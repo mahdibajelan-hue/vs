@@ -35,4 +35,11 @@ assert.equal(Math.round(r.overall.planned), Math.round((100 * 20 + 50 * 30 + 69 
 const e = sgProgress({ phases: [{ code: 'A', engine: 'step' }, { code: 'B', engine: 'step' }], phaseRows: [], schedule: [{ id: 9, phase: 'A', parentId: null, weightPct: null, manualPct: 60 }], clientReport: null }, today)
 assert.deepEqual(e.phases.get('A'), { actual: 60, planned: 60 })
 assert.deepEqual(e.overall, { actual: 30, planned: 30 })
+// live EPC progress from the modules wins over the manual client report for the EPC phase
+{
+  const live = sgProgress({ phases: [{ code: 'G6', engine: 'epc' }], phaseRows: [], schedule: [], clientReport: { progress_engineering: 90 }, epcLive: { actual: 42, planned: 55 } }, today)
+  assert.deepEqual(live.phases.get('G6'), { actual: 42, planned: 55 })
+  const noPlan = sgProgress({ phases: [{ code: 'G6', engine: 'epc' }], phaseRows: [], schedule: [], clientReport: null, epcLive: { actual: 42, planned: null } }, today)
+  assert.deepEqual(noPlan.phases.get('G6'), { actual: 42, planned: 42 })
+}
 console.log('stagegate/sgProgress: all assertions passed')

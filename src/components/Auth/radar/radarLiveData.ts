@@ -21,6 +21,8 @@ import type { RmRisk, RmRiskAssessment } from '../../../modules/risk/types'
 import type { ImIssue } from '../../../modules/issues/types'
 import { loadScheduleSummary } from '../../../modules/scheduling/lib/summaryLoader'
 import { loadStageGateRadar } from './stageGateRadar'
+import { loadEpcProgress } from '../../../modules/epc/epcProgressLoader'
+import type { EpcProgress } from '../../../modules/epc/epcProgress'
 import { loadStageGateBundle } from '../../../modules/lifecycle/lib/stageGateBundleLoader'
 import type { ScheduleSummary } from '../../../modules/scheduling/lib/summary'
 
@@ -206,19 +208,18 @@ function buildGate(bundle: ProjectLifecycleBundle, analysis: ProjectAnalysis, cu
   }
 }
 
-// Stage-Gate G5 (procurement), G6 (execution), G7 (commissioning); the former module's keys for unlinked projects
-const EPC_RELEVANT_STAGES = new Set(['G5', 'G6', 'G7', 'procurement', 'execution', 'commissioning'])
-
-function buildEpc(analysis: ProjectAnalysis, currentStageKey: string): EpcDimension[] | null {
-  if (!EPC_RELEVANT_STAGES.has(currentStageKey)) return null
-  const dim = (key: 'engineering' | 'procurement' | 'construction') =>
-    analysis.health.find((h) => h.dimension === key)?.score ?? 0
-  return [
-    { key: 'engineering', label: 'مهندسی', labelEn: 'Engineering', pct: dim('engineering') },
-    { key: 'procurement', label: 'تدارکات', labelEn: 'Procurement', pct: dim('procurement') },
-    { key: 'construction', label: 'ساخت', labelEn: 'Construction', pct: dim('construction') },
-  ]
+/** The radar's EPC bars: each discipline's actual progress from its own module (never a health score). */
+function epcDimensions(e: EpcProgress): EpcDimension[] | null {
+  const rows = ([['engineering', 'مهندسی', 'Engineering', e.eng], ['procurement', 'تدارکات', 'Procurement', e.proc], ['construction', 'ساخت', 'Construction', e.cons]] as const)
+    .filter(([, , , d]) => d)
+  if (!rows.length) return null
+  return rows.map(([key, label, labelEn, d]) => ({ key, label, labelEn, pct: Math.round(d!.actual), plannedPct: d!.planned == null ? null : Math.round(d!.planned) }))
 }
+
+const faPct = (v: number) => `${String(Math.round(v)).replace(/\d/g, (x) => '۰۱۲۳۴۵۶۷۸۹'[+x])}٪`
+
+/** A project with no Stage-Gate link has no gate to show. */
+const NO_GATE: RadarGate = { name: 'بدون گیت ثبت‌شده', nameEn: 'NO GATE RECORDED', prerequisites: 0, passed: 0, pending: 0, failed: 0, readinessPct: 0 }
 
 // ---------------------------------------------------------------------------
 // Contract summary — from the Finance module (fin_contracts references
@@ -372,10 +373,12 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   let result = afterRiskIssue
 
   // --- Lifecycle / Gate / EPC ------------------------------------------------
+  let plcLive = false
   try {
     // the control tower's engines run on Stage-Gate (G1…G9) for linked projects; the former lifecycle rows only otherwise
     const plcBundle = (await loadStageGateBundle(masterProjectId)) ?? (await fetchLifecycleBundle(masterProjectId))
     if (plcBundle && plcBundle.lifecycle) {
+      plcLive = true
       const analysis = analyseProject(plcBundle, {
         openCriticalRisks: criticalCounts.openCriticalRisks,
         criticalRisksWithoutMitigation: criticalCounts.openCriticalRisks,
@@ -385,7 +388,6 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
       const lifecycle = buildLifecycleStages(plcBundle)
       const currentStage = plcBundle.stages.find((s) => s.stageKey === currentStageKey)
       const nextGate = buildGate(plcBundle, analysis, currentStageKey)
-      const epc = buildEpc(analysis, currentStageKey)
 
       result = {
         ...result,
@@ -398,7 +400,6 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
         lifecycle: lifecycle.length > 0 ? lifecycle : result.lifecycle,
         currentStageLabel: currentStage?.nameFa ?? result.currentStageLabel,
         nextGate: nextGate ?? result.nextGate,
-        epc: epc !== null ? epc : result.epc,
       }
     }
   } catch (err) {
@@ -406,16 +407,50 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   }
 
   // --- Lifecycle / next gate of record: Stage-Gate (G1…G9) -----------------------
-  // Health and EPC come from the control tower engines above; the lifecycle strip and the next gate from Stage-Gate's own readiness.
+  // Health comes from the control tower engines above; the lifecycle strip and the next gate from Stage-Gate's own
+  // readiness; its EPC phase from the engineering / material / execution modules (the same figures they show).
+  let epc: EpcProgress | null = null
+  let lifecycleLive = false
   try {
     const sg = await loadStageGateRadar(masterProjectId)
     if (sg) {
+      epc = sg.epc
+      lifecycleLive = true
       result = { ...result, lifecycle: sg.lifecycle, lifecycleOverallPct: sg.overallPct, currentStageLabel: sg.currentStageLabel, nextGate: sg.nextGate ?? result.nextGate }
-      // time performance = the lifecycle's actual vs planned progress (the mock figures otherwise stay on screen)
+      // time performance = the lifecycle's actual vs planned progress
       if (sg.overallPct != null && sg.overallPlannedPct != null) result = { ...result, kpi: { ...result.kpi, progressActual: sg.overallPct, progressPlanned: sg.overallPlannedPct } }
     }
   } catch (err) {
     console.warn('[radar] Stage-Gate fetch failed, keeping the previous lifecycle picture', err)
+  }
+
+  // --- EPC (engineering / procurement / construction modules) -------------------
+  try {
+    epc ??= await loadEpcProgress(masterProjectId)
+    const dims = epcDimensions(epc)
+    if (dims) result = { ...result, epc: dims }
+    // a project outside Stage-Gate: its lifecycle picture is the EPC modules' own progress, never the mock
+    if (!lifecycleLive && epc.overall) {
+      const o = epc.overall
+      result = {
+        ...result,
+        lifecycle: (dims ?? []).map((d) => ({
+          key: d.key, label: d.label, labelEn: d.labelEn, state: d.pct >= 100 ? 'done' as const : 'current' as const,
+          dateFa: `واقعی ${faPct(d.pct)} · برنامه ${d.plannedPct == null ? '—' : faPct(d.plannedPct)}`, progressPct: d.pct,
+        })),
+        lifecycleOverallPct: Math.round(o.actual),
+        currentStageLabel: 'EPC',
+        nextGate: NO_GATE,
+        kpi: { ...result.kpi, progressActual: Math.round(o.actual), progressPlanned: Math.round(o.planned ?? o.actual) },
+      }
+      lifecycleLive = true
+    }
+  } catch (err) {
+    console.warn('[radar] EPC modules fetch failed', err)
+  }
+  // nothing recorded for this project anywhere: show empty, not the mock picture
+  if (!lifecycleLive && !plcLive) {
+    result = { ...result, lifecycle: [], lifecycleOverallPct: 0, currentStageLabel: '—', nextGate: NO_GATE, epc: null, kpi: { ...result.kpi, progressActual: 0, progressPlanned: 0 } }
   }
 
   // --- Contract ---------------------------------------------------------------

@@ -1,3 +1,4 @@
+import { loadEpcProgress } from '../../epc/epcProgressLoader'
 import { supabase } from '../../../lib/supabaseClient'
 import type { ProjectLifecycleBundle } from '../store/useLifecycleStore'
 import { buildStageGateBundle, type SgItemDef } from './stageGateBundle'
@@ -57,6 +58,7 @@ export async function loadStageGateBundle(masterProjectId: string): Promise<Proj
     decisions: ((dc.data ?? []) as Row[]).map((r) => ({ project, phase: s(r.phase_code), decision: s(r.decision), decidedAt: s(r.decided_at), decidedBy: sn(r.decided_by), reason: s(r.reason), conditionText: s(r.condition_text), conditionDue: sn(r.condition_due_date) })),
     phaseRows: ((pr.data ?? []) as Row[]).map((r) => ({ project, phase: s(r.phase_code), gateStatus: sn(r.gate_status), actualStart: sn(r.actual_start), actualFinish: sn(r.actual_finish), plannedStart: sn(r.planned_start), plannedFinish: sn(r.planned_finish), manualPct: r.manual_actual_pct == null ? null : Number(r.manual_actual_pct), weightPct: r.weight_pct == null ? null : Number(r.weight_pct) })),
     clientReport: ((rep.data ?? []) as Row[])[0] ?? null,
+    epcLive: (await loadEpcProgress(masterProjectId, ((rep.data ?? []) as Row[])[0] ?? null)).overall,
     schedule: ((sc.data ?? []) as Row[]).map((r) => ({ id: Number(r.id), phase: s(r.phase_code), parentId: r.parent_id == null ? null : Number(r.parent_id), seq: Number(r.seq ?? 0), title: s(r.title), plannedStart: sn(r.planned_start), plannedFinish: sn(r.planned_finish), weight: r.weight_pct == null ? null : Number(r.weight_pct), manualPct: r.manual_actual_pct == null ? null : Number(r.manual_actual_pct) })),
     progress: ((hi.data ?? []) as Row[]).map((r) => ({ id: Number(r.id), phase: s(r.phase_code), newPct: Number(r.new_pct ?? 0), comment: s(r.comment), recordedBy: sn(r.recorded_by), recordedAt: s(r.recorded_at) })),
     milestones,

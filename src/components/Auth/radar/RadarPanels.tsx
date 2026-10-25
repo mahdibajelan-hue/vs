@@ -203,10 +203,20 @@ export function SignalStatCard({
 export function LifecyclePanel({ stages, overallPct }: { stages: RadarLifecycleStage[]; overallPct: number }) {
   const current = stages.find((s) => s.state === 'current')
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
+  // a project outside Stage-Gate shows its EPC disciplines instead of gates
+  const epcOnly = stages.length > 0 && stages.every((s) => s.key === 'engineering' || s.key === 'procurement' || s.key === 'construction')
+  if (!stages.length) {
+    return (
+      <div className="flex h-full flex-col p-1">
+        <PanelTitle text="LIFECYCLE PROGRESS" />
+        <p className="mt-6 text-center text-[11px] leading-6 text-muted">برای این پروژه هنوز چرخهٔ عمر (Stage-Gate) یا پیشرفت EPC ثبت نشده است.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full flex-col p-1">
-      <PanelTitle text="LIFECYCLE PROGRESS" />
+      <PanelTitle text={epcOnly ? 'EPC PROGRESS' : 'LIFECYCLE PROGRESS'} />
       <div className="mb-4 flex justify-center">
         {/* Outer ring: overall project progress averaged across every stage's own completion (the
             master-plan view). Inner ring: just the current stage's own progress — the two read
@@ -214,13 +224,13 @@ export function LifecyclePanel({ stages, overallPct }: { stages: RadarLifecycleS
             fit the narrower column this panel now occupies. */}
         <RingGauge
           pct={overallPct} color="var(--radar-green)" size={82} stroke={6}
-          innerPct={current?.progressPct} innerColor="var(--radar-amber)" innerStroke={4}
+          innerPct={epcOnly ? undefined : current?.progressPct} innerColor="var(--radar-amber)" innerStroke={4}
           center={
             <div className="flex flex-col items-center justify-center leading-none">
-              <span className="text-[9.5px] font-extrabold">{current?.labelEn ?? '—'}</span>
+              <span className="text-[9.5px] font-extrabold">{epcOnly ? 'EPC' : current?.labelEn ?? '—'}</span>
               <span className="num mt-1 text-[13px] font-extrabold" style={{ color: 'var(--radar-green)' }}>{Math.round(overallPct)}%</span>
               <span className="mt-0.5 text-[5.5px] font-bold tracking-wide text-muted">OVERALL</span>
-              {current && (
+              {current && !epcOnly && (
                 <span className="num mt-1 flex items-center gap-0.5 text-[8px] font-extrabold" style={{ color: 'var(--radar-amber)' }}>
                   {Math.round(current.progressPct)}%
                   <span className="text-[5px] font-bold tracking-wide text-muted">PHASE</span>

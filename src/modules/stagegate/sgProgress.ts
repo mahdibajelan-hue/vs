@@ -5,7 +5,8 @@
  *  - 'step' phase: actual = weighted rollup of its schedule (Gantt) items' recorded %, planned = elapsed share of its
  *    planned window (falls back to actual when it has no window)
  *  - 'basic_design' phase: actual = the phase's manual %, planned by date
- *  - 'epc' phase: E/P/C progress from the latest client report, weighted
+ *  - 'epc' phase: the project's live EPC progress from the engineering / material / execution modules (epcProgress)
+ *    when they hold data for it; otherwise E/P/C from the latest client report, weighted
  *  - project: phases weighted by weight_pct (equal shares when unset)
  * Pure: the caller passes rows in.
  */
@@ -44,6 +45,8 @@ export function sgProgress(input: {
   phaseRows: SgpPhaseRow[]
   schedule: SgpScheduleItem[]
   clientReport: SgpClientReport
+  /** live EPC progress (0…100) from the EPC modules; wins over the client report for the 'epc' phase */
+  epcLive?: { actual: number; planned: number | null } | null
 }, today = new Date()): SgProgress {
   const rows = new Map(input.phaseRows.map((r) => [r.phase, r]))
   const children = (phase: string, parentId: number | null) => input.schedule.filter((s) => s.phase === phase && (s.parentId ?? null) === parentId)
@@ -66,7 +69,10 @@ export function sgProgress(input: {
   for (const p of input.phases) {
     const r = rows.get(p.code)
     let actual: number, planned: number | null
-    if (p.engine === 'epc') {
+    if (p.engine === 'epc' && input.epcLive) {
+      actual = input.epcLive.actual
+      planned = input.epcLive.planned
+    } else if (p.engine === 'epc') {
       actual = epcWeighted(input.clientReport, 'actual')
       planned = epcWeighted(input.clientReport, 'planned')
     } else if (p.engine === 'basic_design') {

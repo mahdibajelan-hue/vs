@@ -138,7 +138,9 @@ export interface EpcDimension {
   key: 'engineering' | 'procurement' | 'construction'
   label: string
   labelEn: string
+  /** actual progress 0…100 from the discipline's own module */
   pct: number
+  plannedPct?: number | null
 }
 
 export interface ContractSummary {

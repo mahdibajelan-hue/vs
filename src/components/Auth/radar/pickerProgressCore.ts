@@ -1,5 +1,6 @@
 import { stageGateRadarSection, type SgRadarInput } from './stageGateRadarCore'
 import { sgProgress, type SgpScheduleItem, type SgpPhaseRow } from '../../../modules/stagegate/sgProgress'
+import type { EpcProgress } from '../../../modules/epc/epcProgress'
 
 /** One project's lifecycle picture for the picker gauge: the same "overall" figure the radar's lifecycle ring shows. */
 export interface PickerProgress {
@@ -12,6 +13,8 @@ export interface PickerProgress {
   /** the current phase's own actual / planned progress (Stage-Gate engine); null when the engine has no inputs */
   phaseActual: number | null
   phasePlanned: number | null
+  /** 'lifecycle' = Stage-Gate gates; 'epc' = a project with no Stage-Gate link, gauged by its EPC modules alone */
+  mode: 'lifecycle' | 'epc'
 }
 
 export type PickerSource = Omit<SgRadarInput, 'project' | 'prereqs' | 'engine'> & {
@@ -24,7 +27,12 @@ export type PickerSource = Omit<SgRadarInput, 'project' | 'prereqs' | 'engine'> 
     schedule: (SgpScheduleItem & { project: string })[]
     clientReports: Map<string, Record<string, unknown>>
   }
+  /** master project id → its live EPC progress (engineering / material / execution modules). Feeds the Stage-Gate EPC
+   * phase of linked projects, and gauges the projects with no Stage-Gate link. */
+  epc?: Map<string, EpcProgress>
 }
+
+const r1 = (v: number) => Math.round(v)
 
 /** master project id → its lifecycle progress; projects with no Stage-Gate link or no recorded gate data are left out. */
 export function pickerProgress(src: PickerSource, today = new Date()): Map<string, PickerProgress> {
@@ -36,6 +44,7 @@ export function pickerProgress(src: PickerSource, today = new Date()): Map<strin
       phaseRows: eng.phaseRows.filter((r) => r.project === project),
       schedule: eng.schedule.filter((r) => r.project === project),
       clientReport: eng.clientReports.get(project) ?? null,
+      epcLive: src.epc?.get(masterId)?.overall ?? null,
     }, today) : null
     const sec = stageGateRadarSection({
       project, phases: src.phases, steps: src.steps, prereqs: [],
@@ -53,6 +62,21 @@ export function pickerProgress(src: PickerSource, today = new Date()): Map<strin
       phaseTitle: cur?.label ?? 'پایان چرخه',
       phaseActual: cur && prog ? Math.round(prog.phases.get(cur.key)?.actual ?? 0) : null,
       phasePlanned: cur && prog ? Math.round(prog.phases.get(cur.key)?.planned ?? 0) : null,
+      mode: 'lifecycle',
+    })
+  }
+  // projects outside Stage-Gate: the EPC modules' own weighted progress, one gauge segment per discipline
+  for (const [masterId, e] of src.epc ?? []) {
+    if (out.has(masterId) || src.links.some((l) => l.masterId === masterId) || !e.overall) continue
+    const segs = ([['E', e.eng], ['P', e.proc], ['C', e.cons]] as const).filter(([, d]) => d)
+    out.set(masterId, {
+      pct: r1(e.overall.actual),
+      segments: segs.map(([code, d]) => ({ code, pct: r1(d!.actual), state: d!.actual >= 100 ? 'done' as const : 'current' as const })),
+      phaseCode: 'EPC',
+      phaseTitle: 'پیشرفت EPC',
+      phaseActual: r1(e.overall.actual),
+      phasePlanned: e.overall.planned == null ? null : r1(e.overall.planned),
+      mode: 'epc',
     })
   }
   return out

@@ -1,12 +1,14 @@
 import { supabase } from '../../../lib/supabaseClient'
 import { stageGateRadarSection, type SgRadarSection } from './stageGateRadarCore'
 import { sgProgress } from '../../../modules/stagegate/sgProgress'
+import { loadEpcProgress } from '../../../modules/epc/epcProgressLoader'
+import type { EpcProgress } from '../../../modules/epc/epcProgress'
 
 type Row = Record<string, unknown>
 const s = (v: unknown) => (v == null ? '' : String(v))
 
 /** The Stage-Gate picture of a master project (through sg_projects.master_project_id); null when it has none. */
-export async function loadStageGateRadar(masterProjectId: string): Promise<SgRadarSection | null> {
+export async function loadStageGateRadar(masterProjectId: string): Promise<(SgRadarSection & { epc: EpcProgress }) | null> {
   const { data: proj } = await supabase.from('sg_projects').select('name').eq('master_project_id', masterProjectId).maybeSingle()
   const name = (proj as Row | null)?.name
   if (!name) return null
@@ -24,13 +26,16 @@ export async function loadStageGateRadar(masterProjectId: string): Promise<SgRad
   ])
   if (ph.error || !ph.data?.length) return null
   const num = (v: unknown) => (v == null ? null : Number(v))
+  const clientReport = ((rep.data ?? []) as Row[])[0] ?? null
+  const epc = await loadEpcProgress(masterProjectId, clientReport)
   const prog = sgProgress({
     phases: (ph.data as Row[]).map((r) => ({ code: s(r.code), engine: s(r.progress_engine) })),
     phaseRows: ((pr.data ?? []) as Row[]).map((r) => ({ phase: s(r.phase_code), plannedStart: r.planned_start ? s(r.planned_start) : null, plannedFinish: r.planned_finish ? s(r.planned_finish) : null, manualPct: num(r.manual_actual_pct), weightPct: num(r.weight_pct) })),
     schedule: ((sc.data ?? []) as Row[]).map((r) => ({ id: Number(r.id), phase: s(r.phase_code), parentId: num(r.parent_id), weightPct: num(r.weight_pct), manualPct: num(r.manual_actual_pct) })),
-    clientReport: ((rep.data ?? []) as Row[])[0] ?? null,
+    clientReport,
+    epcLive: epc.overall,
   })
-  return stageGateRadarSection({
+  const sec = stageGateRadarSection({
     project, engine: { phases: prog.phases, overall: prog.overall.actual, overallPlanned: prog.overall.planned },
     phases: (ph.data as Row[]).map((r) => ({ code: s(r.code), sort: Number(r.sort_order), title: s(r.title), gateName: s(r.gate_name).replace(/\s*\[NEEDS REVIEW\]/i, '') })),
     steps: ((ob.data ?? []) as Row[]).map((r) => ({ id: Number(r.id), phase: s(r.phase_code), seq: Number(r.seq), title: s(r.title) })),
@@ -42,4 +47,5 @@ export async function loadStageGateRadar(masterProjectId: string): Promise<SgRad
     decisions: ((dc.data ?? []) as Row[]).map((r) => ({ project, phase: s(r.phase_code), decision: s(r.decision), decidedAt: s(r.decided_at), decidedBy: r.decided_by ? s(r.decided_by) : null })),
     phaseRows: ((pr.data ?? []) as Row[]).map((r) => ({ project, phase: s(r.phase_code), gateStatus: r.gate_status ? s(r.gate_status) : null, actualStart: r.actual_start ? s(r.actual_start) : null, actualFinish: r.actual_finish ? s(r.actual_finish) : null, plannedFinish: r.planned_finish ? s(r.planned_finish) : null, manualPct: r.manual_actual_pct == null ? null : Number(r.manual_actual_pct) })),
   })
+  return sec && { ...sec, epc }
 }

@@ -4,6 +4,7 @@ import { useExecutionStore } from '../store/useExecutionStore'
 import { useMaterialModel } from '../../material/lib/control/useMaterialModel'
 import { useExecutionModel } from './useExecutionModel'
 import { epcSettings } from './epcSettings'
+import { engDocsOf } from './engCore'
 import { cumulative } from './progress'
 import { productivity, resourceElasticity, type CrewLog, type ProductivityParams, type ProductivityResult } from './engine/productivity'
 import { forecastActivity, type ActivityForecast } from './engine/forecast'
@@ -43,8 +44,7 @@ export function useEpcModel(projectId: string | null) {
     for (const [id, p] of mat.positions) supply.set(id, { id, onSite: p.onHand, required: Math.max(0, p.requiredQty - p.netConsumed) })
     const prereqs: Prereq[] = epc.prereqs.filter((p) => p.projectId === pid).map((p) => ({ id: p.id, activityId: p.activityId, kind: p.kind, title: p.title, refType: p.refType, refId: p.refId, status: p.status, neededDate: p.neededDate, readyDate: p.readyDate }))
     const rules = DEFAULT_ENG_RULES
-    const docRows = epc.engDocs.filter((d) => d.projectId === pid)
-    const engDocs: Doc[] = docRows.map((d) => ({ id: d.id, code: d.docNo, title: d.title, discipline: d.discipline, contract: d.contract, weight: d.weight, critical: d.critical, plannedPrepared: d.plannedPrepared, plannedApproved: d.plannedApproved, actualPrepared: d.actualPrepared, actualApproved: d.actualApproved, status: d.status }))
+    const engDocs: Doc[] = engDocsOf(epc.engDocs, pid)
     const docById = new Map(engDocs.map((d) => [d.id, d]))
     const docFc = new Map<string, DocForecast>(engDocs.map((d) => [d.id, forecastDoc(d, engDocs, today, rules)]))
     const dlinks: DocLink[] = epc.docLinks.filter((l) => l.projectId === pid).map((l) => ({ id: l.id, docId: l.docId, activityId: l.activityId, front: l.front, needKind: l.needKind, needDate: l.needDate, minStatus: l.minStatus, allowRestricted: l.allowRestricted, altActivityId: l.altActivityId }))

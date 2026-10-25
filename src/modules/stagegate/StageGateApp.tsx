@@ -7,6 +7,8 @@ import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
+import { ensureEpcStores, epcProgressOf } from '../epc/epcProgressLoader'
+import { weightsFromReport } from '../epc/epcProgress'
 import { createStageGateEngine } from './legacy/engine'
 import { linkSgProject, loadSgProjects, type SgProjectRef } from './sgProjects'
 import './stagegate.css'
@@ -35,6 +37,8 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       currentUser: { email: profile.email },
       currentProfile: { role: profile.isAdmin ? 'admin' : 'manager' },
       myProjectAccess: projects.map((p) => ({ project_name: p.name })),
+      // the EPC phase reads the engineering / material / execution modules (once their stores are loaded)
+      getEpcLive: (name: string, report: Record<string, unknown> | null) => { const m = projects.find((p) => p.name === name)?.masterProjectId; return m ? epcProgressOf(m, weightsFromReport(report)) : null },
     })
   }, [profile, projects])
   engineRef.current = engine
@@ -53,6 +57,7 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
 
   async function load(name: string) {
     setSelected(name)
+    await ensureEpcStores()
     if (name && engineRef.current) await engineRef.current.openLifecyclePreview(name)
   }
 

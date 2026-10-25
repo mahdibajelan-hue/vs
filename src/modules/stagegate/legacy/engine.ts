@@ -449,9 +449,15 @@ export function createStageGateEngine(env) {
             return (e * effWe + p * effWp + c * effWc) / totalW;
         }
 
+        function lcEpcLive() {
+            return env.getEpcLive ? env.getEpcLive(lcState.projectName, lcState.clientReport) : null;
+        }
         function lcPhaseProgress(phase) {
             const pp = lcState.projectPhases[phase.code];
             if (phase.progress_engine === 'epc') {
+                // live E/P/C from the engineering / material / execution modules wins over the manual client report
+                const live = lcEpcLive();
+                if (live && live.overall) return { actual: live.overall.actual, planned: live.overall.planned == null ? live.overall.actual : live.overall.planned };
                 return { actual: lcEpcWeighted(lcState.clientReport, 'actual'), planned: lcEpcWeighted(lcState.clientReport, 'planned') };
             }
             if (phase.progress_engine === 'basic_design') {
@@ -1030,6 +1036,38 @@ export function createStageGateEngine(env) {
         }
 
         function lcEpcDrilldownHtml() {
+            const live = lcEpcLive();
+            if (live && live.overall) {
+                const rows = [[live.eng, 'مهندسی (E)', live.weights.e], [live.proc, 'تدارکات (P)', live.weights.p], [live.cons, 'اجرا (C)', live.weights.c]];
+                const tw = (live.eng ? live.weights.e : 0) + (live.proc ? live.weights.p : 0) + (live.cons ? live.weights.c : 0) || 1;
+                const r0 = (v) => toPersianDigits(Math.round(v));
+                return `
+            <div class="border rounded-xl p-3 space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <p class="text-[11px] font-extrabold text-slate-600">درون‌کاوی EPC (مهندسی / تدارکات / اجرا)</p>
+                    <span class="text-[10px] text-slate-400">از ماژول‌های مهندسی، کالا و اجرا</span>
+                </div>
+                ${rows.map(([d, rlabel, w]) => {
+                    if (!d) return `<div class="flex items-center justify-between text-[11px]"><span class="font-bold text-slate-400">${rlabel}</span><span class="text-slate-400">بدون داده در ماژول</span></div>`;
+                    const pl = d.planned == null ? null : d.planned;
+                    const v = pl == null ? 0 : d.actual - pl;
+                    return `<div>
+                        <div class="flex items-center justify-between text-[11px] mb-1">
+                            <span class="font-bold text-slate-600">${rlabel} <span class="text-slate-400 font-normal">وزن ${r0((w / tw) * 100)}٪</span></span>
+                            <span class="font-bold ${v < -5 ? 'text-red-600' : v > 0 ? 'text-emerald-600' : 'text-slate-600'}">${r0(d.actual)}٪ <span class="text-slate-400 font-normal">(برنامه ${pl == null ? '—' : r0(pl) + '٪'})</span></span>
+                        </div>
+                        <div class="h-2 rounded-full bg-slate-100 overflow-hidden relative">
+                            <div class="h-full bg-slate-300 absolute inset-y-0 right-0" style="width:${Math.min(100, pl || 0)}%"></div>
+                            <div class="h-full bg-blue-600 absolute inset-y-0 right-0" style="width:${Math.min(100, d.actual)}%"></div>
+                        </div>
+                    </div>`;
+                }).join('')}
+                <div class="pt-2 border-t flex items-center justify-between text-xs">
+                    <span class="font-extrabold text-slate-700">پیشرفت وزنی EPC</span>
+                    <span class="font-extrabold text-slate-800">${r0(live.overall.actual)}٪ <span class="text-slate-400 font-normal text-[10px]">(برنامه ${live.overall.planned == null ? '—' : r0(live.overall.planned) + '٪'})</span></span>
+                </div>
+            </div>`;
+            }
             const cr = lcState.clientReport;
             if (!cr) return `<div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-700">هنوز «اطلاعات پایه و پیشرفت پروژه» برای این پروژه ثبت نشده؛ پیشرفت E/P/C از آن فرم خوانده می‌شود.</div>`;
             const rows = [['engineering', 'مهندسی (E)'], ['procurement', 'تدارکات (P)'], ['construction', 'اجرا (C)']];

@@ -32,11 +32,12 @@ export function RadarProjectPicker({ onPick, onBack }: { onPick: (id: string) =>
   const recent = useMemo(() => new Set(recentIds.slice(0, 3)), [recentIds])
   // lifecycle progress per project (Stage-Gate); undefined while loading, a map (possibly empty) once known
   const [progress, setProgress] = useState<Map<string, PickerProgress> | undefined>(undefined)
+  const projectIds = useMemo(() => projects.map((p) => p.id), [projects])
   useEffect(() => {
     let alive = true
-    loadPickerProgress().then((m) => { if (alive) setProgress(m) }).catch(() => { if (alive) setProgress(new Map()) })
+    loadPickerProgress(projectIds, (m) => { if (alive) setProgress(m) }).then((m) => { if (alive) setProgress(m) }).catch(() => { if (alive) setProgress((m) => m ?? new Map()) })
     return () => { alive = false }
-  }, [])
+  }, [projectIds])
 
   const ordered = useMemo(() => orderProjects(projects, recentIds), [projects, recentIds])
   const usedPortfolios = portfolios.filter((p) => projects.some((x) => x.portfolioId === p.id))
@@ -139,7 +140,7 @@ function ProjectCard({ p, index, recent, portfolio, program, progress, onHover, 
       onClick={() => onPick(p.id)}
       onMouseEnter={() => onHover(p.id)} onMouseLeave={() => onHover(null)}
       onFocus={() => onHover(p.id)} onBlur={() => onHover(null)}
-      aria-label={`${p.officialName}${prog ? ` — پیشرفت چرخهٔ عمر ${faNum(prog.pct)}٪، فاز ${prog.phaseTitle}` : ''}`}
+      aria-label={`${p.officialName}${prog ? ` — ${prog.mode === 'epc' ? 'پیشرفت EPC' : 'پیشرفت چرخهٔ عمر'} ${faNum(prog.pct)}٪، فاز ${prog.phaseTitle}` : ''}`}
     >
       <span className="rpk-card-glow" aria-hidden />
       <span className="rpk-card-top">

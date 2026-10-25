@@ -1,26 +1,27 @@
 import { useMemo } from 'react'
 import { useExecutionStore } from '../../store/useExecutionStore'
 import { useMasterDataStore } from '../../../masterdata/store/useMasterDataStore'
-import { physicalProgress, plannedOverall } from '../../lib/progress'
+import { executionCore } from '../../lib/executionCore'
+import { useEpcStore } from '../../store/useEpcStore'
 import { pct } from '../common'
 
 /** Managers see every project they are allowed to read side by side (row-level security already filters what is loaded); a click opens that project. */
 export function PortfolioStrip({ current, onPick }: { current: string; onPick: (id: string) => void }) {
   const st = useExecutionStore()
   const projects = useMasterDataStore((s) => s.projects)
+  const epc = useEpcStore()
   const rows = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10)
     return projects.map((p) => {
-      const activities = st.activities.filter((a) => a.projectId === p.id)
-      if (!activities.length) return null
-      const baselines = st.baselines.filter((b) => b.projectId === p.id), ids = new Set(baselines.map((b) => b.id)), blines = st.blines.filter((l) => ids.has(l.baselineId))
-      const reports = st.reports.filter((r) => r.projectId === p.id), rid = new Set(reports.map((r) => r.id)), lines = st.lines.filter((l) => rid.has(l.reportId))
-      const gw = st.settingsByProject.get(p.id)?.groupWeights
-      const act = physicalProgress({ activities, baselines, blines, reports, lines, asOf: today, mode: 'approved', groupWeights: gw }).overall
-      const plan = plannedOverall({ activities, baselines, blines, asOf: today, groupWeights: gw }).overall
+      // the module's own computation (same as its pages), not a re-derivation
+      const core = executionCore(st, epc, p.id, today)
+      if (!core.activities.length) return null
+      const act = core.approved.overall
+      const plan = core.planned.overall
+      const reports = core.reports
       return { id: p.id, name: p.officialName, act, plan, spi: plan && plan > 0 ? act / plan : null, waiting: reports.filter((r) => r.status === 'submitted' || r.status === 'partially_approved').length }
     }).filter((x): x is NonNullable<typeof x> => !!x)
-  }, [projects, st.activities, st.baselines, st.blines, st.reports, st.lines, st.settingsByProject])
+  }, [projects, st, epc])
   if (rows.length < 2) return null
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10, marginBottom: 14 }}>

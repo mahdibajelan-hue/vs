@@ -43,6 +43,8 @@ export interface SgBundleInput {
   actions: LifecycleAction[]
   /** the latest Stage-Gate client report (feeds the EPC-engine phase) */
   clientReport?: Record<string, unknown> | null
+  /** live EPC progress from the engineering / material / execution modules (see epc/epcProgress) */
+  epcLive?: { actual: number; planned: number | null } | null
   /** a hand-set overall health verdict, if one exists for the master project */
   healthOverride?: Pick<ProjectLifecycle, 'healthOverride' | 'healthOverrideReason' | 'healthOverrideBy' | 'healthOverrideAt'> | null
 }
@@ -90,6 +92,7 @@ export function buildStageGateBundle(input: SgBundleInput, today = new Date()): 
     phaseRows: input.phaseRows.map((r) => ({ phase: r.phase, plannedStart: r.plannedStart, plannedFinish: r.plannedFinish, manualPct: r.manualPct, weightPct: r.weightPct ?? null })),
     schedule: input.schedule.map((x) => ({ id: x.id, phase: x.phase, parentId: x.parentId, weightPct: x.weight, manualPct: x.manualPct })),
     clientReport: input.clientReport ?? null,
+    epcLive: input.epcLive ?? null,
   }, today)
   const n = phases.length || 1
   const sgProg: Record<string, { actual: number; planned: number; weight: number }> = {}

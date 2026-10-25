@@ -34,4 +34,24 @@ const withEngine = pickerProgress({ ...src, engines: {
 assert.equal(withEngine.get('m-a').phaseActual, 30)
 assert.equal(withEngine.get('m-a').phasePlanned, 50)
 assert.equal(m.get('m-a').phaseActual, null, 'no engine inputs → no phase bar')
+// EPC modules: a linked project's EPC phase follows them; an unlinked project gets an E/P/C gauge of its own
+{
+  const epc = new Map([
+    ['m-a', { eng: null, proc: null, cons: null, weights: { e: 1, p: 1, c: 1 }, overall: { actual: 80, planned: 90 } }],
+    ['m-x', { eng: { actual: 60, planned: 70 }, proc: { actual: 30, planned: 40 }, cons: null, weights: { e: 1, p: 1, c: 1 }, overall: { actual: 45, planned: 55 } }],
+    ['m-empty', { eng: null, proc: null, cons: null, weights: { e: 1, p: 1, c: 1 }, overall: null }],
+  ])
+  const live = pickerProgress({ ...src, epc, engines: {
+    phases: phases.map((p) => ({ code: p.code, engine: p.code === 'G3' ? 'epc' : 'step' })),
+    phaseRows: [], schedule: [], clientReports: new Map(),
+  } }, new Date('2026-07-02T00:00:00Z'))
+  assert.equal(live.get('m-a').mode, 'lifecycle')
+  assert.equal(live.get('m-a').phaseActual, 80, 'the EPC phase shows the modules figure')
+  const x = live.get('m-x')
+  assert.equal(x.mode, 'epc')
+  assert.equal(x.pct, 45)
+  assert.deepEqual(x.segments.map((s) => [s.code, s.pct]), [['E', 60], ['P', 30]])
+  assert.equal(x.phasePlanned, 55)
+  assert.equal(live.has('m-empty'), false, 'no module data → still no gauge')
+}
 console.log('radar/pickerProgress: all assertions passed')
