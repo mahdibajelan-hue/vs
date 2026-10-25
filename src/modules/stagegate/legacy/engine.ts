@@ -384,6 +384,12 @@ export function createStageGateEngine(env) {
             lcState.phases = (phases || []).slice().sort((a, b) => a.sort_order - b.sort_order);
             lcState.projectPhases = {};
             (projectPhases || []).forEach(pp => { lcState.projectPhases[pp.phase_code] = pp; });
+            // the EPC phase's planned window comes from the engineering / material / execution modules' own plans
+            const epcWin = env.getEpcWindow ? env.getEpcWindow(projectName) : null;
+            if (epcWin) (lcState.phases || []).filter(p => p.progress_engine === 'epc').forEach(p => {
+                const pp = lcState.projectPhases[p.code];
+                if (pp) { pp.planned_start = epcWin.start; pp.planned_finish = epcWin.finish; pp._epcWindowFromModules = true; }
+            });
             lcState.items = {};
             (items || []).forEach(it => {
                 lcState.items[it.phase_code] = lcState.items[it.phase_code] || { objective: {}, output: {}, criterion: {} };

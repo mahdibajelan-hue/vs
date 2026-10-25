@@ -5,7 +5,7 @@ import type { MasterProject } from '../../masterdata/types'
 
 const GAP_THRESHOLD = 5
 
-/** Project-level EVM-lite card: physical progress (from PipePulse) vs financial progress (certified / current budget). */
+/** Project-level EVM-lite card: physical progress (the project lifecycle — same figure as the radar and dashboard) vs financial progress (certified / current budget). */
 export function CostProgressCheckCard({ project, financialPercent }: { project: MasterProject; financialPercent: number }) {
   const [check, setCheck] = useState<CostProgressCrossCheck | null>(null)
   const [loading, setLoading] = useState(true)
@@ -34,16 +34,16 @@ export function CostProgressCheckCard({ project, financialPercent }: { project: 
         <Gauge size={14} style={{ color: '#059669' }} /> تطبیق پیشرفت فیزیکی و مالی (EVM ساده)
       </p>
       {loading ? (
-        <p className="text-xs fin-text-muted">در حال دریافت پیشرفت فیزیکی از ماژول پایپ‌پالس...</p>
+        <p className="text-xs fin-text-muted">در حال محاسبهٔ پیشرفت فیزیکی از چرخهٔ عمر پروژه...</p>
       ) : !check?.mapped ? (
         <p className="text-xs fin-text-muted">این پروژه هنوز به یک پروژه پایپ‌پالس نگاشت نشده است — نگاشت پروژه از ماژول مدیریت کاربران قابل انجام است.</p>
       ) : check.physicalPercent == null ? (
-        <p className="text-xs fin-text-muted">برای این پروژه هنوز برنامه زمان‌بندی یا داده پیشرفت فیزیکی در پایپ‌پالس ثبت نشده است.</p>
+        <p className="text-xs fin-text-muted">برای این پروژه هنوز پیشرفتی در مستر پلن چرخهٔ عمر یا ماژول‌های EPC ثبت نشده است.</p>
       ) : (
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div>
-              <p className="text-[10px] fin-text-muted">پیشرفت فیزیکی واقعی (پایپ‌پالس)</p>
+              <p className="text-[10px] fin-text-muted">پیشرفت فیزیکی واقعی (چرخهٔ عمر)</p>
               <p className="num text-xl font-extrabold" style={{ color: '#3e7c74' }}>
                 {check.physicalPercent.toLocaleString('fa-IR')}٪
               </p>

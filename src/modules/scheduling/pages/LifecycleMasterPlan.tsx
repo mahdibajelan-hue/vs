@@ -3,7 +3,7 @@ import { Loader2, Orbit } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useModuleStore } from '../../../store/useModuleStore'
-import { ensureEpcStores, epcProgressOf } from '../../epc/epcProgressLoader'
+import { ensureEpcStores, epcProgressOf, epcWindowOf } from '../../epc/epcProgressLoader'
 import { weightsFromReport } from '../../epc/epcProgress'
 import { createStageGateEngine } from '../../stagegate/legacy/engine'
 import { loadSgProjects, type SgProjectRef } from '../../stagegate/sgProjects'
@@ -27,6 +27,7 @@ export function LifecycleMasterPlan({ projectId }: { projectId: string }) {
       currentProfile: { role: profile.isAdmin ? 'admin' : 'manager' },
       myProjectAccess: sg.map((p) => ({ project_name: p.name })),
       // the EPC phase reads the engineering / material / execution modules (once their stores are loaded)
+      getEpcWindow: (name: string) => { const m = (sg ?? []).find((p) => p.name === name)?.masterProjectId; return m ? epcWindowOf(m) : null },
       getEpcLive: (name: string, report: Record<string, unknown> | null) => { const m = (sg ?? []).find((p) => p.name === name)?.masterProjectId; return m ? epcProgressOf(m, weightsFromReport(report)) : null },
       planOnly: true,
     })

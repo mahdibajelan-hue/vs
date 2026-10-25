@@ -7,7 +7,7 @@ import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
-import { ensureEpcStores, epcProgressOf } from '../epc/epcProgressLoader'
+import { ensureEpcStores, epcProgressOf, epcWindowOf } from '../epc/epcProgressLoader'
 import { weightsFromReport } from '../epc/epcProgress'
 import { createStageGateEngine } from './legacy/engine'
 import { linkSgProject, loadSgProjects, type SgProjectRef } from './sgProjects'
@@ -38,6 +38,7 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       currentProfile: { role: profile.isAdmin ? 'admin' : 'manager' },
       myProjectAccess: projects.map((p) => ({ project_name: p.name })),
       // the EPC phase reads the engineering / material / execution modules (once their stores are loaded)
+      getEpcWindow: (name: string) => { const m = projects.find((p) => p.name === name)?.masterProjectId; return m ? epcWindowOf(m) : null },
       getEpcLive: (name: string, report: Record<string, unknown> | null) => { const m = projects.find((p) => p.name === name)?.masterProjectId; return m ? epcProgressOf(m, weightsFromReport(report)) : null },
     })
   }, [profile, projects])

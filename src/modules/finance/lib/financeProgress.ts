@@ -1,11 +1,10 @@
-import { fetchPipePulseProjectMappings, fetchPipePulseProjects, summarizeProjectProgress } from '../../../lib/pipepulseRollup'
 import type { MasterProject } from '../../masterdata/types'
+import { loadPickerProgress } from '../../../components/Auth/radar/pickerProgress'
 
 /**
  * EVM-lite cross-check: is the money being paid out keeping pace with the work actually done?
- * Physical progress comes from PipePulse (the same time-based actual % its own Schedule page
- * shows), resolved through the shared rasta_project_mappings table — the same mapping mechanism
- * Risk/Issues/Reporting already use to read PipePulse data from another module.
+ * Physical progress is the project's lifecycle progress — the same figure the radar, the lifecycle and the project
+ * dashboard show (Stage-Gate master plan, EPC phase from the engineering / material / execution modules).
  */
 export interface CostProgressCrossCheck {
   mapped: boolean
@@ -17,17 +16,8 @@ export interface CostProgressCrossCheck {
 }
 
 export async function fetchCostProgressCrossCheck(masterProject: MasterProject, financialPercent: number): Promise<CostProgressCrossCheck> {
-  const mappings = await fetchPipePulseProjectMappings()
-  const pipepulseProjectId = mappings.get(masterProject.id) ?? null
-  if (!pipepulseProjectId) {
-    return { mapped: false, physicalPercent: null, plannedPercent: null, financialPercent, gapPct: null }
-  }
-  const projects = await fetchPipePulseProjects([pipepulseProjectId])
-  const project = projects.get(pipepulseProjectId) ?? null
-  const summary = summarizeProjectProgress(masterProject, pipepulseProjectId, project)
-  if (summary.configuredCount === 0) {
-    return { mapped: true, physicalPercent: null, plannedPercent: null, financialPercent, gapPct: null }
-  }
-  const gapPct = Math.round((financialPercent - summary.actualPercent) * 10) / 10
-  return { mapped: true, physicalPercent: summary.actualPercent, plannedPercent: summary.plannedPercent, financialPercent, gapPct }
+  const o = (await loadPickerProgress([masterProject.id])).get(masterProject.id)?.overall ?? null
+  if (!o) return { mapped: true, physicalPercent: null, plannedPercent: null, financialPercent, gapPct: null }
+  const r1 = (v: number) => Math.round(v * 10) / 10
+  return { mapped: true, physicalPercent: r1(o.actual), plannedPercent: o.planned == null ? null : r1(o.planned), financialPercent, gapPct: r1(financialPercent - o.actual) }
 }

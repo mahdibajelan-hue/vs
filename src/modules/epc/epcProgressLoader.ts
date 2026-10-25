@@ -40,3 +40,17 @@ export async function loadEpcProgress(projectId: string, clientReport?: Record<s
   await ensureEpcStores()
   return epcProgressOf(projectId, weightsFromReport(clientReport))
 }
+
+/** The EPC phase's planned window, from the modules' own plans: engineering documents' planned milestones, material
+ * stages' planned dates and execution activities' planned start / end. null when no module has dates. */
+export function epcWindowOf(projectId: string): { start: string; finish: string } | null {
+  const ex = useExecutionStore.getState(), epc = useEpcStore.getState(), ms = useMaterialStore.getState(), cs = useMaterialControlStore.getState()
+  const dates: string[] = []
+  for (const d of epc.engDocs) if (d.projectId === projectId) for (const v of [d.plannedPrepared, d.plannedApproved]) if (v) dates.push(v.slice(0, 10))
+  const mat = materialCore(ms, cs, projectId)
+  for (const s of mat.stages) if (s.plannedDate) dates.push(s.plannedDate.slice(0, 10))
+  for (const a of ex.activities) if (a.projectId === projectId) for (const v of [a.plannedStart, a.plannedEnd]) if (v) dates.push(v.slice(0, 10))
+  if (!dates.length) return null
+  dates.sort()
+  return { start: dates[0], finish: dates[dates.length - 1] }
+}

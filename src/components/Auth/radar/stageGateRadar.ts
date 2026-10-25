@@ -1,6 +1,7 @@
 import { supabase } from '../../../lib/supabaseClient'
 import { stageGateRadarSection, type SgRadarSection } from './stageGateRadarCore'
 import { sgProgress } from '../../../modules/stagegate/sgProgress'
+import { ensureLifecycleProject } from '../../../modules/projectMetrics/lifecycleInputs'
 import { loadEpcProgress } from '../../../modules/epc/epcProgressLoader'
 import type { EpcProgress } from '../../../modules/epc/epcProgress'
 
@@ -9,10 +10,9 @@ const s = (v: unknown) => (v == null ? '' : String(v))
 
 /** The Stage-Gate picture of a master project (through sg_projects.master_project_id); null when it has none. */
 export async function loadStageGateRadar(masterProjectId: string): Promise<(SgRadarSection & { epc: EpcProgress }) | null> {
-  const { data: proj } = await supabase.from('sg_projects').select('name').eq('master_project_id', masterProjectId).maybeSingle()
-  const name = (proj as Row | null)?.name
-  if (!name) return null
-  const project = s(name)
+  // every project has a lifecycle — created on first use when missing
+  const project = await ensureLifecycleProject(masterProjectId)
+  if (!project) return null
   const [ph, ob, out, cr, it, dc, pr, sc, rep] = await Promise.all([
     supabase.from('sg_lifecycle_phases').select('code, sort_order, title, gate_name, progress_engine').eq('is_active', true),
     supabase.from('sg_lifecycle_objectives').select('id, phase_code, seq, title').eq('is_active', true),

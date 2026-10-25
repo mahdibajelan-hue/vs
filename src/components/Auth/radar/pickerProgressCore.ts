@@ -15,6 +15,9 @@ export interface PickerProgress {
   phasePlanned: number | null
   /** 'lifecycle' = Stage-Gate gates; 'epc' = a project with no Stage-Gate link, gauged by its EPC modules alone */
   mode: 'lifecycle' | 'epc'
+  /** unrounded project progress (lifecycle engine, or EPC modules for 'epc'); planned null when unknown — the figure
+   * every other surface (finance, dashboard) uses, so they agree to the decimal */
+  overall: { actual: number; planned: number | null } | null
 }
 
 export type PickerSource = Omit<SgRadarInput, 'project' | 'prereqs' | 'engine'> & {
@@ -63,6 +66,7 @@ export function pickerProgress(src: PickerSource, today = new Date()): Map<strin
       phaseActual: cur && prog ? Math.round(prog.phases.get(cur.key)?.actual ?? 0) : null,
       phasePlanned: cur && prog ? Math.round(prog.phases.get(cur.key)?.planned ?? 0) : null,
       mode: 'lifecycle',
+      overall: prog ? { actual: prog.overall.actual, planned: prog.overall.planned } : null,
     })
   }
   // projects outside Stage-Gate: the EPC modules' own weighted progress, one gauge segment per discipline
@@ -77,6 +81,7 @@ export function pickerProgress(src: PickerSource, today = new Date()): Map<strin
       phaseActual: r1(e.overall.actual),
       phasePlanned: e.overall.planned == null ? null : r1(e.overall.planned),
       mode: 'epc',
+      overall: e.overall,
     })
   }
   return out
