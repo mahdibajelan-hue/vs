@@ -45,7 +45,7 @@ export function LoginCard() {
 
   return (
     <div
-      className={`hub-fade-in login-card mx-auto mb-6 w-full max-w-sm rounded-2xl border p-6 transition-colors duration-300 ${
+      className={`hub-fade-in login-card mx-auto mb-6 w-full max-w-sm rounded-2xl border p-6 md:mb-2 md:p-5 transition-colors duration-300 ${
         status === 'error' ? 'auth-panel-error' : status === 'success' ? 'auth-panel-success' : ''
       }`}
       style={{

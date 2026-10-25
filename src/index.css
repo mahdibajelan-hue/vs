@@ -1897,20 +1897,32 @@ select option {
 /* Signed-in home: [Radar | my projects] then the organization-wide tools on a uniform grid. */
 .lp-home-top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.7rem; }
 .lp-home-top > * { min-width: 0; }
-@media (min-width: 720px) { .lp-home-top { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); } }
-.lp-home-top .lp-tile.is-hero { min-height: 13rem; }
-.lp-section-title { margin: 1.25rem 0.2rem 0.6rem; font-size: 0.95rem; font-weight: 900; color: var(--text-primary); text-align: right; }
+@media (min-width: 1024px) { .lp-home-top { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: stretch; } }
+.lp-home-top > * > * { height: 100%; }
+.lp-home-top .lp-tile.is-hero { min-height: 11rem; }
+.lp-section-title { margin: 0.9rem 0.2rem 0.5rem; font-size: 0.95rem; font-weight: 900; color: var(--text-primary); text-align: right; }
 .lp-section-title span { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
 .lp-org-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
 .lp-org-grid > * { min-width: 0; }
 .lp-org-grid > .is-wide { grid-column: 1 / -1; }
 @media (min-width: 640px) {
-  .lp-org-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(118px, auto); gap: 0.7rem; }
+  .lp-org-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(92px, auto); gap: 0.6rem; }
   .lp-org-grid > .is-wide { grid-column: span 2; }
   .lp-org-grid .lp-tile-en { display: none; }
   .lp-org-grid .lp-tile-desc { -webkit-line-clamp: 2; font-size: 10.5px; }
   .lp-org-grid > :not(.is-wide) .lp-tile-foot { display: none; }
   .lp-org-grid > .is-wide .lp-tile-en { display: block; }
+}
+/* desktop home: compact tool tiles (icon beside the title) so the whole home fits on one screen */
+@media (min-width: 1024px) {
+  .lp-org-grid .lp-tile { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto 1fr; align-items: center; column-gap: 0.6rem; row-gap: 0.25rem; padding: 0.65rem 0.8rem; min-height: 0; }
+  .lp-org-grid .lp-tile-head { grid-row: 1 / span 2; align-self: start; }
+  .lp-org-grid .lp-tile-chip { height: 1.9rem; width: 1.9rem; }
+  .lp-org-grid .lp-tile-body { grid-row: 1 / span 2; }
+  .lp-org-grid .lp-tile-foot { grid-column: 1 / -1; }
+  .lp-home-top .ibh-bars { display: none; }
+  .lp-home-top .ibh-main { padding: 14px 16px; gap: 12px; }
+  .lp-home-top .ibh-art svg { width: 84px; height: auto; }
 }
 
 .lp-myp {
@@ -2070,3 +2082,10 @@ select option {
   box-shadow: inset 0 0.06em 0.1em rgba(15, 23, 42, 0.32), inset 0 -0.03em 0 rgba(255, 255, 255, 0.95), 0 0.02em 0 rgba(255, 255, 255, 0.9); }
 .launchpad-frame.is-authed .lp-pmis-txt { font-weight: 800; background-image: linear-gradient(180deg, #020617, #1e293b);
   filter: drop-shadow(0 0.025em 0 rgba(255, 255, 255, 0.9)); }
+/* short laptop screens (≈768px tall): drop the tagline under the wordmark and tighten the top row so the home needs no scroll */
+@media (min-width: 1024px) and (max-height: 820px) {
+  .launchpad-frame.is-authed .lp-brand-tag { display: none; }
+  .lp-home-top .lp-tile.is-hero { min-height: 9.5rem; }
+  .lp-home-top .ibh-main { padding-block: 10px; }
+  .lp-section-title { margin-top: 0.6rem; }
+}

@@ -9,6 +9,9 @@ export interface PickerProgress {
   segments: { code: string; pct: number; state: 'done' | 'current' | 'upcoming' }[]
   phaseCode: string
   phaseTitle: string
+  /** the current phase's own actual / planned progress (Stage-Gate engine); null when the engine has no inputs */
+  phaseActual: number | null
+  phasePlanned: number | null
 }
 
 export type PickerSource = Omit<SgRadarInput, 'project' | 'prereqs' | 'engine'> & {
@@ -48,6 +51,8 @@ export function pickerProgress(src: PickerSource, today = new Date()): Map<strin
       segments: sec.lifecycle.map((s) => ({ code: s.key, pct: s.progressPct, state: s.state })),
       phaseCode: cur?.key ?? 'پایان',
       phaseTitle: cur?.label ?? 'پایان چرخه',
+      phaseActual: cur && prog ? Math.round(prog.phases.get(cur.key)?.actual ?? 0) : null,
+      phasePlanned: cur && prog ? Math.round(prog.phases.get(cur.key)?.planned ?? 0) : null,
     })
   }
   return out

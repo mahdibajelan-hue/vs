@@ -7,7 +7,7 @@ const DEV_EMAIL = 'bajelanmahdi6900@gmail.com'
  * so it reads as a colophon beneath the wordmark rather than competing with the login card. */
 export function AboutNote() {
   return (
-    <div className="hub-fade-in flex max-w-md flex-col items-center gap-3 text-center font-light text-zinc-500 md:items-end md:text-left" style={{ animationDelay: '200ms' }}>
+    <div className="hub-fade-in flex max-w-md flex-col items-center gap-3 md:gap-2 text-center font-light text-zinc-500 md:items-end md:text-left" style={{ animationDelay: '200ms' }}>
       <p className="text-[12.5px] leading-7 md:text-justify md:[text-align-last:left]">
         از رادار هوشمند پروژه، ریسک، مسائل، مالی و قرارداد تا ارزیابی شایستگی، شخصیت و توسعه نیروی انسانی، همه در یک سامانه واحد و متصل به
         هم.
@@ -30,7 +30,7 @@ export function AboutNote() {
       <img
         src={`${import.meta.env.BASE_URL}signature-mahdi.png`}
         alt="Mahdi Bajelan — Software Engineer"
-        className="mt-1 h-24 w-auto self-center opacity-80 sm:h-28"
+        className="mt-1 h-24 w-auto self-center opacity-80 sm:h-28 md:h-16"
         onError={(e) => {
           // Falls back to a styled text signature if signature-mahdi.png is ever missing from public/.
           e.currentTarget.style.display = 'none'

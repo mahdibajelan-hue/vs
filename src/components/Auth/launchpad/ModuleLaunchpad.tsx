@@ -14,7 +14,6 @@ import { SupervisionAttendanceCard } from './cards/SupervisionAttendanceCard'
 import { InboxHubCard } from '../../../modules/inbox/components/InboxHubCard'
 import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { useMasterDataStore } from '../../../modules/masterdata/store/useMasterDataStore'
-import { MyProjectsPanel } from './MyProjectsPanel'
 import { PROJECT_MODULES } from '../radar/projectNav'
 
 type CardComponent = (props: { onSelect: () => void; locked?: boolean; badge?: number }) => ReactElement
@@ -80,16 +79,13 @@ export function ModuleLaunchpad({ onSelect, embedded }: { onSelect: (key: 'radar
 
   return (
     <main className="relative z-10 mx-auto w-full max-w-4xl py-2">
-      <div className="hub-fade-in mb-3" style={{ animationDelay: '100ms' }}>
-        <InboxHubCard locked={locked} />
-      </div>
-
+      {/* my inbox beside the radar — the home stays quiet: no project list here, the radar has it */}
       <div className="lp-home-top">
+        <div className="hub-fade-in" style={{ animationDelay: '100ms' }}>
+          <InboxHubCard locked={locked} />
+        </div>
         <div className="hub-fade-in" style={{ animationDelay: '140ms' }}>
           <ProjectRadarCard onSelect={() => openRadar(null)} badge={projectCount} />
-        </div>
-        <div className="hub-fade-in" style={{ animationDelay: '180ms' }}>
-          <MyProjectsPanel onOpen={openRadar} />
         </div>
       </div>
 

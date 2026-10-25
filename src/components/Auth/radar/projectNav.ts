@@ -65,12 +65,14 @@ const RECENT_KEY = 'farin.radar.recent'
 export function recentProjects(): string[] {
   try { const v = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [] } catch { return [] }
 }
-export function rememberProject(id: string) {
-  try { localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...recentProjects().filter((x) => x !== id)].slice(0, 8))) } catch { /* private mode */ }
+export function setRecentProjects(ids: string[]) {
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(ids.slice(0, 50))) } catch { /* private mode */ }
 }
-/** Recent first (in visit order), then the rest by name. */
-export function orderProjects(list: MasterProject[]): MasterProject[] {
-  const rec = recentProjects()
+export function rememberProject(id: string) {
+  setRecentProjects([id, ...recentProjects().filter((x) => x !== id)])
+}
+/** Most recently opened first (every project ever opened, in visit order), then the never-opened ones by name. */
+export function orderProjects(list: MasterProject[], rec: string[] = recentProjects()): MasterProject[] {
   const rank = (p: MasterProject) => { const i = rec.indexOf(p.id); return i < 0 ? 999 : i }
   return [...list].sort((a, b) => rank(a) - rank(b) || a.officialName.localeCompare(b.officialName, 'fa'))
 }

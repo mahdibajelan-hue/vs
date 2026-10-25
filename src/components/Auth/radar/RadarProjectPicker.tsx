@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, CalendarCheck2, Layers, MapPin, Radar as RadarIcon, Search, Clock, Waypoints, Gauge, FlaskConical, Database, Cpu, Network, Factory, TrendingUp, TrendingDown, Minus, Hourglass, type LucideIcon } from 'lucide-react'
+import { ArrowLeft, CalendarCheck2, Layers, MapPin, Radar as RadarIcon, Search, Clock, Waypoints, Gauge, FlaskConical, Database, Cpu, Network, Factory, TrendingUp, TrendingDown, Minus, Hourglass, Activity, type LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../../../modules/masterdata/store/useMasterDataStore'
 import { PROJECT_STATUS_LABEL_FA, PROJECT_STATUS_TONE, type MasterProject } from '../../../modules/masterdata/types'
 import { formatJalali } from '../../../lib/jalali'
 import { orderProjects, projectEnd, recentProjects, timeElapsed } from './projectNav'
 import { loadPickerProgress } from './pickerProgress'
+import { ModuleHeaderActions } from '../../common/ModuleHeaderActions'
+import { syncRecentFromServer } from './projectVisits'
 import type { PickerProgress } from './pickerProgressCore'
 
 const TONE: Record<'neutral' | 'green' | 'amber' | 'red', string> = { neutral: '#94a3b8', green: '#22c55e', amber: '#f59e0b', red: '#ef4444' }
@@ -24,7 +26,10 @@ export function RadarProjectPicker({ onPick, onBack }: { onPick: (id: string) =>
   const [q, setQ] = useState('')
   const [pf, setPf] = useState<string | null>(null)
   const [hot, setHot] = useState<string | null>(null)
-  const recent = useMemo(() => new Set(recentProjects()), [])
+  // visit order: the local copy at once, then the server's (all devices) when it arrives
+  const [recentIds, setRecentIds] = useState<string[]>(() => recentProjects())
+  useEffect(() => { let alive = true; void syncRecentFromServer().then((ids) => { if (alive) setRecentIds(ids) }); return () => { alive = false } }, [])
+  const recent = useMemo(() => new Set(recentIds.slice(0, 3)), [recentIds])
   // lifecycle progress per project (Stage-Gate); undefined while loading, a map (possibly empty) once known
   const [progress, setProgress] = useState<Map<string, PickerProgress> | undefined>(undefined)
   useEffect(() => {
@@ -33,7 +38,7 @@ export function RadarProjectPicker({ onPick, onBack }: { onPick: (id: string) =>
     return () => { alive = false }
   }, [])
 
-  const ordered = useMemo(() => orderProjects(projects), [projects])
+  const ordered = useMemo(() => orderProjects(projects, recentIds), [projects, recentIds])
   const usedPortfolios = portfolios.filter((p) => projects.some((x) => x.portfolioId === p.id))
   const needle = q.trim()
   const list = ordered.filter((p) => (!pf || p.portfolioId === pf) && (!needle || [p.officialName, p.shortName, p.projectCode, p.projectIdCode, p.location].some((v) => v?.includes(needle))))
@@ -42,12 +47,10 @@ export function RadarProjectPicker({ onPick, onBack }: { onPick: (id: string) =>
   return (
     <div dir="rtl" className="rpk-shell">
       <div className="radar-page-texture" aria-hidden="true" />
+      {/* the same shortcut bar as every module (inbox, search, theme, home) */}
       <header className="rpk-top">
-        <button type="button" onClick={onBack} className="rpk-back" title="بازگشت به صفحهٔ اصلی">
-          <ArrowRight size={16} />
-          <span>صفحهٔ اصلی</span>
-        </button>
-        <span className="rpk-brand"><RadarIcon size={16} /> رادار پروژه‌ها</span>
+        <span className="rpk-brand"><span className="rpk-brand-ico"><RadarIcon size={18} /></span><span><b>رادار پروژه‌ها</b><small>انتخاب پروژه</small></span></span>
+        <ModuleHeaderActions onExitToHub={onBack} hideModuleHome />
       </header>
 
       <section className="rpk-hero">
@@ -157,6 +160,7 @@ function ProjectCard({ p, index, recent, portfolio, program, progress, onHover, 
         <GateDial progress={progress} elapsed={used} />
       </span>
       <span className="rpk-clock">
+        {prog && prog.phaseActual != null && <PhaseBar title={prog.phaseTitle} code={prog.phaseCode} actual={prog.phaseActual} planned={prog.phasePlanned ?? prog.phaseActual} />}
         {used == null ? (
           <span className="text-muted">تاریخ‌های قرارداد هنوز ثبت نشده</span>
         ) : (
@@ -172,6 +176,26 @@ function ProjectCard({ p, index, recent, portfolio, program, progress, onHover, 
       </span>
       <span className="rpk-go">ورود به اتاق فرمان <ArrowLeft size={14} aria-hidden /></span>
     </button>
+  )
+}
+
+/** The current phase's own progress: solid = actual, light fill + tick = planned; colour says ahead / behind. */
+function PhaseBar({ title, code, actual, planned }: { title: string; code: string; actual: number; planned: number }) {
+  const gap = actual - planned
+  const tone = gap >= -5 ? '#10b981' : gap >= -20 ? '#f59e0b' : '#ef4444'
+  const clamp = (v: number) => Math.max(0, Math.min(100, v))
+  return (
+    <span className="rpk-phase" style={{ '--ph': tone } as CSSProperties}>
+      <span className="rpk-clock-row">
+        <span><Activity size={12} aria-hidden /> پیشرفت فاز <b className="rpk-phase-name">{title}</b> <i dir="ltr">{code}</i></span>
+        <span className="rpk-phase-nums"><b>{faNum(actual)}٪</b> <small>برنامه {faNum(planned)}٪</small></span>
+      </span>
+      <span className="rpk-ptrack" title={`واقعی ${faNum(actual)}٪ — برنامه ${faNum(planned)}٪`}>
+        <span className="rpk-ptrack-plan" style={{ width: `${clamp(planned)}%` }} />
+        <span className="rpk-ptrack-act" style={{ width: `${clamp(actual)}%` }} />
+        <span className="rpk-ptrack-tick" style={{ insetInlineStart: `${clamp(planned)}%` }} />
+      </span>
+    </span>
   )
 }
 

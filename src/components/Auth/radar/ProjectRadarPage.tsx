@@ -13,8 +13,9 @@ import { RadarProjectPicker } from './RadarProjectPicker'
 import { RadarSidebar } from './RadarSidebar'
 import { MobileRadar } from './MobileRadar'
 import { projectBadges, rememberProject, type ProjectNavItem } from './projectNav'
+import { recordVisit } from './projectVisits'
+import { ModuleHeaderActions } from '../../common/ModuleHeaderActions'
 import './radarShell.css'
-import { SignOutButton } from '../SignOutButton'
 import { HeartbeatBar } from './HeartbeatBar'
 import { RadarDisplay } from './RadarDisplay'
 import { CriticalSignalsPanel, ContractPanel, LifecyclePanel, NextGatePanel, PerformanceRingCard, SignalStatCard } from './RadarPanels'
@@ -47,7 +48,7 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
   // the whole context follows the chosen project, so modules that filter by portfolio/program agree with it
   const pickProject = (id: string | null) => {
     const p = id ? masterProjects.find((x) => x.id === id) : null
-    if (p) rememberProject(p.id)
+    if (p) { rememberProject(p.id); recordVisit(p.id) }
     useProjectContextStore.setState({ portfolioId: p?.portfolioId ?? null, programId: p?.programId ?? null, projectId: p?.id ?? null, phaseId: null })
   }
   const notifications = useNotificationStore((s) => s.items)
@@ -237,12 +238,8 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
             )}
           </div>
 
-          <SignOutButton
-            className="flex h-9 items-center gap-1.5 rounded-xl border border-red-400/25 px-3 text-[11px] text-red-300 hover:bg-red-500/10 transition-colors"
-            title="Sign out and return to login"
-          >
-            Sign Out
-          </SignOutButton>
+          {/* the system-wide shortcut bar (inbox, search, theme, home, my profile / sign out) */}
+          <div dir="rtl"><ModuleHeaderActions onExitToHub={onBack} hideModuleHome /></div>
         </div>
       </header>
 
