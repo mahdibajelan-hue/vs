@@ -9,9 +9,7 @@ export const MODULE_CATALOG: { key: ModuleKey | 'radar'; fa: string; en: string;
   { key: 'estimator', fa: 'برآورد پروژه‌ها', en: 'Project Estimation', words: 'برآورد هزینه تخمین' },
   { key: 'missions', fa: 'مأموریت و گزارش بازدید', en: 'Mission Debrief', words: 'مأموریت ماموریت بازدید سفر' },
   { key: 'landacq', fa: 'تحصیل اراضی', en: 'Land Acquisition', words: 'زمین اراضی پارسل مالک عبور' },
-  { key: 'stagegate', fa: 'چرخه عمر و برج کنترل (Stage-Gate)', en: 'Stage-Gate', words: 'گیت مرحله چرخه عمر برنامه جامع برج کنترل EPC مایلستون' },
-  // the former lifecycle module stays reachable for its templates (they feed the control tower inside Stage-Gate)
-  { key: 'lifecycle', fa: 'قالب‌ها و داده‌های برج کنترل (چرخه عمر قدیمی)', en: 'Lifecycle templates (legacy)', words: 'قالب چرخه عمر قدیمی برج کنترل سلامت هشدار زودهنگام' },
+  { key: 'stagegate', fa: 'چرخه عمر پروژه (Stage-Gate)', en: 'Stage-Gate', words: 'گیت مرحله چرخه عمر فاز تصویب' },
   { key: 'taskissue', fa: 'مدیریت موانع و اقدامات', en: 'Issue & Task', words: 'مانع مسئله اقدام پیگیری issue' },
   { key: 'supervision', fa: 'حضور و غیاب دستگاه نظارت', en: 'Supervision Attendance', words: 'ناظر نظارت نماینده کارفرما حضور غیاب اضافه کار ساعت کار صبحانه ناهار شام خودرو استیجاری کارت ساعت' },
   { key: 'risk', fa: 'مدیریت ریسک', en: 'Risk Management', words: 'ریسک خطر کنترل KRI' },

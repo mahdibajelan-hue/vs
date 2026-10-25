@@ -24,7 +24,7 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
   { id: 'watch', label: 'پایش', items: [
     { id: 'overview', module: null, label: 'رادار پروژه', icon: Radar, accent: '#22c55e' },
     // Stage-Gate is the lifecycle of record; the EPC control tower lives inside it as a tab
-    { id: 'stagegate', module: 'stagegate', label: 'چرخهٔ عمر و برج کنترل', icon: Route, accent: '#38bdf8' },
+    { id: 'stagegate', module: 'stagegate', label: 'چرخهٔ عمر (Stage-Gate)', icon: Route, accent: '#38bdf8' },
   ] },
   { id: 'time', label: 'زمان و اجرا', items: [
     { id: 'scheduling', module: 'scheduling', label: 'برنامه‌ریزی و کنترل زمان', icon: CalendarClock, accent: '#14b8a6' },

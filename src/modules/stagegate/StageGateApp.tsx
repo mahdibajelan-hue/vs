@@ -1,25 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link2, Loader2, Orbit, Target } from 'lucide-react'
+import { Link2, Loader2, Orbit } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useModuleStore } from '../../store/useModuleStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
-import { useLifecycleStore } from '../lifecycle/store/useLifecycleStore'
-import { ControlTowerPage } from '../lifecycle/pages/ControlTowerPage'
-import { MilestonesPage } from '../lifecycle/pages/MilestonesPage'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { createStageGateEngine } from './legacy/engine'
 import { linkSgProject, loadSgProjects, type SgProjectRef } from './sgProjects'
 import './stagegate.css'
 
-type View = 'lifecycle' | 'tower' | 'milestones'
-
-/** Stage-Gate lifecycle (9-gate model, orbit + Gantt master plan) — the lifecycle of record of the platform.
- * The lifecycle view is the original engine mounted on #lcBody. Each Stage-Gate project is linked to a master project
- * (sg_projects.master_project_id): opened from Project Radar it shows that project only. The EPC control tower
- * (health, early warnings, milestones) of the former lifecycle module lives here as a second tab. */
+/** Stage-Gate lifecycle (9-gate model, orbit + gate pages) — the lifecycle of record of the platform. The original
+ * engine is mounted on #lcBody. Each Stage-Gate project is linked to a master project (sg_projects.master_project_id):
+ * opened from Project Radar it shows that project only. The whole-project master plan (Gantt) lives in Scheduling. */
 export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const profile = useAuthStore((s) => s.profile)
   const masterProjects = useMasterDataStore((s) => s.projects)
@@ -28,7 +22,6 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const [projects, setProjects] = useState<SgProjectRef[]>([])
   const [selected, setSelected] = useState('')
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<View>('lifecycle')
   const [linkMsg, setLinkMsg] = useState<string | null>(null)
   const engineRef = useRef<ReturnType<typeof createStageGateEngine> | null>(null)
 
@@ -60,23 +53,12 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
 
   async function load(name: string) {
     setSelected(name)
-    setView('lifecycle')
     if (name && engineRef.current) await engineRef.current.openLifecyclePreview(name)
   }
 
   const current = projects.find((p) => p.name === selected) ?? null
   const master = current?.masterProjectId ? masterProjects.find((m) => m.id === current.masterProjectId) ?? null : null
 
-  // the control tower reads the former lifecycle module's data for the linked master project
-  const selectPlcProject = useLifecycleStore((s) => s.selectProject)
-  // the tower reads its bundle from Stage-Gate (G1…G9), not from the former lifecycle templates
-  useEffect(() => {
-    if (!master || view === 'lifecycle') return
-    useLifecycleStore.getState().setSgMode(true)
-    void selectPlcProject(master.id)
-  }, [master, view, selectPlcProject])
-  // the engine renders into #lcBody: when coming back to the lifecycle tab, draw it again
-  useEffect(() => { if (view === 'lifecycle' && selected && engineRef.current) void engineRef.current.openLifecyclePreview(selected) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [view])
 
   const linkTo = async (masterId: string) => {
     if (!current) return
@@ -101,15 +83,9 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       </header>
       <StorageErrorBanner />
 
-      {selected && (
-        <nav className="sg-root no-print flex shrink-0 gap-1 border-b px-3 py-2 sm:px-5" style={{ background: 'var(--sg-nav)' }} role="tablist" aria-label="بخش‌های چرخه عمر">
-          <SgTab on={view === 'lifecycle'} onClick={() => setView('lifecycle')} icon={<Orbit size={14} />} label="چرخهٔ عمر و گیت‌ها" />
-          <SgTab on={view !== 'lifecycle'} onClick={() => setView('tower')} icon={<Target size={14} />} label="برج کنترل EPC" disabled={!master} title={master ? undefined : 'برای برج کنترل، پروژه باید به اطلاعات پایه وصل باشد'} />
-        </nav>
-      )}
 
       <main className="min-h-0 flex-1 overflow-y-auto">
-        <div className={`sg-root space-y-4 p-3 sm:p-5 ${view === 'lifecycle' ? '' : 'hidden'}`} style={{ minHeight: '100%' }}>
+        <div className="sg-root space-y-4 p-3 sm:p-5" style={{ minHeight: '100%' }}>
           {locked ? (
             !loading && !lockedSg && (
               <div className="rounded-2xl border bg-white p-8 text-center text-sm text-slate-500">
@@ -147,25 +123,7 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           </div>
         </div>
 
-        {view !== 'lifecycle' && master && (
-          <div className="plc-canvas min-h-full">
-            {view === 'tower' ? (
-              <ControlTowerPage project={master} backLabel="چرخهٔ عمر و گیت‌ها" onBack={() => setView('lifecycle')} onOpenStage={() => setView('lifecycle')} onOpenMilestones={() => setView('milestones')} />
-            ) : (
-              <MilestonesPage projectId={master.id} onBack={() => setView('tower')} />
-            )}
-          </div>
-        )}
       </main>
     </div>
-  )
-}
-
-function SgTab({ on, onClick, icon, label, disabled, title }: { on: boolean; onClick: () => void; icon: React.ReactNode; label: string; disabled?: boolean; title?: string }) {
-  return (
-    <button type="button" role="tab" aria-selected={on} disabled={disabled} title={title} onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-40 ${on ? 'bg-blue-900 text-[#ffffff]' : 'text-slate-500 hover:bg-slate-50'}`}>
-      {icon} {label}
-    </button>
   )
 }

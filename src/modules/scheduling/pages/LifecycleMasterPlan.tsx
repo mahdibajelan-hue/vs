@@ -36,7 +36,7 @@ export function LifecycleMasterPlan({ projectId }: { projectId: string }) {
       <div className="im-card im-empty" style={{ display: 'grid', gap: 10, justifyItems: 'center', padding: 32 }}>
         <Orbit size={26} aria-hidden style={{ color: 'var(--im-muted)' }} />
         <b>این پروژه هنوز به یک پروژهٔ Stage-Gate وصل نشده است.</b>
-        <span className="im-helper">مستر پلن چرخه عمر از ماژول «چرخهٔ عمر و برج کنترل (Stage-Gate)» خوانده می‌شود؛ اتصال پروژه از همان ماژول (بیرون از رادار) انجام می‌شود.</span>
+        <span className="im-helper">مستر پلن چرخه عمر از ماژول «چرخه عمر پروژه (Stage-Gate)» خوانده می‌شود؛ اتصال پروژه از همان ماژول (بیرون از رادار) انجام می‌شود.</span>
         <button type="button" className="im-btn im-btn-sm" onClick={() => useModuleStore.getState().enterModule('stagegate')}>رفتن به Stage-Gate</button>
       </div>
     )

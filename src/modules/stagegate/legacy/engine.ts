@@ -611,9 +611,9 @@ export function createStageGateEngine(env) {
                     .lc-dark-panel .text-slate-400 { color: #94a3b8 !important; }
                     .lc-dark-panel .text-slate-500 { color: #94a3b8 !important; }
                 </style>
-                ${planOnly ? '' : lcTabBarHtml()}
+                ${/* the whole-project master plan (Gantt) lives in Scheduling; the lifecycle shows the orbit and gate pages */ ''}
                 ${planOnly ? '' : lcExecStripHtml()}
-                ${planOnly || lcState.activeTab === 'plan' ? lcMasterPlanHtml()
+                ${planOnly ? lcMasterPlanHtml()
                     : lcState.selectedPhase ? lcPhaseDetailPageHtml(lcState.phases.find(p => p.code === lcState.selectedPhase))
                     : lcOrbitPageHtml()}
                 ${planOnly ? '' : lcMetadataBarHtml()}
@@ -1262,13 +1262,6 @@ export function createStageGateEngine(env) {
             const nextIdx = idx === -1 ? levels.indexOf(1) : Math.min(levels.length - 1, Math.max(0, idx + dir));
             lcState.ganttZoom = levels[nextIdx];
             lcRenderAll();
-        }
-
-        function lcTabBarHtml() {
-            const tabs = [['orbit', 'نمای مداری'], ['plan', 'برنامه زمان‌بندی (Gantt)']];
-            return `<div class="no-print flex items-center gap-2">
-                ${tabs.map(([key, label]) => `<button type="button" data-lc-tab="${key}" class="text-xs font-bold px-4 py-2 rounded-xl border transition ${lcState.activeTab === key ? 'bg-blue-900 text-white border-blue-900' : 'bg-white text-slate-500 hover:bg-slate-50'}">${esc(label)}</button>`).join('')}
-            </div>`;
         }
 
         function lcScheduleChildren(phaseCode, parentId) {
