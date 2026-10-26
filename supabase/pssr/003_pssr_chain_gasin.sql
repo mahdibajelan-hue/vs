@@ -6,8 +6,11 @@ alter table pssr_signers drop constraint if exists pssr_signers_master_project_i
 alter table pssr_signers add column if not exists person_label text not null default '';
 alter table pssr_signers add column if not exists step_rule text not null default 'any';
 alter table pssr_signers add column if not exists is_manual boolean not null default false;
-alter table pssr_signers drop constraint if exists pssr_signers_rule_chk;
-alter table pssr_signers add constraint pssr_signers_rule_chk check (step_rule in ('any', 'all'));
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'pssr_signers_rule_chk') then
+    alter table pssr_signers add constraint pssr_signers_rule_chk check (step_rule in ('any', 'all'));
+  end if;
+end $$;
 alter table pssr_signoffs add column if not exists person_label text not null default '';
 alter table pssr_signoffs add column if not exists manual_signer text not null default '';
 alter table pssr_signoffs add column if not exists manual_signed_on date;
@@ -39,8 +42,9 @@ create index if not exists pssr_gasin_logs_permit on pssr_gasin_logs (permit_id)
 do $$ declare t text; begin
   foreach t in array array['pssr_systems', 'pssr_template_items', 'pssr_checks', 'pssr_meetings', 'pssr_punches', 'pssr_signers', 'pssr_signoffs', 'pssr_gasin_permits', 'pssr_gasin_logs'] loop
     execute format('alter table %I enable row level security', t);
-    execute format('drop policy if exists %I on %I', t || '_auth', t);
-    execute format('create policy %I on %I for all to authenticated using (auth.uid() is not null) with check (auth.uid() is not null)', t || '_auth', t);
+    if not exists (select 1 from pg_policies where tablename = t and policyname = t || '_auth') then
+      execute format('create policy %I on %I for all to authenticated using (auth.uid() is not null) with check (auth.uid() is not null)', t || '_auth', t);
+    end if;
   end loop;
 end $$;
 
@@ -68,7 +72,11 @@ where not exists (select 1 from pssr_template_items);
 
 -- اسکن فرم‌های دستی امضاشده (خصوصی؛ با لینک موقت باز می‌شود)
 insert into storage.buckets (id, name, public, file_size_limit) values ('pssr-docs', 'pssr-docs', false, 20971520) on conflict (id) do nothing;
-drop policy if exists pssr_docs_read on storage.objects;
-create policy pssr_docs_read on storage.objects for select to authenticated using (bucket_id = 'pssr-docs');
-drop policy if exists pssr_docs_write on storage.objects;
-create policy pssr_docs_write on storage.objects for insert to authenticated with check (bucket_id = 'pssr-docs');
+do $$ begin
+  if not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'pssr_docs_read') then
+    create policy pssr_docs_read on storage.objects for select to authenticated using (bucket_id = 'pssr-docs');
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'pssr_docs_write') then
+    create policy pssr_docs_write on storage.objects for insert to authenticated with check (bucket_id = 'pssr-docs');
+  end if;
+end $$;

@@ -14,8 +14,8 @@ begin
   return new;
 end $$;
 
-drop trigger if exists trg_sg_auto_lifecycle_project on master_projects;
-create trigger trg_sg_auto_lifecycle_project after insert on master_projects
+-- بدون DROP (ابزار SQL سوپابیس پیش از هر DROP تأیید می‌خواهد): create or replace trigger در Postgres 14+
+create or replace trigger trg_sg_auto_lifecycle_project after insert on master_projects
 for each row execute function sg_auto_lifecycle_project();
 
 -- پروژه‌های موجود بدون چرخهٔ عمر

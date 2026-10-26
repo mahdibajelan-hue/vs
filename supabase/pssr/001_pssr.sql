@@ -93,8 +93,9 @@ create index if not exists pssr_systems_project on pssr_systems (master_project_
 do $$ declare t text; begin
   foreach t in array array['pssr_systems', 'pssr_template_items', 'pssr_checks', 'pssr_meetings', 'pssr_punches', 'pssr_signers', 'pssr_signoffs'] loop
     execute format('alter table %I enable row level security', t);
-    execute format('drop policy if exists %I on %I', t || '_auth', t);
-    execute format('create policy %I on %I for all to authenticated using (auth.uid() is not null) with check (auth.uid() is not null)', t || '_auth', t);
+    if not exists (select 1 from pg_policies where tablename = t and policyname = t || '_auth') then
+      execute format('create policy %I on %I for all to authenticated using (auth.uid() is not null) with check (auth.uid() is not null)', t || '_auth', t);
+    end if;
   end loop;
 end $$;
 
