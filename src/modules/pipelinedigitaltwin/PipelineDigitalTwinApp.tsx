@@ -2,6 +2,8 @@ import { CalendarDays, Route as RouteIcon, Settings } from 'lucide-react'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useModuleStore } from '../../store/useModuleStore'
+import { useState } from 'react'
 import { usePdtStore } from './store/usePdtStore'
 import { DashboardPage } from './pages/DashboardPage'
 import type { ProjectPhase } from './types'
@@ -29,6 +31,8 @@ export function PipelineDigitalTwinApp({ onExitToHub, onBackToRadar }: { onExitT
   const setProjectPhase = usePdtStore((s) => s.setProjectPhase)
   const profile = useAuthStore((s) => s.profile)
   const todayIso = new Date().toISOString().slice(0, 10)
+  // another module can open the twin on one of its data layers (enterModule('pipelinedigitaltwin', …, 'pssr'))
+  const [initialLayer] = useState<'pssr' | 'land' | null>(() => { const t = useModuleStore.getState().entryTab; return t === 'pssr' || t === 'land' ? t : null })
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden" style={{ background: 'var(--bg-app)' }}>
@@ -99,7 +103,7 @@ export function PipelineDigitalTwinApp({ onExitToHub, onBackToRadar }: { onExitT
       <StorageErrorBanner />
 
       <main className="min-h-0 flex-1 overflow-hidden">
-        <DashboardPage />
+        <DashboardPage initialLayer={initialLayer} />
       </main>
     </div>
   )

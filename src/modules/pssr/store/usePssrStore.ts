@@ -30,9 +30,10 @@ interface State {
   permits: GasinPermit[]; logs: GasinLog[]; advisories: PssrAdvisories | null
   load: (projectId: string) => Promise<void>
   addSystem: (p: { code: string; name: string; kind: PssrKind; kmFrom: number | null; kmTo: number | null; targetGasIn: string | null; note: string }, by: string) => Promise<string | null>
-  updateSystem: (id: string, p: Partial<{ name: string; targetGasIn: string | null; note: string }>) => Promise<boolean>
+  updateSystem: (id: string, p: Partial<{ name: string; kind: PssrKind; kmFrom: number | null; kmTo: number | null; targetGasIn: string | null; note: string }>) => Promise<boolean>
   deleteSystem: (id: string) => Promise<boolean>
-  setCheck: (id: string, status: CheckStatus, evidence: string, by: string) => Promise<boolean>
+  /** `fileUrl`: a photo / document path in the private bucket (undefined keeps the current one) */
+  setCheck: (id: string, status: CheckStatus, evidence: string, by: string, fileUrl?: string | null) => Promise<boolean>
   addMeeting: (systemId: string, heldOn: string, attendees: string, notes: string, by: string) => Promise<boolean>
   addPunch: (p: { systemId: string; meetingId: string | null; category: PunchCategory; title: string; discipline: string; owner: string; dueDate: string | null }, by: string) => Promise<boolean>
   closePunch: (id: string, note: string, by: string) => Promise<boolean>
@@ -102,9 +103,9 @@ export const usePssrStore = create<State>()((set, get) => {
       await get().load(pid)
       return data.id as string
     },
-    updateSystem: (id, p) => ok(supabase.from('pssr_systems').update({ ...(p.name != null ? { name: p.name } : {}), ...(p.targetGasIn !== undefined ? { target_gas_in: p.targetGasIn } : {}), ...(p.note != null ? { note: p.note } : {}) }).eq('id', id)),
+    updateSystem: (id, p) => ok(supabase.from('pssr_systems').update({ ...(p.name != null ? { name: p.name } : {}), ...(p.kind ? { kind: p.kind } : {}), ...(p.kmFrom !== undefined ? { km_from: p.kmFrom } : {}), ...(p.kmTo !== undefined ? { km_to: p.kmTo } : {}), ...(p.targetGasIn !== undefined ? { target_gas_in: p.targetGasIn } : {}), ...(p.note != null ? { note: p.note } : {}) }).eq('id', id)),
     deleteSystem: (id) => ok(supabase.from('pssr_systems').delete().eq('id', id)),
-    setCheck: (id, status, evidence, by) => ok(supabase.from('pssr_checks').update({ status, evidence, checked_by: by, checked_at: now() }).eq('id', id)),
+    setCheck: (id, status, evidence, by, fileUrl) => ok(supabase.from('pssr_checks').update({ status, evidence, checked_by: by, checked_at: now(), ...(fileUrl !== undefined ? { file_url: fileUrl } : {}) }).eq('id', id)),
     addMeeting: (systemId, heldOn, attendees, notes, by) => ok(supabase.from('pssr_meetings').insert({ system_id: systemId, held_on: heldOn, attendees, notes, created_by: by })),
     addPunch: (p, by) => ok(supabase.from('pssr_punches').insert({ system_id: p.systemId, meeting_id: p.meetingId, category: p.category, title: p.title, discipline: p.discipline, owner: p.owner, due_date: p.dueDate, raised_by: by })),
     closePunch: (id, note, by) => ok(supabase.from('pssr_punches').update({ status: 'closed', close_note: note, closed_by: by, closed_at: now() }).eq('id', id)),

@@ -13,6 +13,7 @@ import { GASIN_CHECKS, type GasinPermit, type PssrCheck, type PssrMeeting, type 
 export type PssrStage = 'mc' | 'pssr' | 'ready' | 'signing' | 'rfsu' | 'permit' | 'gasin' | 'live'
 export const STAGE_FA: Record<PssrStage, string> = { mc: 'تکمیل مکانیکی', pssr: 'در حال PSSR', ready: 'آمادهٔ امضای RFSU', signing: 'در حال امضای RFSU', rfsu: 'RFSU صادر شد', permit: 'مجوز تزریق گاز', gasin: 'تزریق گاز در جریان', live: 'تحت گاز' }
 export const STAGE_ORDER: PssrStage[] = ['mc', 'pssr', 'ready', 'signing', 'rfsu', 'permit', 'gasin', 'live']
+export const STAGE_COLOR: Record<PssrStage, string> = { mc: '#64748b', pssr: '#f59e0b', ready: '#3b82f6', signing: '#a855f7', rfsu: '#10b981', permit: '#0ea5e9', gasin: '#f97316', live: '#16a34a' }
 
 export type SignerRow = Pick<PssrSigner, 'seq' | 'roleLabel' | 'personLabel' | 'signerEmail' | 'rule' | 'manual'>
 export interface Blocker { kind: 'no_meeting' | 'check_pending' | 'check_failed' | 'punch_a'; label: string }

@@ -8,9 +8,8 @@ import { LAND_LAYER_LEGEND, loadLandLayer, type LandLayerSpan } from '../../land
  * natural / governmental / needs review). The data comes from the Land Acquisition module for the project selected in the
  * platform context — the twin itself stores nothing about land.
  */
-export function LandLayerToggle({ onSpans }: { onSpans: (s: LandLayerSpan[] | null) => void }) {
+export function LandLayerToggle({ on, onToggle, onSpans }: { on: boolean; onToggle: () => void; onSpans: (s: LandLayerSpan[] | null) => void }) {
   const projectId = useProjectContextStore((s) => s.projectId)
-  const [on, setOn] = useState(false)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
 
@@ -29,7 +28,7 @@ export function LandLayerToggle({ onSpans }: { onSpans: (s: LandLayerSpan[] | nu
 
   return (
     <div className="glass-panel flex flex-col gap-1.5 rounded-xl px-3 py-2">
-      <button onClick={() => setOn((v) => !v)} aria-pressed={on} className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: on ? '#d6a24a' : undefined }}>
+      <button onClick={onToggle} aria-pressed={on} className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: on ? '#d6a24a' : undefined }}>
         {busy ? <Loader2 size={13} className="animate-spin" /> : <Sprout size={13} />} لایهٔ تحصیل اراضی
       </button>
       {on && !note && (

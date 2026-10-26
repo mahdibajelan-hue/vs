@@ -4,7 +4,7 @@ import { projectReadiness, systemStatus, type SignerRow, type SystemStatus } fro
 
 type Row = Record<string, any>
 export interface PssrSummary {
-  systems: { id: string; code: string; name: string; status: SystemStatus }[]
+  systems: { id: string; code: string; name: string; kind: string; kmFrom: number | null; kmTo: number | null; status: SystemStatus }[]
   totals: ReturnType<typeof projectReadiness>
   openA: { system: string; title: string; due: string | null }[]
 }
@@ -12,7 +12,7 @@ export interface PssrSummary {
 /** One project's PSSR picture (systems, stages, open A punches) for the radar and the lifecycle G7 page — the same rules
  * as the module (pssrCore). null when the module has no data or its tables are not created yet. */
 export async function loadPssrSummary(masterProjectId: string): Promise<PssrSummary | null> {
-  const sys = await supabase.from('pssr_systems').select('id, code, name').eq('master_project_id', masterProjectId).order('code')
+  const sys = await supabase.from('pssr_systems').select('id, code, name, kind, km_from, km_to').eq('master_project_id', masterProjectId).order('code')
   if (sys.error || !sys.data?.length) return null
   const ids = sys.data.map((r: Row) => r.id)
   const [ch, me, pu, sg, so, pm] = await Promise.all([
@@ -25,7 +25,7 @@ export async function loadPssrSummary(masterProjectId: string): Promise<PssrSumm
   ])
   const signers: SignerRow[] = (sg.data ?? []).length ? (sg.data as Row[]).map((r) => ({ seq: Number(r.seq), roleLabel: r.role_label, personLabel: r.person_label ?? '', signerEmail: r.signer_email ?? '', rule: r.step_rule === 'all' ? 'all' : 'any', manual: !!r.is_manual })) : DEFAULT_SIGN_CHAIN
   const systems = (sys.data as Row[]).map((s) => ({
-    id: s.id, code: s.code, name: s.name,
+    id: s.id, code: s.code, name: s.name, kind: s.kind, kmFrom: s.km_from == null ? null : Number(s.km_from), kmTo: s.km_to == null ? null : Number(s.km_to),
     status: systemStatus({
       checks: ((ch.data ?? []) as Row[]).filter((c) => c.system_id === s.id).map((c) => ({ id: c.id, systemId: s.id, category: '', seq: 0, title: c.title, mandatory: !!c.mandatory, status: c.status, evidence: '', fileUrl: null, checkedBy: null, checkedAt: null })),
       meetings: ((me.data ?? []) as Row[]).filter((m) => m.system_id === s.id).map((m) => ({ id: m.id, systemId: s.id, heldOn: '', attendees: '', notes: '', createdBy: null })),

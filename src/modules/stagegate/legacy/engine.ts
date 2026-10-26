@@ -3085,7 +3085,8 @@ export function createStageGateEngine(env) {
             const file = fileInput?.files?.[0];
             if (file) {
                 const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
-                const path = `${lcState.projectName}/${phaseCode}/${kind}/${itemId}/${Date.now()}.${ext}`;
+                // storage keys must be ASCII: the item id already identifies project + phase, the project name (Persian) cannot be in the key
+                const path = `${phaseCode}/${kind}/${itemId}/${Date.now()}.${ext.replace(/[^a-z0-9]/g, '').slice(0, 5) || 'bin'}`;
                 const { error: uploadError } = await _supabase.storage.from('lifecycle-evidence').upload(path, file, { upsert: true });
                 if (uploadError) { alert('خطا در بارگذاری فایل: ' + uploadError.message); return; }
                 const { data: urlData } = _supabase.storage.from('lifecycle-evidence').getPublicUrl(path);

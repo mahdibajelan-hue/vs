@@ -15,9 +15,11 @@ import { VisualizationFilters } from '../components/VisualizationFilters'
 import { ConstructionStatusLegend } from '../components/ConstructionStatusLegend'
 import { RouteInfoBar } from '../components/RouteInfoBar'
 import { LandLayerToggle } from '../components/LandLayerToggle'
-import type { LandLayerSpan } from '../../landacq/integration/layer'
+import { PssrLayerToggle, PSSR_GAP_COLOR } from '../components/PssrLayerToggle'
+import type { ProgressSpan } from '../lib/routeSegments'
 
-export function DashboardPage() {
+/** `initialLayer` = which data layer to show on open (e.g. «نمایش روی دوقلوی دیجیتال» from the PSSR module opens with 'pssr'). */
+export function DashboardPage({ initialLayer = null }: { initialLayer?: 'land' | 'pssr' | null }) {
   const route = usePdtStore((s) => s.route)
   const pipe = usePdtStore((s) => s.pipe)
   const joints = usePdtStore((s) => s.joints)
@@ -30,7 +32,11 @@ export function DashboardPage() {
   const viewerRef = useRef<Cesium.Viewer | null>(null)
   const [kpiOpen, setKpiOpen] = useState(true)
   const [dockOpen, setDockOpen] = useState(true)
-  const [landSpans, setLandSpans] = useState<LandLayerSpan[] | null>(null)
+  // one data layer at a time: two colourings of the same pipe cannot be read together
+  const [layer, setLayer] = useState<'land' | 'pssr' | null>(initialLayer)
+  const [spansBy, setSpansBy] = useState<Partial<Record<'land' | 'pssr', ProgressSpan[] | null>>>({})
+  const layerSpans = layer ? spansBy[layer] ?? null : null
+  const toggle = (l: 'land' | 'pssr') => setLayer((cur) => (cur === l ? null : l))
 
   // Timeline scrubbing recomputes each joint's five stage fields (and derived finalStatus) as of
   // the scrubbed moment by replaying its own history log — nothing here is a separate snapshot, so
@@ -71,7 +77,8 @@ export function DashboardPage() {
           selectedJointId={selectedJointId}
           statusFilter={statusFilter}
           onSelectJoint={selectJoint}
-          landSpans={landSpans}
+          layerSpans={layerSpans}
+          layerGapColor={layer === 'pssr' ? PSSR_GAP_COLOR : null}
           onViewerReady={(v) => {
             viewerRef.current = v
           }}
@@ -81,8 +88,9 @@ export function DashboardPage() {
       <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
         <VisualizationFilters joints={displayedJoints} value={statusFilter} onChange={setStatusFilter} />
       </div>
-      <div className="absolute left-3 top-14 z-10 max-w-[min(20rem,calc(100%-1.5rem))]">
-        <LandLayerToggle onSpans={setLandSpans} />
+      <div className="absolute left-3 top-14 z-10 flex max-w-[min(20rem,calc(100%-1.5rem))] flex-col gap-2">
+        <LandLayerToggle on={layer === 'land'} onToggle={() => toggle('land')} onSpans={(s) => setSpansBy((m) => ({ ...m, land: s }))} />
+        <PssrLayerToggle on={layer === 'pssr'} onToggle={() => toggle('pssr')} onSpans={(s) => setSpansBy((m) => ({ ...m, pssr: s }))} />
       </div>
 
       <ConstructionStatusLegend />

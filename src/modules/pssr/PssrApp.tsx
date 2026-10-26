@@ -1,22 +1,25 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { Activity, AlertTriangle, BookOpen, CheckCircle2, ClipboardCheck, FileSignature, Flame, Gauge, ListChecks, Loader2, Paperclip, Plus, Printer, Settings2, ShieldCheck, Stamp, Users, X } from 'lucide-react'
+import { createContext, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { Activity, AlertTriangle, Camera, Download, Map as MapIcon, Pencil, Tablet, Trash2, BookOpen, CheckCircle2, ClipboardCheck, FileSignature, Flame, Gauge, ListChecks, Loader2, Paperclip, Plus, Printer, Settings2, ShieldCheck, Stamp, Users, X } from 'lucide-react'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { formatJalali } from '../../lib/jalali'
 import { usePssrStore, type PssrAdvisories } from './store/usePssrStore'
-import { canSign, permitApprovers, projectReadiness, STAGE_FA, STAGE_ORDER, systemStatus, type ChainPerson, type PssrStage, type SignerRow, type SystemStatus } from './lib/pssrCore'
-import { CHECK_FA, DEFAULT_SIGN_CHAIN, GASIN_CHECKS, GASIN_LOG_FA, GASIN_STATUS_FA, KIND_FA, PUNCH_CAT_FA, PUNCH_STATUS_FA, type CheckStatus, type GasinLogKind, type PssrKind, type PssrPunch, type PssrSystem, type PunchCategory } from './types'
+import { canSign, permitApprovers, projectReadiness, STAGE_COLOR, STAGE_FA, STAGE_ORDER, systemStatus, type ChainPerson, type PssrStage, type SignerRow, type SystemStatus } from './lib/pssrCore'
+import { CHECK_FA, DEFAULT_SIGN_CHAIN, GASIN_CHECKS, GASIN_LOG_FA, GASIN_STATUS_FA, KIND_FA, PUNCH_CAT_FA, PUNCH_STATUS_FA, type CheckStatus, type GasinLog, type GasinLogKind, type GasinPermit, type PssrCheck, type PssrKind, type PssrPunch, type PssrSystem, type PunchCategory } from './types'
 import { PssrGuide } from './PssrGuide'
+import { ReadinessMap } from './ReadinessMap'
 import './pssr.css'
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
 const today = () => new Date().toISOString().slice(0, 10)
-const STAGE_COLOR: Record<PssrStage, string> = { mc: '#64748b', pssr: '#f59e0b', ready: '#3b82f6', signing: '#a855f7', rfsu: '#10b981', permit: '#0ea5e9', gasin: '#f97316', live: '#16a34a' }
 const AFTER_RFSU: PssrStage[] = ['rfsu', 'permit', 'gasin', 'live']
-type Tab = 'dash' | 'systems' | 'punches' | 'settings'
+type Tab = 'dash' | 'map' | 'systems' | 'punches' | 'settings'
+/** tablet (field) mode: big touch targets, one-tap check status, camera evidence, one-tap gas-in events */
+const TabletCtx = createContext(false)
+const TABLET_KEY = 'pssr.tablet.v1'
 
 /**
  * PSSR — ایمنی و آمادگی پیش از راه‌اندازی. Per commissioning system: the PSSR checklist, the PSSR meeting, punch items
@@ -29,6 +32,8 @@ export function PssrApp({ onExitToHub }: { onExitToHub: () => void; onBackToRada
   const [tab, setTab] = useState<Tab>('dash')
   const [openSys, setOpenSys] = useState<string | null>(null)
   const [guide, setGuide] = useState(false)
+  const [tablet, setTablet] = useState(() => { try { return localStorage.getItem(TABLET_KEY) === '1' } catch { return false } })
+  const switchTablet = () => setTablet((v) => { try { localStorage.setItem(TABLET_KEY, v ? '0' : '1') } catch { /* private mode */ } return !v })
   useEffect(() => { if (!useMasterDataStore.getState().loaded) void useMasterDataStore.getState().fetchAll() }, [])
   useEffect(() => { if (projectId) void st.load(projectId) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [projectId])
 
@@ -43,19 +48,21 @@ export function PssrApp({ onExitToHub }: { onExitToHub: () => void; onBackToRada
   const missingTables = !!st.error && /pssr_|relation|schema cache/i.test(st.error)
 
   return (
-    <div className="ps" dir="rtl">
+    <TabletCtx.Provider value={tablet}>
+    <div className={`ps ${tablet ? 'is-tablet' : ''}`} dir="rtl">
       <header className="ps-top">
         <div className="ps-brand">
           <span className="ps-brand-ico"><ShieldCheck size={18} /></span>
           <span><b>PSSR — ایمنی پیش از راه‌اندازی</b><small>{project?.officialName ?? '—'}</small></span>
         </div>
         <div className="ps-top-end">
+          <button type="button" className={`ps-btn ${tablet ? 'is-on' : ''}`} aria-pressed={tablet} onClick={switchTablet} title="دکمه‌های بزرگ برای کار در کارگاه با تبلت: ثبت یک‌ضربه‌ای وضعیت، عکس با دوربین، ثبت سریع رویداد تزریق گاز"><Tablet size={15} /> حالت تبلت</button>
           <button type="button" className="ps-btn is-primary" onClick={() => setGuide(true)}><BookOpen size={15} /> راهنما</button>
           <ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome />
         </div>
       </header>
       <nav className="ps-tabs" aria-label="بخش‌ها">
-        {([['dash', 'داشبورد آمادگی', ClipboardCheck], ['systems', 'سیستم‌ها', ListChecks], ['punches', 'پانچ‌لیست', AlertTriangle], ['settings', 'تنظیمات', Settings2]] as const).map(([k, l, I]) => (
+        {([['dash', 'داشبورد آمادگی', ClipboardCheck], ['map', 'نقشهٔ آمادگی', MapIcon], ['systems', 'سیستم‌ها', ListChecks], ['punches', 'پانچ‌لیست', AlertTriangle], ['settings', 'تنظیمات', Settings2]] as const).map(([k, l, I]) => (
           <button key={k} type="button" className={`ps-tab ${tab === k && !openSys ? 'is-on' : ''}`} onClick={() => { setTab(k); setOpenSys(null) }}><I size={15} aria-hidden />{l}</button>
         ))}
       </nav>
@@ -65,6 +72,7 @@ export function PssrApp({ onExitToHub }: { onExitToHub: () => void; onBackToRada
           : st.loading ? <p className="ps-loading"><Loader2 size={16} className="animate-spin" /> در حال بارگذاری…</p>
           : openSys ? <SystemPage id={openSys} status={statusOf.get(openSys)} chain={chain} onBack={() => setOpenSys(null)} />
           : tab === 'dash' ? <Dashboard summary={summary} statusOf={statusOf} onOpen={setOpenSys} onNew={() => setTab('systems')} />
+          : tab === 'map' ? <ReadinessMap statusOf={statusOf} onOpen={setOpenSys} />
           : tab === 'systems' ? <Systems statusOf={statusOf} onOpen={setOpenSys} />
           : tab === 'punches' ? <PunchList onOpen={setOpenSys} />
           : <Settings chain={chain} />}
@@ -72,6 +80,7 @@ export function PssrApp({ onExitToHub }: { onExitToHub: () => void; onBackToRada
       </main>
       {guide && <PssrGuide onClose={() => setGuide(false)} />}
     </div>
+    </TabletCtx.Provider>
   )
 }
 
@@ -185,6 +194,7 @@ function NewSystem({ onDone }: { onDone: (id: string | null) => void }) {
 function SystemPage({ id, status, chain, onBack }: { id: string; status?: SystemStatus; chain: SignerRow[]; onBack: () => void }) {
   const st = usePssrStore()
   const sys = st.systems.find((s) => s.id === id)
+  const [editing, setEditing] = useState(false)
   if (!sys || !status) return <Empty text="سیستم یافت نشد." />
   const stageIdx = STAGE_ORDER.indexOf(status.stage)
   return (
@@ -198,8 +208,10 @@ function SystemPage({ id, status, chain, onBack }: { id: string; status?: System
       <header className="ps-hero">
         <div className="ps-hero-id">
           <span className="ps-hero-code" dir="ltr">{sys.code}</span>
-          <div><h2>{sys.name}</h2><p>{KIND_FA[sys.kind]}{sys.kmFrom != null ? ` · کیلومتر ${fa(sys.kmFrom)} تا ${fa(sys.kmTo ?? sys.kmFrom)}` : ''} · تزریق گاز هدف: {jd(sys.targetGasIn)}</p></div>
+          <div><h2>{sys.name}</h2><p>{KIND_FA[sys.kind]}{sys.kmFrom != null ? ` · کیلومتر ${fa(sys.kmFrom)}${sys.kmTo != null && sys.kmTo !== sys.kmFrom ? ` تا ${fa(sys.kmTo)}` : ''}` : ' · بدون کیلومتر'} · تزریق گاز هدف: {jd(sys.targetGasIn)}</p></div>
+          <button type="button" className="ps-btn is-ghost" onClick={() => setEditing((v) => !v)}><Pencil size={14} /> ویرایش</button>
         </div>
+        {editing && <EditSystem sys={sys} onDone={(deleted) => { setEditing(false); if (deleted) onBack() }} />}
         <div className="ps-hero-stats">
           <div><small>آمادگی برای RFSU</small><b>{fa(status.readiness)}٪</b></div>
           <div><small>چک‌لیست</small><b>{fa(status.checks.ok + status.checks.na)} / {fa(status.checks.total)}</b></div>
@@ -232,6 +244,38 @@ function SystemPage({ id, status, chain, onBack }: { id: string; status?: System
   )
 }
 
+function EditSystem({ sys, onDone }: { sys: PssrSystem; onDone: (deleted: boolean) => void }) {
+  const st = usePssrStore()
+  const isAdmin = useAuthStore((s) => !!s.profile?.isAdmin)
+  const [f, setF] = useState({ name: sys.name, kind: sys.kind, kmFrom: sys.kmFrom?.toString() ?? '', kmTo: sys.kmTo?.toString() ?? '', target: sys.targetGasIn ?? '', note: sys.note })
+  const [confirm, setConfirm] = useState('')
+  const num = (v: string) => (v.trim() === '' ? null : Number(v))
+  const bad = f.kmFrom !== '' && f.kmTo !== '' && Number(f.kmTo) < Number(f.kmFrom)
+  return (
+    <div className="ps-edit">
+      <div className="ps-grid">
+        <Field label="نام"><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        <Field label="نوع"><select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as PssrKind })}>{Object.entries(KIND_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
+        <Field label={f.kind === 'station' ? 'کیلومتر محل' : 'از کیلومتر'}><input type="number" value={f.kmFrom} onChange={(e) => setF({ ...f, kmFrom: e.target.value })} /></Field>
+        {f.kind !== 'station' && <Field label="تا کیلومتر"><input type="number" value={f.kmTo} onChange={(e) => setF({ ...f, kmTo: e.target.value })} aria-invalid={bad} /></Field>}
+        <Field label="تاریخ هدف تزریق گاز"><input type="date" value={f.target} onChange={(e) => setF({ ...f, target: e.target.value })} /></Field>
+        <Field label="یادداشت" wide><input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Field>
+      </div>
+      {bad && <p className="ps-hint is-warn">«تا کیلومتر» نباید کمتر از «از کیلومتر» باشد.</p>}
+      <div className="ps-actions">
+        <button type="button" className="ps-btn is-primary" disabled={!f.name.trim() || bad} onClick={async () => { if (await st.updateSystem(sys.id, { name: f.name.trim(), kind: f.kind, kmFrom: num(f.kmFrom), kmTo: f.kind === 'station' ? num(f.kmFrom) : num(f.kmTo), targetGasIn: f.target || null, note: f.note })) onDone(false) }}>ذخیرهٔ تغییرات</button>
+        <button type="button" className="ps-btn is-ghost" onClick={() => onDone(false)}>انصراف</button>
+        {isAdmin && (
+          <span className="ps-danger">
+            <input value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder={`برای حذف، ${sys.code} را بنویسید`} dir="ltr" aria-label="تأیید حذف" />
+            <button type="button" className="ps-btn is-bad" disabled={confirm !== sys.code} onClick={async () => { if (await st.deleteSystem(sys.id)) onDone(true) }}><Trash2 size={14} /> حذف سیستم و همهٔ سوابق</button>
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Section({ n, id, title, mode, hint, children }: { n: number; id: string; title: string; mode: 'input' | 'view'; hint: string; children: ReactNode }) {
   return (
     <section id={id} className={`ps-sec is-${mode}`}>
@@ -253,27 +297,58 @@ function Checklist({ systemId }: { systemId: string }) {
       {cats.map((cat) => (
         <div key={cat} className="ps-cat">
           <h4>{cat}</h4>
-          {list.filter((c) => c.category === cat).map((c) => <CheckRow key={c.id} id={c.id} title={c.title} mandatory={c.mandatory} status={c.status} evidence={c.evidence} meta={c.checkedBy ? `${c.checkedBy} · ${jd(c.checkedAt)}` : ''} onSave={(s, e) => st.setCheck(c.id, s, e, email)} advice={adv ? adviceFor(c.title, adv) : null} />)}
+          {list.filter((c) => c.category === cat).map((c) => <CheckRow key={c.id} systemId={systemId} check={c} meta={c.checkedBy ? `${c.checkedBy} · ${jd(c.checkedAt)}` : ''} onSave={(s, e, f) => st.setCheck(c.id, s, e, email, f)} advice={adv ? adviceFor(c.title, adv) : null} />)}
         </div>
       ))}
     </div>
   )
 }
 
-function CheckRow({ title, mandatory, status, evidence, meta, onSave, advice }: { id: string; title: string; mandatory: boolean; status: CheckStatus; evidence: string; meta: string; onSave: (s: CheckStatus, e: string) => Promise<boolean>; advice?: string | null }) {
+const CHECK_TONE: Record<CheckStatus, string> = { pending: '#64748b', ok: '#10b981', fail: '#ef4444', na: '#0ea5e9' }
+
+function CheckRow({ systemId, check, meta, onSave, advice }: { systemId: string; check: PssrCheck; meta: string; onSave: (s: CheckStatus, e: string, fileUrl?: string | null) => Promise<boolean>; advice?: string | null }) {
+  const { status, evidence } = check
+  const tablet = useContext(TabletCtx)
+  const st = usePssrStore()
   const [s, setS] = useState(status), [e, setE] = useState(evidence), [busy, setBusy] = useState(false)
   useEffect(() => { setS(status); setE(evidence) }, [status, evidence])
   const dirty = s !== status || e !== evidence
+  const save = async (ns: CheckStatus, ne: string, file?: File) => {
+    setBusy(true)
+    const url = file ? await st.uploadScan(systemId, file) : undefined
+    if (file && !url) { setBusy(false); return }
+    await onSave(ns, ne, url)
+    setBusy(false)
+  }
+  const photo = (
+    <label className={`ps-btn is-ghost ps-photo ${busy ? 'is-busy' : ''}`} title="گرفتن یا پیوست عکس / مدرک">
+      <Camera size={tablet ? 18 : 14} aria-hidden /> {check.fileUrl ? 'عکس جدید' : 'عکس'}
+      <input type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={(x) => { const f = x.target.files?.[0]; x.target.value = ''; if (f) void save(s, e, f) }} />
+    </label>
+  )
   return (
     <div className={`ps-check is-${status}`}>
-      <div className="ps-check-title"><span className={`ps-dot is-${status}`} />{title}{mandatory && <em>الزامی</em>}</div>
-      <div className="ps-check-edit">
-        <select value={s} onChange={(x) => setS(x.target.value as CheckStatus)} aria-label="وضعیت">{(Object.keys(CHECK_FA) as CheckStatus[]).map((k) => <option key={k} value={k}>{CHECK_FA[k]}</option>)}</select>
-        <input value={e} onChange={(x) => setE(x.target.value)} placeholder="مدرک / توضیح (شمارهٔ صورت‌جلسه، لینک…)" />
-        <button type="button" className="ps-btn" disabled={!dirty || busy} onClick={async () => { setBusy(true); await onSave(s, e); setBusy(false) }}>{busy ? <Loader2 size={13} className="animate-spin" /> : 'ذخیره'}</button>
-      </div>
+      <div className="ps-check-title"><span className={`ps-dot is-${status}`} />{check.title}{check.mandatory && <em>الزامی</em>}</div>
+      {tablet ? (
+        <div className="ps-check-tab">
+          <div className="ps-seg" role="group" aria-label="وضعیت">
+            {(['ok', 'fail', 'na', 'pending'] as CheckStatus[]).map((k) => (
+              <button key={k} type="button" aria-pressed={status === k} disabled={busy} style={{ '--c': CHECK_TONE[k] } as CSSProperties} onClick={() => k !== status && save(k, e)}>{CHECK_FA[k]}</button>
+            ))}
+          </div>
+          <input value={e} onChange={(x) => setE(x.target.value)} onBlur={() => { if (e !== evidence) void save(status, e) }} placeholder="مدرک / توضیح" />
+          {photo}
+        </div>
+      ) : (
+        <div className="ps-check-edit">
+          <select value={s} onChange={(x) => setS(x.target.value as CheckStatus)} aria-label="وضعیت">{(Object.keys(CHECK_FA) as CheckStatus[]).map((k) => <option key={k} value={k}>{CHECK_FA[k]}</option>)}</select>
+          <input value={e} onChange={(x) => setE(x.target.value)} placeholder="مدرک / توضیح (شمارهٔ صورت‌جلسه، لینک…)" />
+          <button type="button" className="ps-btn" disabled={!dirty || busy} onClick={() => save(s, e)}>{busy ? <Loader2 size={13} className="animate-spin" /> : 'ذخیره'}</button>
+          {photo}
+        </div>
+      )}
       {advice && <small className={`ps-advice ${status === 'ok' ? 'is-strong' : ''}`}><AlertTriangle size={12} aria-hidden /> {advice}{status === 'ok' ? ' — با وجود این، بند «تأیید» شده است؛ دوباره بررسی کنید.' : ''}</small>}
-      {meta && <small className="ps-meta">آخرین ثبت: {meta}</small>}
+      {(meta || check.fileUrl) && <small className="ps-meta">{meta && `آخرین ثبت: ${meta}`}{check.fileUrl && <> · <button type="button" className="ps-link" onClick={() => st.openScan(check.fileUrl!)}><Paperclip size={11} /> مدرک پیوست</button></>}</small>}
     </div>
   )
 }
@@ -474,6 +549,7 @@ function GasIn({ sys, status, chain }: { sys: PssrSystem; status: SystemStatus; 
   const email = profile?.email ?? ''
   const permit = st.permits.find((p) => p.systemId === sys.id) ?? null
   const logs = permit ? st.logs.filter((l) => l.permitId === permit.id) : []
+  const project = useMasterDataStore((s) => s.projects.find((p) => p.id === sys.projectId))
   const approvers = permitApprovers(chain)
   const mayApprove = !!profile?.isAdmin || approvers.some((a) => a.signerEmail && a.signerEmail.toLowerCase() === email.toLowerCase())
   const [head, setHead] = useState({ ptw: permit?.ptwNo ?? '', planned: permit?.plannedAt?.slice(0, 16) ?? '' })
@@ -524,7 +600,7 @@ function GasIn({ sys, status, chain }: { sys: PssrSystem; status: SystemStatus; 
       )}
       {permit && permit.status !== 'draft' && (
         <section className="ps-card">
-          <header className="ps-card-head"><b><Activity size={15} /> ثبت عملیات تزریق گاز</b></header>
+          <header className="ps-card-head"><b><Activity size={15} /> ثبت عملیات تزریق گاز</b><button type="button" className="ps-btn is-ghost" onClick={() => printGasin(sys, permit, logs, project?.officialName ?? '')}><Printer size={14} /> چاپ مجوز و گزارش عملیات</button></header>
           {logs.length ? (
             <div className="ps-table-wrap"><table className="ps-table"><thead><tr><th>زمان</th><th>رویداد</th><th>فشار (bar)</th><th>محل</th><th>شرح</th><th>ثبت‌کننده</th></tr></thead>
               <tbody>{logs.map((l) => <tr key={l.id} className={l.kind === 'incident' ? 'is-late' : ''}><td className="ps-nowrap">{jd(l.at)} {new Date(l.at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</td><td>{GASIN_LOG_FA[l.kind]}</td><td>{l.pressure != null ? fa(l.pressure) : '—'}</td><td>{l.location || '—'}</td><td>{l.note}</td><td>{l.by}</td></tr>)}</tbody></table></div>
@@ -546,19 +622,63 @@ function GasIn({ sys, status, chain }: { sys: PssrSystem; status: SystemStatus; 
   )
 }
 
+const QUICK_EVENTS: GasinLogKind[] = ['valve_open', 'valve_close', 'pressure', 'purge', 'leak_check', 'hold', 'incident']
+
 function LogForm({ permitId }: { permitId: string }) {
   const st = usePssrStore()
+  const tablet = useContext(TabletCtx)
   const email = useAuthStore((s) => s.profile?.email ?? '')
   const [f, setF] = useState({ kind: 'pressure' as GasinLogKind, pressure: '', location: '', note: '' })
+  const [busy, setBusy] = useState(false)
+  const add = async (kind: GasinLogKind) => {
+    setBusy(true)
+    if (await st.addLog(permitId, { kind, pressure: f.pressure ? Number(f.pressure) : null, location: f.location, note: f.note }, email)) setF({ ...f, kind, pressure: '', note: '' })
+    setBusy(false)
+  }
+  if (tablet) {
+    // field mode: type the reading / place once, then one tap on the event records it
+    return (
+      <div className="ps-quick">
+        <div className="ps-inline-form">
+          <Field label="فشار (bar)"><input type="number" inputMode="decimal" value={f.pressure} onChange={(e) => setF({ ...f, pressure: e.target.value })} /></Field>
+          <Field label="محل (شیر / کیلومتر)"><input value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} /></Field>
+          <Field label="شرح (اختیاری)" wide><input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Field>
+        </div>
+        <div className="ps-quick-grid">
+          {QUICK_EVENTS.map((k) => <button key={k} type="button" disabled={busy} className={`ps-btn ${k === 'incident' ? 'is-bad' : 'is-primary'}`} onClick={() => add(k)}>{GASIN_LOG_FA[k]}</button>)}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="ps-inline-form">
       <Field label="رویداد"><select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as GasinLogKind })}>{(Object.keys(GASIN_LOG_FA) as GasinLogKind[]).map((k) => <option key={k} value={k}>{GASIN_LOG_FA[k]}</option>)}</select></Field>
       <Field label="فشار (bar)"><input type="number" value={f.pressure} onChange={(e) => setF({ ...f, pressure: e.target.value })} /></Field>
       <Field label="محل (شیر / کیلومتر)"><input value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} /></Field>
       <Field label="شرح" wide><input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Field>
-      <button type="button" className="ps-btn is-primary" disabled={!f.note.trim() && !f.pressure} onClick={async () => { if (await st.addLog(permitId, { kind: f.kind, pressure: f.pressure ? Number(f.pressure) : null, location: f.location, note: f.note }, email)) setF({ ...f, pressure: '', note: '' }) }}><Plus size={14} /> ثبت رویداد</button>
+      <button type="button" className="ps-btn is-primary" disabled={busy || (!f.note.trim() && !f.pressure)} onClick={() => add(f.kind)}><Plus size={14} /> ثبت رویداد</button>
     </div>
   )
+}
+
+function printGasin(sys: PssrSystem, permit: GasinPermit, logs: GasinLog[], projectName: string) {
+  const w = window.open('', '_blank', 'width=900,height=1100')
+  if (!w) return
+  const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
+  const tm = (d: string | null) => (d ? `${jd(d)} ${new Date(d).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}` : '—')
+  const checks = GASIN_CHECKS.map((g) => { const c = permit.checks[g.key]; return `<tr><td>${c?.ok ? '✔' : '✘'}</td><td>${esc(g.label)}${c?.value ? ` — ${esc(c.value)}` : ''}</td><td>${esc(c?.by ?? '')}</td></tr>` }).join('')
+  const rows = logs.map((l) => `<tr><td>${esc(tm(l.at))}</td><td>${esc(GASIN_LOG_FA[l.kind])}</td><td>${l.pressure != null ? fa(l.pressure) : '—'}</td><td>${esc(l.location || '—')}</td><td>${esc(l.note)}</td><td>${esc(l.by)}</td></tr>`).join('')
+  w.document.write(`<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>Gas-in ${esc(sys.code)}</title>
+  <style>body{font-family:Vazirmatn,Tahoma,sans-serif;margin:28px;color:#0f172a}h1{font-size:19px;margin:0}h2{font-size:13px;color:#475569;margin:4px 0 16px}h3{font-size:14px;margin:18px 0 6px}
+  table{width:100%;border-collapse:collapse;font-size:12px}td,th{border:1px solid #cbd5e1;padding:6px;text-align:right}th{background:#f1f5f9}</style></head><body>
+  <h1>مجوز و گزارش عملیات تزریق گاز</h1><h2>${esc(projectName)} — ${esc(sys.code)} ${esc(sys.name)}</h2>
+  <table><tr><th>شمارهٔ PTW</th><td>${esc(permit.ptwNo || '—')}</td><th>وضعیت</th><td>${esc(GASIN_STATUS_FA[permit.status])}</td></tr>
+  <tr><th>صادرکننده</th><td>${esc(permit.approvedBy ?? '—')} · ${esc(tm(permit.approvedAt))}</td><th>فشار نهایی</th><td>${permit.finalPressure != null ? fa(permit.finalPressure) + ' bar' : '—'}</td></tr>
+  <tr><th>شروع</th><td>${esc(tm(permit.startedAt))}</td><th>پایان</th><td>${esc(tm(permit.completedAt))}</td></tr></table>
+  <h3>چک‌لیست روز تزریق</h3><table><tr><th></th><th>بند</th><th>تأییدکننده</th></tr>${checks}</table>
+  <h3>رویدادها</h3><table><tr><th>زمان</th><th>رویداد</th><th>فشار (bar)</th><th>محل</th><th>شرح</th><th>ثبت‌کننده</th></tr>${rows}</table>
+  <script>window.onload=()=>window.print()</script></body></html>`)
+  w.document.close()
 }
 
 // ── advisories from other modules ────────────────────────────────────────────
@@ -605,6 +725,7 @@ function PunchList({ onOpen }: { onOpen: (id: string) => void }) {
       <div className="ps-row-head">
         <div><b>پانچ‌لیست پروژه</b><small>همهٔ یافته‌های PSSR همهٔ سیستم‌ها؛ برای دیدن پروندهٔ هر سیستم روی کد آن در فهرست سیستم‌ها بزنید.</small></div>
         <div className="ps-filters">
+          <button type="button" className="ps-btn is-ghost" disabled={!list.length} onClick={() => exportPunches(list, (id) => st.systems.find((s) => s.id === id)?.code ?? '')}><Download size={14} /> خروجی اکسل (CSV)</button>
           {(['all', 'A', 'B', 'C'] as const).map((k) => <button key={k} type="button" className={`ps-pill ${cat === k ? 'is-on' : ''}`} onClick={() => setCat(k)}>{k === 'all' ? 'همه' : `دستهٔ ${k}`}</button>)}
           <button type="button" className={`ps-pill ${state === 'open' ? 'is-on' : ''}`} onClick={() => setState(state === 'open' ? 'all' : 'open')}>{state === 'open' ? 'فقط باز' : 'همه وضعیت‌ها'}</button>
         </div>
@@ -613,6 +734,19 @@ function PunchList({ onOpen }: { onOpen: (id: string) => void }) {
       {st.systems.length > 0 && <p className="ps-hint">برای ثبت یافتهٔ جدید، <button type="button" className="ps-link" onClick={() => onOpen(st.systems[0].id)}>پروندهٔ سیستم</button> را باز کنید.</p>}
     </>
   )
+}
+
+/** the punch list as CSV with a BOM so Excel opens the Persian text correctly */
+function exportPunches(list: PssrPunch[], codeOf: (systemId: string) => string) {
+  const cell = (v: string) => `"${v.replace(/"/g, '""')}"`
+  const head = ['سیستم', 'دسته', 'شرح', 'رشته', 'مسئول', 'مهلت', 'وضعیت', 'ثبت', 'بسته‌شده توسط', 'شرح بستن', 'تأیید توسط']
+  const rows = list.map((p) => [codeOf(p.systemId), p.category, p.title, p.discipline, p.owner, jd(p.dueDate), PUNCH_STATUS_FA[p.status], jd(p.raisedAt), p.closedBy ?? '', p.closeNote, p.verifiedBy ?? ''])
+  const csv = '\uFEFF' + [head, ...rows].map((r) => r.map((x) => cell(String(x ?? ''))).join(',')).join('\r\n')
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  a.download = `pssr-punch-list-${today()}.csv`
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }
 
 // ── settings: sign chain (steps × persons) + template ────────────────────────

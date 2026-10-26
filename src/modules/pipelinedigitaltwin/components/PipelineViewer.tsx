@@ -4,8 +4,7 @@ import 'cesium/Build/Cesium/Widgets/widgets.css'
 import { Home, Layers, Loader2, LocateFixed } from 'lucide-react'
 import type { Joint, JointFinalStatus, Pipe, Route } from '../types'
 import { cumulativeDistances, pointAtChainage, sliceRoutePoints } from '../lib/chainage'
-import { computeProgressSpans } from '../lib/routeSegments'
-import type { LandLayerSpan } from '../../landacq/integration/layer'
+import { computeProgressSpans, paintSpans, type ProgressSpan } from '../lib/routeSegments'
 import { FINAL_STATUS_COLOR } from '../lib/progressEngine'
 
 // No Cesium ion account for this MVP (per spec: mock/offline terrain, no token dependency) — so
@@ -42,8 +41,10 @@ interface PipelineViewerProps {
   statusFilter: JointFinalStatus | 'all'
   onSelectJoint: (id: string | null) => void
   onViewerReady?: (viewer: Cesium.Viewer) => void
-  /** Land Acquisition Layer: when set, the pipe is painted by land status instead of construction progress. */
-  landSpans?: LandLayerSpan[] | null
+  /** A data layer (land acquisition, PSSR readiness…): when set, the pipe is painted by it instead of construction progress. */
+  layerSpans?: ProgressSpan[] | null
+  /** colour of the route the layer does not cover; null leaves those stretches undrawn */
+  layerGapColor?: string | null
 }
 
 /**
@@ -61,7 +62,7 @@ function imageryProviderPromise(style: ImageryStyle): Promise<Cesium.ImageryProv
     : Promise.resolve(new Cesium.OpenStreetMapImageryProvider({ url: OSM_URL }))
 }
 
-export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFilter, onSelectJoint, onViewerReady, landSpans }: PipelineViewerProps) {
+export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFilter, onSelectJoint, onViewerReady, layerSpans, layerGapColor = null }: PipelineViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Cesium.Viewer | null>(null)
   const pointsRef = useRef<Cesium.PointPrimitiveCollection | null>(null)
@@ -160,7 +161,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
     const cumulative = cumulativeDistances(route.points)
     const radiusMeters = (pipe.diameterInch * INCH_TO_METER) / 2
     const shape = pipeCrossSection(radiusMeters)
-    const spans = landSpans ? landSpans.map((l) => ({ startMeters: l.startMeters, endMeters: Math.min(l.endMeters, route.lengthMeters), color: l.color })) : computeProgressSpans(joints, route.lengthMeters)
+    const spans = layerSpans ? paintSpans(layerSpans, route.lengthMeters, layerGapColor) : computeProgressSpans(joints, route.lengthMeters)
 
     for (const span of spans) {
       const slice = sliceRoutePoints(route.points, cumulative, span.startMeters, span.endMeters)
@@ -173,6 +174,9 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
           cornerType: Cesium.CornerType.ROUNDED,
           material: Cesium.Color.fromCssColorString(span.color),
         },
+        // a 48" tube is under a pixel wide when the whole route is in view, and a layer has no joint dots to show the
+        // line: a screen-width line keeps the layer's colours readable at every zoom
+        ...(layerSpans ? { polyline: { positions, width: 6, material: Cesium.Color.fromCssColorString(span.color) } } : {}),
       })
     }
 
@@ -182,7 +186,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
       viewer.flyTo(viewer.entities, { duration: 1.2 })
       hasFlownRef.current = true
     }
-  }, [route, joints, pipe, landSpans])
+  }, [route, joints, pipe, layerSpans, layerGapColor])
 
   // Joint markers — rebuilt whenever joint statuses change (e.g. an edit, or the Timeline scrub date moving).
   useEffect(() => {
@@ -191,8 +195,12 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
     if (!points || !viewer) return
 
     points.removeAll()
+    // a data layer paints the pipe itself; thousands of progress-coloured joint dots would cover it, so they step back
+    // (only the selected joint stays visible)
+    const layerOn = !!layerSpans
     const cumulative = cumulativeDistances(route.points)
     for (const joint of joints) {
+      if (layerOn && joint.id !== selectedJointId) continue
       const p = pointAtChainage(route.points, cumulative, joint.chainageMeters)
       const selected = joint.id === selectedJointId
       const dimmed = statusFilter !== 'all' && joint.finalStatus !== statusFilter
@@ -206,7 +214,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
         id: joint.id,
       })
     }
-  }, [joints, route, selectedJointId, statusFilter])
+  }, [joints, route, selectedJointId, statusFilter, layerSpans])
 
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden rounded-2xl">
