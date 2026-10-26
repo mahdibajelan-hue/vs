@@ -94,7 +94,10 @@ export function computeStageReadiness(
   }
 
   for (const ms of ctx.stageMilestones ?? []) {
-    if (ms.status !== 'achieved') {
+    // a critical milestone blocks the gate once it is late (its baseline date has passed and it is not achieved);
+    // one still ahead of its date only means the stage is not finished yet
+    const due = ms.baselineDate ?? ms.forecastDate
+    if (ms.status !== 'achieved' && due != null && due.slice(0, 10) < today) {
       blockers.push({
         kind: 'milestone_not_achieved',
         label: ms.name,

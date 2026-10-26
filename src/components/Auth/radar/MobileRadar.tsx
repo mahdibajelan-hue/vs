@@ -1,3 +1,4 @@
+import { HealthGuideButton, healthColor as healthColorOf } from '../../../modules/projectMetrics/HealthGuide'
 import { useEffect, type CSSProperties } from 'react'
 import { Activity, ArrowLeftRight, ArrowRight, ChevronLeft, Clock3, Flag, RefreshCw, ShieldAlert } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -25,7 +26,8 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
   const k = data.kpi
   // coming back from a module the window may still be scrolled down
   useEffect(() => { window.scrollTo(0, 0) }, [])
-  const statusColor = STATUS_COLOR[data.status]
+  // colour = the health verdict (worst dimension) when known, so the ring and the status always agree
+  const statusColor = data.healthDetail ? healthColorOf(data.healthDetail) : STATUS_COLOR[data.status]
   const code = project.projectIdCode || project.projectCode
   const critical = [...data.signals].sort((a, b) => sevRank(a.severity) - sevRank(b.severity)).slice(0, 3)
   const items = PROJECT_NAV.flatMap((g) => g.items)
@@ -53,7 +55,7 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
       <section className="mr-hero" style={{ '--st': statusColor } as CSSProperties}>
         <Ring value={k.health} color={statusColor} />
         <div className="mr-hero-body">
-          <p className="mr-hero-label">سلامت پروژه</p>
+          <p className="mr-hero-label">سلامت پروژه <HealthGuideButton health={data.healthDetail} /></p>
           <p className="mr-hero-status"><span className="mr-pulse" aria-hidden />{STATUS_LABEL_FA[data.status]}</p>
           <Bar label="پیشرفت واقعی" value={k.progressActual} ref2={k.progressPlanned} ref2Label="برنامه" color={k.progressActual >= k.progressPlanned ? '#22c55e' : '#f59e0b'} />
           <Bar label="عملکرد هزینه" value={k.costPerformancePct} color={k.costVariancePct >= 0 ? '#22c55e' : '#f59e0b'} />

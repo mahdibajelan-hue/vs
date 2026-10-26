@@ -7,7 +7,7 @@
  *  - risks, delays: the risk register and the execution stoppage register
  * Pure: the caller passes rows and the module computations in.
  */
-import { plannedByDate, sgProgress } from '../stagegate/sgProgress'
+import { sgProgress } from '../stagegate/sgProgress'
 import type { EpcProgress } from '../epc/epcProgress'
 import type { LifecycleInputs } from './lifecycleInputs'
 
@@ -20,15 +20,20 @@ export interface PhaseMetric {
 export interface CurvePoint { date: string; planned: number; earned: number | null; cost: number | null }
 export interface WeekPoint { from: string; planned: number; earned: number }
 export interface Slice { key: string; label: string; value: number }
+/** Earned value of the EPC scope only: BAC = the EPC contracts' current value, progress = the EPC phase (engineering /
+ * procurement / construction modules, value-weighted), AC = what has been certified on the EPC contracts. */
 export interface Evm {
-  bac: number; bacSource: 'budget' | 'contracts' | 'master' | 'none'
+  bac: number; bacSource: 'epc_contracts' | 'module_values' | 'none'
   pv: number; ev: number; ac: number
   spi: number | null; cpi: number | null; tcpi: number | null
   eac: number | null; etc: number | null; vac: number | null; cv: number; sv: number
 }
 export interface ProjectMetrics {
   asOf: string
+  /** the EPC phase's planned / earned progress — the basis of every EVM figure */
   planned: number; earned: number; costPct: number | null
+  /** the whole lifecycle (all phases, weighted) — the figure the radar, the picker and Stage-Gate show */
+  lifecycle: { actual: number; planned: number }
   phases: PhaseMetric[]
   current: PhaseMetric | null
   epc: EpcProgress
@@ -48,14 +53,10 @@ export interface MetricsInput {
   epcAt: (date: string) => EpcProgress
   epcWindow: { start: string; finish: string } | null
   finance: {
-    /** current budget (finance module); 0 when not entered */
-    budget: number
-    /** current value of the live contracts */
-    contractsValue: number
-    /** master data contract value, last fallback for BAC */
-    masterValue: number
-    /** certified amounts of the live contracts, dated */
-    certificates: { date: string; amount: number }[]
+    /** current value of the live EPC contracts (finance module) */
+    epcContractsValue: number
+    /** certified amounts on the EPC contracts, dated */
+    epcCertificates: { date: string; amount: number }[]
     /** certified amount per contract category (label) */
     byCategory: Slice[]
   }
@@ -84,22 +85,6 @@ export function monthTicks(from: string, to: string, cap = 60): string[] {
   return out
 }
 
-/** A non-EPC phase's actual progress at a past date: recorded history when the phase keeps one (basic design), else the
- * current figure spread over the phase's actual span (actual start → actual finish, or today while still running). */
-export function phaseActualAt(now: number, t: string, today: string, row: { actualStart: string | null; actualFinish: string | null; plannedStart: string | null } | undefined, history: { pct: number; at: string }[]): number {
-  if (t >= today) return now
-  if (history.length) {
-    const h = history.filter((x) => x.at <= t)
-    return h.length ? h[h.length - 1].pct : 0
-  }
-  const start = row?.actualStart ?? row?.plannedStart
-  if (!start || t < start) return 0
-  const end = row?.actualFinish && row.actualFinish < today ? row.actualFinish : today
-  if (t >= end) return now
-  const span = ms(end) - ms(start)
-  return span > 0 ? (now * (ms(t) - ms(start))) / span : now
-}
-
 export function projectMetrics(inp: MetricsInput): ProjectMetrics {
   const { lc, today } = inp
   const rows = new Map(lc.phaseRows.map((r) => [r.phase, r]))
@@ -126,34 +111,15 @@ export function projectMetrics(inp: MetricsInput): ProjectMetrics {
     }
   })
 
-  // project progress at any date: the same weighting, each phase at that date
-  const historyOf = (code: string) => lc.history.filter((h) => h.phase === code)
-  const at = (t: string, withActual: boolean): { actual: number; planned: number } => {
-    if (t === today) return { actual: prog.overall.actual, planned: prog.overall.planned }
-    const epc = inp.epcAt(t)
-    const day = new Date(`${t}T00:00:00Z`)
-    let a = 0, pl = 0
-    for (const p of lc.phases) {
-      const w = weightOf(p.code), r = rows.get(p.code), now = prog.phases.get(p.code)!.actual
-      let actual: number, planned: number | null
-      if (p.engine === 'epc' && epc.overall) { actual = epc.overall.actual; planned = epc.overall.planned }
-      else {
-        actual = withActual ? phaseActualAt(now, t, today, r, p.engine === 'basic_design' ? historyOf(p.code) : []) : 0
-        planned = p.engine === 'epc' && inp.epcWindow ? plannedByDate(inp.epcWindow.start, inp.epcWindow.finish, day) : plannedByDate(r?.plannedStart ?? null, r?.plannedFinish ?? null, day)
-      }
-      a += w * actual; pl += w * (planned ?? actual)
-    }
-    return { actual: a / totalW, planned: pl / totalW }
-  }
-
-  // money
+  // EVM on the EPC scope
   const f = inp.finance
-  const bacSource: Evm['bacSource'] = f.budget > 0 ? 'budget' : f.contractsValue > 0 ? 'contracts' : f.masterValue > 0 ? 'master' : 'none'
-  const bac = f.budget > 0 ? f.budget : f.contractsValue > 0 ? f.contractsValue : f.masterValue
-  const certs = [...f.certificates].sort((x, y) => x.date.localeCompare(y.date))
+  const moduleValue = (epcNow.values?.e ?? 0) + (epcNow.values?.p ?? 0) + (epcNow.values?.c ?? 0)
+  const bacSource: Evm['bacSource'] = f.epcContractsValue > 0 ? 'epc_contracts' : moduleValue > 0 ? 'module_values' : 'none'
+  const bac = f.epcContractsValue > 0 ? f.epcContractsValue : moduleValue
+  const certs = [...f.epcCertificates].sort((x, y) => x.date.localeCompare(y.date))
   const costTo = (t: string) => certs.reduce((s, c) => s + (c.date <= t ? c.amount : 0), 0)
   const ac = costTo(today)
-  const earned = prog.overall.actual, planned = prog.overall.planned
+  const earned = epcNow.overall?.actual ?? 0, planned = epcNow.overall?.planned ?? earned
   const ev = (bac * earned) / 100, pv = (bac * planned) / 100
   const spi = planned > 0 ? earned / planned : null
   const cpi = ac > 0 && bac > 0 ? ev / ac : null
@@ -163,17 +129,19 @@ export function projectMetrics(inp: MetricsInput): ProjectMetrics {
     tcpi: bac - ac > 0 ? (bac - ev) / (bac - ac) : null,
     eac, etc: eac == null ? null : eac - ac, vac: eac == null ? null : bac - eac, cv: ev - ac, sv: ev - pv,
   }
+  const at = (t: string) => {
+    if (t === today) return { actual: earned, planned }
+    const o = inp.epcAt(t).overall
+    return { actual: o?.actual ?? 0, planned: o?.planned ?? o?.actual ?? 0 }
+  }
 
-  // S-curve: from the earliest planned / actual date to the latest finish (or today)
-  const dates = [
-    ...lc.phaseRows.flatMap((r) => [r.plannedStart, r.plannedFinish, r.actualStart]),
-    inp.epcWindow?.start, inp.epcWindow?.finish, certs[0]?.date, today,
-  ].filter((d): d is string => !!d).map((d) => d.slice(0, 10)).sort()
+  // S-curve of the EPC scope: from the modules' first planned date (or the first certificate) to their last
+  const dates = [inp.epcWindow?.start, inp.epcWindow?.finish, certs[0]?.date, today].filter((d): d is string => !!d).map((d) => d.slice(0, 10)).sort()
   const curve: CurvePoint[] = []
-  if (dates.length > 1) {
+  if (epcNow.overall && dates.length > 1) {
     for (const t of monthTicks(dates[0], dates[dates.length - 1])) {
       const past = t <= today
-      const v = at(t, past)
+      const v = at(t)
       curve.push({ date: t, planned: v.planned, earned: past ? v.actual : null, cost: past && bac > 0 ? (costTo(t) / bac) * 100 : null })
     }
     // today itself is always a point, matching the headline figures exactly
@@ -182,14 +150,16 @@ export function projectMetrics(inp: MetricsInput): ProjectMetrics {
     if (i < 0) curve.push(pt); else if (curve[i].date === today) curve[i] = pt; else curve.splice(i, 0, pt)
   }
 
-  // the last ten weeks: progress gained in each week, planned vs earned
+  // the last ten weeks: EPC progress gained in each week, planned vs earned
   const weekly: WeekPoint[] = []
-  let prev = at(iso(ms(today) - 70 * DAY), true)
-  for (let k = 9; k >= 0; k--) {
-    const end = iso(ms(today) - k * 7 * DAY)
-    const v = k === 0 ? { actual: earned, planned } : at(end, true)
-    weekly.push({ from: iso(ms(end) - 6 * DAY), planned: Math.max(0, v.planned - prev.planned), earned: Math.max(0, v.actual - prev.actual) })
-    prev = v
+  if (epcNow.overall) {
+    let prev = at(iso(ms(today) - 70 * DAY))
+    for (let k = 9; k >= 0; k--) {
+      const end = iso(ms(today) - k * 7 * DAY)
+      const v = at(end)
+      weekly.push({ from: iso(ms(end) - 6 * DAY), planned: Math.max(0, v.planned - prev.planned), earned: Math.max(0, v.actual - prev.actual) })
+      prev = v
+    }
   }
 
   const epcSlices: Slice[] = ([['E', 'مهندسی', epcNow.eng, epcNow.weights.e], ['P', 'تدارکات', epcNow.proc, epcNow.weights.p], ['C', 'اجرا', epcNow.cons, epcNow.weights.c]] as const)
@@ -197,6 +167,7 @@ export function projectMetrics(inp: MetricsInput): ProjectMetrics {
 
   return {
     asOf: today, planned, earned, costPct: bac > 0 ? (ac / bac) * 100 : null,
+    lifecycle: { actual: prog.overall.actual, planned: prog.overall.planned },
     phases, current: phases.find((p) => p.state === 'current') ?? null,
     epc: epcNow, epcWindow: inp.epcWindow, evm, curve, weekly,
     costBreakdown: f.byCategory.filter((x) => x.value > 0).sort((a, b) => b.value - a.value),

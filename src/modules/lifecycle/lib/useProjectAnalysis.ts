@@ -1,3 +1,4 @@
+import type { HealthInput } from './health'
 import { useMemo } from 'react'
 import type { ProjectLifecycleBundle } from '../store/useLifecycleStore'
 import { computeStageReadiness, deriveGateStatus, averageReadiness, type StageReadiness } from './readiness'
@@ -36,6 +37,8 @@ export interface ExternalCounts {
   openCriticalRisks?: number
   criticalRisksWithoutMitigation?: number
   openCriticalIssues?: number
+  /** module performance indexes (see HealthInput.perf) */
+  perf?: HealthInput['perf']
 }
 
 export function analyseProject(
@@ -76,6 +79,7 @@ export function analyseProject(
     openCriticalIssues,
     blockedGateCount,
     stored: bundle.health,
+    perf: external.perf,
     // a bundle built from Stage-Gate (G1…G9) reads its stage-bound dimensions from the G phases
     stageOf: bundle.stages.some((s) => isStageGateKey(s.stageKey)) ? SG_DIMENSION_STAGES : undefined,
   })

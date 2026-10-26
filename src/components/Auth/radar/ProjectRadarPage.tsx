@@ -1,3 +1,4 @@
+import { HealthGuideButton, healthColor as healthColorOf } from '../../../modules/projectMetrics/HealthGuide'
 import { useEffect, useMemo, useState } from 'react'
 import {
   Activity, ArrowRight, Bell, CheckCircle2,
@@ -140,13 +141,17 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
   const displayName = selectedProject ? selectedProject.officialName : (data.projectNameEn ?? data.projectName)
 
   // Performance-strip derived values (Project/Time/Cost/Quality Performance cards)
-  const healthCaption = data.kpi.health >= 85 ? 'EXCELLENT' : data.kpi.health >= 70 ? 'GOOD' : data.kpi.health >= 50 ? 'FAIR' : 'POOR'
-  const healthColor = data.kpi.health >= 70 ? 'var(--radar-green)' : data.kpi.health >= 50 ? 'var(--radar-amber)' : '#ef4444'
+  // the colour and caption are the health VERDICT (worst dimension), never re-derived from the averaged score
+  const hd = data.healthDetail
+  const healthCaption = hd ? ({ green: 'HEALTHY', yellow: 'NEEDS ATTENTION', red: 'AT RISK', black: 'GATE BLOCKED' } as const)[hd.status] + (hd.drivenBy ? ` · ${hd.drivenBy.toUpperCase()}` : '') : '—'
+  const healthColor = hd ? healthColorOf(hd) : 'var(--text-muted)'
   const timeVariance = data.kpi.progressActual - data.kpi.progressPlanned
   const timeColor = timeVariance < 0 ? 'var(--radar-amber)' : 'var(--radar-green)'
   const timeCaption = timeVariance < 0 ? 'BEHIND' : timeVariance > 0 ? 'AHEAD' : 'ON SCHEDULE'
   const costColor = data.kpi.costVariancePct >= 0 ? 'var(--radar-green)' : 'var(--radar-amber)'
   const costCaption = data.kpi.costVariancePct >= 0 ? 'AHEAD' : 'OVER BUDGET'
+  // quality is entered by hand in the lifecycle health; until then it is unassessed, not «excellent»
+  const qualityAssessed = hd ? hd.dims.find((d) => d.dimension === 'quality')?.assessed !== false : true
   const qualityColor = data.kpi.qualityPct >= 70 ? 'var(--radar-green)' : 'var(--radar-amber)'
   const qualityCaption = data.kpi.qualityPct >= 85 ? 'EXCELLENT' : data.kpi.qualityPct >= 70 ? 'GOOD' : 'FAIR'
 
@@ -304,6 +309,7 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
               pct={data.kpi.health} color={healthColor} ringSub="/100"
               bigValue={String(data.kpi.health)} bigValueColor="var(--text-primary)"
               caption={healthCaption} captionColor={healthColor}
+              extra={<HealthGuideButton health={hd} />}
             />
             <PerformanceRingCard
               title="TIME PERFORMANCE"
@@ -319,8 +325,8 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
             />
             <PerformanceRingCard
               title="QUALITY PERFORMANCE"
-              pct={data.kpi.qualityPct} color={qualityColor} ringUnit="%"
-              bigValue={qualityCaption} bigValueColor={qualityColor}
+              pct={qualityAssessed ? data.kpi.qualityPct : 0} color={qualityColor} ringUnit="%"
+              bigValue={qualityAssessed ? qualityCaption : 'NOT ASSESSED'} bigValueColor={qualityAssessed ? qualityColor : 'var(--text-muted)'}
             />
           </div>
 

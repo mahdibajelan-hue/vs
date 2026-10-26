@@ -36,6 +36,20 @@ export interface HealthInput {
   stored: HealthScore[]
   /** Which stages feed the stage-bound dimensions. Defaults to the former 11-stage keys; the Stage-Gate model passes G codes. */
   stageOf?: { engineering: string[]; procurement: string[]; construction: string[] }
+  /** performance indexes (actual ÷ planned) measured by the modules: SPI of engineering / procurement / construction,
+   * of the whole lifecycle (schedule), and CPI of the EPC contract (cost). When given they set those dimensions. */
+  perf?: Partial<Record<'schedule' | 'cost' | 'engineering' | 'procurement' | 'construction', number | null>>
+}
+
+/** Index → score: 1.00 or better is 100; every 0.01 below costs 4 points. So ≥ 0.95 is green (≥ 80), 0.90–0.95 yellow
+ * (60–80), below 0.90 red. */
+export function scoreFromIndex(idx: number): number {
+  return Math.max(0, Math.min(100, Math.round(100 - Math.max(0, 1 - idx) * 400)))
+}
+const PERF_LABEL: Record<string, string> = { schedule: 'SPI چرخهٔ عمر', cost: 'CPI پیمان EPC', engineering: 'SPI مهندسی', procurement: 'SPI تدارکات', construction: 'SPI اجرا' }
+function perfHealth(dimension: 'schedule' | 'cost' | 'engineering' | 'procurement' | 'construction', idx: number): DerivedHealth {
+  const score = scoreFromIndex(idx)
+  return { dimension, score, status: statusFromScore(score), explanation: `${PERF_LABEL[dimension]} = ${idx.toFixed(2)} (واقعی ÷ برنامه)`, isManual: false, assessed: true }
 }
 const DEFAULT_STAGE_OF = { engineering: ['engineering'], procurement: ['procurement'], construction: ['execution'] }
 
@@ -46,6 +60,8 @@ export interface DerivedHealth {
   explanation: string
   /** True when the value came from a stored/manual row rather than being derived here. */
   isManual: boolean
+  /** false when there was nothing to assess (no data, no manual score) — shown as 100 but left out of the overall score */
+  assessed?: boolean
 }
 
 /** Schedule health from critical-path slip and delayed milestones. */
@@ -54,7 +70,7 @@ function scheduleHealth(input: HealthInput): DerivedHealth {
   const ms = computeMilestoneKpis(input.milestones)
 
   if (input.activities.length === 0 && input.milestones.length === 0) {
-    return { dimension: 'schedule', score: 100, status: 'green', explanation: 'برنامه‌ای ثبت نشده است', isManual: false }
+    return { dimension: 'schedule', score: 100, status: 'green', explanation: 'برنامه‌ای ثبت نشده است', isManual: false, assessed: false }
   }
 
   // Each day of critical-path slip costs a point (capped), each delayed critical milestone costs 8.
@@ -100,7 +116,7 @@ function procurementHealth(input: HealthInput): DerivedHealth {
   ).length
 
   if (procMilestones.length === 0 && overdueProcActions === 0) {
-    return { dimension: 'procurement', score: 100, status: 'green', explanation: 'موردی ثبت نشده است', isManual: false }
+    return { dimension: 'procurement', score: 100, status: 'green', explanation: 'موردی ثبت نشده است', isManual: false, assessed: false }
   }
 
   const score = Math.max(0, 100 - kpis.criticalDelayed * 15 - kpis.delayed * 6 - overdueProcActions * 5)
@@ -121,7 +137,7 @@ function stageMilestoneHealth(input: HealthInput, dimension: 'engineering' | 'co
   const keys = (input.stageOf ?? DEFAULT_STAGE_OF)[dimension]
   const list = input.milestones.filter((m) => keys.includes(m.stageKey))
   if (list.length === 0) {
-    return { dimension, score: 100, status: 'green', explanation: 'موردی ثبت نشده است', isManual: false }
+    return { dimension, score: 100, status: 'green', explanation: 'موردی ثبت نشده است', isManual: false, assessed: false }
   }
   const kpis = computeMilestoneKpis(list)
   const score = Math.max(0, 100 - kpis.criticalDelayed * 15 - kpis.delayed * 6 - kpis.atRisk * 3)
@@ -149,6 +165,8 @@ const DERIVED: Partial<Record<HealthDimension, (i: HealthInput) => DerivedHealth
 
 export function computeHealth(input: HealthInput): DerivedHealth[] {
   return HEALTH_DIMENSIONS.map((dimension) => {
+    const idx = input.perf?.[dimension as keyof NonNullable<HealthInput['perf']>]
+    if (idx != null && Number.isFinite(idx)) return perfHealth(dimension as 'schedule', idx)
     const derive = DERIVED[dimension]
     if (derive) return derive(input)
 
@@ -162,7 +180,7 @@ export function computeHealth(input: HealthInput): DerivedHealth[] {
         isManual: true,
       }
     }
-    return { dimension, score: 100, status: 'green' as HealthStatus, explanation: 'ارزیابی نشده', isManual: true }
+    return { dimension, score: 100, status: 'green' as HealthStatus, explanation: 'ارزیابی نشده', isManual: true, assessed: false }
   })
 }
 
@@ -190,7 +208,10 @@ export function computeOverallHealth(
     }
   }
 
-  const avg = dimensions.length ? Math.round(dimensions.reduce((s, d) => s + d.score, 0) / dimensions.length) : 100
+  // the score averages the dimensions that were actually assessed; an unassessed one would only pad it with 100
+  const counted = dimensions.filter((d) => d.assessed !== false)
+  const basis = counted.length ? counted : dimensions
+  const avg = basis.length ? Math.round(basis.reduce((s, d) => s + d.score, 0) / basis.length) : 100
   // a blocked gate turns the verdict black, but the score stays the real average (a bare 0 reads as "no data")
   if (blockedGateCount > 0) {
     return { status: 'black', score: avg, drivenBy: null, isOverridden: false, overrideReason: '' }

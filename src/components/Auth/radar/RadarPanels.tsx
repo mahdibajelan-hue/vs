@@ -139,9 +139,11 @@ function PanelTitle({ text, action }: { text: string; action?: string }) {
  * health or "64% → -8% BEHIND" for schedule performance — matches the four-card performance
  * strip from the reference layout (Project/Time/Cost/Quality Performance). */
 export function PerformanceRingCard({
-  title, pct, ringUnit, ringSub, color, bigValue, bigValueColor, caption, captionColor,
+  title, pct, ringUnit, ringSub, color, bigValue, bigValueColor, caption, captionColor, extra,
 }: {
   title: string
+  /** a small control beside the title (e.g. a help button) */
+  extra?: React.ReactNode
   pct: number
   ringUnit?: string
   ringSub?: string
@@ -153,7 +155,7 @@ export function PerformanceRingCard({
 }) {
   return (
     <div className="p-1">
-      <PanelTitle text={title} />
+      {extra ? <div className="flex items-start justify-between gap-2"><PanelTitle text={title} />{extra}</div> : <PanelTitle text={title} />}
       <div className="flex items-center gap-4">
         <RingGauge pct={pct} color={color} size={64} stroke={6} unit={ringUnit} sub={ringSub} />
         <div className="min-w-0 flex-1">

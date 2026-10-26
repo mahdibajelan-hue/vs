@@ -12,6 +12,10 @@ export interface EpcProgress {
   proc: Discipline | null
   cons: Discipline | null
   weights: EpcWeights
+  /** where the E/P/C weights came from: each module's own value (rial), the client report, or equal shares */
+  weightSource?: 'value' | 'report' | 'equal'
+  /** each discipline's value in rial when the weights are value-based */
+  values?: EpcWeights
   /** weighted over the disciplines that have data; null when none has */
   overall: { actual: number; planned: number | null } | null
 }

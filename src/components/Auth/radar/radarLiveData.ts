@@ -22,6 +22,7 @@ import type { ImIssue } from '../../../modules/issues/types'
 import { loadScheduleSummary } from '../../../modules/scheduling/lib/summaryLoader'
 import { loadStageGateRadar } from './stageGateRadar'
 import { loadEpcProgress } from '../../../modules/epc/epcProgressLoader'
+import { loadProjectMetrics } from '../../../modules/projectMetrics/projectMetricsLoader'
 import type { EpcProgress } from '../../../modules/epc/epcProgress'
 import { loadStageGateBundle } from '../../../modules/lifecycle/lib/stageGateBundleLoader'
 import type { ScheduleSummary } from '../../../modules/scheduling/lib/summary'
@@ -218,6 +219,8 @@ function epcDimensions(e: EpcProgress): EpcDimension[] | null {
 
 const faPct = (v: number) => `${String(Math.round(v)).replace(/\d/g, (x) => '۰۱۲۳۴۵۶۷۸۹'[+x])}٪`
 
+const STATUS_OF_HEALTH: Record<'green' | 'yellow' | 'red' | 'black', ProjectRadarStatus> = { green: 'nominal', yellow: 'attention', red: 'at_risk', black: 'critical' }
+
 /** A project with no Stage-Gate link has no gate to show. */
 const NO_GATE: RadarGate = { name: 'بدون گیت ثبت‌شده', nameEn: 'NO GATE RECORDED', prerequisites: 0, passed: 0, pending: 0, failed: 0, readinessPct: 0 }
 
@@ -368,6 +371,8 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   const stamp = `${formatJalali(iso)} - ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   base.reportDateEn = stamp
   base.reportDateFa = stamp.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])
+  // the status starts neutral (never the mock's random one); live health / signals set it below
+  base.status = 'nominal'
 
   const { data: afterRiskIssue, criticalCounts } = await applyRiskIssueSection(base, masterProjectId)
   let result = afterRiskIssue
@@ -451,6 +456,31 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   // nothing recorded for this project anywhere: show empty, not the mock picture
   if (!lifecycleLive && !plcLive) {
     result = { ...result, lifecycle: [], lifecycleOverallPct: 0, currentStageLabel: '—', nextGate: NO_GATE, epc: null, kpi: { ...result.kpi, progressActual: 0, progressPlanned: 0 } }
+  }
+
+  // --- One snapshot: health, lifecycle progress, EPC — exactly what the project dashboard shows -------------
+  try {
+    const snap = await loadProjectMetrics(masterProjectId)
+    if (snap) {
+      // cost variance = the EPC contract's CPI − 1 (0 when nothing has been certified yet), never the mock figure
+      result = { ...result, kpi: { ...result.kpi, progressActual: Math.round(snap.lifecycle.actual), progressPlanned: Math.round(snap.lifecycle.planned), cpi: snap.evm.cpi ?? 0, spi: snap.evm.spi ?? 0, costVariancePct: snap.evm.cpi == null ? 0 : Math.round((snap.evm.cpi - 1) * 100) } }
+      const dims = epcDimensions(snap.epc)
+      if (dims) result = { ...result, epc: dims }
+      if (snap.health) {
+        result = {
+          ...result, healthDetail: snap.health,
+          // the verdict, not the averaged score, sets the status (see HealthGuide)
+          status: STATUS_OF_HEALTH[snap.health.status],
+          kpi: {
+            ...result.kpi, health: snap.health.score,
+            qualityPct: snap.health.dims.find((d) => d.dimension === 'quality')?.score ?? result.kpi.qualityPct,
+            costPerformancePct: snap.health.dims.find((d) => d.dimension === 'cost')?.score ?? result.kpi.costPerformancePct,
+          },
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[radar] project snapshot failed', err)
   }
 
   // --- Contract ---------------------------------------------------------------

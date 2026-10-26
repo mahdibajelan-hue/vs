@@ -172,6 +172,8 @@ export interface RadarData {
   nextGate: RadarGate
   epc: EpcDimension[] | null
   contract: ContractSummary
+  /** the project's health — score, verdict (worst dimension) and the ten dimensions behind it (projectMetrics) */
+  healthDetail?: import('../../../modules/projectMetrics/projectMetricsLoader').ProjectHealth | null
 }
 
 export const STATUS_LABEL_FA: Record<ProjectRadarStatus, string> = {

@@ -8,6 +8,9 @@ import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { formatJalali } from '../../lib/jalali'
 import { loadProjectMetrics } from './projectMetricsLoader'
 import type { ProjectMetrics, Slice } from './projectMetricsCore'
+import type { ProjectSnapshot } from './projectMetricsLoader'
+import { HealthGuideButton, HEALTH_STATUS_FA, healthColor } from './HealthGuide'
+import { HEALTH_DIMENSION_LABEL_FA } from '../lifecycle/types'
 import './projectDashboard.css'
 
 const fa = (v: number, d = 0) => v.toLocaleString('fa-IR', { minimumFractionDigits: d, maximumFractionDigits: d })
@@ -29,7 +32,7 @@ const RISK_COLOR: Record<string, string> = { critical: '#ef4444', high: '#f97316
 export function ProjectDashboardApp({ onExitToHub }: { onExitToHub: () => void; onBackToRadar?: () => void }) {
   const projectId = useProjectContextStore((s) => s.projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
-  const [m, setM] = useState<ProjectMetrics | null | undefined>(undefined)
+  const [m, setM] = useState<ProjectSnapshot | null | undefined>(undefined)
   const [err, setErr] = useState<string | null>(null)
   useEffect(() => {
     if (!useMasterDataStore.getState().loaded) void useMasterDataStore.getState().fetchAll()
@@ -65,7 +68,7 @@ export function ProjectDashboardApp({ onExitToHub }: { onExitToHub: () => void; 
   )
 }
 
-function Body({ m }: { m: ProjectMetrics }) {
+function Body({ m }: { m: ProjectSnapshot }) {
   const e = m.evm
   const spark = useMemo(() => m.curve.filter((c) => c.earned != null), [m.curve])
   const spiSeries = spark.map((c) => (c.planned > 0 ? (c.earned as number) / c.planned : null))
@@ -76,26 +79,53 @@ function Body({ m }: { m: ProjectMetrics }) {
       {noPlan && (
         <div className="pdb-note"><AlertTriangle size={15} aria-hidden /> برای این پروژه هنوز مستر پلن (بازه‌های فازها) در «برنامه‌ریزی ← مستر پلن چرخه عمر» تعریف نشده؛ درصد برنامه‌ای تا تعریف آن برابر واقعی فرض می‌شود.</div>
       )}
-      <section className="pdb-kpis" aria-label="شاخص‌های پیشرفت و عملکرد">
-        <Kpi label="پیشرفت برنامه‌ای" en="Planned %" value={pct(m.planned, 2)} color={C.planned} help="میانگین وزنی پیشرفت برنامه‌ای فازهای چرخهٔ عمر؛ فازهای غیر EPC از مستر پلن، فاز EPC از برنامهٔ ماژول‌ها" visual={<Ring v={m.planned} color={C.planned} />} />
-        <Kpi label="پیشرفت واقعی (کسب‌شده)" en="Earned %" value={pct(m.earned, 2)} color={C.earned} help="میانگین وزنی پیشرفت واقعی فازها — همان عدد رادار و چرخهٔ عمر" visual={<Ring v={m.earned} color={C.earned} />} />
-        <Kpi label="هزینهٔ واقعی" en="Actual cost %" value={pct(m.costPct, 2)} color={C.cost} help="کارکرد تأییدشدهٔ قراردادها تا امروز ÷ بودجهٔ پروژه (BAC)" visual={<Ring v={m.costPct ?? 0} color={C.cost} />} />
+      <section className="pdb-overview" aria-label="نمای کلی پروژه">
+        <article className="pdb-ov pdb-ov-health" style={{ '--hc': healthColor(m.health) } as CSSProperties}>
+          <span className="pdb-ov-label">سلامت پروژه <HealthGuideButton health={m.health} /></span>
+          {m.health ? (
+            <>
+              <b className="pdb-ov-value">{fa(m.health.score)}<small>/۱۰۰</small></b>
+              <span className="pdb-ov-sub"><i className="pdb-dot" />{HEALTH_STATUS_FA[m.health.status]}{m.health.drivenBy ? ` · عامل: ${HEALTH_DIMENSION_LABEL_FA[m.health.drivenBy]}` : ''}</span>
+            </>
+          ) : <b className="pdb-ov-value">—</b>}
+        </article>
+        <article className="pdb-ov">
+          <span className="pdb-ov-label">پیشرفت کل چرخهٔ عمر</span>
+          <b className="pdb-ov-value">{pct(m.lifecycle.actual)}</b>
+          <span className="pdb-ov-sub">برنامه {pct(m.lifecycle.planned)} · {m.lifecycle.actual - m.lifecycle.planned >= 0 ? 'جلوتر' : 'عقب‌تر'} {pct(Math.abs(m.lifecycle.actual - m.lifecycle.planned))} — همان عدد رادار و Stage-Gate</span>
+        </article>
+        <article className="pdb-ov">
+          <span className="pdb-ov-label">فاز جاری</span>
+          <b className="pdb-ov-value pdb-ov-text">{m.current ? <><span className="pdb-code" dir="ltr">{m.current.code}</span> {m.current.title}</> : 'پایان چرخه'}</b>
+          <span className="pdb-ov-sub">{m.current ? `واقعی ${pct(m.current.actual)} · برنامه ${pct(m.current.planned)}` : ''}</span>
+        </article>
+        <article className="pdb-ov">
+          <span className="pdb-ov-label">مبنای ارزش کسب‌شده</span>
+          <b className="pdb-ov-value pdb-ov-text">پیمان EPC</b>
+          <span className="pdb-ov-sub">{e.bacSource === 'epc_contracts' ? 'BAC = ارزش جاری قرارداد(های) EPC در ماژول مالی' : e.bacSource === 'module_values' ? 'قرارداد EPC ثبت نشده؛ BAC = ارزش مهندسی + کالا + اجرا در ماژول‌ها' : 'قرارداد EPC و ارزش ماژول‌ها ثبت نشده'}</span>
+        </article>
+      </section>
+
+      <section className="pdb-kpis" aria-label="شاخص‌های پیشرفت و عملکرد پیمان EPC">
+        <Kpi label="برنامه‌ای EPC" en="Planned %" value={pct(m.planned, 2)} color={C.planned} help="پیشرفت برنامه‌ای پیمان EPC: برنامهٔ ماژول‌های مهندسی، کالا و اجرا با وزن ارزش هر بخش" visual={<Ring v={m.planned} color={C.planned} />} />
+        <Kpi label="کسب‌شدهٔ EPC" en="Earned %" value={pct(m.earned, 2)} color={C.earned} help="پیشرفت واقعی پیمان EPC (همان پیشرفت فاز اجرای پروژه در چرخهٔ عمر)" visual={<Ring v={m.earned} color={C.earned} />} />
+        <Kpi label="هزینهٔ واقعی EPC" en="Actual cost %" value={pct(m.costPct, 2)} color={C.cost} help="کارکرد تأییدشدهٔ قرارداد(های) EPC تا امروز ÷ BAC" visual={<Ring v={m.costPct ?? 0} color={C.cost} />} />
         <Kpi label="شاخص عملکرد زمانی" en="SPI" value={idx(e.spi)} color={C.spi} tone={tone(e.spi)} help="پیشرفت واقعی ÷ پیشرفت برنامه‌ای" visual={<Spark values={spiSeries} color={C.spi} />} />
-        <Kpi label="شاخص عملکرد هزینه" en="CPI" value={idx(e.cpi)} color={C.cpi} tone={tone(e.cpi)} help="ارزش کسب‌شده (BAC × پیشرفت واقعی) ÷ هزینهٔ واقعی (کارکرد تأییدشده)" visual={<Spark values={cpiSeries} color={C.cpi} />} />
+        <Kpi label="شاخص عملکرد هزینه" en="CPI" value={idx(e.cpi)} color={C.cpi} tone={tone(e.cpi)} help="ارزش کسب‌شده (BAC × پیشرفت EPC) ÷ هزینهٔ واقعی (کارکرد تأییدشدهٔ پیمان EPC)" visual={<Spark values={cpiSeries} color={C.cpi} />} />
         <Kpi label="شاخص لازم برای تکمیل" en="TCPI" value={idx(e.tcpi)} color={C.tcpi} tone={e.tcpi == null ? undefined : e.tcpi <= 1 ? 'good' : e.tcpi <= 1.1 ? 'warn' : 'bad'} help="(BAC − EV) ÷ (BAC − AC): کارایی هزینه‌ای لازم برای ماندن در بودجه" visual={<Spark values={spark.map((c) => c.cost)} color={C.tcpi} />} />
       </section>
 
       <section className="pdb-row pdb-row-2">
-        <Panel title="منحنی S" sub="برنامه‌ای، کسب‌شده و هزینهٔ واقعی (٪ تجمعی)" icon={<Gauge size={15} />}>
+        <Panel title="منحنی S پیمان EPC" sub="برنامه‌ای، کسب‌شده و هزینهٔ واقعی (٪ تجمعی)" icon={<Gauge size={15} />}>
           <SCurve m={m} />
         </Panel>
-        <Panel title="پیشرفت هفتگی" sub="ده هفتهٔ اخیر — برنامه‌ای در برابر کسب‌شده" icon={<Clock3 size={15} />}>
+        <Panel title="پیشرفت هفتگی EPC" sub="ده هفتهٔ اخیر — برنامه‌ای در برابر کسب‌شده" icon={<Clock3 size={15} />}>
           <Weekly m={m} />
         </Panel>
       </section>
 
-      <section className="pdb-money" aria-label="ارزش کسب‌شده (میلیارد ریال)">
-        <Money label="بودجهٔ تکمیل" en="BAC" value={bn(e.bac)} icon={<Wallet size={18} />} sub={e.bacSource === 'budget' ? 'بودجهٔ مصوب ماژول مالی' : e.bacSource === 'contracts' ? 'ارزش جاری قراردادها' : e.bacSource === 'master' ? 'مبلغ قرارداد در اطلاعات پایه' : 'ثبت نشده'} />
+      <section className="pdb-money" aria-label="ارزش کسب‌شدهٔ پیمان EPC (میلیارد ریال)">
+        <Money label="بودجهٔ تکمیل" en="BAC" value={bn(e.bac)} icon={<Wallet size={18} />} sub={e.bacSource === 'epc_contracts' ? 'ارزش جاری قرارداد EPC' : e.bacSource === 'module_values' ? 'ارزش ماژول‌های EPC' : 'ثبت نشده'} />
         <Money label="برآورد هزینهٔ تمام‌شده" en="EAC" value={bn(e.eac)} icon={<Calculator size={18} />} sub="BAC ÷ CPI" />
         <Money label="انحراف هزینه" en="CV" value={bn(e.cv)} signed={e.cv} sub="EV − AC" />
         <Money label="انحراف زمان" en="SV" value={bn(e.sv)} signed={e.sv} sub="EV − PV" />
@@ -107,7 +137,7 @@ function Body({ m }: { m: ProjectMetrics }) {
         <Panel title="تفکیک هزینهٔ واقعی" sub="کارکرد تأییدشده به تفکیک نوع قرارداد" icon={<Coins size={15} />}>
           <Donut data={m.costBreakdown} unit="bn" empty="هنوز کارکردی تأیید نشده است." />
         </Panel>
-        <Panel title="تفکیک کار EPC" sub="وزن و پیشرفت مهندسی، تدارکات و اجرا" icon={<PieIcon size={15} />}>
+        <Panel title="تفکیک کار EPC" sub="وزن هر بخش = ارزش ریالی آن در ماژول خودش" icon={<PieIcon size={15} />}>
           <EpcBreakdown m={m} />
         </Panel>
         <Panel title="وضعیت ریسک‌ها" sub="ریسک‌های فعال به تفکیک سطح" icon={<AlertTriangle size={15} />}>
@@ -125,11 +155,11 @@ function Body({ m }: { m: ProjectMetrics }) {
       <details className="pdb-how">
         <summary><HelpCircle size={14} aria-hidden /> نحوهٔ محاسبه</summary>
         <ul>
-          <li>پیشرفت پروژه = میانگین وزنی فازهای چرخهٔ عمر (وزن هر فاز در مستر پلن؛ بدون وزن، سهم مساوی). همین عدد در رادار، کارت پروژه، چرخهٔ عمر و ماژول مالی نمایش داده می‌شود.</li>
-          <li>فازهای غیر EPC: واقعی از درصد فعالیت‌های مستر پلن (طراحی پایه از درصد ثبت‌شده)، برنامه‌ای از بازهٔ برنامه‌ای فاز.</li>
-          <li>فاز EPC: مهندسی از مدارک (تهیه و تأیید وزنی)، تدارکات از مراحل تأمین کالا (ارزش‌محور)، اجرا از کارکرد تأییدشدهٔ گزارش‌های روزانه؛ با وزن‌های E/P/C فرم «اطلاعات پایه پروژه» (یا سهم مساوی).</li>
-          <li>EV = BAC × پیشرفت واقعی، PV = BAC × پیشرفت برنامه‌ای، AC = کارکرد تأییدشدهٔ قراردادها تا امروز. مبالغ به میلیارد ریال.</li>
-          <li>منحنی گذشته: فاز EPC از تاریخ‌های ثبت‌شده در ماژول‌ها بازسازی می‌شود؛ سایر فازها از تاریخ شروع و پایان واقعی (یا سابقهٔ درصد طراحی پایه).</li>
+          <li>پیشرفت کل چرخهٔ عمر = میانگین وزنی فازها (وزن هر فاز در مستر پلن). فازهای غیر EPC با مستر پلن کنترل می‌شوند؛ فاز اجرای پروژه (EPC) پیشرفت و برنامه‌اش را از ماژول‌ها می‌گیرد. همین عدد در رادار، کارت پروژه، Stage-Gate و ماژول مالی نمایش داده می‌شود.</li>
+          <li>پیشرفت EPC: مهندسی از مدارک (تهیه و تأیید، وزن مدرک)، کالا از مراحل تأمین (ارزش‌محور)، اجرا از کارکرد تأییدشدهٔ گزارش‌های روزانه. وزن هر بخش = ارزش ریالی آن در ماژول خودش (قیمت مدارک، ارزش اقلام بسته‌ها، مقدار × فی فعالیت‌ها).</li>
+          <li>ارزش کسب‌شده فقط روی پیمان EPC: BAC = ارزش جاری قرارداد(های) EPC، EV = BAC × پیشرفت واقعی EPC، PV = BAC × پیشرفت برنامه‌ای EPC، AC = کارکرد تأییدشدهٔ قرارداد EPC تا امروز. SPI = EV÷PV، CPI = EV÷AC، TCPI = (BAC−EV)÷(BAC−AC)، EAC = BAC÷CPI، ETC = EAC−AC، VAC = BAC−EAC، CV = EV−AC، SV = EV−PV. مبالغ به میلیارد ریال.</li>
+          <li>منحنی S و پیشرفت هفتگی از تاریخ‌های ثبت‌شده در ماژول‌ها (برنامه و تأیید هر مدرک، مرحلهٔ کالا و گزارش روزانه) بازسازی می‌شوند.</li>
+          <li>سلامت پروژه: راهنمای (?) کنار کارت سلامت را ببینید.</li>
         </ul>
       </details>
     </main>
@@ -280,7 +310,7 @@ function EpcBreakdown({ m }: { m: ProjectMetrics }) {
     <div className="pdb-epc">
       {rows.map(([key, label, d, w]) => (
         <button type="button" key={key} className="pdb-epc-row" onClick={() => open(key)} disabled={!d} title={d ? `رفتن به ماژول ${label}` : 'بدون داده در ماژول'}>
-          <span className="pdb-epc-head"><b>{label}</b><small>وزن {d ? fa((w / tw) * 100) : '—'}٪</small><em>{d ? pct(d.actual) : '—'}</em></span>
+          <span className="pdb-epc-head"><b>{label}</b><small>وزن {d ? fa((w / tw) * 100, (w / tw) * 100 < 10 ? 1 : 0) : '—'}٪</small><em>{d ? pct(d.actual) : '—'}</em></span>
           <span className="pdb-bar">
             {d?.planned != null && <span className="pdb-bar-plan" style={{ width: `${Math.min(100, d.planned)}%` }} />}
             {d && <span className="pdb-bar-act" style={{ width: `${Math.min(100, d.actual)}%` }} />}
@@ -289,6 +319,7 @@ function EpcBreakdown({ m }: { m: ProjectMetrics }) {
         </button>
       ))}
       {m.epc.overall && <p className="pdb-epc-total">پیشرفت وزنی EPC: <b>{pct(m.epc.overall.actual)}</b> · برنامه {pct(m.epc.overall.planned)}</p>}
+      <p className="pdb-epc-src">{m.epc.weightSource === 'value' ? `وزن‌ها از ارزش ماژول‌ها: مهندسی ${bn(m.epc.values?.e ?? 0)}، کالا ${bn(m.epc.values?.p ?? 0)}، اجرا ${bn(m.epc.values?.c ?? 0)} میلیارد ریال` : m.epc.weightSource === 'report' ? 'ارزش ریالی همهٔ بخش‌ها در ماژول‌ها ثبت نشده؛ وزن‌ها از فرم «اطلاعات پایه پروژه»' : 'ارزش ریالی بخش‌ها ثبت نشده؛ وزن مساوی'}</p>
     </div>
   )
 }
