@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link2, Loader2, Orbit } from 'lucide-react'
+import { BookOpen, Link2, Loader2, Orbit } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useModuleStore } from '../../store/useModuleStore'
@@ -11,6 +11,7 @@ import { ensureEpcStores, epcProgressOf, epcWindowOf } from '../epc/epcProgressL
 import { weightsFromReport } from '../epc/epcProgress'
 import { createStageGateEngine } from './legacy/engine'
 import { linkSgProject, loadSgProjects, type SgProjectRef } from './sgProjects'
+import { SgGuideDialog } from './SgGuideDialog'
 import './stagegate.css'
 
 /** Stage-Gate lifecycle (9-gate model, orbit + gate pages) — the lifecycle of record of the platform. The original
@@ -25,6 +26,7 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const [selected, setSelected] = useState('')
   const [loading, setLoading] = useState(true)
   const [linkMsg, setLinkMsg] = useState<string | null>(null)
+  const [guide, setGuide] = useState<{ phase: string | null } | null>(null)
   const engineRef = useRef<ReturnType<typeof createStageGateEngine> | null>(null)
 
   const refresh = () => loadSgProjects().then((p) => { setProjects(p); setLoading(false); return p })
@@ -37,6 +39,8 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       currentUser: { email: profile.email },
       currentProfile: { role: profile.isAdmin ? 'admin' : 'manager' },
       myProjectAccess: projects.map((p) => ({ project_name: p.name })),
+      onOpenGuide: (phase: string | null) => setGuide({ phase }),
+      onOpenModule: (key: 'engineering' | 'material' | 'execution') => useModuleStore.getState().enterModule(key, contextProjectId ? 'project' : undefined),
       // the EPC phase reads the engineering / material / execution modules (once their stores are loaded)
       getEpcWindow: (name: string) => { const m = projects.find((p) => p.name === name)?.masterProjectId; return m ? epcWindowOf(m) : null },
       getEpcLive: (name: string, report: Record<string, unknown> | null) => { const m = projects.find((p) => p.name === name)?.masterProjectId; return m ? epcProgressOf(m, weightsFromReport(report)) : null },
@@ -81,12 +85,19 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
             <Orbit size={20} />
           </span>
           <div className="min-w-0">
-            <h2 className="truncate text-base font-extrabold text-slate-800">چرخه عمر پروژه — Stage-Gate</h2>
-            <p className="text-xs text-slate-500">مدل ۹ گیتی: تعریف تا تسویه حساب. پروژه: <b id="lcProjectNameLabel" className="text-slate-700">{selected || '—'}</b>{master ? <> · <span className="text-slate-600">{master.officialName}</span></> : null}</p>
+            <h2 className="truncate text-base font-extrabold text-slate-800">چرخهٔ عمر پروژه</h2>
+            <p className="truncate text-xs text-slate-500" title={master?.officialName ?? selected}>{master?.officialName ?? (selected || 'پروژه‌ای انتخاب نشده')}</p>
+            <span id="lcProjectNameLabel" hidden>{selected}</span>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setGuide({ phase: null })} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-extrabold text-[#ffffff]" style={{ background: 'linear-gradient(135deg, #2563eb, #0ea5e9)' }}>
+            <BookOpen size={15} aria-hidden /> راهنما
+          </button>
         <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
+        </div>
       </header>
+      {guide && <SgGuideDialog phase={guide.phase} onClose={() => setGuide(null)} />}
       <StorageErrorBanner />
 
 

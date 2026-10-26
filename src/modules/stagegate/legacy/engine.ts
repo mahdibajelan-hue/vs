@@ -4,6 +4,8 @@
 // (lcState … lcBindEvents). The rendering/logic is kept as in the source on purpose so the Gantt and
 // orbit behave identically; only the data layer is adapted (sg_* tables) and the globals the source
 // took from its host page are injected through `env`.
+import { SG_PHASE_GUIDE, SG_SOURCE_LABEL, SG_HOW_TO } from '../sgGuide'
+
 export function createStageGateEngine(env) {
   const { _supabase, currentUser, currentProfile, onGotoClientReport } = env
   // planOnly: only the Master Schedule (Gantt) — used by the Scheduling module's «مستر پلن چرخه عمر پروژه»
@@ -259,6 +261,7 @@ export function createStageGateEngine(env) {
             activity: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
             shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
             users: '<path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+            info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
             checklist: '<path d="M9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
         };
         function iconSvg(name, cls) {
@@ -574,6 +577,7 @@ export function createStageGateEngine(env) {
                 document.getElementById('lcBody').innerHTML = lcEmptyStateHtml('داده مرجع چرخه عمر هنوز در سامانه ثبت نشده است — از فایل seed_lifecycle_master_data.sql برای بارگذاری آن استفاده کنید.');
                 return;
             }
+            lcSectionSeq = 0;
             document.getElementById('lcBody').innerHTML = `
                 <style>
                     /* Positioning (translate to the node's spot on the orbit) stays a
@@ -639,7 +643,8 @@ export function createStageGateEngine(env) {
         // matters more here than making any single node bigger.
         function lcOrbitPageHtml() {
             return `
-            <div class="lc-dark-panel rounded-2xl p-4 md:p-6 flex flex-col" style="background: radial-gradient(ellipse 90% 70% at 50% 10%, #123159 0%, #04070f 78%); border: 1px solid rgba(255,255,255,.07); min-height: 48vh;">
+            ${lcHowToHtml()}
+            <div class="lc-dark-panel sgx-orbit-panel rounded-2xl p-4 md:p-6 flex flex-col" style="background: radial-gradient(ellipse 90% 70% at 50% 10%, #123159 0%, #04070f 78%); border: 1px solid rgba(255,255,255,.07); min-height: 48vh;">
                 ${lcIdentityStripHtml()}
                 <div class="relative flex-1 flex items-center justify-center" id="lcOrbitStage" style="min-height: 37vh;">
                     <div style="width:100%; max-width:600px; margin:0 auto; position:relative;">
@@ -647,7 +652,53 @@ export function createStageGateEngine(env) {
                     </div>
                 </div>
                 ${lcLegendHtml()}
-            </div>`;
+            </div>
+            ${lcPhaseListHtml()}`;
+        }
+
+        // «کاربر با نگاه بفهمد چه کند» — three steps above the orbit, and a link to the full guide
+        function lcHowToHtml() {
+            return `
+            <section class="sgx-howto no-print" aria-label="راهنمای سریع">
+                <div class="sgx-howto-head">
+                    <b>چطور از این صفحه استفاده کنم؟</b>
+                    ${env.onOpenGuide ? `<button type="button" data-lc-action="open-guide" class="sgx-guide-btn">${iconSvg('info', 'w-4 h-4')}<span>راهنمای کامل مراحل</span></button>` : ''}
+                </div>
+                <ol class="sgx-howto-steps">
+                    ${SG_HOW_TO.map((h, i) => `<li><span class="sgx-num">${toPersianDigits(i + 1)}</span><div><b>${esc(h.title)}</b><p>${esc(h.text)}</p></div></li>`).join('')}
+                </ol>
+            </section>`;
+        }
+
+        // the phases as a plain list — the whole view on phones (the orbit needs room), and a quick index under it on desktop
+        function lcPhaseListHtml() {
+            const n = lcState.phases.length;
+            return `
+            <section class="sgx-plist" aria-label="فهرست فازها">
+                <header class="sgx-plist-head"><b>فازهای چرخهٔ عمر</b><small>روی هر فاز بزنید تا اطلاعات آن را ببینید یا ثبت کنید</small></header>
+                <ol>
+                ${lcState.phases.map((p, i) => {
+                    const status = lcNodeStatus(p);
+                    const meta = LC_NODE_STATUS_META[status];
+                    const { actual, planned } = lcPhaseProgress(p);
+                    const g = SG_PHASE_GUIDE[p.code];
+                    const auto = p.progress_engine === 'epc';
+                    return `
+                    <li>
+                        <button type="button" data-lc-phase="${p.code}" class="sgx-prow" style="--c:${meta.color}">
+                            <span class="sgx-pcode">${esc(p.code)}</span>
+                            <span class="sgx-pmain">
+                                <span class="sgx-ptitle">${esc(p.title)}</span>
+                                <span class="sgx-pmeta"><i class="sgx-dot"></i>${esc(meta.label)} · ${auto ? 'خودکار از ماژول‌ها' : 'ورود اطلاعات در همین فاز'}</span>
+                                <span class="sgx-pbar" title="واقعی ${toPersianDigits(Math.round(actual))}٪ · برنامه ${toPersianDigits(Math.round(planned))}٪"><span class="sgx-pbar-plan" style="width:${Math.min(100, planned)}%"></span><span class="sgx-pbar-act" style="width:${Math.min(100, actual)}%"></span></span>
+                            </span>
+                            <span class="sgx-pnum"><b>${toPersianDigits(Math.round(actual))}٪</b><small>برنامه ${toPersianDigits(Math.round(planned))}٪</small></span>
+                            <span class="sgx-pgo" aria-hidden="true">‹</span>
+                        </button>
+                    </li>`;
+                }).join('')}
+                </ol>
+            </section>`;
         }
 
         // Clicking a node used to open a floating card over the orbit; now it
@@ -663,30 +714,103 @@ export function createStageGateEngine(env) {
             const gate = lcGateReadiness(phase);
             const gateMeta = LC_GATE_STATUS_META[gate.effective];
             const gateName = lcTitleWithReviewFlag(phase.gate_name);
+            const status = lcNodeStatus(phase);
+            const meta = LC_NODE_STATUS_META[status];
+            const guide = SG_PHASE_GUIDE[phase.code];
+            const engine = phase.progress_engine;
+            const pp = lcState.projectPhases[phase.code] || {};
+            const idx = lcState.phases.findIndex(p => p.code === phase.code);
+            const prev = lcState.phases[idx - 1], next = lcState.phases[idx + 1];
+            const varCls = variance < -5 ? 'is-bad' : variance > 2 ? 'is-good' : '';
+
+            // the numbered work sections — each says whether the user types something here or only reads it
+            const sections = [];
+            if (engine === 'epc') {
+                sections.push(lcSectionHtml('lcSec-epc', 'پیشرفت این فاز از ماژول‌ها', 'auto', 'اینجا چیزی وارد نمی‌شود: درصد و برنامهٔ این فاز از ماژول‌های پیشرفت مهندسی، کنترل و تأمین کالا و مدیریت اجرا خوانده می‌شود. برای به‌روزرسانی، اطلاعات را در همان ماژول‌ها ثبت کنید.', `${lcEpcDrilldownHtml()}${env.onOpenModule ? `<div class="sgx-modlinks no-print">${[['engineering', 'پیشرفت مهندسی'], ['material', 'کنترل و تأمین کالا'], ['execution', 'مدیریت اجرا']].map(([k, l]) => `<button type="button" data-lc-action="open-module" data-module="${k}" class="sgx-modlink">ثبت در ${l} ←</button>`).join('')}</div>` : ''}`));
+            } else if (engine === 'basic_design') {
+                sections.push(lcSectionHtml('lcSec-bd', 'پیشرفت دوره‌ای طراحی پایه', 'input', 'در پایان هر دوره (مثلاً هفته یا ماه) برچسب دوره و درصد پیشرفت تجمعی طراحی پایه را وارد و «ثبت پیشرفت دوره» را بزنید.', lcBasicDesignHtml(phase, pp)));
+            }
+            sections.push(lcSectionHtml('lcSec-schedule', 'جدول زمانی این فاز (مستر پلن)', engine === 'epc' ? 'view' : 'input',
+                engine === 'epc' ? 'بازهٔ برنامهٔ این فاز از برنامهٔ ماژول‌های EPC گرفته می‌شود؛ ردیف‌های زیر فقط برای دیدن است.'
+                    : 'روی نام هر فعالیت بزنید تا تاریخ شروع و پایان و درصد پیشرفت آن را ثبت کنید؛ با «+» کنار هر ردیف زیرفعالیت اضافه کنید. پیشرفت واقعی این فاز = میانگین وزنی همین فعالیت‌ها.',
+                `<div class="lc-dark-panel sgx-gantt">${lcGanttGridHtml(lcBuildScheduleRows(phase.code), lcScheduleDateRange(phase.code))}</div>${lcPhaseHeroActionsHtml(phase)}`));
+            const criteria = lcChecklistSectionHtml(phase, 'criterion', '');
+            sections.push(lcSectionHtml('lcSec-criteria', 'معیارهای عبور از گیت', lcState.canEdit ? 'input' : 'view',
+                'برای هر معیار وضعیت را انتخاب کنید، لینک یا فایل مدرک را اضافه و «ذخیره» را بزنید. معیارهای [الزامی] باید تأیید یا معاف شوند تا بتوان درخواست بررسی گیت داد.',
+                criteria || '<p class="sgx-empty">برای این فاز معیار عبوری تعریف نشده است.</p>'));
+            sections.push(lcSectionHtml('lcSec-gate', 'تصمیم گیت', lcState.canEdit ? 'input' : 'view',
+                isAdminUser() ? 'پس از بررسی معیارها یکی از تصمیم‌ها را ثبت کنید: عبور، عبور مشروط (با شرط و مهلت) یا بازگشت جهت اقدام.' : 'وقتی همهٔ معیارهای الزامی تأیید شد، «درخواست بررسی گیت» را بزنید تا تأییدکننده تصمیم بگیرد.',
+                `${lcGateActionsHtml(phase, gate) || '<p class="sgx-empty">ثبت تصمیم برای نقش شما فعال نیست.</p>'}${lcRisksSectionHtml(phase)}${lcApprovalsHistoryHtml(phase)}`));
+            sections.push(lcSectionHtml('lcSec-info', 'خروجی‌ها، تاریخ‌ها و وزن فاز', 'view', 'خروجی‌های مورد انتظار این فاز، تاریخ‌های برنامه و واقعی و سهم (وزن) آن در پیشرفت کل پروژه.',
+                `${lcOutputListHtml(phase)}${lcPhaseScheduleHtml(phase, pp)}`));
+
             return `
-            <div class="space-y-5">
-                <div class="lc-dark-panel rounded-2xl p-5" style="background: linear-gradient(135deg, #0b1830, #10243f);">
-                    <button type="button" data-lc-back-to-orbit class="no-print text-[11px] font-bold mb-3 inline-flex items-center gap-1 hover:underline" style="color:#93c5fd;">→ بازگشت به چرخه عمر</button>
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                            <span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-1" style="background:rgba(255,255,255,.1); color:#93c5fd;">مرحله ${toPersianDigits(phase.sort_order)} از ${toPersianDigits(lcState.phases.length)}</span>
-                            <h3 class="text-lg font-extrabold text-white">${esc(phase.title)}</h3>
-                            <p class="text-[11px] mt-0.5" style="color:#93c5fd;">مسئول: ${esc(phase.responsible)} · گیت: ${esc(gateName.clean)}${gateName.needsReview ? ' ⚠' : ''}</p>
+            <div class="sgx-phase" id="lcPhaseTop" style="--acc:${meta.color};">
+                <nav class="sgx-nav no-print" aria-label="ناوبری فازها">
+                    <button type="button" data-lc-back-to-orbit class="sgx-back">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/><path d="M12 3v2M21 12h-2M12 21v-2M3 12h2"/></svg>
+                        <span>بازگشت به نمای مداری</span>
+                    </button>
+                    <div class="sgx-steps" role="list">
+                        ${lcState.phases.map(p => { const m = LC_NODE_STATUS_META[lcNodeStatus(p)]; return `<button type="button" role="listitem" data-lc-phase="${p.code}" class="sgx-step${p.code === phase.code ? ' is-on' : ''}" style="--c:${m.color}" title="${esc(p.title)} — ${esc(m.label)}"${p.code === phase.code ? ' aria-current="step"' : ''}><b>${esc(p.code)}</b><span>${esc(p.title)}</span></button>`; }).join('')}
+                    </div>
+                </nav>
+
+                <header class="sgx-hero">
+                    <div class="sgx-hero-id">
+                        <span class="sgx-hero-code">${esc(phase.code)}</span>
+                        <div class="min-w-0">
+                            <p class="sgx-hero-kicker">مرحلهٔ ${toPersianDigits(idx + 1)} از ${toPersianDigits(lcState.phases.length)} · <span class="sgx-chip"><i class="sgx-dot"></i>${esc(meta.label)}</span></p>
+                            <h3 class="sgx-hero-title">${esc(phase.title)}</h3>
+                            <p class="sgx-hero-sub">مسئول: ${esc(phase.responsible || '—')} · گیت: ${esc(gateName.clean)}${gateName.needsReview ? ' ⚠' : ''}</p>
                         </div>
-                        <span class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-${gateMeta.color}-100 text-${gateMeta.color}-700">وضعیت گیت: ${esc(gateMeta.label)}${!gate.readyForGate ? ` (${toPersianDigits(gate.pendingMandatory.length)} معیار الزامی باقی‌مانده)` : ''}</span>
                     </div>
-                    <div class="grid grid-cols-3 gap-3 mt-4">
-                        <div class="rounded-xl p-2.5 text-center" style="background:rgba(255,255,255,.06);"><p class="text-[10px]" style="color:#93c5fd;">واقعی</p><p class="text-lg font-extrabold text-white">${toPersianDigits(Math.round(actual))}٪</p></div>
-                        <div class="rounded-xl p-2.5 text-center" style="background:rgba(255,255,255,.06);"><p class="text-[10px]" style="color:#93c5fd;">برنامه‌ای</p><p class="text-lg font-extrabold text-white">${toPersianDigits(Math.round(planned))}٪</p></div>
-                        <div class="rounded-xl p-2.5 text-center" style="background:rgba(255,255,255,.06);"><p class="text-[10px]" style="color:#93c5fd;">انحراف</p><p class="text-lg font-extrabold ${variance < -5 ? 'text-red-400' : variance > 2 ? 'text-emerald-400' : 'text-blue-300'}">${variance >= 0 ? '+' : ''}${toPersianDigits(Math.round(variance))}٪</p></div>
+                    <div class="sgx-stats">
+                        <div class="sgx-stat is-act"><small>پیشرفت واقعی</small><b>${toPersianDigits(Math.round(actual))}٪</b></div>
+                        <div class="sgx-stat is-plan"><small>برنامه‌ای</small><b>${toPersianDigits(Math.round(planned))}٪</b></div>
+                        <div class="sgx-stat ${varCls}"><small>انحراف</small><b>${variance >= 0 ? '+' : ''}${toPersianDigits(Math.round(variance))}٪</b></div>
+                        <div class="sgx-stat"><small>وضعیت گیت</small><b class="sgx-stat-text">${esc(gateMeta.label)}</b>${!gate.readyForGate && pp.gate_status !== 'passed' ? `<em>${toPersianDigits(gate.pendingMandatory.length)} معیار الزامی باقی‌مانده</em>` : ''}</div>
                     </div>
-                    ${lcPhaseHeroActionsHtml(phase)}
-                </div>
-                ${lcPhaseTimelineSectionHtml(phase)}
-                <div id="lcPhaseDetailBody" class="bg-white rounded-2xl shadow-sm border p-5">
-                    ${lcDetailPanelHtml()}
-                </div>
+                    ${guide ? `<p class="sgx-source">${iconSvg('info', 'w-4 h-4')} ${esc(SG_SOURCE_LABEL[guide.source])}</p>` : ''}
+                </header>
+
+                ${guide ? `
+                <section class="sgx-todo" aria-label="کارهای این فاز">
+                    <div class="sgx-todo-head"><b>در این فاز چه باید کرد؟</b><small>${esc(guide.purpose)}</small></div>
+                    <ol class="sgx-todo-list">
+                        ${guide.enter.map((t, i) => `<li><span class="sgx-num">${toPersianDigits(i + 1)}</span><span>${esc(t)}</span></li>`).join('')}
+                        <li><span class="sgx-num">${toPersianDigits(guide.enter.length + 1)}</span><span><b>شرط عبور از گیت:</b> ${esc(guide.gate)}</span></li>
+                    </ol>
+                    <div class="sgx-jump no-print">${sections.map(x => x.jump).join('')}</div>
+                </section>` : ''}
+
+                ${sections.map(x => x.html).join('')}
+
+                <nav class="sgx-pager no-print" aria-label="فاز قبلی و بعدی">
+                    ${prev ? `<button type="button" data-lc-phase="${prev.code}" class="sgx-pager-btn">→ ${esc(prev.code)} · ${esc(prev.title)}</button>` : '<span></span>'}
+                    <button type="button" data-lc-back-to-orbit class="sgx-pager-btn is-orbit">نمای مداری</button>
+                    ${next ? `<button type="button" data-lc-phase="${next.code}" class="sgx-pager-btn">${esc(next.code)} · ${esc(next.title)} ←</button>` : '<span></span>'}
+                </nav>
             </div>`;
+        }
+
+        // one numbered work section: the badge tells at a glance whether data is entered here, computed, or only shown
+        let lcSectionSeq = 0;
+        function lcSectionHtml(id, title, mode, hint, body) {
+            const n = ++lcSectionSeq;
+            const badge = mode === 'input' ? '✎ ورود اطلاعات' : mode === 'auto' ? '⚙ خودکار' : 'فقط نمایش';
+            return {
+                jump: `<button type="button" data-lc-scroll="${id}" class="sgx-jump-btn is-${mode}"><span class="sgx-num">${toPersianDigits(n)}</span>${esc(title)}</button>`,
+                html: `
+                <section id="${id}" class="sgx-sec is-${mode}">
+                    <header class="sgx-sec-head">
+                        <span class="sgx-num">${toPersianDigits(n)}</span>
+                        <div class="min-w-0"><h4>${esc(title)}</h4><p>${esc(hint)}</p></div>
+                        <span class="sgx-badge is-${mode}">${badge}</span>
+                    </header>
+                    <div class="sgx-sec-body">${body}</div>
+                </section>`,
+            };
         }
 
         // «دکمه‌های ایجاد فعالیت‌های زیرمجموعه و ری‌پلن رو بزرگتر و در
@@ -920,10 +1044,12 @@ export function createStageGateEngine(env) {
                 cr?.contractor_name ? `پیمانکار: ${cr.contractor_name}` : null,
                 cr?.consultant_name ? `مشاور: ${cr.consultant_name}` : null,
             ].filter(Boolean);
+            // the project's name is already in the page header — repeat only the contract parties, when known
+            if (!parts.length) return `<p class="sgx-orbit-hint">روی هر فاز در مدار بزنید تا صفحهٔ آن باز شود. حلقهٔ سبز = واقعی، نارنجی = برنامه‌ای.</p>`;
             return `
-            <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-4 mb-4" style="border-bottom: 1px solid rgba(255,255,255,.08);">
-                <p class="text-white font-extrabold text-sm md:text-base">${esc(lcState.projectName)}</p>
-                ${parts.length ? `<p class="text-[11px] md:text-xs" style="color:#93c5fd;">${parts.map(esc).join(' · ')}</p>` : ''}
+            <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 pb-3 mb-3" style="border-bottom: 1px solid rgba(255,255,255,.08);">
+                <p class="text-[11px] md:text-xs" style="color:#93c5fd;">${parts.map(esc).join(' · ')}</p>
+                <p class="sgx-orbit-hint" style="margin:0">روی هر فاز بزنید تا صفحهٔ آن باز شود.</p>
             </div>`;
         }
 
@@ -998,7 +1124,7 @@ export function createStageGateEngine(env) {
             const statuses = LC_KIND_STATUSES[kind];
             return `
             <div>
-                <p class="text-[11px] font-extrabold text-slate-500 mb-1.5">${esc(label)}</p>
+                ${label ? `<p class="text-[11px] font-extrabold text-slate-500 mb-1.5">${esc(label)}</p>` : ''}
                 <div class="space-y-1.5">
                     ${master.map(m => {
                         const row = progressMap[m.id] || { status: statuses[0][0] };
@@ -3064,7 +3190,7 @@ export function createStageGateEngine(env) {
             // gate-action body at the bottom of the phase page — rather than
             // jumping to the top of the whole لایف‌سایکل view (hero + its
             // own timeline), which just makes them scroll down again anyway.
-            const target = document.getElementById('lcPhaseDetailBody') || document.getElementById('lifecycleView');
+            const target = document.getElementById('lcPhaseTop') || document.getElementById('lcBody');
             target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
@@ -3103,8 +3229,10 @@ export function createStageGateEngine(env) {
             root.querySelectorAll('[data-lc-action="gantt-zoom-reset"]').forEach(btn => btn.addEventListener('click', () => { lcState.ganttZoom = 1; lcRenderAll(); }));
             lcBindGanttDragEvents();
             root.querySelectorAll('[data-lc-phase]').forEach(el => el.addEventListener('click', () => lcSelectPhase(el.dataset.lcPhase)));
-            const backBtn = root.querySelector('[data-lc-back-to-orbit]');
-            if (backBtn) backBtn.addEventListener('click', () => { lcState.selectedPhase = null; lcRenderAll(); });
+            root.querySelectorAll('[data-lc-back-to-orbit]').forEach(b => b.addEventListener('click', () => { lcState.selectedPhase = null; lcRenderAll(); document.getElementById('lcBody')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
+            root.querySelectorAll('[data-lc-scroll]').forEach(b => b.addEventListener('click', () => document.getElementById(b.dataset.lcScroll)?.scrollIntoView({ behavior: 'smooth', block: 'start' })));
+            root.querySelectorAll('[data-lc-action="open-module"]').forEach(b => b.addEventListener('click', () => env.onOpenModule && env.onOpenModule(b.dataset.module)));
+            root.querySelectorAll('[data-lc-action="open-guide"]').forEach(b => b.addEventListener('click', () => env.onOpenGuide && env.onOpenGuide(lcState.selectedPhase)));
             root.querySelectorAll('[data-lc-action="save-item"]').forEach(btn => btn.addEventListener('click', () => lcSaveItemFromRow(btn.closest('[data-lc-item-row]'))));
             root.querySelectorAll('[data-lc-action="request-gate"]').forEach(btn => btn.addEventListener('click', () => lcRequestGateReview(btn.dataset.phase)));
             root.querySelectorAll('[data-lc-action="gate-pass"]').forEach(btn => btn.addEventListener('click', () => lcDecideGate(btn.dataset.phase, 'pass')));
