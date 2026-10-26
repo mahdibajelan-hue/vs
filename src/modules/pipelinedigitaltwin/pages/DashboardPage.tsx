@@ -14,6 +14,8 @@ import { JointPanel } from '../components/JointPanel'
 import { VisualizationFilters } from '../components/VisualizationFilters'
 import { RouteInfoBar } from '../components/RouteInfoBar'
 import { LandLayerToggle } from '../components/LandLayerToggle'
+import { HydroLayerToggle } from '../components/HydroLayerToggle'
+import { HYDRO_GAP_COLOR } from '../../testing/integration/layer'
 import { PssrLayerToggle, PSSR_GAP_COLOR } from '../components/PssrLayerToggle'
 import { ConstructionPanel } from '../components/ConstructionPanel'
 import { EntryDrawer } from '../components/EntryDrawer'
@@ -24,10 +26,13 @@ import { CONDITION_COLOR, jointNoOfId, type Asset } from '../lib/twinCore'
 import type { ProgressSpan } from '../lib/routeSegments'
 import type { Official } from '../hooks/useOfficial'
 
+export type Layer = 'land' | 'pssr' | 'hydro'
+const shift = (startKm: number) => <T extends ProgressSpan>(s: T[] | null) => (s ? s.map((x) => ({ ...x, startMeters: x.startMeters - startKm * 1000, endMeters: x.endMeters - startKm * 1000 })) : null)
+
 const email = () => useAuthStore.getState().profile?.email ?? ''
 
 /** `initialLayer` = which data layer to show on open (e.g. «نمایش روی دوقلوی دیجیتال» from the PSSR module opens with 'pssr'). */
-export function DashboardPage({ initialLayer = null, official }: { initialLayer?: 'land' | 'pssr' | null; official: Official }) {
+export function DashboardPage({ initialLayer = null, official }: { initialLayer?: Layer | null; official: Official }) {
   const st = usePdtStore()
   const { route, pipe, joints, scrubDate, selectedJointId, selectJoint, statusFilter, setStatusFilter, lens, startKm } = st
   const viewerRef = useRef<Cesium.Viewer | null>(null)
@@ -35,10 +40,10 @@ export function DashboardPage({ initialLayer = null, official }: { initialLayer?
   const [kpiOpen, setKpiOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 760)
   const [dockOpen, setDockOpen] = useState(true)
   // one data layer at a time: two colourings of the same pipe cannot be read together
-  const [layer, setLayer] = useState<'land' | 'pssr' | null>(initialLayer)
-  const [spansBy, setSpansBy] = useState<Partial<Record<'land' | 'pssr', ProgressSpan[] | null>>>({})
+  const [layer, setLayer] = useState<Layer | null>(initialLayer)
+  const [spansBy, setSpansBy] = useState<Partial<Record<Layer, ProgressSpan[] | null>>>({})
   const layerSpans = layer ? spansBy[layer] ?? null : null
-  const toggle = (l: 'land' | 'pssr') => setLayer((cur) => (cur === l ? null : l))
+  const toggle = (l: Layer) => setLayer((cur) => (cur === l ? null : l))
   const [entry, setEntry] = useState<{ preset: number | null } | null>(null)
   const [assetForm, setAssetForm] = useState<Asset | 'new' | null>(null)
 
@@ -88,7 +93,7 @@ export function DashboardPage({ initialLayer = null, official }: { initialLayer?
       <div className="absolute inset-0">
         <PipelineViewer
           route={route} pipe={pipe} joints={displayedJoints} selectedJointId={selectedJointId} statusFilter={statusFilter}
-          onSelectJoint={onPick} layerSpans={layerSpans} layerGapColor={layer === 'pssr' ? PSSR_GAP_COLOR : null}
+          onSelectJoint={onPick} layerSpans={layerSpans} layerGapColor={layer === 'pssr' ? PSSR_GAP_COLOR : layer === 'hydro' ? HYDRO_GAP_COLOR : null}
           markers={markers} focusMeters={focusMeters}
           onViewerReady={(v) => { viewerRef.current = v }}
         />
@@ -98,7 +103,8 @@ export function DashboardPage({ initialLayer = null, official }: { initialLayer?
         <div className="absolute left-3 top-3 z-10 flex flex-col items-end gap-2" style={{ maxWidth: kpiOpen ? 'calc(100% - 24rem)' : 'calc(100% - 4rem)' }}>
           {construction && !layer && <VisualizationFilters joints={displayedJoints} value={statusFilter} onChange={setStatusFilter} />}
           <LandLayerToggle on={layer === 'land'} onToggle={() => toggle('land')} onSpans={(s) => setSpansBy((m) => ({ ...m, land: s }))} />
-          <PssrLayerToggle on={layer === 'pssr'} onToggle={() => toggle('pssr')} onSpans={(s) => setSpansBy((m) => ({ ...m, pssr: s ? s.map((x) => ({ ...x, startMeters: x.startMeters - startKm * 1000, endMeters: x.endMeters - startKm * 1000 })) : null }))} />
+          <PssrLayerToggle on={layer === 'pssr'} onToggle={() => toggle('pssr')} onSpans={(s) => setSpansBy((m) => ({ ...m, pssr: shift(startKm)(s) }))} />
+          <HydroLayerToggle on={layer === 'hydro'} onToggle={() => toggle('hydro')} onSpans={(s) => setSpansBy((m) => ({ ...m, hydro: shift(startKm)(s) }))} />
         </div>
       )}
 

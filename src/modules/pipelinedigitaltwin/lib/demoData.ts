@@ -104,7 +104,7 @@ export function generateDemoJoints(route: Route): Joint[] {
 }
 
 /**
- * A clearly fictional route of about `totalKm` (one vertex per ~1 km, gentle meander, modest elevation) for a project that
+ * A clearly fictional route of about `totalKm` (one vertex per ~1 km, gentle meander, mountain profile) for a project that
  * has no surveyed route yet — so the twin can be tried before a KML exists. Saved as the twin's own route (never as the
  * land module's shared route) and labelled «مسیر نمونه».
  */
@@ -117,7 +117,8 @@ export function generateSyntheticRoute(totalKm: number): GeoPoint[] {
     const step = 0.0091
     lon += (Math.cos(heading) * step) / Math.cos((lat * Math.PI) / 180)
     lat += Math.sin(heading) * step
-    pts.push({ lon, lat, elevation: Math.round((60 + Math.sin(i * 0.05) * 35 + Math.sin(i * 0.31) * 8) * 10) / 10 })
+    // a mountain line (≈500–2000 m), so the profile and hydrotest sectioning have something real to work on
+    pts.push({ lon, lat, elevation: Math.round((1250 + 520 * Math.sin(i / 31) + 180 * Math.sin(i / 9.5) + 60 * Math.sin(i / 3.1)) * 10) / 10 })
   }
   return pts
 }

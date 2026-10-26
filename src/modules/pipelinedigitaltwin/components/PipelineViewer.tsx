@@ -68,7 +68,22 @@ function imageryProviderPromise(style: ImageryStyle): Promise<Cesium.ImageryProv
     : Promise.resolve(new Cesium.OpenStreetMapImageryProvider({ url: OSM_URL }))
 }
 
+/**
+ * Height to draw a route point at. The globe here is a flat ellipsoid (no terrain), so a line surveyed at 500–2000 m would
+ * float kilometres above the ground and wheel-zoom would fly past it: points are drawn relative to the route's lowest
+ * elevation, keeping the shape of the profile while sitting on the surface. The real elevations stay in the data (profile,
+ * hydrotest sectioning).
+ */
+const baseOf = new WeakMap<object, number>()
+function heightFn(points: { elevation: number | null }[]) {
+  let base = baseOf.get(points)
+  if (base == null) { base = Math.min(...points.map((p) => p.elevation ?? Infinity)); if (!Number.isFinite(base)) base = 0; baseOf.set(points, base) }
+  const b = base
+  return (p: { elevation: number | null }) => (p.elevation ?? b) - b
+}
+
 export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFilter, onSelectJoint, onViewerReady, layerSpans, layerGapColor = null, markers = [], focusMeters = null }: PipelineViewerProps) {
+  const hOf = heightFn(route.points)
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Cesium.Viewer | null>(null)
   const pointsRef = useRef<Cesium.PointPrimitiveCollection | null>(null)
@@ -155,7 +170,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
     const joint = joints.find((j) => j.id === selectedJointId)
     if (!joint) return
     const p = pointAtChainage(route.points, cumulative, joint.chainageMeters)
-    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, (p.elevation ?? 0) + 400), duration: 1 })
+    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, hOf(p) + 400), duration: 1 })
   }
 
   // A genuinely new route (e.g. a fresh KMZ import) should re-fly the camera once; a joint-status
@@ -178,7 +193,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
     for (const span of spans) {
       const slice = sliceRoutePoints(route.points, cumulative, span.startMeters, span.endMeters)
       if (slice.length < 2) continue
-      const positions = Cesium.Cartesian3.fromDegreesArrayHeights(slice.flatMap((p) => [p.lon, p.lat, p.elevation ?? 0]))
+      const positions = Cesium.Cartesian3.fromDegreesArrayHeights(slice.flatMap((p) => [p.lon, p.lat, hOf(p)]))
       // a 48" tube is under a pixel wide when the whole route is in view and a layer hides the joint dots, so a data layer
       // is drawn as a screen-width line (readable at every zoom); construction progress keeps the real tube
       viewer.entities.add(layerSpans
@@ -212,7 +227,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
       const dimmed = statusFilter !== 'all' && joint.finalStatus !== statusFilter
       const baseColor = Cesium.Color.fromCssColorString(FINAL_STATUS_COLOR[joint.finalStatus])
       points.add({
-        position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.elevation ?? 0),
+        position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, hOf(p)),
         pixelSize: selected ? 14 : dimmed ? 5 : 8,
         color: dimmed ? baseColor.withAlpha(0.25) : baseColor,
         outlineColor: selected ? Cesium.Color.WHITE : Cesium.Color.BLACK.withAlpha(dimmed ? 0.15 : 0.6),
@@ -231,7 +246,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
     for (const m of markers) {
       if (m.meters < 0 || m.meters > route.lengthMeters) continue
       const p = pointAtChainage(route.points, cumulative, m.meters)
-      const position = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, (p.elevation ?? 0) + 2)
+      const position = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, hOf(p) + 2)
       pts.add({ position, pixelSize: m.size ?? 13, color: Cesium.Color.fromCssColorString(m.color), outlineColor: Cesium.Color.WHITE, outlineWidth: 2, id: m.id, disableDepthTestDistance: Number.POSITIVE_INFINITY })
       labels.add({ position, text: m.label, font: '600 12px Vazirmatn, Tahoma, sans-serif', fillColor: Cesium.Color.WHITE, outlineColor: Cesium.Color.BLACK, outlineWidth: 3, style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -18), distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 60000), disableDepthTestDistance: Number.POSITIVE_INFINITY, id: m.id })
     }
@@ -241,7 +256,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
     const viewer = viewerRef.current
     if (!viewer || focusMeters == null || route.points.length < 2) return
     const p = pointAtChainage(route.points, cumulativeDistances(route.points), focusMeters)
-    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, (p.elevation ?? 0) + 1500), duration: 1 })
+    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, hOf(p) + 1500), duration: 1 })
   }, [focusMeters, route])
 
   return (

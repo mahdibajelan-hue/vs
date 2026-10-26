@@ -21,8 +21,8 @@ const faDigits = (s: string) => s.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴�
 function coordsOf(text: string): LonLat[] {
   const out: LonLat[] = []
   for (const tok of text.trim().split(/\s+/)) {
-    const [lon, lat] = tok.split(',').map(Number)
-    if (Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lon) <= 180 && Math.abs(lat) <= 90) out.push([lon, lat])
+    const [lon, lat, alt] = tok.split(',').map(Number)
+    if (Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lon) <= 180 && Math.abs(lat) <= 90) out.push(Number.isFinite(alt) ? [lon, lat, alt] : [lon, lat])
   }
   return out
 }
@@ -103,7 +103,7 @@ export function parseKmlRoute(kml: string): KmlRoute {
       const pts = dedupe(coordsOf(m[1]))
       if (pts.length >= 2) lines.push(pts)
     }
-    const track = [...pm.matchAll(/<gx:coord>([\s\S]*?)<\/gx:coord>/g)].map((m) => m[1].trim().split(/\s+/).map(Number)).filter((v) => v.length >= 2 && v.every(Number.isFinite)).map((v) => [v[0], v[1]] as LonLat)
+    const track = [...pm.matchAll(/<gx:coord>([\s\S]*?)<\/gx:coord>/g)].map((m) => m[1].trim().split(/\s+/).map(Number)).filter((v) => v.length >= 2 && v.every(Number.isFinite)).map((v) => (v.length > 2 ? [v[0], v[1], v[2]] : [v[0], v[1]]) as LonLat)
     if (track.length >= 2) lines.push(dedupe(track))
   }
   // a file with bare <coordinates> outside any Placemark (rare) still works

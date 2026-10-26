@@ -7,7 +7,7 @@ import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { formatJalali } from '../../lib/jalali'
 import { usePdtStore, type Lens } from './store/usePdtStore'
-import { DashboardPage } from './pages/DashboardPage'
+import { DashboardPage, type Layer } from './pages/DashboardPage'
 import { RouteSetup } from './components/RouteSetup'
 import { SettingsDialog } from './components/SettingsDialog'
 import { useOfficial } from './hooks/useOfficial'
@@ -35,7 +35,7 @@ export function PipelineDigitalTwinApp({ onExitToHub, onBackToRadar }: { onExitT
   const [settings, setSettings] = useState(false)
   const [guide, setGuide] = useState(false)
   // another module can open the twin on one of its data layers (enterModule('pipelinedigitaltwin', …, 'pssr'))
-  const [initialLayer] = useState<'pssr' | 'land' | null>(() => { const t = useModuleStore.getState().entryTab; return t === 'pssr' || t === 'land' ? t : null })
+  const [initialLayer] = useState<Layer | null>(() => { const t = useModuleStore.getState().entryTab; return t === 'pssr' || t === 'land' || t === 'hydro' ? t : null })
   useEffect(() => { if (!useMasterDataStore.getState().loaded) void useMasterDataStore.getState().fetchAll() }, [])
   useEffect(() => { if (projectId) void st.load(projectId) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [projectId])
   const projectName = project?.officialName ?? ''

@@ -1,4 +1,5 @@
-export type LonLat = [number, number]
+/** [lon, lat] or, when the source carried it (a KML/KMZ altitude), [lon, lat, elevation m] — the profile for hydrotest sectioning */
+export type LonLat = [number, number] | [number, number, number]
 
 const R = 6371008.8
 const rad = (d: number) => (d * Math.PI) / 180

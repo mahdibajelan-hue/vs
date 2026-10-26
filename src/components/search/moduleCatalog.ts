@@ -9,6 +9,7 @@ export const MODULE_CATALOG: { key: ModuleKey | 'radar'; fa: string; en: string;
   { key: 'estimator', fa: 'برآورد پروژه‌ها', en: 'Project Estimation', words: 'برآورد هزینه تخمین' },
   { key: 'missions', fa: 'مأموریت و گزارش بازدید', en: 'Mission Debrief', words: 'مأموریت ماموریت بازدید سفر' },
   { key: 'landacq', fa: 'تحصیل اراضی', en: 'Land Acquisition', words: 'زمین اراضی پارسل مالک عبور' },
+  { key: 'testing', fa: 'آزمایش‌ها (هیدروتست و پوشش)', en: 'Hydrotest / Coating test', words: 'هیدروتست هیدرواستاتیک تست فشار قطعه بندی پروفیل پوشش هالیدی DCVG CIPS ایستگاه بسته آزمون' },
   { key: 'pssr', fa: 'آمادگی راه‌اندازی (PSSR)', en: 'PSSR / RFSU', words: 'PSSR RFSU ایمنی راه اندازی پیش راه اندازی پانچ لیست تزریق گاز گواهی آمادگی' },
   { key: 'stagegate', fa: 'چرخه عمر پروژه (Stage-Gate)', en: 'Stage-Gate', words: 'گیت مرحله چرخه عمر فاز تصویب' },
   { key: 'taskissue', fa: 'مدیریت موانع و اقدامات', en: 'Issue & Task', words: 'مانع مسئله اقدام پیگیری issue' },

@@ -21,7 +21,7 @@ export function RouteSetup({ projectName, compact }: { projectName: string; comp
     try {
       const r = await readRouteFile(file)
       if (r.points.length < 2) throw new Error('هیچ مسیر خطی در این فایل پیدا نشد.')
-      await st.saveRoute(r.points.map(([lon, lat]) => ({ lon, lat, elevation: null })), file.name, 'kml', email, projectName)
+      await st.saveRoute(r.points.map((p) => ({ lon: p[0], lat: p[1], elevation: p.length > 2 ? p[2]! : null })), file.name, 'kml', email, projectName)
       setNote(`${fa(r.lengthKm, 2)} کیلومتر خوانده شد${r.ignoredLines ? ` (${fa(r.ignoredLines)} خط فرعی نادیده گرفته شد)` : ''}.`)
     } catch (e) { st.setImportError((e as Error).message || 'فایل قابل خواندن نبود — یک KML/KMZ معتبر انتخاب کنید.') }
     st.setImporting(false)

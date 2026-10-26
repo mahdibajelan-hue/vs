@@ -310,7 +310,8 @@ export interface RouteInfo {
   totalKm: number
   startKm: number
   /** [lon, lat][] — empty when the project is modelled by chainage only. */
-  geometry: [number, number][]
+  /** [lon, lat] or [lon, lat, elevation m] when the KML/KMZ carried altitude */
+  geometry: ([number, number] | [number, number, number])[]
   geometrySource: 'none' | 'kml' | 'manual' | 'demo'
   settings: LandSettings
   isDemo: boolean

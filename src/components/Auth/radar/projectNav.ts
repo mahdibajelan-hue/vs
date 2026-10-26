@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  BadgeDollarSign, CalendarClock, LayoutDashboard, ShieldCheck, ClipboardList, Cpu, GitPullRequestArrow, HardHat, PackageCheck,
+  BadgeDollarSign, CalendarClock, Droplets, LayoutDashboard, ShieldCheck, ClipboardList, Cpu, GitPullRequestArrow, HardHat, PackageCheck,
   PencilRuler, Radar, Route, ShieldAlert, Sparkles, Sprout,
 } from 'lucide-react'
 import { PROJECT_SCOPED_MODULES, type ModuleKey } from '../../../store/useModuleStore'
@@ -32,6 +32,7 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
     { id: 'engineering', module: 'engineering', label: 'پیشرفت مهندسی', icon: PencilRuler, accent: '#818cf8' },
     { id: 'material', module: 'material', label: 'کنترل و تأمین کالا', icon: PackageCheck, accent: '#f59e0b' },
     { id: 'execution', module: 'execution', label: 'مدیریت اجرا', icon: HardHat, accent: '#fb923c' },
+    { id: 'testing', module: 'testing', label: 'آزمایش‌ها (هیدروتست و پوشش)', icon: Droplets, accent: '#0ea5e9' },
     { id: 'pssr', module: 'pssr', label: 'آمادگی راه‌اندازی (PSSR)', icon: ShieldCheck, accent: '#f97316' },
   ] },
   { id: 'money', label: 'قرارداد و هزینه', items: [

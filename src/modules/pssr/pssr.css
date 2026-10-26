@@ -149,7 +149,8 @@
 .ps-advice { display: flex; align-items: center; gap: .3rem; margin-top: .3rem; font-size: 11px; color: #b45309; }
 .ps-advice.is-strong { color: #dc2626; font-weight: 700; }
 .ps-adv-grid { display: grid; gap: .5rem; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 800px) { .ps-adv-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 640px) { .ps-adv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .ps-adv-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .ps-adv-item { border-radius: .8rem; border: 1px solid var(--border-soft); border-inline-start: 4px solid var(--c); }
 .ps-adv-item summary { display: flex; align-items: baseline; gap: .5rem; padding: .55rem .7rem; cursor: pointer; list-style: none; font-size: 12px; }
 .ps-adv-item summary::-webkit-details-marker { display: none; }

@@ -297,7 +297,7 @@ function Checklist({ systemId }: { systemId: string }) {
       {cats.map((cat) => (
         <div key={cat} className="ps-cat">
           <h4>{cat}</h4>
-          {list.filter((c) => c.category === cat).map((c) => <CheckRow key={c.id} systemId={systemId} check={c} meta={c.checkedBy ? `${c.checkedBy} · ${jd(c.checkedAt)}` : ''} onSave={(s, e, f) => st.setCheck(c.id, s, e, email, f)} advice={adv ? adviceFor(c.title, adv) : null} />)}
+          {list.filter((c) => c.category === cat).map((c) => <CheckRow key={c.id} systemId={systemId} check={c} meta={c.checkedBy ? `${c.checkedBy} · ${jd(c.checkedAt)}` : ''} onSave={(s, e, f) => st.setCheck(c.id, s, e, email, f)} advice={adv ? adviceFor(c.title, adv, st.systems.find((x) => x.id === systemId)) : null} />)}
         </div>
       ))}
     </div>
@@ -683,7 +683,13 @@ function printGasin(sys: PssrSystem, permit: GasinPermit, logs: GasinLog[], proj
 
 // ── advisories from other modules ────────────────────────────────────────────
 /** a checklist item's related warning from the other modules: open changes for MOC, unapproved documents for As-built, open NCRs for NDT/welds */
-function adviceFor(title: string, a: PssrAdvisories): string | null {
+function adviceFor(title: string, a: PssrAdvisories, sys?: { kmFrom: number | null; kmTo: number | null }): string | null {
+  if (/هیدرو|hydro/i.test(title) && a.ht.length) {
+    // the sections that overlap this system's stretch (a system without a chainage: the whole line)
+    const lo = sys?.kmFrom, hi = sys?.kmTo != null && lo != null && sys.kmTo > lo ? sys.kmTo : lo
+    const hit = lo == null ? a.ht : a.ht.filter((h) => h.kmTo > lo! && h.kmFrom < hi! + (hi === lo ? 0.001 : 0))
+    if (hit.length) { const f = hit.filter((h) => h.failed).length; return `${fa(hit.length)} قطعهٔ هیدروتست هنوز پذیرفته نشده (${hit.slice(0, 4).map((h) => h.code).join('، ')}${hit.length > 4 ? '…' : ''})${f ? ` · ${fa(f)} مردود` : ''}` }
+  }
   if (/MOC|تغییر/.test(title) && a.moc.length) return `${fa(a.moc.length)} درخواست تغییر (MOC) باز در ماژول مدیریت تغییرات`
   if (/As-built|P&ID/i.test(title)) { const ab = a.docs.filter((d) => d.asBuilt).length; if (ab || a.docs.length) return ab ? `${fa(ab)} مدرک As-built تأییدنشده` : `${fa(a.docs.length)} مدرک مهندسی هنوز تأیید نهایی نشده` }
   if (/NDT|جوش/.test(title) && a.ncr.length) return `${fa(a.ncr.length)} NCR باز در ماژول اجرا`
@@ -697,6 +703,7 @@ function AdvisoryPanel() {
     { key: 'ncr', label: 'NCR باز (ماژول اجرا)', list: a.ncr, color: '#ef4444' },
     { key: 'docs', label: 'مدارک مهندسی تأییدنشده', list: a.docs, color: '#f59e0b' },
     { key: 'moc', label: 'تغییرات (MOC) باز', list: a.moc, color: '#a855f7' },
+    { key: 'ht', label: 'قطعهٔ هیدروتست پذیرفته‌نشده', list: a.ht.map((h) => ({ code: h.code, text: `کیلومتر ${fa(h.kmFrom)} تا ${fa(h.kmTo)}${h.failed ? ' · مردود' : ''}` })), color: '#0ea5e9' },
   ]
   return (
     <section className="ps-card ps-adv">

@@ -17,7 +17,9 @@ const permitOf = (r: Row): GasinPermit => ({ id: r.id, systemId: r.system_id, pt
 const logOf = (r: Row): GasinLog => ({ id: r.id, permitId: r.permit_id, at: s(r.at), kind: r.kind, pressure: nn(r.pressure), location: s(r.location), note: s(r.note), by: s(r.by_user) })
 
 /** what other modules say about this project's readiness: open NCRs, engineering documents not yet approved, open changes (MOC) */
-export interface PssrAdvisories { ncr: { code: string; text: string }[]; docs: { code: string; text: string; asBuilt: boolean }[]; moc: { code: string; text: string; status: string }[] }
+export interface PssrAdvisories { ncr: { code: string; text: string }[]; docs: { code: string; text: string; asBuilt: boolean }[]; moc: { code: string; text: string; status: string }[]
+  /** hydrotest sections of the line (testing module) not yet accepted */
+  ht: { code: string; kmFrom: number; kmTo: number; failed: boolean }[] }
 const NCR_DONE = new Set(['closed', 'void']), DOC_DONE = new Set(['approved', 'superseded']), MOC_DONE = new Set(['closed', 'rejected', 'cancelled', 'implemented'])
 const tplOf = (r: Row): PssrTemplateItem => ({ id: Number(r.id), kind: r.kind, category: s(r.category), seq: Number(r.seq ?? 0), title: s(r.title), mandatory: !!r.mandatory, active: !!r.is_active })
 
@@ -65,7 +67,7 @@ export const usePssrStore = create<State>()((set, get) => {
       if (sys.error) { set({ loading: false, error: sys.error.message, systems: [] }); return }
       const ids = (sys.data ?? []).map((r: Row) => r.id)
       const any = ids.length ? ids : ['00000000-0000-0000-0000-000000000000']
-      const [ch, me, pu, sg, so, tp, pm, nc, dc, cr] = await Promise.all([
+      const [ch, me, pu, sg, so, tp, pm, nc, dc, cr, ht] = await Promise.all([
         supabase.from('pssr_checks').select('*').in('system_id', any).order('seq'),
         supabase.from('pssr_meetings').select('*').in('system_id', any).order('held_on', { ascending: false }),
         supabase.from('pssr_punches').select('*').in('system_id', any).order('raised_at'),
@@ -76,6 +78,7 @@ export const usePssrStore = create<State>()((set, get) => {
         supabase.from('ex_ncr').select('code, description, status, severity').eq('project_id', projectId),
         supabase.from('ex_eng_docs').select('doc_no, title, status, category').eq('project_id', projectId),
         supabase.from('chg_change_requests').select('cr_number, title, status').eq('master_project_id', projectId),
+        supabase.from('ht_sections').select('code, km_from, km_to, stage, failed').eq('master_project_id', projectId).order('seq'),
       ])
       const permits = (pm.data ?? []).map(permitOf)
       const lg = permits.length ? await supabase.from('pssr_gasin_logs').select('*').in('permit_id', permits.map((x) => x.id)).order('at') : { data: [] as Row[] }
@@ -88,6 +91,7 @@ export const usePssrStore = create<State>()((set, get) => {
           ncr: (nc.data ?? []).filter((r: Row) => !NCR_DONE.has(r.status)).map((r: Row) => ({ code: s(r.code), text: s(r.description) })),
           docs: (dc.data ?? []).filter((r: Row) => !DOC_DONE.has(r.status)).map((r: Row) => ({ code: s(r.doc_no), text: s(r.title), asBuilt: /as.?built|ازبیلت|چون.?ساخت/i.test(`${r.title} ${r.category ?? ''}`) })),
           moc: (cr.data ?? []).filter((r: Row) => !MOC_DONE.has(r.status)).map((r: Row) => ({ code: s(r.cr_number), text: s(r.title), status: s(r.status) })),
+          ht: (ht.data ?? []).filter((r: Row) => r.stage !== 'accepted' || r.failed).map((r: Row) => ({ code: s(r.code), kmFrom: Number(r.km_from), kmTo: Number(r.km_to), failed: !!r.failed })),
         },
       })
     },
