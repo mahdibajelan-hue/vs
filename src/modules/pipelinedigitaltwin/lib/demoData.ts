@@ -1,4 +1,4 @@
-import type { Joint, JointStatusField, Pipe, Route } from '../types'
+import type { GeoPoint, Joint, JointStatusField, Pipe, Route } from '../types'
 import { computeRouteLength } from './chainage'
 import { generateJointsForRoute } from './jointGeneration'
 import { deriveFinalStatus } from './progressEngine'
@@ -101,4 +101,23 @@ export function generateDemoJoints(route: Route): Joint[] {
   }
 
   return joints
+}
+
+/**
+ * A clearly fictional route of about `totalKm` (one vertex per ~1 km, gentle meander, modest elevation) for a project that
+ * has no surveyed route yet — so the twin can be tried before a KML exists. Saved as the twin's own route (never as the
+ * land module's shared route) and labelled «مسیر نمونه».
+ */
+export function generateSyntheticRoute(totalKm: number): GeoPoint[] {
+  const n = Math.max(2, Math.round(totalKm))
+  const pts: GeoPoint[] = []
+  let lon = 47.6, lat = 33.5, heading = 0.25
+  for (let i = 0; i <= n; i++) {
+    heading += Math.sin(i * 0.11) * 0.05
+    const step = 0.0091
+    lon += (Math.cos(heading) * step) / Math.cos((lat * Math.PI) / 180)
+    lat += Math.sin(heading) * step
+    pts.push({ lon, lat, elevation: Math.round((60 + Math.sin(i * 0.05) * 35 + Math.sin(i * 0.31) * 8) * 10) / 10 })
+  }
+  return pts
 }

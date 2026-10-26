@@ -45,7 +45,13 @@ interface PipelineViewerProps {
   layerSpans?: ProgressSpan[] | null
   /** colour of the route the layer does not cover; null leaves those stretches undrawn */
   layerGapColor?: string | null
+  /** physical assets (valves, stations, crossings…) drawn on the route; picking one reports its id like a joint */
+  markers?: TwinMarker[]
+  /** chainage (m) to fly the camera to — the selected joint / asset */
+  focusMeters?: number | null
 }
+
+export interface TwinMarker { id: string; meters: number; color: string; label: string; size?: number }
 
 /**
  * Raw Cesium.Viewer — hand-rolled the same way ThreeViewer.tsx hand-rolls three.js, rather than
@@ -62,10 +68,12 @@ function imageryProviderPromise(style: ImageryStyle): Promise<Cesium.ImageryProv
     : Promise.resolve(new Cesium.OpenStreetMapImageryProvider({ url: OSM_URL }))
 }
 
-export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFilter, onSelectJoint, onViewerReady, layerSpans, layerGapColor = null }: PipelineViewerProps) {
+export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFilter, onSelectJoint, onViewerReady, layerSpans, layerGapColor = null, markers = [], focusMeters = null }: PipelineViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Cesium.Viewer | null>(null)
   const pointsRef = useRef<Cesium.PointPrimitiveCollection | null>(null)
+  const markerPtsRef = useRef<Cesium.PointPrimitiveCollection | null>(null)
+  const markerLabelsRef = useRef<Cesium.LabelCollection | null>(null)
   const hasFlownRef = useRef(false)
   const [loading, setLoading] = useState(true)
   const [imageryStyle, setImageryStyle] = useState<ImageryStyle>('satellite')
@@ -96,6 +104,8 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
     viewer.scene.screenSpaceCameraController.maximumZoomDistance = 400000
     viewerRef.current = viewer
     pointsRef.current = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection())
+    markerPtsRef.current = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection())
+    markerLabelsRef.current = viewer.scene.primitives.add(new Cesium.LabelCollection())
 
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas)
     handler.setInputAction((movement: Cesium.ScreenSpaceEventHandler.PositionedEvent) => {
@@ -117,6 +127,8 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
       viewer.destroy()
       viewerRef.current = null
       pointsRef.current = null
+      markerPtsRef.current = null
+      markerLabelsRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -167,17 +179,11 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
       const slice = sliceRoutePoints(route.points, cumulative, span.startMeters, span.endMeters)
       if (slice.length < 2) continue
       const positions = Cesium.Cartesian3.fromDegreesArrayHeights(slice.flatMap((p) => [p.lon, p.lat, p.elevation ?? 0]))
-      viewer.entities.add({
-        polylineVolume: {
-          positions,
-          shape,
-          cornerType: Cesium.CornerType.ROUNDED,
-          material: Cesium.Color.fromCssColorString(span.color),
-        },
-        // a 48" tube is under a pixel wide when the whole route is in view, and a layer has no joint dots to show the
-        // line: a screen-width line keeps the layer's colours readable at every zoom
-        ...(layerSpans ? { polyline: { positions, width: 6, material: Cesium.Color.fromCssColorString(span.color) } } : {}),
-      })
+      // a 48" tube is under a pixel wide when the whole route is in view and a layer hides the joint dots, so a data layer
+      // is drawn as a screen-width line (readable at every zoom); construction progress keeps the real tube
+      viewer.entities.add(layerSpans
+        ? { polyline: { positions, width: 6, material: Cesium.Color.fromCssColorString(span.color) } }
+        : { polylineVolume: { positions, shape, cornerType: Cesium.CornerType.ROUNDED, material: Cesium.Color.fromCssColorString(span.color) } })
     }
 
     // flyTo only on the very first geometry for a given route — re-running it every time a joint
@@ -216,6 +222,28 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
     }
   }, [joints, route, selectedJointId, statusFilter, layerSpans])
 
+  // asset markers — on top of the pipe and the joints, labelled by tag once the camera is close enough to read them
+  useEffect(() => {
+    const pts = markerPtsRef.current, labels = markerLabelsRef.current
+    if (!pts || !labels || route.points.length < 2) return
+    pts.removeAll(); labels.removeAll()
+    const cumulative = cumulativeDistances(route.points)
+    for (const m of markers) {
+      if (m.meters < 0 || m.meters > route.lengthMeters) continue
+      const p = pointAtChainage(route.points, cumulative, m.meters)
+      const position = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, (p.elevation ?? 0) + 2)
+      pts.add({ position, pixelSize: m.size ?? 13, color: Cesium.Color.fromCssColorString(m.color), outlineColor: Cesium.Color.WHITE, outlineWidth: 2, id: m.id, disableDepthTestDistance: Number.POSITIVE_INFINITY })
+      labels.add({ position, text: m.label, font: '600 12px Vazirmatn, Tahoma, sans-serif', fillColor: Cesium.Color.WHITE, outlineColor: Cesium.Color.BLACK, outlineWidth: 3, style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -18), distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 60000), disableDepthTestDistance: Number.POSITIVE_INFINITY, id: m.id })
+    }
+  }, [markers, route])
+
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer || focusMeters == null || route.points.length < 2) return
+    const p = pointAtChainage(route.points, cumulativeDistances(route.points), focusMeters)
+    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, (p.elevation ?? 0) + 1500), duration: 1 })
+  }, [focusMeters, route])
+
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden rounded-2xl">
       {loading && (
@@ -225,13 +253,14 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
       )}
 
       <div
-        className="pointer-events-none absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(10,14,20,0.75)] text-[9px] font-bold text-white/80 backdrop-blur-md"
+        style={{ right: 'var(--tw-ctrl-right, 0.75rem)' }}
+        className="pointer-events-none absolute top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(10,14,20,0.75)] text-[9px] font-bold text-white/80 backdrop-blur-md"
         title="جهت شمال"
       >
         <span style={{ transform: `rotate(${-headingDeg}deg)`, transition: 'transform 0.1s linear' }}>N</span>
       </div>
 
-      <div className="absolute right-3 top-14 z-10 flex flex-col overflow-hidden rounded-xl border border-white/15 bg-[rgba(10,14,20,0.75)] backdrop-blur-md">
+      <div style={{ right: 'var(--tw-ctrl-right, 0.75rem)' }} className="absolute top-14 z-10 flex flex-col overflow-hidden rounded-xl border border-white/15 bg-[rgba(10,14,20,0.75)] backdrop-blur-md">
         <button onClick={flyHome} title="بازگشت به نمای کامل مسیر" className="border-b border-white/10 p-2 text-white/80 hover:bg-white/10">
           <Home size={14} />
         </button>

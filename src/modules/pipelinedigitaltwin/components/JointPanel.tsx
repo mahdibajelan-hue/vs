@@ -1,44 +1,17 @@
-import { useState } from 'react'
-import { FileText, History, MapPin, X } from 'lucide-react'
-import type { BackfillStatus, CoatingStatus, GeoPoint, Joint, LoweringStatus, NdtStatus, Pipe, WeldingStatus } from '../types'
+import { useEffect, useState, type CSSProperties } from 'react'
+import { ClipboardPen, History, Loader2, MapPin, X } from 'lucide-react'
+import type { GeoPoint, Joint, Pipe } from '../types'
 import { FINAL_STATUS_COLOR, FINAL_STATUS_LABEL_FA } from '../lib/progressEngine'
 import { formatChainage } from '../lib/chainage'
 import { formatJalali } from '../../../lib/jalali'
+import { jointNoOfId, STAGE_FA, STAGE_FIELD, STAGE_OPTIONS, STAGE_ORDER, type StageKey } from '../lib/twinCore'
+import { jointEvents, type JointEventRow } from '../repo'
+import { usePdtStore } from '../store/usePdtStore'
+import { STAGE_COLOR } from './EntryDrawer'
 
-const WELDING_OPTIONS: { value: WeldingStatus; label: string }[] = [
-  { value: 'not_started', label: 'شروع‌نشده' },
-  { value: 'welded', label: 'جوش‌شده' },
-  { value: 'repaired', label: 'تعمیرشده' },
-  { value: 'accepted', label: 'پذیرفته‌شده' },
-]
-const NDT_OPTIONS: { value: NdtStatus; label: string }[] = [
-  { value: 'pending', label: 'در انتظار' },
-  { value: 'passed', label: 'قبول' },
-  { value: 'failed', label: 'مردود' },
-  { value: 'repair_required', label: 'نیاز به تعمیر' },
-]
-const COATING_OPTIONS: { value: CoatingStatus; label: string }[] = [
-  { value: 'pending', label: 'در انتظار' },
-  { value: 'completed', label: 'انجام‌شده' },
-  { value: 'failed', label: 'ناموفق' },
-]
-const LOWERING_OPTIONS: { value: LoweringStatus; label: string }[] = [
-  { value: 'pending', label: 'در انتظار' },
-  { value: 'completed', label: 'انجام‌شده' },
-]
-const BACKFILL_OPTIONS: { value: BackfillStatus; label: string }[] = [
-  { value: 'pending', label: 'در انتظار' },
-  { value: 'completed', label: 'انجام‌شده' },
-]
-
-const FIELD_LABEL_FA: Record<string, string> = {
-  weldingStatus: 'جوشکاری',
-  ndtStatus: 'رادیوگرافی (NDT)',
-  coatingStatus: 'پوشش',
-  loweringStatus: 'پایین‌آوری',
-  backfillStatus: 'خاک‌ریزی',
-  notes: 'یادداشت',
-}
+const TONE: Record<string, string> = { done: '#22c55e', bad: '#ef4444', neutral: '#94a3b8' }
+const FIELD_FA: Record<string, string> = { weldingStatus: STAGE_FA.welding, ndtStatus: STAGE_FA.ndt, coatingStatus: STAGE_FA.coating, loweringStatus: STAGE_FA.lowering, backfillStatus: STAGE_FA.backfill, notes: 'یادداشت' }
+const label = (field: string, v: string) => { const st = (Object.keys(STAGE_FIELD) as StageKey[]).find((k) => STAGE_FIELD[k] === field); return st ? STAGE_OPTIONS[st].find((o) => o.value === v)?.label ?? v : v }
 
 interface JointPanelProps {
   joint: Joint
@@ -49,153 +22,105 @@ interface JointPanelProps {
   editable: boolean
   onUpdate: (field: 'weldingStatus' | 'ndtStatus' | 'coatingStatus' | 'loweringStatus' | 'backfillStatus' | 'notes', value: string) => void
   onClose: () => void
+  /** opens bulk entry starting at this joint */
+  onEntryFrom?: (jointNo: number) => void
+  startKm?: number
 }
 
-/** "Joint History" panel — every field here is real: derived from the joint's own stage fields, its interpolated position on the route, the project's pipe spec, and its own append-only change log (never a separate stored snapshot). */
-export function JointPanel({ joint, pipe, position, prevJointNumber, nextJointNumber, editable, onUpdate, onClose }: JointPanelProps) {
+/** One girth weld: where it is, its five activities (one tap each, saved at once) and every change ever recorded on it — including bulk entries that covered it. */
+export function JointPanel({ joint, pipe, position, prevJointNumber, nextJointNumber, editable, onUpdate, onClose, onEntryFrom, startKm = 0 }: JointPanelProps) {
+  const projectId = usePdtStore((s) => s.projectId)
+  const saving = usePdtStore((s) => s.saving)
   const [showHistory, setShowHistory] = useState(false)
+  const [events, setEvents] = useState<JointEventRow[] | null>(null)
+  const no = jointNoOfId(joint.id)
   const color = FINAL_STATUS_COLOR[joint.finalStatus]
-  const lastActivityAt = joint.history.length > 0 ? joint.history[joint.history.length - 1].at : null
+  const stageAt = (s: StageKey) => joint.history.find((h) => h.field === STAGE_FIELD[s])?.at ?? null
+
+  useEffect(() => {
+    if (!showHistory || !projectId) return
+    let alive = true
+    setEvents(null)
+    void jointEvents(projectId, no).then((e) => alive && setEvents(e))
+    return () => { alive = false }
+  }, [showHistory, projectId, no, joint])
 
   return (
-    <div className="glass-panel absolute left-3 top-3 z-20 flex max-h-[calc(100%-1.5rem)] w-80 flex-col overflow-hidden rounded-2xl">
+    <div className="glass-panel absolute left-3 top-3 z-20 flex max-h-[calc(100%-1.5rem)] w-[22rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3.5 py-3" style={{ borderColor: 'var(--border-soft)' }}>
         <div className="flex items-center gap-2">
-          <p className="text-sm font-extrabold">{joint.jointNumber}</p>
-          <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${color}22`, color }}>
-            {FINAL_STATUS_LABEL_FA[joint.finalStatus]}
-          </span>
+          <p className="text-sm font-extrabold" dir="ltr">{joint.jointNumber}</p>
+          <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${color}22`, color }}>{FINAL_STATUS_LABEL_FA[joint.finalStatus]}</span>
+          {saving && <Loader2 size={13} className="animate-spin text-muted" />}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <button onClick={() => setShowHistory((v) => !v)} title="تاریخچه تغییرات" className={`rounded-lg p-1.5 ${showHistory ? 'bg-white/15' : 'hover:bg-white/10'}`}>
-            <History size={13} />
-          </button>
-          <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-white/10">
-            <X size={13} />
-          </button>
+          <button onClick={() => setShowHistory((v) => !v)} title="تاریخچهٔ تغییرات" aria-pressed={showHistory} className={`rounded-lg p-1.5 ${showHistory ? 'bg-white/15' : 'hover:bg-white/10'}`}><History size={14} /></button>
+          <button onClick={onClose} aria-label="بستن" className="rounded-lg p-1.5 hover:bg-white/10"><X size={14} /></button>
         </div>
       </div>
 
       {showHistory ? (
         <div className="min-h-0 flex-1 overflow-y-auto p-3.5">
-          {joint.history.length === 0 ? (
-            <p className="text-[11px] text-muted">هنوز تغییری ثبت نشده است.</p>
-          ) : (
-            <ul className="space-y-2">
-              {[...joint.history]
-                .reverse()
-                .map((h) => (
-                  <li key={h.id} className="rounded-lg border border-white/10 p-2 text-[10px]">
-                    <p className="num text-muted">{formatJalali(h.at.slice(0, 10))}</p>
-                    <p className="mt-0.5 font-medium">{FIELD_LABEL_FA[h.field] ?? h.field}</p>
-                    <p className="text-muted">
-                      {h.fromValue || '—'} ← {h.toValue}
-                    </p>
+          {events == null ? <p className="text-[11px] text-muted"><Loader2 size={12} className="inline animate-spin" /> در حال خواندن…</p>
+            : events.length === 0 ? <p className="text-[11px] text-muted">هنوز تغییری روی این سرجوش ثبت نشده است.</p>
+            : (
+              <ul className="space-y-2">
+                {events.map((h) => (
+                  <li key={h.id} className="rounded-lg border border-white/10 p-2 text-[11px]">
+                    <p className="flex justify-between"><b>{FIELD_FA[h.field] ?? h.field}: {label(h.field, h.value)}</b><span className="num text-muted">{formatJalali(h.at.slice(0, 10))}</span></p>
+                    <p className="text-muted">{h.by || '—'}{h.from !== h.to ? ` · ثبت گروهی سرجوش ${h.from.toLocaleString('fa-IR')} تا ${h.to.toLocaleString('fa-IR')}` : ''}</p>
+                    {h.note && <p className="text-secondary">{h.note}</p>}
                   </li>
                 ))}
-            </ul>
-          )}
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto p-3.5 text-xs">
-          <Section>
-            <InfoRow label="چینج (Chainage)" value={formatChainage(joint.chainageMeters)} />
-            <InfoRow label="آخرین فعالیت" value={lastActivityAt ? formatJalali(lastActivityAt.slice(0, 10)) : '—'} />
-            <InfoRow label="مختصات" value={`${position.lat.toFixed(4)}, ${position.lon.toFixed(4)}`} icon={<MapPin size={10} />} />
-            <InfoRow label="ارتفاع" value={position.elevation != null ? `${position.elevation.toFixed(1)} m` : '—'} />
-          </Section>
-
-          <Section title="مشخصات لوله">
-            <InfoRow label="سرجوش قبل" value={prevJointNumber ?? '—'} />
-            <InfoRow label="سرجوش بعد" value={nextJointNumber ?? '—'} />
-            <InfoRow label="قطر" value={`Ø${pipe.diameterInch}″`} />
-            <InfoRow label="ضخامت جدار" value={`${pipe.wallThicknessMm} mm`} />
-            <InfoRow label="جنس" value={pipe.material} />
-          </Section>
-
-          <Section title="فعالیت‌های ساخت">
-            <StatusRow label={FIELD_LABEL_FA.weldingStatus} value={joint.weldingStatus} options={WELDING_OPTIONS} editable={editable} onChange={(v) => onUpdate('weldingStatus', v)} />
-            <StatusRow label={FIELD_LABEL_FA.ndtStatus} value={joint.ndtStatus} options={NDT_OPTIONS} editable={editable} onChange={(v) => onUpdate('ndtStatus', v)} />
-            <StatusRow label={FIELD_LABEL_FA.coatingStatus} value={joint.coatingStatus} options={COATING_OPTIONS} editable={editable} onChange={(v) => onUpdate('coatingStatus', v)} />
-            <StatusRow label={FIELD_LABEL_FA.loweringStatus} value={joint.loweringStatus} options={LOWERING_OPTIONS} editable={editable} onChange={(v) => onUpdate('loweringStatus', v)} />
-            <StatusRow label={FIELD_LABEL_FA.backfillStatus} value={joint.backfillStatus} options={BACKFILL_OPTIONS} editable={editable} onChange={(v) => onUpdate('backfillStatus', v)} />
-          </Section>
-
-          <Section>
-            <p className="mb-1 text-[10px] text-muted">{FIELD_LABEL_FA.notes}</p>
-            {editable ? (
-              <textarea
-                defaultValue={joint.notes}
-                onBlur={(e) => onUpdate('notes', e.target.value)}
-                rows={2}
-                className="w-full resize-none rounded-lg border border-white/10 bg-white/5 p-1.5 text-[11px] outline-none focus:border-brand-400"
-              />
-            ) : (
-              <p className="text-[11px] text-secondary">{joint.notes || '—'}</p>
+              </ul>
             )}
-          </Section>
-
-          <div className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] text-muted">
-            <FileText size={12} /> اسناد پیوست‌شده: ۰
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3.5 text-xs">
+          <div className="tw-sec">
+            <Info label="کیلومتر" value={formatChainage(startKm * 1000 + joint.chainageMeters)} ltr />
+            <Info label="مختصات" value={`${position.lat.toFixed(5)}, ${position.lon.toFixed(5)}`} icon={<MapPin size={10} />} ltr />
+            <Info label="ارتفاع" value={position.elevation != null ? `${position.elevation.toFixed(1)} m` : '—'} />
+            <Info label="سرجوش قبل / بعد" value={`${prevJointNumber ?? '—'} / ${nextJointNumber ?? '—'}`} ltr />
+            <Info label="لوله" value={`Ø${pipe.diameterInch}″ · ${pipe.wallThicknessMm} mm · ${pipe.material}`} ltr />
           </div>
+
+          <div className="tw-stages">
+            {STAGE_ORDER.map((s) => {
+              const field = STAGE_FIELD[s], at = stageAt(s)
+              return (
+                <div key={s} className="tw-stage" style={{ borderInlineStart: `3px solid ${STAGE_COLOR[s]}` }}>
+                  <div>{STAGE_FA[s]}<small>{at ? formatJalali(at.slice(0, 10)) : ''}</small></div>
+                  {editable ? (
+                    <div className="tw-seg" role="group" aria-label={STAGE_FA[s]}>
+                      {STAGE_OPTIONS[s].map((o) => <button key={o.value} type="button" aria-pressed={joint[field] === o.value} style={{ '--c': TONE[o.tone] } as CSSProperties} onClick={() => onUpdate(field, o.value)}>{o.label}</button>)}
+                    </div>
+                  ) : <span className="text-secondary">{STAGE_OPTIONS[s].find((o) => o.value === joint[field])?.label}</span>}
+                </div>
+              )
+            })}
+          </div>
+          {joint.welders.length > 0 && <Info label="جوشکاران" value={joint.welders.join('، ')} />}
+
+          <div>
+            <p className="mb-1 text-[10px] text-muted">یادداشت</p>
+            {editable
+              ? <textarea key={joint.id} defaultValue={joint.notes} onBlur={(e) => e.target.value !== joint.notes && onUpdate('notes', e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-white/10 bg-white/5 p-1.5 text-[11px] outline-none focus:border-brand-400" />
+              : <p className="text-[11px] text-secondary">{joint.notes || '—'}</p>}
+          </div>
+          {editable && onEntryFrom && <button type="button" className="tw-btn is-acc w-full" onClick={() => onEntryFrom(no)}><ClipboardPen size={13} /> ثبت گروهی از این سرجوش</button>}
+          {!editable && <p className="tw-hint">در نمای تاریخ گذشته ویرایش ممکن نیست؛ جدول زمانی را به «امروز» برگردانید.</p>}
         </div>
       )}
     </div>
   )
 }
 
-function Section({ title, children }: { title?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      {title && <p className="mb-1.5 text-[10px] font-bold text-secondary">{title}</p>}
-      <div className="space-y-1.5 rounded-xl border border-white/10 p-2.5">{children}</div>
-    </div>
-  )
-}
-
-function InfoRow({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function Info({ label, value, icon, ltr }: { label: string; value: string; icon?: React.ReactNode; ltr?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="flex items-center gap-1 text-muted">
-        {icon}
-        {label}
-      </span>
-      <span className="num font-medium">{value}</span>
-    </div>
-  )
-}
-
-function StatusRow<V extends string>({
-  label,
-  value,
-  options,
-  editable,
-  onChange,
-}: {
-  label: string
-  value: V
-  options: { value: V; label: string }[]
-  editable: boolean
-  onChange: (v: string) => void
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-muted">{label}</span>
-      {editable ? (
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="rounded-lg border border-white/10 bg-white/5 px-1.5 py-1 text-[11px] outline-none focus:border-brand-400"
-        >
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <span className="font-medium">{options.find((o) => o.value === value)?.label ?? value}</span>
-      )}
+      <span className="flex items-center gap-1 text-muted">{icon}{label}</span>
+      <span className="num font-medium" dir={ltr ? 'ltr' : undefined}>{value}</span>
     </div>
   )
 }
