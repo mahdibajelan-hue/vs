@@ -737,12 +737,12 @@ export function createStageGateEngine(env) {
                 sections.push(lcSectionHtml('lcSec-pssr', 'آمادگی راه‌اندازی از ماژول PSSR', 'auto',
                     'وضعیت سیستم‌های راه‌اندازی، پانچ‌های باز و گواهی‌های RFSU از ماژول «آمادگی راه‌اندازی (PSSR)» خوانده می‌شود؛ چک‌لیست، جلسه، پانچ و امضای RFSU را در همان ماژول ثبت کنید.',
                     `${t ? `<div class="sgx-stats" style="margin-top:0">
-                        <div class="sgx-stat is-act"><small>RFSU صادرشده</small><b>${toPersianDigits(t.byStage.rfsu)} از ${toPersianDigits(t.systems)}</b><em style="color:inherit">${toPersianDigits(t.rfsuPct)}٪ سیستم‌ها</em></div>
-                        <div class="sgx-stat"><small>میانگین آمادگی</small><b>${toPersianDigits(t.avgReadiness)}٪</b></div>
+                        <div class="sgx-stat is-act"><small>RFSU صادرشده</small><b>${toPersianDigits(t.withRfsu)} از ${toPersianDigits(t.systems)}</b><em style="color:inherit">${toPersianDigits(t.rfsuPct)}٪ سیستم‌ها</em></div>
+                        <div class="sgx-stat ${t.live ? 'is-good' : ''}"><small>تحت گاز</small><b>${toPersianDigits(t.live)} از ${toPersianDigits(t.systems)}</b><em style="color:inherit">آمادگی میانگین ${toPersianDigits(t.avgReadiness)}٪</em></div>
                         <div class="sgx-stat ${t.openA ? 'is-bad' : 'is-good'}"><small>پانچ A باز</small><b>${toPersianDigits(t.openA)}</b></div>
                         <div class="sgx-stat"><small>پانچ B / C باز</small><b>${toPersianDigits(t.openB)} / ${toPersianDigits(t.openC)}</b></div>
                     </div>
-                    <ul class="sgx-todo-list" style="margin-top:.6rem">${pssr.systems.map(x => `<li><span class="sgx-num">${esc(x.code)}</span><span><b>${esc(x.name)}</b> — آمادگی ${toPersianDigits(x.status.readiness)}٪ · ${x.status.stage === 'rfsu' ? 'RFSU صادر شد' : x.status.blockers.length ? toPersianDigits(x.status.blockers.length) + ' مانع' : 'آمادهٔ امضا'}</span></li>`).join('')}</ul>`
+                    <ul class="sgx-todo-list" style="margin-top:.6rem">${pssr.systems.map(x => `<li><span class="sgx-num">${esc(x.code)}</span><span><b>${esc(x.name)}</b> — آمادگی ${toPersianDigits(x.status.readiness)}٪ · ${x.status.stage === 'live' ? 'تحت گاز' : x.status.stage === 'gasin' ? 'تزریق گاز در جریان' : x.status.stage === 'permit' ? 'مجوز تزریق گاز صادر شد' : x.status.stage === 'rfsu' ? 'RFSU صادر شد' : x.status.blockers.length ? toPersianDigits(x.status.blockers.length) + ' مانع' : 'آمادهٔ امضا'}</span></li>`).join('')}</ul>`
                     : '<p class="sgx-empty">هنوز سیستمی در ماژول PSSR برای این پروژه تعریف نشده است.</p>'}
                     ${env.onOpenModule ? `<div class="sgx-modlinks no-print"><button type="button" data-lc-action="open-module" data-module="pssr" class="sgx-modlink">رفتن به آمادگی راه‌اندازی (PSSR) ←</button></div>` : ''}`));
             }

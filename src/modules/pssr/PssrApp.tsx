@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { AlertTriangle, BookOpen, CheckCircle2, ClipboardCheck, FileSignature, Flame, ListChecks, Loader2, Plus, Printer, Settings2, ShieldCheck, Users, X } from 'lucide-react'
+import { Activity, AlertTriangle, BookOpen, CheckCircle2, ClipboardCheck, FileSignature, Flame, Gauge, ListChecks, Loader2, Paperclip, Plus, Printer, Settings2, ShieldCheck, Stamp, Users, X } from 'lucide-react'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { formatJalali } from '../../lib/jalali'
-import { usePssrStore } from './store/usePssrStore'
-import { canSign, projectReadiness, STAGE_FA, STAGE_ORDER, systemStatus, type PssrStage, type SystemStatus } from './lib/pssrCore'
-import { CHECK_FA, DEFAULT_SIGN_CHAIN, KIND_FA, PUNCH_CAT_FA, PUNCH_STATUS_FA, type CheckStatus, type PssrKind, type PssrPunch, type PssrSystem, type PunchCategory } from './types'
+import { usePssrStore, type PssrAdvisories } from './store/usePssrStore'
+import { canSign, permitApprovers, projectReadiness, STAGE_FA, STAGE_ORDER, systemStatus, type ChainPerson, type PssrStage, type SignerRow, type SystemStatus } from './lib/pssrCore'
+import { CHECK_FA, DEFAULT_SIGN_CHAIN, GASIN_CHECKS, GASIN_LOG_FA, GASIN_STATUS_FA, KIND_FA, PUNCH_CAT_FA, PUNCH_STATUS_FA, type CheckStatus, type GasinLogKind, type PssrKind, type PssrPunch, type PssrSystem, type PunchCategory } from './types'
 import { PssrGuide } from './PssrGuide'
 import './pssr.css'
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
 const today = () => new Date().toISOString().slice(0, 10)
-const STAGE_COLOR: Record<PssrStage, string> = { mc: '#64748b', pssr: '#f59e0b', ready: '#3b82f6', signing: '#a855f7', rfsu: '#10b981' }
+const STAGE_COLOR: Record<PssrStage, string> = { mc: '#64748b', pssr: '#f59e0b', ready: '#3b82f6', signing: '#a855f7', rfsu: '#10b981', permit: '#0ea5e9', gasin: '#f97316', live: '#16a34a' }
+const AFTER_RFSU: PssrStage[] = ['rfsu', 'permit', 'gasin', 'live']
 type Tab = 'dash' | 'systems' | 'punches' | 'settings'
 
 /**
@@ -31,13 +32,13 @@ export function PssrApp({ onExitToHub }: { onExitToHub: () => void; onBackToRada
   useEffect(() => { if (!useMasterDataStore.getState().loaded) void useMasterDataStore.getState().fetchAll() }, [])
   useEffect(() => { if (projectId) void st.load(projectId) /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [projectId])
 
-  // the sign chain in force: the project's own, or the default roles (no emails → only an admin can sign)
-  const chain = useMemo(() => (st.signers.length ? st.signers.map((s) => ({ seq: s.seq, roleLabel: s.roleLabel, signerEmail: s.signerEmail })) : DEFAULT_SIGN_CHAIN.map((r, i) => ({ seq: i + 1, roleLabel: r, signerEmail: '' }))), [st.signers])
+  // the sign chain in force: the project's own, or the default steps (no emails → only an admin can sign)
+  const chain: SignerRow[] = useMemo(() => (st.signers.length ? st.signers : DEFAULT_SIGN_CHAIN), [st.signers])
   const statusOf = useMemo(() => {
     const m = new Map<string, SystemStatus>()
-    for (const sys of st.systems) m.set(sys.id, systemStatus({ checks: st.checks.filter((c) => c.systemId === sys.id), meetings: st.meetings.filter((x) => x.systemId === sys.id), punches: st.punches.filter((p) => p.systemId === sys.id), signers: chain, signoffs: st.signoffs.filter((x) => x.systemId === sys.id) }))
+    for (const sys of st.systems) m.set(sys.id, systemStatus({ checks: st.checks.filter((c) => c.systemId === sys.id), meetings: st.meetings.filter((x) => x.systemId === sys.id), punches: st.punches.filter((p) => p.systemId === sys.id), signers: chain, signoffs: st.signoffs.filter((x) => x.systemId === sys.id), permit: st.permits.find((x) => x.systemId === sys.id) ?? null }))
     return m
-  }, [st.systems, st.checks, st.meetings, st.punches, st.signoffs, chain])
+  }, [st.systems, st.checks, st.meetings, st.punches, st.signoffs, st.permits, chain])
   const summary = projectReadiness([...statusOf.values()])
   const missingTables = !!st.error && /pssr_|relation|schema cache/i.test(st.error)
 
@@ -60,9 +61,9 @@ export function PssrApp({ onExitToHub }: { onExitToHub: () => void; onBackToRada
       </nav>
       <main className="ps-main">
         {!projectId ? <Empty text="ابتدا از رادار پروژه یک پروژه را انتخاب کنید." />
-          : missingTables ? <Empty text="جدول‌های ماژول PSSR هنوز در پایگاه داده ساخته نشده‌اند. فایل supabase/pssr/001_pssr.sql را یک بار در SQL Editor اجرا کنید." />
+          : missingTables ? <Empty text="جدول‌های ماژول PSSR هنوز در پایگاه داده ساخته نشده‌اند. فایل‌های supabase/pssr/001_pssr.sql و 003_pssr_chain_gasin.sql را یک بار در SQL Editor اجرا کنید." />
           : st.loading ? <p className="ps-loading"><Loader2 size={16} className="animate-spin" /> در حال بارگذاری…</p>
-          : openSys ? <SystemPage id={openSys} status={statusOf.get(openSys)} onBack={() => setOpenSys(null)} />
+          : openSys ? <SystemPage id={openSys} status={statusOf.get(openSys)} chain={chain} onBack={() => setOpenSys(null)} />
           : tab === 'dash' ? <Dashboard summary={summary} statusOf={statusOf} onOpen={setOpenSys} onNew={() => setTab('systems')} />
           : tab === 'systems' ? <Systems statusOf={statusOf} onOpen={setOpenSys} />
           : tab === 'punches' ? <PunchList onOpen={setOpenSys} />
@@ -91,10 +92,11 @@ function Dashboard({ summary, statusOf, onOpen, onNew }: { summary: ReturnType<t
     <>
       <section className="ps-kpis">
         <Kpi label="سیستم‌ها" value={fa(summary.systems)} sub={`میانگین آمادگی ${fa(summary.avgReadiness)}٪`} color="#3b82f6" />
-        <Kpi label="RFSU صادرشده" value={`${fa(summary.byStage.rfsu)} از ${fa(summary.systems)}`} sub={`${fa(summary.rfsuPct)}٪ سیستم‌ها`} color="#10b981" />
-        <Kpi label="پانچ A باز" value={fa(summary.openA)} sub="مانع صدور RFSU" color={summary.openA ? '#ef4444' : '#10b981'} />
-        <Kpi label="پانچ B / C باز" value={`${fa(summary.openB)} / ${fa(summary.openC)}`} sub={summary.overdue ? `${fa(summary.overdue)} پانچ سررسیدگذشته` : 'بدون سررسید گذشته'} color={summary.overdue ? '#f59e0b' : '#64748b'} />
+        <Kpi label="RFSU صادرشده" value={`${fa(summary.withRfsu)} از ${fa(summary.systems)}`} sub={`${fa(summary.rfsuPct)}٪ سیستم‌ها`} color="#10b981" />
+        <Kpi label="تحت گاز" value={`${fa(summary.live)} از ${fa(summary.systems)}`} sub={summary.byStage.gasin ? `${fa(summary.byStage.gasin)} سیستم در حال تزریق` : `${fa(summary.livePct)}٪ سیستم‌ها`} color="#16a34a" />
+        <Kpi label="پانچ A باز" value={fa(summary.openA)} sub={`B: ${fa(summary.openB)} · C: ${fa(summary.openC)}${summary.overdue ? ` · ${fa(summary.overdue)} سررسیدگذشته` : ''}`} color={summary.openA ? '#ef4444' : '#10b981'} />
       </section>
+      <AdvisoryPanel />
       <section className="ps-flow" aria-label="سیستم‌ها در هر مرحله">
         {STAGE_ORDER.map((stg, i) => (
           <div key={stg} className="ps-flow-col" style={{ '--c': STAGE_COLOR[stg] } as CSSProperties}>
@@ -180,7 +182,7 @@ function NewSystem({ onDone }: { onDone: (id: string | null) => void }) {
 }
 
 // ── one system ───────────────────────────────────────────────────────────────
-function SystemPage({ id, status, onBack }: { id: string; status?: SystemStatus; onBack: () => void }) {
+function SystemPage({ id, status, chain, onBack }: { id: string; status?: SystemStatus; chain: SignerRow[]; onBack: () => void }) {
   const st = usePssrStore()
   const sys = st.systems.find((s) => s.id === id)
   if (!sys || !status) return <Empty text="سیستم یافت نشد." />
@@ -220,8 +222,11 @@ function SystemPage({ id, status, onBack }: { id: string; status?: SystemStatus;
       <Section n={3} id="ps-punch" title="یافته‌ها و پانچ‌لیست" mode="input" hint="هر نقص را با دسته ثبت کنید: A باید پیش از RFSU بسته و توسط فرد دیگری تأیید شود؛ B پیش از تحویل موقت؛ C بهبود.">
         <Punches systemId={id} />
       </Section>
-      <Section n={4} id="ps-rfsu" title="گواهی RFSU — آمادگی برای راه‌اندازی" mode="input" hint="وقتی همهٔ موانع رفع شد، امضاکنندگان به ترتیب امضا می‌کنند. با آخرین امضا گواهی RFSU صادر و مجوز ورود به مرحلهٔ تزریق گاز داده می‌شود.">
+      <Section n={4} id="ps-rfsu" title="گواهی RFSU — آمادگی برای راه‌اندازی" mode="input" hint="وقتی همهٔ موانع رفع شد، به ترتیب امضا می‌شود: پیمانکار ← مشاور ← کارفرما (سیستمی)، سپس نمایندهٔ بهره‌بردار فرم کاغذی را دستی امضا می‌کند و مدیر پروژهٔ کارفرما با پیوست اسکن آن، مهر تأیید سیستمی می‌زند.">
         <Rfsu sys={sys} status={status} />
+      </Section>
+      <Section n={5} id="ps-gasin" title="مجوز و ثبت عملیات تزریق گاز" mode="input" hint="پس از RFSU، چک‌لیست روز تزریق را تأیید کنید؛ کارفرما (مدیر پروژه یا مسئول HSE) مجوز را صادر می‌کند. سپس شروع، قرائت‌های فشار، باز و بسته شدن شیرها و پایان یا توقف عملیات را ثبت کنید.">
+        <GasIn sys={sys} status={status} chain={chain} />
       </Section>
     </div>
   )
@@ -241,20 +246,21 @@ function Checklist({ systemId }: { systemId: string }) {
   const email = useAuthStore((s) => s.profile?.email ?? '')
   const list = st.checks.filter((c) => c.systemId === systemId)
   const cats = [...new Set(list.map((c) => c.category))]
+  const adv = st.advisories
   if (!list.length) return <p className="ps-hint">برای این سیستم بندی ساخته نشده؛ قالب چک‌لیست را در «تنظیمات» ببینید.</p>
   return (
     <div className="ps-checks">
       {cats.map((cat) => (
         <div key={cat} className="ps-cat">
           <h4>{cat}</h4>
-          {list.filter((c) => c.category === cat).map((c) => <CheckRow key={c.id} id={c.id} title={c.title} mandatory={c.mandatory} status={c.status} evidence={c.evidence} meta={c.checkedBy ? `${c.checkedBy} · ${jd(c.checkedAt)}` : ''} onSave={(s, e) => st.setCheck(c.id, s, e, email)} />)}
+          {list.filter((c) => c.category === cat).map((c) => <CheckRow key={c.id} id={c.id} title={c.title} mandatory={c.mandatory} status={c.status} evidence={c.evidence} meta={c.checkedBy ? `${c.checkedBy} · ${jd(c.checkedAt)}` : ''} onSave={(s, e) => st.setCheck(c.id, s, e, email)} advice={adv ? adviceFor(c.title, adv) : null} />)}
         </div>
       ))}
     </div>
   )
 }
 
-function CheckRow({ title, mandatory, status, evidence, meta, onSave }: { id: string; title: string; mandatory: boolean; status: CheckStatus; evidence: string; meta: string; onSave: (s: CheckStatus, e: string) => Promise<boolean> }) {
+function CheckRow({ title, mandatory, status, evidence, meta, onSave, advice }: { id: string; title: string; mandatory: boolean; status: CheckStatus; evidence: string; meta: string; onSave: (s: CheckStatus, e: string) => Promise<boolean>; advice?: string | null }) {
   const [s, setS] = useState(status), [e, setE] = useState(evidence), [busy, setBusy] = useState(false)
   useEffect(() => { setS(status); setE(evidence) }, [status, evidence])
   const dirty = s !== status || e !== evidence
@@ -266,6 +272,7 @@ function CheckRow({ title, mandatory, status, evidence, meta, onSave }: { id: st
         <input value={e} onChange={(x) => setE(x.target.value)} placeholder="مدرک / توضیح (شمارهٔ صورت‌جلسه، لینک…)" />
         <button type="button" className="ps-btn" disabled={!dirty || busy} onClick={async () => { setBusy(true); await onSave(s, e); setBusy(false) }}>{busy ? <Loader2 size={13} className="animate-spin" /> : 'ذخیره'}</button>
       </div>
+      {advice && <small className={`ps-advice ${status === 'ok' ? 'is-strong' : ''}`}><AlertTriangle size={12} aria-hidden /> {advice}{status === 'ok' ? ' — با وجود این، بند «تأیید» شده است؛ دوباره بررسی کنید.' : ''}</small>}
       {meta && <small className="ps-meta">آخرین ثبت: {meta}</small>}
     </div>
   )
@@ -356,42 +363,86 @@ function PunchTable({ list, me, systemOf }: { list: PssrPunch[]; me: string; sys
   )
 }
 
+// ── RFSU: multi-person sign chain + the operator's manual form ──────────────
+const RULE_FA = { any: 'امضای یکی از افراد کافی است', all: 'همهٔ افراد باید امضا کنند' } as const
+
 function Rfsu({ sys, status }: { sys: PssrSystem; status: SystemStatus }) {
   const st = usePssrStore()
   const profile = useAuthStore((s) => s.profile)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === sys.projectId))
-  const [comment, setComment] = useState('')
   const step = status.nextStep
-  const mine = canSign(step, profile?.email, !!profile?.isAdmin)
+  const signable = step ? step.persons.filter((p) => canSign(step, p, profile?.email, !!profile?.isAdmin)) : []
+  const issued = AFTER_RFSU.includes(status.stage)
   return (
     <div className="ps-stack">
       <ol className="ps-chain">
         {status.chain.map((c) => (
           <li key={c.seq} className={`is-${c.state}`}>
             <span className="ps-chain-n">{c.state === 'signed' ? '✓' : c.state === 'rejected' ? '✕' : fa(c.seq)}</span>
-            <div><b>{c.role}</b><small>{c.email || 'امضاکننده تعیین نشده (فقط مدیر سامانه)'}</small>
-              {c.by && <small>{c.state === 'signed' ? 'امضا شد' : 'رد شد'}: {c.by} · {jd(c.at)}{c.comment ? ` — ${c.comment}` : ''}</small>}</div>
+            <div className="ps-chain-body">
+              <b>{c.label}{c.manual && <em className="ps-tag is-manual"><Stamp size={11} aria-hidden /> امضای دستی + تأیید سیستمی</em>}</b>
+              <small>{c.manual ? 'فرم کاغذی را نمایندهٔ بهره‌بردار امضا می‌کند؛ مهر تأیید سیستمی با فرد زیر' : RULE_FA[c.rule]}</small>
+              <ul className="ps-persons">
+                {c.persons.map((p) => (
+                  <li key={p.label} className={`is-${p.state}`}>
+                    <span className="ps-person-dot" aria-hidden />
+                    <span><b>{p.label}</b><small>{p.email || 'ایمیل تعیین نشده (فقط مدیر سامانه)'}</small></span>
+                    <span className="ps-person-state">
+                      {p.state === 'pending' ? 'در انتظار' : `${p.state === 'signed' ? (c.manual ? 'تأیید شد' : 'امضا شد') : 'رد شد'} · ${p.by ?? ''} · ${jd(p.at)}`}
+                      {p.comment && <small>«{p.comment}»</small>}
+                      {c.manual && p.state === 'signed' && <small>امضای دستی: {p.manualSigner || '—'} · {jd(p.manualSignedOn)}{p.fileUrl && <> · <button type="button" className="ps-link" onClick={() => st.openScan(p.fileUrl!)}><Paperclip size={11} /> اسکن فرم</button></>}</small>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </li>
         ))}
       </ol>
-      {status.stage === 'rfsu' ? (
+      {issued ? (
         <div className="ps-rfsu-ok"><FileSignature size={18} /> <b>گواهی RFSU در {jd(status.rfsuAt)} صادر شد.</b> این سیستم آمادهٔ مرحلهٔ تزریق گاز است.
           <button type="button" className="ps-btn" onClick={() => printRfsu(sys, status, project?.officialName ?? '')}><Printer size={14} /> چاپ گواهی</button></div>
       ) : status.blockers.length ? (
         <p className="ps-hint is-warn"><AlertTriangle size={14} /> تا رفع {fa(status.blockers.length)} مانع بالای صفحه، امضای RFSU فعال نمی‌شود.</p>
       ) : step ? (
         <div className="ps-sign">
-          <p>نوبت امضا: <b>{step.role}</b>{step.email ? ` (${step.email})` : ''}</p>
-          {mine ? (
-            <div className="ps-inline-form">
-              <Field label="توضیح (اختیاری؛ برای رد لازم است)" wide><input value={comment} onChange={(e) => setComment(e.target.value)} /></Field>
-              <button type="button" className="ps-btn is-ok" onClick={async () => { await st.sign(sys.id, step.seq, step.role, 'sign', comment, profile?.email ?? ''); setComment('') }}><FileSignature size={14} /> امضا و تأیید</button>
-              <button type="button" className="ps-btn is-bad" disabled={!comment.trim()} onClick={async () => { await st.sign(sys.id, step.seq, step.role, 'reject', comment, profile?.email ?? ''); setComment('') }}>رد</button>
-            </div>
-          ) : <p className="ps-hint">فقط {step.email || 'مدیر سامانه'} می‌تواند این مرحله را امضا کند.</p>}
+          <p>نوبت: <b>{step.label}</b> — {step.manual ? 'پس از امضای دستی فرم توسط نمایندهٔ بهره‌بردار، اسکن آن را پیوست و تأیید کنید.' : RULE_FA[step.rule]}</p>
+          {signable.length ? <SignForm key={`${step.seq}-${status.chain.map((c) => c.persons.map((p) => p.state).join()).join()}`} systemId={sys.id} seq={step.seq} label={step.label} manual={step.manual} persons={signable} />
+            : <p className="ps-hint">فقط {step.persons.filter((p) => p.state !== 'signed').map((p) => p.email ? `${p.label} (${p.email})` : p.label).join(' / ')} یا مدیر سامانه می‌تواند این مرحله را {step.manual ? 'تأیید' : 'امضا'} کند.</p>}
         </div>
       ) : null}
-      {!st.signers.length && <p className="ps-hint">زنجیرهٔ امضا هنوز برای این پروژه تعیین نشده و نقش‌های پیش‌فرض نمایش داده می‌شود؛ در «تنظیمات» ایمیل امضاکنندگان را وارد کنید.</p>}
+      {!st.signers.length && <p className="ps-hint">زنجیرهٔ امضا هنوز برای این پروژه ذخیره نشده و ساختار پیش‌فرض نمایش داده می‌شود؛ در «تنظیمات» ایمیل افراد را وارد و ذخیره کنید.</p>}
+    </div>
+  )
+}
+
+function SignForm({ systemId, seq, label, manual, persons }: { systemId: string; seq: number; label: string; manual: boolean; persons: ChainPerson[] }) {
+  const st = usePssrStore()
+  const email = useAuthStore((s) => s.profile?.email ?? '')
+  const [who, setWho] = useState(persons[0].label)
+  const [comment, setComment] = useState('')
+  const [m, setM] = useState({ signer: '', date: today() })
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const manualOk = !manual || (!!file && !!m.signer.trim() && !!m.date)
+  const go = async (decision: 'sign' | 'reject') => {
+    setBusy(true)
+    let fileUrl: string | null = null
+    if (manual && decision === 'sign' && file) { fileUrl = await st.uploadScan(systemId, file); if (!fileUrl) { setBusy(false); return } }
+    await st.sign({ systemId, seq, roleLabel: label, personLabel: who, decision, comment, ...(manual && decision === 'sign' ? { manualSigner: m.signer.trim(), manualSignedOn: m.date, fileUrl } : {}) }, email)
+    setBusy(false)
+  }
+  return (
+    <div className="ps-inline-form">
+      <Field label={manual ? 'تأییدکننده' : 'امضا به عنوان'}><select value={who} onChange={(e) => setWho(e.target.value)}>{persons.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}</select></Field>
+      {manual && <>
+        <Field label="نام نمایندهٔ بهره‌بردار (امضاکنندهٔ فرم) *"><input value={m.signer} onChange={(e) => setM({ ...m, signer: e.target.value })} /></Field>
+        <Field label="تاریخ امضای دستی *"><input type="date" value={m.date} onChange={(e) => setM({ ...m, date: e.target.value })} /></Field>
+        <Field label="اسکن فرم امضاشده (PDF یا تصویر) *"><input type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></Field>
+      </>}
+      <Field label="توضیح (اختیاری؛ برای رد لازم است)" wide><input value={comment} onChange={(e) => setComment(e.target.value)} /></Field>
+      <button type="button" className="ps-btn is-ok" disabled={busy || !manualOk} onClick={() => go('sign')}>{busy ? <Loader2 size={14} className="animate-spin" /> : manual ? <Stamp size={14} /> : <FileSignature size={14} />} {manual ? 'مهر تأیید سیستمی' : 'امضا و تأیید'}</button>
+      <button type="button" className="ps-btn is-bad" disabled={busy || !comment.trim()} onClick={() => go('reject')}>رد</button>
     </div>
   )
 }
@@ -400,6 +451,7 @@ function printRfsu(sys: PssrSystem, status: SystemStatus, projectName: string) {
   const w = window.open('', '_blank', 'width=900,height=1100')
   if (!w) return
   const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
+  const rows = status.chain.flatMap((c) => c.persons.filter((p) => p.state === 'signed').map((p) => `<tr><td>${fa(c.seq)}</td><td>${esc(c.label)}</td><td>${esc(c.manual ? `${p.manualSigner} (امضای دستی ${jd(p.manualSignedOn)}) — تأیید: ${p.label}` : p.label)}</td><td>${esc(p.by ?? '')}</td><td>${esc(jd(p.at))}</td></tr>`)).join('')
   w.document.write(`<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>RFSU ${esc(sys.code)}</title>
   <style>body{font-family:Vazirmatn,Tahoma,sans-serif;margin:32px;color:#0f172a}h1{font-size:20px;margin:0}h2{font-size:14px;color:#475569;margin:4px 0 20px}
   table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}td,th{border:1px solid #cbd5e1;padding:8px;text-align:right}th{background:#f1f5f9}
@@ -410,9 +462,135 @@ function printRfsu(sys: PssrSystem, status: SystemStatus, projectName: string) {
   <tr><th>پانچ‌های باز</th><td>A: ${fa(status.punches.A.open)} · B: ${fa(status.punches.B.open)} · C: ${fa(status.punches.C.open)}</td></tr>
   <tr><th>تاریخ صدور</th><td class="ok">${esc(jd(status.rfsuAt))}</td></tr></table>
   <p style="font-size:13px;line-height:2;margin-top:16px">بدین‌وسیله گواهی می‌شود سیستم فوق بازبینی ایمنی پیش از راه‌اندازی (PSSR) را با موفقیت پشت سر گذاشته، همهٔ یافته‌های دستهٔ A بسته و تأیید شده و برای ورود به مرحلهٔ تزریق گاز آماده است. یافته‌های دستهٔ B و C طبق برنامه پیگیری می‌شوند.</p>
-  <table><tr><th>ردیف</th><th>سمت</th><th>امضاکننده</th><th>تاریخ</th></tr>${status.chain.map((c) => `<tr><td>${fa(c.seq)}</td><td>${esc(c.role)}</td><td>${esc(c.by ?? '')}</td><td>${esc(jd(c.at))}</td></tr>`).join('')}</table>
+  <table><tr><th>مرحله</th><th>طرف</th><th>سمت / امضاکننده</th><th>کاربر سامانه</th><th>تاریخ</th></tr>${rows}</table>
   </div><script>window.onload=()=>window.print()</script></body></html>`)
   w.document.close()
+}
+
+// ── gas-in: permit (day-of checklist + approval) and the operation log ───────
+function GasIn({ sys, status, chain }: { sys: PssrSystem; status: SystemStatus; chain: SignerRow[] }) {
+  const st = usePssrStore()
+  const profile = useAuthStore((s) => s.profile)
+  const email = profile?.email ?? ''
+  const permit = st.permits.find((p) => p.systemId === sys.id) ?? null
+  const logs = permit ? st.logs.filter((l) => l.permitId === permit.id) : []
+  const approvers = permitApprovers(chain)
+  const mayApprove = !!profile?.isAdmin || approvers.some((a) => a.signerEmail && a.signerEmail.toLowerCase() === email.toLowerCase())
+  const [head, setHead] = useState({ ptw: permit?.ptwNo ?? '', planned: permit?.plannedAt?.slice(0, 16) ?? '' })
+  const [final, setFinal] = useState('')
+  const [reason, setReason] = useState('')
+  useEffect(() => { setHead({ ptw: permit?.ptwNo ?? '', planned: permit?.plannedAt?.slice(0, 16) ?? '' }) }, [permit?.ptwNo, permit?.plannedAt])
+  if (!AFTER_RFSU.includes(status.stage)) return <p className="ps-hint"><ShieldCheck size={14} /> مجوز تزریق گاز فقط پس از صدور گواهی RFSU قابل تنظیم است.</p>
+  const editable = !permit || permit.status === 'draft' || permit.status === 'aborted'
+  const toggle = (key: string, ok: boolean, value?: string) => {
+    const checks = { ...(permit?.checks ?? {}), [key]: { ok, value: value ?? permit?.checks[key]?.value ?? '', by: email, at: new Date().toISOString() } }
+    void st.savePermit(sys.id, { checks }, email)
+  }
+  return (
+    <div className="ps-stack">
+      <div className="ps-gas-head" style={{ '--c': STAGE_COLOR[status.stage] } as CSSProperties}>
+        <Gauge size={18} aria-hidden />
+        <b>{permit ? GASIN_STATUS_FA[permit.status] : 'مجوز هنوز تنظیم نشده'}</b>
+        <small>چک‌لیست روز تزریق: {fa(status.gasin.checksDone)} از {fa(status.gasin.checksTotal)}{permit?.approvedBy ? ` · صادرکننده: ${permit.approvedBy} (${jd(permit.approvedAt)})` : ''}{permit?.startedAt ? ` · شروع ${jd(permit.startedAt)}` : ''}{permit?.completedAt ? ` · پایان ${jd(permit.completedAt)}` : ''}</small>
+      </div>
+      <div className="ps-inline-form">
+        <Field label="شمارهٔ مجوز کار (PTW)"><input value={head.ptw} disabled={!editable} onChange={(e) => setHead({ ...head, ptw: e.target.value })} dir="ltr" /></Field>
+        <Field label="زمان برنامه‌ریزی‌شدهٔ تزریق"><input type="datetime-local" value={head.planned} disabled={!editable} onChange={(e) => setHead({ ...head, planned: e.target.value })} /></Field>
+        {editable && <button type="button" className="ps-btn" onClick={() => st.savePermit(sys.id, { ptwNo: head.ptw, plannedAt: head.planned ? new Date(head.planned).toISOString() : null }, email)}>ذخیرهٔ مجوز</button>}
+      </div>
+      <ul className="ps-gas-checks">
+        {GASIN_CHECKS.map((g) => {
+          const c = permit?.checks[g.key]
+          return (
+            <li key={g.key} className={c?.ok ? 'is-ok' : ''}>
+              <label><input type="checkbox" checked={!!c?.ok} disabled={!editable} onChange={(e) => toggle(g.key, e.target.checked)} /> {g.label}</label>
+              {g.value && <input className="ps-gas-val" defaultValue={c?.value ?? ''} disabled={!editable} placeholder={g.value} onBlur={(e) => { if (e.target.value !== (c?.value ?? '')) toggle(g.key, !!c?.ok, e.target.value) }} />}
+              {c?.ok && c.by && <small className="ps-meta">{c.by} · {jd(c.at)}</small>}
+            </li>
+          )
+        })}
+      </ul>
+      {editable && (
+        <div className="ps-actions">
+          <button type="button" className="ps-btn is-ok" disabled={!status.gasin.canApprove || !mayApprove || !permit?.ptwNo} onClick={() => st.setPermitStatus(sys.id, 'approved', email)}><Stamp size={14} /> صدور مجوز تزریق گاز</button>
+          <small className="ps-meta">{!status.gasin.canApprove ? 'همهٔ بندهای چک‌لیست باید تأیید شود.' : !permit?.ptwNo ? 'شمارهٔ PTW را ثبت و ذخیره کنید.' : !mayApprove ? `صدور مجوز با ${approvers.map((a) => a.personLabel).join(' / ')} یا مدیر سامانه است.` : 'آمادهٔ صدور.'}</small>
+        </div>
+      )}
+      {permit?.status === 'approved' && (
+        <div className="ps-actions">
+          <button type="button" className="ps-btn is-primary" onClick={() => st.setPermitStatus(sys.id, 'in_progress', email)}><Flame size={14} /> شروع تزریق گاز</button>
+          <button type="button" className="ps-btn is-ghost" onClick={() => st.setPermitStatus(sys.id, 'draft', email)}>بازگشت به پیش‌نویس</button>
+        </div>
+      )}
+      {permit && permit.status !== 'draft' && (
+        <section className="ps-card">
+          <header className="ps-card-head"><b><Activity size={15} /> ثبت عملیات تزریق گاز</b></header>
+          {logs.length ? (
+            <div className="ps-table-wrap"><table className="ps-table"><thead><tr><th>زمان</th><th>رویداد</th><th>فشار (bar)</th><th>محل</th><th>شرح</th><th>ثبت‌کننده</th></tr></thead>
+              <tbody>{logs.map((l) => <tr key={l.id} className={l.kind === 'incident' ? 'is-late' : ''}><td className="ps-nowrap">{jd(l.at)} {new Date(l.at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</td><td>{GASIN_LOG_FA[l.kind]}</td><td>{l.pressure != null ? fa(l.pressure) : '—'}</td><td>{l.location || '—'}</td><td>{l.note}</td><td>{l.by}</td></tr>)}</tbody></table></div>
+          ) : <p className="ps-hint">هنوز رویدادی ثبت نشده است.</p>}
+          {permit.status === 'in_progress' && <>
+            <LogForm permitId={permit.id} />
+            <div className="ps-inline-form">
+              <Field label="فشار نهایی خط (bar)"><input type="number" value={final} onChange={(e) => setFinal(e.target.value)} /></Field>
+              <button type="button" className="ps-btn is-ok" onClick={() => st.setPermitStatus(sys.id, 'completed', email, { finalPressure: final ? Number(final) : null })}><CheckCircle2 size={14} /> پایان — سیستم تحت گاز</button>
+              <Field label="دلیل توقف"><input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
+              <button type="button" className="ps-btn is-bad" disabled={!reason.trim()} onClick={async () => { if (await st.setPermitStatus(sys.id, 'aborted', email, { note: reason.trim() })) setReason('') }}>توقف اضطراری</button>
+            </div>
+          </>}
+          {permit.status === 'completed' && <p className="ps-rfsu-ok"><CheckCircle2 size={16} /> سیستم در {jd(permit.completedAt)} تحت گاز رفت{permit.finalPressure != null ? ` (فشار نهایی ${fa(permit.finalPressure)} bar)` : ''}.</p>}
+          {permit.status === 'aborted' && <p className="ps-hint is-warn"><AlertTriangle size={14} /> عملیات متوقف شد. پس از رفع علت، چک‌لیست را دوباره تأیید و مجوز را از نو صادر کنید.</p>}
+        </section>
+      )}
+    </div>
+  )
+}
+
+function LogForm({ permitId }: { permitId: string }) {
+  const st = usePssrStore()
+  const email = useAuthStore((s) => s.profile?.email ?? '')
+  const [f, setF] = useState({ kind: 'pressure' as GasinLogKind, pressure: '', location: '', note: '' })
+  return (
+    <div className="ps-inline-form">
+      <Field label="رویداد"><select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as GasinLogKind })}>{(Object.keys(GASIN_LOG_FA) as GasinLogKind[]).map((k) => <option key={k} value={k}>{GASIN_LOG_FA[k]}</option>)}</select></Field>
+      <Field label="فشار (bar)"><input type="number" value={f.pressure} onChange={(e) => setF({ ...f, pressure: e.target.value })} /></Field>
+      <Field label="محل (شیر / کیلومتر)"><input value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })} /></Field>
+      <Field label="شرح" wide><input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Field>
+      <button type="button" className="ps-btn is-primary" disabled={!f.note.trim() && !f.pressure} onClick={async () => { if (await st.addLog(permitId, { kind: f.kind, pressure: f.pressure ? Number(f.pressure) : null, location: f.location, note: f.note }, email)) setF({ ...f, pressure: '', note: '' }) }}><Plus size={14} /> ثبت رویداد</button>
+    </div>
+  )
+}
+
+// ── advisories from other modules ────────────────────────────────────────────
+/** a checklist item's related warning from the other modules: open changes for MOC, unapproved documents for As-built, open NCRs for NDT/welds */
+function adviceFor(title: string, a: PssrAdvisories): string | null {
+  if (/MOC|تغییر/.test(title) && a.moc.length) return `${fa(a.moc.length)} درخواست تغییر (MOC) باز در ماژول مدیریت تغییرات`
+  if (/As-built|P&ID/i.test(title)) { const ab = a.docs.filter((d) => d.asBuilt).length; if (ab || a.docs.length) return ab ? `${fa(ab)} مدرک As-built تأییدنشده` : `${fa(a.docs.length)} مدرک مهندسی هنوز تأیید نهایی نشده` }
+  if (/NDT|جوش/.test(title) && a.ncr.length) return `${fa(a.ncr.length)} NCR باز در ماژول اجرا`
+  return null
+}
+
+function AdvisoryPanel() {
+  const a = usePssrStore((s) => s.advisories)
+  if (!a) return null
+  const items = [
+    { key: 'ncr', label: 'NCR باز (ماژول اجرا)', list: a.ncr, color: '#ef4444' },
+    { key: 'docs', label: 'مدارک مهندسی تأییدنشده', list: a.docs, color: '#f59e0b' },
+    { key: 'moc', label: 'تغییرات (MOC) باز', list: a.moc, color: '#a855f7' },
+  ]
+  return (
+    <section className="ps-card ps-adv">
+      <header className="ps-card-head"><b><AlertTriangle size={15} /> هشدارهای خودکار از ماژول‌های دیگر</b><small className="ps-meta">پیش از تأیید بندهای مرتبط چک‌لیست بررسی شود</small></header>
+      <div className="ps-adv-grid">
+        {items.map((i) => (
+          <details key={i.key} className="ps-adv-item" style={{ '--c': i.list.length ? i.color : '#10b981' } as CSSProperties}>
+            <summary><b>{fa(i.list.length)}</b><span>{i.label}</span></summary>
+            {i.list.length ? <ul>{i.list.slice(0, 8).map((x, k) => <li key={k}><span dir="ltr" className="ps-code">{x.code || '—'}</span> {x.text}</li>)}{i.list.length > 8 && <li>و {fa(i.list.length - 8)} مورد دیگر…</li>}</ul> : <p className="ps-meta">موردی نیست.</p>}
+          </details>
+        ))}
+      </div>
+    </section>
+  )
 }
 
 // ── project punch list ───────────────────────────────────────────────────────
@@ -437,29 +615,52 @@ function PunchList({ onOpen }: { onOpen: (id: string) => void }) {
   )
 }
 
-// ── settings: sign chain + template ──────────────────────────────────────────
-function Settings({ chain }: { chain: { seq: number; roleLabel: string; signerEmail: string }[] }) {
+// ── settings: sign chain (steps × persons) + template ────────────────────────
+interface StepDraft { label: string; rule: 'any' | 'all'; manual: boolean; persons: { label: string; email: string }[] }
+const toSteps = (rows: SignerRow[]): StepDraft[] => [...new Set(rows.map((r) => r.seq))].sort((a, b) => a - b).map((seq) => {
+  const l = rows.filter((r) => r.seq === seq)
+  return { label: l[0].roleLabel, rule: l[0].rule, manual: l.some((r) => r.manual), persons: l.map((r) => ({ label: r.personLabel, email: r.signerEmail })) }
+})
+
+function Settings({ chain }: { chain: SignerRow[] }) {
   const st = usePssrStore()
   const isAdmin = useAuthStore((s) => !!s.profile?.isAdmin)
-  const [rows, setRows] = useState(chain.map((c) => ({ roleLabel: c.roleLabel, signerEmail: c.signerEmail })))
+  const [steps, setSteps] = useState<StepDraft[]>(() => toSteps(chain))
   const [saved, setSaved] = useState(false)
   const [t, setT] = useState({ kind: 'all' as PssrKind | 'all', category: '', title: '', mandatory: true })
+  const upd = (i: number, p: Partial<StepDraft>) => { setSaved(false); setSteps(steps.map((x, j) => (j === i ? { ...x, ...p } : x))) }
+  const valid = steps.length > 0 && steps.every((x) => x.label.trim() && x.persons.length && x.persons.every((p) => p.label.trim()))
+  const save = async () => setSaved(await st.saveSigners(steps.flatMap((x, i) => x.persons.map((p) => ({ seq: i + 1, roleLabel: x.label, personLabel: p.label, signerEmail: p.email, rule: x.rule, manual: x.manual })))))
   return (
     <div className="ps-stack">
       <section className="ps-card">
         <header className="ps-card-head"><b><FileSignature size={15} /> زنجیرهٔ امضای RFSU این پروژه</b></header>
-        <p className="ps-hint">امضاها به همین ترتیب انجام می‌شوند. هر نقش را فقط کاربری با همین ایمیل (یا مدیر سامانه) می‌تواند امضا کند.</p>
-        {rows.map((r, i) => (
-          <div key={i} className="ps-signer">
-            <span className="ps-num">{fa(i + 1)}</span>
-            <input value={r.roleLabel} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, roleLabel: e.target.value } : x)))} placeholder="سمت" />
-            <input value={r.signerEmail} onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, signerEmail: e.target.value } : x)))} placeholder="ایمیل امضاکننده" dir="ltr" />
-            <button type="button" className="ps-x" onClick={() => setRows(rows.filter((_, j) => j !== i))} aria-label="حذف"><X size={14} /></button>
-          </div>
-        ))}
+        <p className="ps-hint">مراحل به همین ترتیب امضا می‌شوند. هر مرحله یک یا چند نفر دارد: «یکی کافی» (مثلاً مدیر پروژه یا سرپرست کارگاه) یا «همه لازم» (مثلاً مدیر پروژه و مسئول HSE کارفرما). مرحلهٔ «دستی» فرم کاغذی است که اسکن آن را فرد تعیین‌شده پیوست و تأیید می‌کند. هر نفر را فقط کاربری با همان ایمیل (یا مدیر سامانه) امضا می‌کند.</p>
+        <ol className="ps-steps-edit">
+          {steps.map((x, i) => (
+            <li key={i}>
+              <div className="ps-step-row">
+                <span className="ps-num">{fa(i + 1)}</span>
+                <input value={x.label} onChange={(e) => upd(i, { label: e.target.value })} placeholder="طرف (مثلاً پیمانکار)" />
+                <select value={x.rule} onChange={(e) => upd(i, { rule: e.target.value as 'any' | 'all' })} aria-label="قاعده"><option value="any">یکی کافی است</option><option value="all">همه لازم است</option></select>
+                <label className="ps-checkbox"><input type="checkbox" checked={x.manual} onChange={(e) => upd(i, { manual: e.target.checked })} /> امضای دستی + تأیید سیستمی</label>
+                <button type="button" className="ps-x" onClick={() => { setSaved(false); setSteps(steps.filter((_, j) => j !== i)) }} aria-label="حذف مرحله"><X size={14} /></button>
+              </div>
+              {x.persons.map((p, k) => (
+                <div key={k} className="ps-signer">
+                  <span className="ps-meta">{x.manual ? 'تأییدکننده' : 'فرد'}</span>
+                  <input value={p.label} onChange={(e) => upd(i, { persons: x.persons.map((q, m) => (m === k ? { ...q, label: e.target.value } : q)) })} placeholder="سمت (مثلاً سرپرست کارگاه)" />
+                  <input value={p.email} onChange={(e) => upd(i, { persons: x.persons.map((q, m) => (m === k ? { ...q, email: e.target.value } : q)) })} placeholder="ایمیل" dir="ltr" />
+                  <button type="button" className="ps-x" onClick={() => upd(i, { persons: x.persons.filter((_, m) => m !== k) })} aria-label="حذف فرد"><X size={14} /></button>
+                </div>
+              ))}
+              <button type="button" className="ps-btn is-ghost" onClick={() => upd(i, { persons: [...x.persons, { label: '', email: '' }] })}><Plus size={13} /> افزودن فرد</button>
+            </li>
+          ))}
+        </ol>
         <div className="ps-actions">
-          <button type="button" className="ps-btn" onClick={() => setRows([...rows, { roleLabel: '', signerEmail: '' }])}><Plus size={14} /> افزودن سمت</button>
-          <button type="button" className="ps-btn is-primary" disabled={!isAdmin || rows.some((r) => !r.roleLabel.trim())} onClick={async () => { setSaved(await st.saveSigners(rows)) }}>ذخیرهٔ زنجیره</button>
+          <button type="button" className="ps-btn" onClick={() => { setSaved(false); setSteps([...steps, { label: '', rule: 'any', manual: false, persons: [{ label: '', email: '' }] }]) }}><Plus size={14} /> افزودن مرحله</button>
+          <button type="button" className="ps-btn is-primary" disabled={!isAdmin || !valid} onClick={save}>ذخیرهٔ زنجیره</button>
           {!isAdmin && <small className="ps-meta">فقط مدیر سامانه زنجیره را تغییر می‌دهد.</small>}
           {saved && <small className="ps-meta">ذخیره شد.</small>}
         </div>

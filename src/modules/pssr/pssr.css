@@ -127,3 +127,44 @@
 .ps-sign p { font-size: 12.5px; margin-bottom: .5rem; }
 .ps-signer { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.2fr) auto; gap: .45rem; align-items: center; }
 @media (prefers-reduced-motion: reduce) { .ps-btn, .ps-flow-card { transition: none; } }
+/* phase 2: multi-person chain, gas-in, advisories */
+@media (min-width: 1000px) { .ps-flow { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.ps-chain-body { flex: 1; min-width: 0; gap: .15rem; }
+.ps-tag { display: inline-flex; align-items: center; gap: .2rem; margin-inline-start: .45rem; padding: .05rem .45rem; border-radius: 99px; font-size: 10.5px; font-style: normal; font-weight: 800; }
+.ps-tag.is-manual { color: #b45309; background: color-mix(in srgb, #f59e0b 16%, transparent); }
+.ps-persons { display: grid; gap: .3rem; margin-top: .4rem; }
+.ps-persons li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .5rem; align-items: center; padding: .35rem .5rem; border-radius: .6rem; background: color-mix(in srgb, var(--text-primary) 4%, transparent); border: 0; }
+.ps-persons li > span { display: flex; flex-direction: column; min-width: 0; }
+.ps-person-state { text-align: left; font-size: 11px; color: var(--text-secondary); }
+.ps-person-dot { width: .6rem; height: .6rem; border-radius: 99px; background: var(--border-soft); }
+.ps-persons li.is-signed .ps-person-dot { background: #10b981; } .ps-persons li.is-rejected .ps-person-dot { background: #ef4444; }
+@media (max-width: 640px) { .ps-persons li { grid-template-columns: auto minmax(0, 1fr); } .ps-person-state { grid-column: 2; text-align: right; } }
+.ps-gas-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .7rem .85rem; border-radius: .9rem; border: 1px solid color-mix(in srgb, var(--c) 45%, var(--border-soft)); background: color-mix(in srgb, var(--c) 9%, transparent); color: var(--c); }
+.ps-gas-head b { color: var(--text-primary); } .ps-gas-head small { flex-basis: 100%; color: var(--text-secondary); font-size: 11.5px; }
+.ps-gas-checks { display: grid; gap: .35rem; }
+.ps-gas-checks li { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .5rem .65rem; border-radius: .7rem; border: 1px solid var(--border-soft); font-size: 12.5px; }
+.ps-gas-checks li.is-ok { border-color: color-mix(in srgb, #10b981 45%, var(--border-soft)); background: color-mix(in srgb, #10b981 6%, transparent); }
+.ps-gas-checks label { display: flex; align-items: center; gap: .45rem; flex: 1 1 18rem; cursor: pointer; }
+.ps-gas-val { width: 11rem; max-width: 100%; }
+.ps-advice { display: flex; align-items: center; gap: .3rem; margin-top: .3rem; font-size: 11px; color: #b45309; }
+.ps-advice.is-strong { color: #dc2626; font-weight: 700; }
+.ps-adv-grid { display: grid; gap: .5rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 800px) { .ps-adv-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.ps-adv-item { border-radius: .8rem; border: 1px solid var(--border-soft); border-inline-start: 4px solid var(--c); }
+.ps-adv-item summary { display: flex; align-items: baseline; gap: .5rem; padding: .55rem .7rem; cursor: pointer; list-style: none; font-size: 12px; }
+.ps-adv-item summary::-webkit-details-marker { display: none; }
+.ps-adv-item summary b { font-size: 1.3rem; color: var(--c); font-variant-numeric: tabular-nums; }
+.ps-adv-item ul { display: grid; gap: .25rem; padding: 0 .7rem .6rem; font-size: 11.5px; color: var(--text-secondary); }
+.ps-steps-edit { display: grid; gap: .6rem; }
+.ps-steps-edit > li { display: grid; gap: .4rem; padding: .6rem; border-radius: .8rem; border: 1px solid var(--border-soft); }
+.ps-step-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: .45rem; align-items: center; }
+@media (max-width: 700px) { .ps-step-row { grid-template-columns: auto minmax(0, 1fr) auto; } .ps-step-row .ps-checkbox { grid-column: 2 / -1; } .ps-signer { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; } .ps-signer > .ps-meta { display: none; } }
+.ps .ps-gas-checks .ps-gas-val { width: 12rem; flex: 0 0 auto; }
+@media (max-width: 700px) {
+  .ps-sysnav { flex-wrap: nowrap; }
+  .ps-stepper { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .ps-stepper::-webkit-scrollbar { display: none; }
+  .ps-stepper li { flex: none; }
+  .ps-stepper li:not(.is-on) { font-size: 0; gap: 0; padding: .25rem; }
+  .ps .ps-gas-checks .ps-gas-val { width: 100%; }
+}
