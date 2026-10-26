@@ -25,7 +25,7 @@ export function useExecutionModel(projectId: string | null) {
     lines = core.lines
     const firstDate = reports.filter((r) => r.formKey === 'work').map((r) => r.reportDate).sort()[0] ?? ''
     const start = settings.projectStart || firstDate
-    const curve = progressCurve({ ...base, from: start, to: today, settings })
+    const curve = progressCurve({ ...base, from: start, to: today, settings, employer: ((settings as unknown as { employerStep?: string }).employerStep === 'binding' ? 'binding' : 'off') })
     const detected = detectGaps({ today, settings, reports, lines, resources, activities, baselines, blines })
     const baseOf = (a: Activity, asOf = today) => effectiveBase(a, baselines, blines, asOf).baseQty
     return { projectId: pid, settings, today, activities, baselines, blines, reports, lines, resources, stoppages, history, gaps, maps, actById, linesByReport, unmappedActions: core.unmappedActions, approved, registered, planned, curve, detected, baseOf, people: st.people }

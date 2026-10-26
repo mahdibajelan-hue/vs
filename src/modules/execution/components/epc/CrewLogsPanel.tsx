@@ -1,3 +1,4 @@
+import { makeId } from '../../../../lib/id'
 import { Plus, Trash2, Users } from 'lucide-react'
 import { ActivityPicker } from '../ActivityPicker'
 import { DecInput } from '../../../material/components/control/DecInput'
@@ -7,7 +8,7 @@ import type { CrewLogRow } from '../../epcTypes'
 export type CrewDraft = Omit<CrewLogRow, 'id' | 'reportId'> & { key: string }
 export const COMPOSITION_SUGGESTIONS = [['sideboom', 'سایدبوم'], ['weld_machine', 'موتور جوش'], ['welder', 'جوشکار'], ['fitter', 'فیتر'], ['grinder', 'سنگ‌زن'], ['helper', 'کمکی'], ['excavator', 'بیل مکانیکی'], ['loader', 'لودر'], ['truck', 'کامیون'], ['operator', 'اپراتور'], ['worker', 'کارگر']] as const
 const LIMITS = [['', 'بدون محدودیت ثبت‌شده'], ['inspection', 'ظرفیت بازرسی'], ['material', 'مصالح'], ['front', 'جبهه/زمین'], ['permit', 'مجوز'], ['weather', 'آب‌وهوا'], ['equipment', 'تجهیز'], ['manpower', 'نیرو']] as const
-export const newCrew = (): CrewDraft => ({ key: crypto.randomUUID(), activityId: null, crewName: '', composition: {}, usefulHours: 0, idleHours: 0, outputQty: 0, conditions: {}, note: '' })
+export const newCrew = (): CrewDraft => ({ key: makeId('crew'), activityId: null, crewName: '', composition: {}, usefulHours: 0, idleHours: 0, outputQty: 0, conditions: {}, note: '' })
 
 /** Productivity input: one row per crew per activity — the composition of its resources, useful and idle hours and the output. Feeds the productivity engine once the report is approved. */
 export function CrewLogsPanel({ rows, editable, activities, onChange }: { rows: CrewDraft[]; editable: boolean; activities: Activity[]; onChange: (n: CrewDraft[]) => void }) {

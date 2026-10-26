@@ -236,6 +236,8 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const allActions = useEpcStore((x) => x.workActions)
   const actions = useMemo(() => allActions.filter((a) => a.projectId === m.projectId && a.active).sort((a, b) => a.sort - b.sort), [allActions, m.projectId])
   const [pickAction, setPickAction] = useState('')
+  const allRules = useEpcStore((x) => x.actionRules)
+  const actionRules = useMemo(() => allRules.filter((x) => x.projectId === m.projectId), [allRules, m.projectId])
   const addAction = () => {
     const a = actions.find((x) => x.key === pickAction); if (!a) return
     setRows((r) => [...r, { key: uid0(), activityId: null, qty: 0, kmFrom: null, kmTo: null, location: '', note: '', detail: { actionKey: a.key, actionTitle: a.title, actionUnit: a.unit }, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null }]); setDirty(true)
@@ -243,7 +245,10 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   // cumulative per ACTION from the other registered work reports (what was entered, in the action's own unit)
   const actionCum = (key: string, today: number) => {
     const ids = new Set(m.reports.filter((x) => x.formKey === 'work' && x.id !== reportId && x.reportDate < head.reportDate && x.status !== 'rejected' && x.status !== 'draft').map((x) => x.id))
-    let prev = 0; for (const [rid, ls] of m.linesByReport) if (ids.has(rid)) for (const l of ls) if (actionOf(l) === key && l.status !== 'rejected') prev += l.qty
+    // work recorded earlier straight on the price-book row this action maps to (default rule, plain factor) counts too, converted back to the action's unit —
+    // otherwise a site switching to action entry would see its cumulative restart from zero
+    const rule = actionRules.find((x) => x.actionKey === key && !x.whenField && !(x.multFields ?? '').trim() && x.factor > 0)
+    let prev = 0; for (const [rid, ls] of m.linesByReport) if (ids.has(rid)) for (const l of ls) { if (l.status === 'rejected') continue; if (actionOf(l) === key) prev += l.qty; else if (rule && l.activityId === rule.activityId) prev += l.qty / rule.factor }
     return { prev, total: prev + today }
   }
   const centralOn = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { centralWeld?: boolean } } | undefined)?.flags?.centralWeld

@@ -97,13 +97,14 @@ export function plannedOverall(a: { activities: Activity[]; baselines: Baseline[
 
 export interface CurvePoint { date: string; planned: number | null; actual: number; registered: number }
 /** Weekly planned-versus-actual series from the first work report (or the project start) to the date. */
-export function progressCurve(a: { activities: Activity[]; baselines: Baseline[]; blines: BaselineLine[]; reports: Report[]; lines: ReportLine[]; from: string; to: string; settings: ExSettings }): CurvePoint[] {
+export function progressCurve(a: { activities: Activity[]; baselines: Baseline[]; blines: BaselineLine[]; reports: Report[]; lines: ReportLine[]; from: string; to: string; settings: ExSettings; employer?: EmployerMode }): CurvePoint[] {
   if (!a.from || a.from > a.to) return []
   const weeks = periodsBetween('week', a.from, a.to, a.settings.weekStart)
   return weeks.map((w) => {
     const d = w.to > a.to ? a.to : w.to
-    const base = { activities: a.activities, baselines: a.baselines, blines: a.blines, reports: a.reports, lines: a.lines, asOf: d }
-    return { date: d, planned: plannedOverall(base).overall, actual: physicalProgress({ ...base, mode: 'approved' }).overall, registered: physicalProgress({ ...base, mode: 'registered' }).overall }
+    // the same group weights (and employer step) as the headline figures, so the curve's last point equals today's KPI
+    const base = { activities: a.activities, baselines: a.baselines, blines: a.blines, reports: a.reports, lines: a.lines, asOf: d, groupWeights: a.settings.groupWeights }
+    return { date: d, planned: plannedOverall(base).overall, actual: physicalProgress({ ...base, mode: 'approved', employer: a.employer }).overall, registered: physicalProgress({ ...base, mode: 'registered' }).overall }
   })
 }
 

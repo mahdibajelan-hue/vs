@@ -41,6 +41,8 @@ interface State {
   setFocus: (id: string | null, tab?: 'review' | 'daily' | 'gaps' | 'delays') => void
   /** lite: only what other modules (the schedule) read — skips the price list, report history, gap items and people names; `loaded` stays false so the execution module itself still loads everything */
   fetchAll: (opts?: { lite?: boolean }) => Promise<void>
+  /** re-reads only the given reports (row, lines, resources, stoppages, history) — the daily save / send / review path, instead of reloading every project */
+  reloadReports: (ids: string[]) => Promise<void>
   myRoles: (projectId: string) => ExRole[]
   can: (projectId: string, action: string) => boolean
   settings: (projectId: string) => ExSettings
@@ -88,6 +90,10 @@ const actRow = (r: Row): Activity => ({ id: r.id, projectId: r.project_id, price
 export const repRow = (r: Row): Report => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, reportNo: r.report_no, reportDate: r.report_date, contractorOrgId: r.contractor_org_id, front: r.front ?? '', station: r.station ?? '', shift: r.shift ?? 'day', status: r.status, data: r.data ?? {}, notes: r.notes ?? '', missing: Array.isArray(r.missing) ? r.missing : [], completionOf: r.completion_of, dueDate: r.due_date, createdBy: r.created_by, createdAt: r.created_at, submittedBy: r.submitted_by, submittedAt: r.submitted_at, reviewedBy: r.reviewed_by, reviewedAt: r.reviewed_at, reviewNote: r.review_note ?? '', letterhead: r.letterhead ?? null })
 export const lineRow = (r: Row): ReportLine => ({ id: r.id, reportId: r.report_id, lineNo: r.line_no ?? 0, activityId: r.activity_id, qty: n(r.qty), kmFrom: nn(r.km_from), kmTo: nn(r.km_to), location: r.location ?? '', note: r.note ?? '', detail: r.detail ?? {}, status: r.status, approvedQty: nn(r.approved_qty), reviewNote: r.review_note ?? '', sourceReportId: r.source_report_id, employerStatus: r.employer_status ?? null, employerQty: nn(r.employer_qty), employerNote: r.employer_note ?? '' })
 
+const resRow = (r: Row): ReportResource => ({ id: r.id, reportId: r.report_id, kind: r.kind, section: r.section ?? '', name: r.name, totalQty: n(r.total_qty), activeQty: n(r.active_qty), idleQty: n(r.idle_qty), leaveQty: n(r.leave_qty), stoppedQty: n(r.stopped_qty), nativeQty: n(r.native_qty), nonnativeQty: n(r.nonnative_qty), repairQty: n(r.repair_qty), hours: n(r.hours), note: r.note ?? '' })
+const stopRow = (r: Row): Stoppage => ({ id: r.id, reportId: r.report_id, category: r.category, hours: n(r.hours), description: r.description ?? '', materialId: r.material_id, issueRef: r.issue_ref, responsibility: r.responsibility ?? '', critical: !!r.critical, noticeDate: r.notice_date ?? null, noticeRef: r.notice_ref ?? '', assessNote: r.assess_note ?? '' })
+const histRow = (r: Row): ReportHistory => ({ id: r.id, reportId: r.report_id, at: r.at, actor: r.actor, action: r.action, note: r.note ?? '' })
+
 export const useExecutionStore = create<State>((set, get) => ({
   ...initial,
 
@@ -114,17 +120,36 @@ export const useExecutionStore = create<State>((set, get) => ({
       blines: ok<Row>(blines).map((r): BaselineLine => ({ id: r.id, baselineId: r.baseline_id, activityId: r.activity_id, itemNo: r.item_no ?? '', title: r.title ?? '', unit: r.unit ?? '', baseQty: n(r.base_qty), weight: n(r.weight), unitPrice: n(r.unit_price), weightGroup: r.weight_group ?? '', active: !!r.active })),
       reports: ok<Row>(reps).map(repRow),
       lines: ok<Row>(lns).map(lineRow),
-      resources: ok<Row>(res).map((r): ReportResource => ({ id: r.id, reportId: r.report_id, kind: r.kind, section: r.section ?? '', name: r.name, totalQty: n(r.total_qty), activeQty: n(r.active_qty), idleQty: n(r.idle_qty), leaveQty: n(r.leave_qty), stoppedQty: n(r.stopped_qty), nativeQty: n(r.native_qty), nonnativeQty: n(r.nonnative_qty), repairQty: n(r.repair_qty), hours: n(r.hours), note: r.note ?? '' })),
-      stoppages: ok<Row>(stp).map((r): Stoppage => ({ id: r.id, reportId: r.report_id, category: r.category, hours: n(r.hours), description: r.description ?? '', materialId: r.material_id, issueRef: r.issue_ref, responsibility: r.responsibility ?? '', critical: !!r.critical, noticeDate: r.notice_date ?? null, noticeRef: r.notice_ref ?? '', assessNote: r.assess_note ?? '' })),
+      resources: ok<Row>(res).map(resRow),
+      stoppages: ok<Row>(stp).map(stopRow),
       maps: ok<Row>(maps).map((r): FormMap => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, metricKey: r.metric_key, groupValue: r.group_value ?? '', activityId: r.activity_id })),
       ...(lite ? {} : {
       books: ok<Row>(books).map((r): PriceBook => ({ id: r.id, projectId: r.project_id, discipline: r.discipline ?? '', year: r.year, season: r.season ?? '', title: r.title, version: r.version, status: r.status, note: r.note ?? '' })),
       priceItems: ok<Row>(items).map((r): PriceItem => ({ id: r.id, bookId: r.book_id, chapter: r.chapter ?? '', itemNo: r.item_no, spec: r.spec ?? '', description: r.description, unit: r.unit ?? '', unitPrice: n(r.unit_price), starred: !!r.starred, remark: r.remark ?? '', groupCode: r.group_code ?? '', groupTitle: r.group_title ?? '', parentItemNo: r.parent_item_no ?? '', surchargePct: nn(r.surcharge_pct) })),
-      history: ok<Row>(his).map((r): ReportHistory => ({ id: r.id, reportId: r.report_id, at: r.at, actor: r.actor, action: r.action, note: r.note ?? '' })),
+      history: ok<Row>(his).map(histRow),
       gaps: ok<Row>(gaps).map((r): Gap => ({ id: r.id, projectId: r.project_id, fingerprint: r.fingerprint, kind: r.kind, formKey: r.form_key ?? '', periodKey: r.period_key ?? '', front: r.front ?? '', subject: r.subject ?? '', existing: r.existing ?? {}, missing: Array.isArray(r.missing) ? r.missing : [], responsible: r.responsible, dueDate: r.due_date, status: r.status, note: r.note ?? '', generatedReportId: r.generated_report_id })),
       people: new Map(ok<Row>(profs).map((p) => [p.id as string, (p.full_name as string) || 'کاربر'])),
       }),
       loaded: lite ? get().loaded : true, coreLoaded: true, loading: false,
+    })
+  },
+
+  reloadReports: async (ids) => {
+    if (!ids.length) return
+    const [reps, lns, res, stp, his] = await Promise.all([
+      supabase.from('ex_reports').select('*').in('id', ids), supabase.from('ex_report_lines').select('*').in('report_id', ids).order('line_no'),
+      supabase.from('ex_report_resources').select('*').in('report_id', ids), supabase.from('ex_report_stoppages').select('*').in('report_id', ids),
+      supabase.from('ex_report_history').select('*').in('report_id', ids).order('at', { ascending: false }),
+    ])
+    if (reps.error || lns.error || res.error || stp.error) { await get().fetchAll(); return } // fall back to the full read rather than show half a report
+    const keep = new Set(ids), cur = get()
+    const got = ((reps.data ?? []) as Row[]).map(repRow)
+    set({
+      reports: [...cur.reports.filter((r) => !keep.has(r.id)), ...got].sort((a, b) => b.reportDate.localeCompare(a.reportDate)),
+      lines: [...cur.lines.filter((l) => !keep.has(l.reportId)), ...((lns.data ?? []) as Row[]).map(lineRow)],
+      resources: [...cur.resources.filter((r) => !keep.has(r.reportId)), ...((res.data ?? []) as Row[]).map(resRow)],
+      stoppages: [...cur.stoppages.filter((r) => !keep.has(r.reportId)), ...((stp.data ?? []) as Row[]).map(stopRow)],
+      history: his.error ? cur.history : [...((his.data ?? []) as Row[]).map(histRow), ...cur.history.filter((h) => !keep.has(h.reportId))],
     })
   },
 
@@ -275,7 +300,7 @@ export const useExecutionStore = create<State>((set, get) => ({
     const row = { project_id: d.projectId, form_key: d.formKey, report_date: d.reportDate, front: d.front ?? '', station: d.station ?? '', shift: d.shift ?? 'day', contractor_org_id: d.contractorOrgId ?? null, data: d.data ?? {}, notes: d.notes ?? '', status: d.status ?? 'draft', completion_of: d.completionOf ?? null, missing: d.missing ?? [], due_date: d.dueDate ?? null }
     const { data, error } = await supabase.from('ex_reports').insert(row).select('id').single()
     if (report('ایجاد گزارش', error)) return null
-    await get().fetchAll(); return (data as Row).id as string
+    await get().reloadReports([(data as Row).id as string]); return (data as Row).id as string
   },
   updateReport: async (id, p) => {
     const row: Row = {}
@@ -301,13 +326,12 @@ export const useExecutionStore = create<State>((set, get) => ({
       const keep = new Set(body.lines.map((l) => l.id).filter(Boolean) as string[])
       const gone = existing.filter((l) => !keep.has(l.id)).map((l) => l.id)
       if (gone.length) { const { error } = await supabase.from('ex_report_lines').delete().in('id', gone); if (report('حذف ردیف گزارش', error)) return false }
-      let i = 0
-      for (const l of body.lines) {
-        i++
-        const row = { report_id: reportId, line_no: i, activity_id: l.activityId ?? null, qty: l.qty ?? 0, km_from: l.kmFrom ?? null, km_to: l.kmTo ?? null, location: l.location ?? '', note: l.note ?? '', detail: l.detail ?? {}, source_report_id: l.sourceReportId ?? null }
-        const { error } = l.id ? await supabase.from('ex_report_lines').update(row).eq('id', l.id) : await supabase.from('ex_report_lines').insert(row)
-        if (report('ذخیرهٔ ردیف گزارش', error)) return false
-      }
+      // the rows are written together (each carries its own line_no), not one round trip after another
+      const res = await Promise.all(body.lines.map((l, i) => {
+        const row = { report_id: reportId, line_no: i + 1, activity_id: l.activityId ?? null, qty: l.qty ?? 0, km_from: l.kmFrom ?? null, km_to: l.kmTo ?? null, location: l.location ?? '', note: l.note ?? '', detail: l.detail ?? {}, source_report_id: l.sourceReportId ?? null }
+        return l.id ? supabase.from('ex_report_lines').update(row).eq('id', l.id) : supabase.from('ex_report_lines').insert(row)
+      }))
+      if (report('ذخیرهٔ ردیف گزارش', res.find((x) => x.error)?.error ?? null)) return false
     }
     if (body.resources) {
       const del = await supabase.from('ex_report_resources').delete().eq('report_id', reportId)
@@ -321,31 +345,31 @@ export const useExecutionStore = create<State>((set, get) => ({
       const rows = body.stoppages.filter((s) => s.hours > 0 || s.description.trim()).map((s) => ({ report_id: reportId, category: s.category, hours: s.hours, description: s.description, material_id: s.materialId ?? null, responsibility: s.responsibility ?? '', critical: !!s.critical, notice_date: s.noticeDate ?? null, notice_ref: s.noticeRef ?? '', assess_note: s.assessNote ?? '' }))
       if (rows.length) { const { error } = await supabase.from('ex_report_stoppages').insert(rows); if (report('ذخیرهٔ توقف‌ها', error)) return false }
     }
-    await get().fetchAll(); return true
+    await get().reloadReports([reportId]); return true
   },
   submitReport: async (id) => {
     const { error } = await supabase.rpc('ex_report_submit', { p_id: id })
     if (report('ارسال گزارش', error)) return false
-    await get().fetchAll(); return true
+    await get().reloadReports([id]); return true
   },
   reviewReport: async (id, decisions, note) => {
     const { error } = await supabase.rpc('ex_report_review', { p_id: id, p_decisions: decisions.map((d) => ({ line_id: d.lineId, decision: d.decision, qty: d.qty ?? null, note: d.note ?? '' })), p_note: note })
     if (report('ثبت نتیجهٔ بررسی', error)) return false
-    await get().fetchAll()
+    await get().reloadReports([id])
     void archiveIfDone(get().reports.find((r) => r.id === id)) // approved technical forms are filed in the archive automatically
     return true
   },
   decideWhole: async (id, decision, note) => {
     const { error } = await supabase.rpc('ex_report_decide_whole', { p_id: id, p_decision: decision, p_note: note })
     if (report('ثبت نتیجهٔ بررسی', error)) return false
-    await get().fetchAll()
+    await get().reloadReports([id])
     void archiveIfDone(get().reports.find((r) => r.id === id)) // approved technical forms are filed in the archive automatically
     return true
   },
   reopenReport: async (id, reason) => {
     const { error } = await supabase.rpc('ex_report_reopen', { p_id: id, p_reason: reason })
     if (report('بازگشایی گزارش', error)) return false
-    await get().fetchAll(); return true
+    await get().reloadReports([id]); return true
   },
 
   syncGaps: async (projectId, items) => {
@@ -368,12 +392,16 @@ export const useExecutionStore = create<State>((set, get) => ({
   assessStoppage: async (id, resp, critical, note) => {
     const { error } = await supabase.rpc('ex_stoppage_assess', { p_id: id, p_resp: resp, p_critical: critical, p_note: note })
     if (report('ثبت ارزیابی تأخیر', error)) return false
-    await get().fetchAll(); return true
+    const rid = get().stoppages.find((x) => x.id === id)?.reportId
+    if (rid) await get().reloadReports([rid]); else await get().fetchAll()
+    return true
   },
   noticeStoppage: async (id, date, ref) => {
     const { error } = await supabase.rpc('ex_stoppage_notice', { p_id: id, p_date: date || null, p_ref: ref })
     if (report('ثبت اخطار تأخیر', error)) return false
-    await get().fetchAll(); return true
+    const rid = get().stoppages.find((x) => x.id === id)?.reportId
+    if (rid) await get().reloadReports([rid]); else await get().fetchAll()
+    return true
   },
   raise: async (a) => {
     const { data, error } = await supabase.rpc('ex_raise', { p_project: a.projectId, p_report: a.reportId, p_stoppage: a.stoppageId ?? null, p_target: a.target, p_title: a.title, p_description: a.description, p_severity: a.severity, p_extra: { station: a.station ?? '' } })
