@@ -730,6 +730,22 @@ export function createStageGateEngine(env) {
             } else if (engine === 'basic_design') {
                 sections.push(lcSectionHtml('lcSec-bd', 'پیشرفت دوره‌ای طراحی پایه', 'input', 'در پایان هر دوره (مثلاً هفته یا ماه) برچسب دوره و درصد پیشرفت تجمعی طراحی پایه را وارد و «ثبت پیشرفت دوره» را بزنید.', lcBasicDesignHtml(phase, pp)));
             }
+            // G7 (pre-commissioning & start-up): the commissioning systems' readiness from the PSSR module
+            const pssr = phase.code === 'G7' && env.getPssr ? env.getPssr(lcState.projectName) : null;
+            if (phase.code === 'G7' && env.getPssr) {
+                const t = pssr?.totals;
+                sections.push(lcSectionHtml('lcSec-pssr', 'آمادگی راه‌اندازی از ماژول PSSR', 'auto',
+                    'وضعیت سیستم‌های راه‌اندازی، پانچ‌های باز و گواهی‌های RFSU از ماژول «آمادگی راه‌اندازی (PSSR)» خوانده می‌شود؛ چک‌لیست، جلسه، پانچ و امضای RFSU را در همان ماژول ثبت کنید.',
+                    `${t ? `<div class="sgx-stats" style="margin-top:0">
+                        <div class="sgx-stat is-act"><small>RFSU صادرشده</small><b>${toPersianDigits(t.byStage.rfsu)} از ${toPersianDigits(t.systems)}</b><em style="color:inherit">${toPersianDigits(t.rfsuPct)}٪ سیستم‌ها</em></div>
+                        <div class="sgx-stat"><small>میانگین آمادگی</small><b>${toPersianDigits(t.avgReadiness)}٪</b></div>
+                        <div class="sgx-stat ${t.openA ? 'is-bad' : 'is-good'}"><small>پانچ A باز</small><b>${toPersianDigits(t.openA)}</b></div>
+                        <div class="sgx-stat"><small>پانچ B / C باز</small><b>${toPersianDigits(t.openB)} / ${toPersianDigits(t.openC)}</b></div>
+                    </div>
+                    <ul class="sgx-todo-list" style="margin-top:.6rem">${pssr.systems.map(x => `<li><span class="sgx-num">${esc(x.code)}</span><span><b>${esc(x.name)}</b> — آمادگی ${toPersianDigits(x.status.readiness)}٪ · ${x.status.stage === 'rfsu' ? 'RFSU صادر شد' : x.status.blockers.length ? toPersianDigits(x.status.blockers.length) + ' مانع' : 'آمادهٔ امضا'}</span></li>`).join('')}</ul>`
+                    : '<p class="sgx-empty">هنوز سیستمی در ماژول PSSR برای این پروژه تعریف نشده است.</p>'}
+                    ${env.onOpenModule ? `<div class="sgx-modlinks no-print"><button type="button" data-lc-action="open-module" data-module="pssr" class="sgx-modlink">رفتن به آمادگی راه‌اندازی (PSSR) ←</button></div>` : ''}`));
+            }
             sections.push(lcSectionHtml('lcSec-schedule', 'جدول زمانی این فاز (مستر پلن)', engine === 'epc' ? 'view' : 'input',
                 engine === 'epc' ? 'بازهٔ برنامهٔ این فاز از برنامهٔ ماژول‌های EPC گرفته می‌شود؛ ردیف‌های زیر فقط برای دیدن است.'
                     : 'روی نام هر فعالیت بزنید تا تاریخ شروع و پایان و درصد پیشرفت آن را ثبت کنید؛ با «+» کنار هر ردیف زیرفعالیت اضافه کنید. پیشرفت واقعی این فاز = میانگین وزنی همین فعالیت‌ها.',

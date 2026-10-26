@@ -38,5 +38,5 @@ export const useModuleAccessStore = create<ModuleAccessState>()((set) => ({
 /** true unless we've actually loaded a list that excludes this module. */
 export function hasModuleAccess(accessibleModules: Set<ModuleKey> | null, key: ModuleKey): boolean {
   // the project dashboard only reads what the project's modules already show — open to everyone who can open the radar
-  return key === 'projectdashboard' || accessibleModules === null || accessibleModules.has(key)
+  return key === 'projectdashboard' || key === 'pssr' || accessibleModules === null || accessibleModules.has(key)
 }

@@ -9,6 +9,7 @@ export const MODULE_CATALOG: { key: ModuleKey | 'radar'; fa: string; en: string;
   { key: 'estimator', fa: 'برآورد پروژه‌ها', en: 'Project Estimation', words: 'برآورد هزینه تخمین' },
   { key: 'missions', fa: 'مأموریت و گزارش بازدید', en: 'Mission Debrief', words: 'مأموریت ماموریت بازدید سفر' },
   { key: 'landacq', fa: 'تحصیل اراضی', en: 'Land Acquisition', words: 'زمین اراضی پارسل مالک عبور' },
+  { key: 'pssr', fa: 'آمادگی راه‌اندازی (PSSR)', en: 'PSSR / RFSU', words: 'PSSR RFSU ایمنی راه اندازی پیش راه اندازی پانچ لیست تزریق گاز گواهی آمادگی' },
   { key: 'stagegate', fa: 'چرخه عمر پروژه (Stage-Gate)', en: 'Stage-Gate', words: 'گیت مرحله چرخه عمر فاز تصویب' },
   { key: 'taskissue', fa: 'مدیریت موانع و اقدامات', en: 'Issue & Task', words: 'مانع مسئله اقدام پیگیری issue' },
   { key: 'supervision', fa: 'حضور و غیاب دستگاه نظارت', en: 'Supervision Attendance', words: 'ناظر نظارت نماینده کارفرما حضور غیاب اضافه کار ساعت کار صبحانه ناهار شام خودرو استیجاری کارت ساعت' },

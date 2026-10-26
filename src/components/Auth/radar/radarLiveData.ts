@@ -22,6 +22,7 @@ import type { ImIssue } from '../../../modules/issues/types'
 import { loadScheduleSummary } from '../../../modules/scheduling/lib/summaryLoader'
 import { loadStageGateRadar } from './stageGateRadar'
 import { loadEpcProgress } from '../../../modules/epc/epcProgressLoader'
+import { loadPssrSummary } from '../../../modules/pssr/lib/pssrSummary'
 import { loadProjectMetrics } from '../../../modules/projectMetrics/projectMetricsLoader'
 import type { EpcProgress } from '../../../modules/epc/epcProgress'
 import { loadStageGateBundle } from '../../../modules/lifecycle/lib/stageGateBundleLoader'
@@ -481,6 +482,24 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
     }
   } catch (err) {
     console.warn('[radar] project snapshot failed', err)
+  }
+
+  // --- PSSR: every open category-A punch blocks a system's start-up — a critical gate signal --------------
+  try {
+    const ps = await loadPssrSummary(masterProjectId)
+    if (ps && ps.openA.length) {
+      const [rMin, rMax] = SEVERITY_RADIUS_RANGE.critical
+      const pssrSignals: RadarSignal[] = ps.openA.slice(0, 12).map((p, i, arr) => ({
+        id: `pssr-${i}`, category: 'gate', severity: 'critical',
+        title: `پانچ A باز PSSR — ${p.system}`, subject: p.system, detail: p.title,
+        impact: 'تا بسته و تأیید نشود گواهی RFSU و تزریق گاز این سیستم ممکن نیست', rootCause: '—', recommendedAction: 'بستن و تأیید پانچ در ماژول آمادگی راه‌اندازی (PSSR)',
+        titleEn: `Open PSSR punch A — ${p.system}`, subjectEn: p.system, detailEn: p.title, impactEn: 'Blocks RFSU / gas-in', rootCauseEn: '—', recommendedActionEn: 'Close and verify in PSSR',
+        angle: Math.round(200 + (i / Math.max(1, arr.length)) * 60), radius: spreadRadius(rMin, rMax, i),
+      }))
+      result = { ...result, signals: [...result.signals.filter((x) => !x.id.startsWith('pssr-')), ...pssrSignals] }
+    }
+  } catch (err) {
+    console.warn('[radar] PSSR summary failed', err)
   }
 
   // --- Contract ---------------------------------------------------------------

@@ -12,6 +12,7 @@ import { weightsFromReport } from '../epc/epcProgress'
 import { createStageGateEngine } from './legacy/engine'
 import { linkSgProject, loadSgProjects, type SgProjectRef } from './sgProjects'
 import { SgGuideDialog } from './SgGuideDialog'
+import { loadPssrSummary, type PssrSummary } from '../pssr/lib/pssrSummary'
 import './stagegate.css'
 
 /** Stage-Gate lifecycle (9-gate model, orbit + gate pages) — the lifecycle of record of the platform. The original
@@ -27,6 +28,7 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const [loading, setLoading] = useState(true)
   const [linkMsg, setLinkMsg] = useState<string | null>(null)
   const [guide, setGuide] = useState<{ phase: string | null } | null>(null)
+  const pssrRef = useRef(new Map<string, PssrSummary | null>())
   const engineRef = useRef<ReturnType<typeof createStageGateEngine> | null>(null)
 
   const refresh = () => loadSgProjects().then((p) => { setProjects(p); setLoading(false); return p })
@@ -40,7 +42,8 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       currentProfile: { role: profile.isAdmin ? 'admin' : 'manager' },
       myProjectAccess: projects.map((p) => ({ project_name: p.name })),
       onOpenGuide: (phase: string | null) => setGuide({ phase }),
-      onOpenModule: (key: 'engineering' | 'material' | 'execution') => useModuleStore.getState().enterModule(key, contextProjectId ? 'project' : undefined),
+      getPssr: (name: string) => pssrRef.current.get(name) ?? null,
+      onOpenModule: (key: 'engineering' | 'material' | 'execution' | 'pssr') => useModuleStore.getState().enterModule(key, contextProjectId ? 'project' : undefined),
       // the EPC phase reads the engineering / material / execution modules (once their stores are loaded)
       getEpcWindow: (name: string) => { const m = projects.find((p) => p.name === name)?.masterProjectId; return m ? epcWindowOf(m) : null },
       getEpcLive: (name: string, report: Record<string, unknown> | null) => { const m = projects.find((p) => p.name === name)?.masterProjectId; return m ? epcProgressOf(m, weightsFromReport(report)) : null },
@@ -62,7 +65,9 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
 
   async function load(name: string) {
     setSelected(name)
-    await ensureEpcStores()
+    const mid = projects.find((p) => p.name === name)?.masterProjectId
+    const [, ps] = await Promise.all([ensureEpcStores(), mid ? loadPssrSummary(mid).catch(() => null) : Promise.resolve(null)])
+    pssrRef.current.set(name, ps)
     if (name && engineRef.current) await engineRef.current.openLifecyclePreview(name)
   }
 
