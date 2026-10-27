@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { AlertTriangle, BookOpen, Calculator, CheckCircle2, ClipboardCheck, Droplets, Factory, FileUp, Loader2, Plus, Settings2, ShieldCheck, Waves, X } from 'lucide-react'
+import { ShamsiDate } from '../../components/common/ShamsiField'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useAuthStore } from '../../store/useAuthStore'
@@ -270,7 +271,7 @@ function Stations({ onOpen }: { onOpen: (id: string) => void }) {
             <label className="ps-field"><span>فشار طراحی (bar) *</span><input type="number" value={f.dp} onChange={(e) => setF({ ...f, dp: e.target.value })} dir="ltr" /></label>
             <label className="ps-field"><span>فشار آزمون (bar)</span><input type="number" value={f.tp} onChange={(e) => setF({ ...f, tp: e.target.value })} placeholder={tpAuto} dir="ltr" /></label>
             <label className="ps-field"><span>سیال</span><select value={f.medium} onChange={(e) => setF({ ...f, medium: e.target.value as typeof f.medium })}><option value="water">آب</option><option value="nitrogen">نیتروژن</option><option value="air">هوا</option></select></label>
-            <label className="ps-field"><span>تاریخ برنامه</span><input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></label>
+            <div className="ps-field"><span>تاریخ برنامه</span><ShamsiDate clearable value={f.date} onChange={(v) => setF({ ...f, date: v })} label="تاریخ برنامه" /></div>
           </div>
           <div className="ps-actions"><button type="button" className="ps-btn is-primary" disabled={!f.code.trim() || !(Number(f.dp) > 0)} onClick={save}><CheckCircle2 size={15} /> ذخیره</button></div>
         </section>
@@ -326,7 +327,7 @@ function Coating() {
         <div className="ps-inline-form">
           <label className="ps-field"><span>از کیلومتر *</span><input type="number" step="0.001" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} dir="ltr" /></label>
           <label className="ps-field"><span>تا کیلومتر *</span><input type="number" step="0.001" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} dir="ltr" aria-invalid={f.to !== '' && !ok} /></label>
-          <label className="ps-field"><span>تاریخ</span><input type="date" value={f.at} max={today()} onChange={(e) => setF({ ...f, at: e.target.value })} /></label>
+          <div className="ps-field"><span>تاریخ</span><ShamsiDate value={f.at} max={today()} onChange={(v) => setF({ ...f, at: v })} label="تاریخ" /></div>
           {f.kind === 'holiday' && <label className="ps-field"><span>ولتاژ (kV)</span><input type="number" value={f.kv} onChange={(e) => setF({ ...f, kv: e.target.value })} dir="ltr" /></label>}
           <label className="ps-field"><span>نتیجه</span><select value={f.result} onChange={(e) => setF({ ...f, result: e.target.value as 'pass' | 'fail' })}><option value="pass">قبول</option><option value="fail">مردود</option></select></label>
           <label className="ps-field"><span>تعداد عیب</span><input type="number" min={0} value={f.defects} onChange={(e) => setF({ ...f, defects: e.target.value })} /></label>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { AlertTriangle, ChevronDown, FileDown, Loader2, Paperclip, Search } from 'lucide-react'
+import { ShamsiDate } from '../../components/common/ShamsiField'
 import { formatJalali } from '../../lib/jalali'
 import { useAuthStore } from '../../store/useAuthStore'
 import { usePssrStore } from './store/usePssrStore'
@@ -30,7 +31,7 @@ export function FormHeader({ sys, official, locked }: { sys: PssrSystem; officia
       <div className="ps-grid">
         <label className="ps-field"><span>نوع راه‌اندازی</span><select value={h.startupType} onChange={(e) => setH({ ...h, startupType: e.target.value })}><option value="">—</option>{STARTUP_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
         <label className="ps-field"><span>رهبر تیم PSSR</span><input value={h.teamLead} onChange={(e) => setH({ ...h, teamLead: e.target.value })} placeholder="نام و سمت" /></label>
-        <label className="ps-field"><span>تاریخ بازدید PSSR</span><input type="date" value={h.reviewDate} onChange={(e) => setH({ ...h, reviewDate: e.target.value })} /></label>
+        <div className="ps-field"><span>تاریخ بازدید PSSR</span><ShamsiDate clearable value={h.reviewDate} onChange={(v) => setH({ ...h, reviewDate: v })} label="تاریخ بازدید PSSR" /></div>
         <div className="ps-field" style={{ alignSelf: 'end' }}><button type="button" className="ps-btn" disabled={!dirty} onClick={() => st.saveHeader(sys.id, { startupType: h.startupType, teamLead: h.teamLead.trim(), reviewDate: h.reviewDate || null })}>ذخیرهٔ سربرگ</button></div>
       </div>
     </div>

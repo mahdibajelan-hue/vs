@@ -2089,3 +2089,12 @@ select option {
   .lp-home-top .ibh-main { padding-block: 10px; }
   .lp-section-title { margin-top: 0.6rem; }
 }
+
+/* Shamsi date fields (components/common/ShamsiField) */
+.shamsi-field { position: relative; min-width: 0; }
+.shamsi-field.is-disabled { pointer-events: none; opacity: .6; }
+.shamsi-field .input { min-height: 2.15rem; padding: .4rem .6rem; font-size: 12.5px; font-family: inherit; }
+.shamsi-field .input > span { font-size: inherit; font-weight: 500; color: var(--text-primary); }
+.shamsi-clear { position: absolute; inset-inline-end: 1.9rem; top: 50%; transform: translateY(-50%); display: inline-grid; place-items: center; width: 1.4rem; height: 1.4rem; border-radius: .4rem; color: var(--text-muted); }
+.shamsi-clear:hover { background: rgba(148, 163, 184, .15); color: var(--text-primary); }
+.shamsi-dt { display: grid; grid-template-columns: minmax(0, 1fr) 6.5rem; gap: .35rem; }

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { Activity, AlertTriangle, Camera, Download, Map as MapIcon, Pencil, Tablet, Trash2, BookOpen, CheckCircle2, ClipboardCheck, FileSignature, Flame, Gauge, ListChecks, Loader2, Paperclip, Plus, Printer, Settings2, ShieldCheck, Stamp, Users, X } from 'lucide-react'
+import { ShamsiDate, ShamsiDateTime } from '../../components/common/ShamsiField'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useAuthStore } from '../../store/useAuthStore'
@@ -183,7 +184,7 @@ function NewSystem({ onDone }: { onDone: (id: string | null) => void }) {
         <Field label="نوع"><select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as PssrKind })}>{Object.entries(KIND_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
         <Field label="از کیلومتر"><input type="number" value={f.kmFrom} onChange={(e) => setF({ ...f, kmFrom: e.target.value })} /></Field>
         <Field label="تا کیلومتر"><input type="number" value={f.kmTo} onChange={(e) => setF({ ...f, kmTo: e.target.value })} /></Field>
-        <Field label="تاریخ هدف تزریق گاز"><input type="date" value={f.target} onChange={(e) => setF({ ...f, target: e.target.value })} /></Field>
+        <Field label="تاریخ هدف تزریق گاز" group><ShamsiDate clearable value={f.target} onChange={(v) => setF({ ...f, target: v })} label="تاریخ هدف تزریق گاز" /></Field>
       </div>
       <p className="ps-hint">با ذخیره، {fa(n)} بند چک‌لیست PSSR متناسب با نوع «{KIND_FA[f.kind]}» برای این سیستم ساخته می‌شود.</p>
       <div className="ps-actions"><button type="button" className="ps-btn is-primary" disabled={busy || !f.code.trim() || !f.name.trim()} onClick={save}>{busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={15} />} ذخیرهٔ سیستم</button></div>
@@ -261,7 +262,7 @@ function EditSystem({ sys, onDone }: { sys: PssrSystem; onDone: (deleted: boolea
         <Field label="نوع"><select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as PssrKind })}>{Object.entries(KIND_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
         <Field label={f.kind === 'station' ? 'کیلومتر محل' : 'از کیلومتر'}><input type="number" value={f.kmFrom} onChange={(e) => setF({ ...f, kmFrom: e.target.value })} /></Field>
         {f.kind !== 'station' && <Field label="تا کیلومتر"><input type="number" value={f.kmTo} onChange={(e) => setF({ ...f, kmTo: e.target.value })} aria-invalid={bad} /></Field>}
-        <Field label="تاریخ هدف تزریق گاز"><input type="date" value={f.target} onChange={(e) => setF({ ...f, target: e.target.value })} /></Field>
+        <Field label="تاریخ هدف تزریق گاز" group><ShamsiDate clearable value={f.target} onChange={(v) => setF({ ...f, target: v })} label="تاریخ هدف تزریق گاز" /></Field>
         <Field label="یادداشت" wide><input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Field>
       </div>
       {bad && <p className="ps-hint is-warn">«تا کیلومتر» نباید کمتر از «از کیلومتر» باشد.</p>}
@@ -376,7 +377,7 @@ function Meetings({ systemId }: { systemId: string }) {
         </article>
       ))}
       <div className="ps-inline-form">
-        <Field label="تاریخ جلسه"><input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></Field>
+        <Field label="تاریخ جلسه" group><ShamsiDate value={f.date} onChange={(v) => setF({ ...f, date: v })} label="تاریخ جلسه" /></Field>
         <Field label="حاضران (نام و سمت)"><input value={f.attendees} onChange={(e) => setF({ ...f, attendees: e.target.value })} placeholder="مثلاً: مهندس ناظر، HSE، بهره‌بردار…" /></Field>
         <Field label="خلاصهٔ جلسه" wide><textarea rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
         <button type="button" className="ps-btn is-primary" disabled={!f.date} onClick={async () => { if (await st.addMeeting(systemId, f.date, f.attendees, f.notes, email)) setF({ date: today(), attendees: '', notes: '' }) }}><Plus size={14} /> ثبت جلسه</button>
@@ -399,7 +400,7 @@ function Punches({ systemId }: { systemId: string }) {
         <Field label="شرح یافته *" wide><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="مثلاً: پلاک شناسایی شیر ۱۲ نصب نشده" /></Field>
         <Field label="رشته"><input value={f.discipline} onChange={(e) => setF({ ...f, discipline: e.target.value })} placeholder="مکانیک، برق، ابزار دقیق…" /></Field>
         <Field label="مسئول"><input value={f.owner} onChange={(e) => setF({ ...f, owner: e.target.value })} /></Field>
-        <Field label="مهلت"><input type="date" value={f.due} onChange={(e) => setF({ ...f, due: e.target.value })} /></Field>
+        <Field label="مهلت" group><ShamsiDate clearable value={f.due} onChange={(v) => setF({ ...f, due: v })} label="مهلت" /></Field>
         {meetings.length > 0 && <Field label="جلسه"><select value={f.meeting} onChange={(e) => setF({ ...f, meeting: e.target.value })}><option value="">—</option>{meetings.map((m) => <option key={m.id} value={m.id}>{jd(m.heldOn)}</option>)}</select></Field>}
         <button type="button" className="ps-btn is-primary" disabled={!f.title.trim()} onClick={async () => { if (await st.addPunch({ systemId, meetingId: f.meeting || null, category: f.category, title: f.title.trim(), discipline: f.discipline, owner: f.owner, dueDate: f.due || null }, email)) setF({ ...f, title: '', owner: '', due: '' }) }}><Plus size={14} /> ثبت یافته</button>
       </div>
@@ -523,7 +524,7 @@ function SignForm({ systemId, seq, label, manual, persons }: { systemId: string;
       <Field label={manual ? 'تأییدکننده' : 'امضا به عنوان'}><select value={who} onChange={(e) => setWho(e.target.value)}>{persons.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}</select></Field>
       {manual && <>
         <Field label="نام نمایندهٔ بهره‌بردار (امضاکنندهٔ فرم) *"><input value={m.signer} onChange={(e) => setM({ ...m, signer: e.target.value })} /></Field>
-        <Field label="تاریخ امضای دستی *"><input type="date" value={m.date} onChange={(e) => setM({ ...m, date: e.target.value })} /></Field>
+        <Field label="تاریخ امضای دستی *" group><ShamsiDate value={m.date} onChange={(v) => setM({ ...m, date: v })} label="تاریخ امضای دستی" /></Field>
         <Field label="اسکن فرم امضاشده (PDF یا تصویر) *"><input type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></Field>
       </>}
       <Field label="توضیح (اختیاری؛ برای رد لازم است)" wide><input value={comment} onChange={(e) => setComment(e.target.value)} /></Field>
@@ -582,7 +583,7 @@ function GasIn({ sys, status, chain }: { sys: PssrSystem; status: SystemStatus; 
       </div>
       <div className="ps-inline-form">
         <Field label="شمارهٔ مجوز کار (PTW)"><input value={head.ptw} disabled={!editable} onChange={(e) => setHead({ ...head, ptw: e.target.value })} dir="ltr" /></Field>
-        <Field label="زمان برنامه‌ریزی‌شدهٔ تزریق"><input type="datetime-local" value={head.planned} disabled={!editable} onChange={(e) => setHead({ ...head, planned: e.target.value })} /></Field>
+        <Field label="زمان برنامه‌ریزی‌شدهٔ تزریق" group><ShamsiDateTime value={head.planned} disabled={!editable} onChange={(v) => setHead({ ...head, planned: v })} label="زمان برنامه‌ریزی‌شدهٔ تزریق" /></Field>
         {editable && <button type="button" className="ps-btn" onClick={() => st.savePermit(sys.id, { ptwNo: head.ptw, plannedAt: head.planned ? new Date(head.planned).toISOString() : null }, email)}>ذخیرهٔ مجوز</button>}
       </div>
       <ul className="ps-gas-checks">
@@ -836,8 +837,10 @@ function Settings({ chain }: { chain: SignerRow[] }) {
   )
 }
 
-function Field({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
-  return <label className={`ps-field ${wide ? 'is-wide' : ''}`}><span>{label}</span>{children}</label>
+/** `group` renders a div instead of a label — for composite controls (the Shamsi picker) whose popup clicks must not re-trigger the label */
+function Field({ label, children, wide, group }: { label: string; children: ReactNode; wide?: boolean; group?: boolean }) {
+  const Tag = group ? 'div' : 'label'
+  return <Tag className={`ps-field ${wide ? 'is-wide' : ''}`}><span>{label}</span>{children}</Tag>
 }
 function Empty({ text }: { text: string }) {
   return <div className="ps-empty"><Flame size={24} aria-hidden /><p>{text}</p></div>

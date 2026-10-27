@@ -1,5 +1,6 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { AlertTriangle, CheckCircle2, Gauge, Plus, Printer, RotateCcw, XCircle } from 'lucide-react'
+import { ShamsiDateTime } from '../../../components/common/ShamsiField'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { formatJalali } from '../../../lib/jalali'
@@ -100,7 +101,7 @@ export function TestPage({ kind, id, onBack }: { kind: TargetKind; id: string; o
         {t.stage !== 'planned' && t.stage !== 'accepted' && !t.failed && (
           <div className="ps-inline-form">
             <label className="ps-field"><span>مرحله</span><select value={f.phase} onChange={(e) => setF({ ...f, phase: e.target.value })}>{PHASES.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
-            <label className="ps-field"><span>زمان</span><input type="datetime-local" value={f.at} onChange={(e) => setF({ ...f, at: e.target.value })} /></label>
+            <div className="ps-field"><span>زمان</span><ShamsiDateTime value={f.at} onChange={(v) => setF({ ...f, at: v })} label="زمان قرائت" /></div>
             <label className="ps-field"><span>فشار (bar) *</span><input type="number" inputMode="decimal" step="0.1" value={f.p} onChange={(e) => setF({ ...f, p: e.target.value })} dir="ltr" /></label>
             <label className="ps-field"><span>دما (°C)</span><input type="number" inputMode="decimal" step="0.1" value={f.temp} onChange={(e) => setF({ ...f, temp: e.target.value })} dir="ltr" /></label>
             <label className="ps-field is-wide"><span>توضیح</span><input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
@@ -163,8 +164,8 @@ function PressureChart({ readings, minTest }: { readings: HtReading[]; minTest: 
         {tline && <path d={tline} className="ht-tline" />}
         <path d={line} className="ht-pline" />
         {readings.map((r) => <circle key={r.id} cx={x(Date.parse(r.at))} cy={y(r.pressureBar)} r={3} className="ht-pt" />)}
-        <text x={L} y={H - 6} className="ht-ax">{new Date(t0).toLocaleString('fa-IR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</text>
-        <text x={W - R} y={H - 6} textAnchor="end" className="ht-ax">{new Date(t1).toLocaleString('fa-IR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</text>
+        <text x={L} y={H - 6} className="ht-ax">{new Date(t0).toLocaleString('fa-IR-u-ca-persian', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</text>
+        <text x={W - R} y={H - 6} textAnchor="end" className="ht-ax">{new Date(t1).toLocaleString('fa-IR-u-ca-persian', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</text>
       </svg>
     </div>
   )
