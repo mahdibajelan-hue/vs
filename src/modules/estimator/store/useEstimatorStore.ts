@@ -2,10 +2,10 @@ import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
-import type { EstAssumptions, EstEstimateRecord, EstFullInputs, EstProject, EstProjectDraft, EstResults } from '../types'
+import type { EstAssumptions, EstBenchmark, EstBenchmarkDraft, EstEstimateRecord, EstFullInputs, EstProject, EstProjectDraft, EstResults } from '../types'
 import {
-  estAssumptionsFromRow, estEstimateFromRow, estProjectFromRow,
-  type EstAssumptionsRow, type EstEstimateRow, type EstProjectRow,
+  estAssumptionsFromRow, estBenchmarkFromRow, estEstimateFromRow, estProjectFromRow,
+  type EstAssumptionsRow, type EstBenchmarkRow, type EstEstimateRow, type EstProjectRow,
 } from '../lib/estimatorData'
 
 export interface EstProjectSummary { latestEur: number; latestRial: number; latestAt: string; versions: number }
@@ -23,6 +23,11 @@ interface EstimatorStoreState {
   estimates: EstEstimateRecord[]
   /** latest saved total and version count per project, for the project list */
   summaries: Record<string, EstProjectSummary>
+  benchmarks: EstBenchmark[]
+  loadingBenchmarks: boolean
+  fetchBenchmarks: () => Promise<void>
+  saveBenchmark: (draft: EstBenchmarkDraft & { costEur: number }, id?: string) => Promise<boolean>
+  deleteBenchmark: (id: string) => Promise<void>
   assumptions: EstAssumptions | null
   loadingProjects: boolean
   loadingEstimates: boolean
@@ -57,6 +62,35 @@ export const useEstimatorStore = create<EstimatorStoreState>()((set, get) => ({
   currentProject: null,
   estimates: [],
   summaries: {},
+  benchmarks: [],
+  loadingBenchmarks: false,
+
+  fetchBenchmarks: async () => {
+    set({ loadingBenchmarks: true })
+    const { data, error } = await supabase.from('est_benchmarks').select('*').order('cost_year', { ascending: false })
+    set({ loadingBenchmarks: false })
+    if (reportError('بارگذاری کتابخانهٔ پروژه‌های مرجع', error)) return
+    set({ benchmarks: ((data ?? []) as EstBenchmarkRow[]).map(estBenchmarkFromRow) })
+  },
+
+  saveBenchmark: async (d, id) => {
+    const row = {
+      name: d.name, location: d.location, kind: d.kind, setting: d.setting, terrain: d.terrain,
+      length_km: d.lengthKm, diameter_in: d.diameterIn, has_compressor: d.hasCompressor, cost_year: d.costYear,
+      amount: d.amount, currency: d.currency, fx_rial_per_eur: d.fxRialPerEur, fx_eur_per_usd: d.fxEurPerUsd,
+      cost_eur: d.costEur, notes: d.notes,
+    }
+    const { error } = id ? await supabase.from('est_benchmarks').update(row).eq('id', id) : await supabase.from('est_benchmarks').insert(row)
+    if (reportError('ذخیرهٔ پروژهٔ مرجع', error)) return false
+    await get().fetchBenchmarks()
+    return true
+  },
+
+  deleteBenchmark: async (id) => {
+    const { error } = await supabase.from('est_benchmarks').delete().eq('id', id)
+    if (reportError('حذف پروژهٔ مرجع', error)) return
+    set({ benchmarks: get().benchmarks.filter((b) => b.id !== id) })
+  },
   assumptions: null,
   loadingProjects: true,
   loadingEstimates: false,

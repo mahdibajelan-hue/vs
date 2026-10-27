@@ -122,7 +122,7 @@ export function RouteSchematic({
       </g>
 
       {lengthKm != null && lengthKm > 0 && (
-        <text x={(X0 + X1) / 2} y={H - 6} textAnchor="middle" fontSize="11" fill={ink} fontFamily="'JetBrains Mono', monospace">
+        <text x={(X0 + X1) / 2} y={H - 6} textAnchor="middle" fontSize="11" fill={ink} fontFamily="'Fira Code', monospace">
           {Math.round(lengthKm).toLocaleString('en-US')} km
         </text>
       )}

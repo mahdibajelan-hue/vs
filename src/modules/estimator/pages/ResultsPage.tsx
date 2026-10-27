@@ -3,9 +3,11 @@ import {
   BarChart, Bar, AreaChart, Area, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, LabelList, Legend, ReferenceLine,
 } from 'recharts'
-import { AlertTriangle, CalendarRange, Check, Copy, FileDown, FileSpreadsheet, Gauge, Landmark, LineChart, PackageSearch, PieChart as PieIcon, Printer, Ruler, Save, ShieldAlert, Table2, TrendingUp, X } from 'lucide-react'
-import type { EstFullInputs, EstProject, EstRisk } from '../types'
-import { annualCashFlow, computeEstimate, buildCashFlowTimeline, computeSensitivity, estimateKpis, estimateRange, LIFECYCLE_PHASE_LABEL, MATURITY, maturityOf, scopeLabels, SENSITIVITY_PCT } from '../lib/calc'
+import { AlertTriangle, CalendarRange, Layers3, Check, Copy, FileDown, FileSpreadsheet, Gauge, Landmark, LineChart, PackageSearch, PieChart as PieIcon, Printer, Ruler, Save, ShieldAlert, Table2, TrendingUp, X } from 'lucide-react'
+import type { EstBenchmark, EstFullInputs, EstProject, EstRisk } from '../types'
+import { annualCashFlow, buildCashFlowTimeline, computeSensitivity, estimateKpis, LIFECYCLE_PHASE_LABEL, MATURITY, maturityOf, scopeLabels, SENSITIVITY_PCT } from '../lib/calc'
+import { finalResults, METHOD_META } from '../lib/methods'
+import { MethodLadder } from '../components/MethodLadder'
 import { exportEstimateToExcel, exportReportPagesToPdf, printReportElement } from '../lib/exportEstimate'
 import { RouteSchematic } from '../components/RouteSchematic'
 import {
@@ -33,22 +35,31 @@ function riskBand(score: number) {
 }
 
 export function ResultsPage({
-  project, inputs, onSave, saving, versionLabel,
+  project, inputs, benchmarks, nowYear, onChange, onSave, saving, versionLabel,
 }: {
   project: EstProject
   inputs: EstFullInputs
-  onSave: (args: { label: string; grandTotalEur: number; grandTotalRial: number }) => void | Promise<void>
+  benchmarks: EstBenchmark[]
+  nowYear: number
+  onChange: (next: EstFullInputs) => void
+  onSave: (args: { label: string }) => void | Promise<void>
   saving: boolean
   /** set when the page shows a saved version rather than the working inputs */
   versionLabel?: string
 }) {
-  const results = useMemo(() => computeEstimate(project, inputs), [project, inputs])
+  const fr = useMemo(() => finalResults(project, inputs, benchmarks, nowYear), [project, inputs, benchmarks, nowYear])
+  const results = fr.results
+  const chosen = fr.methods.chosen
   const cashFlow = useMemo(() => buildCashFlowTimeline(inputs, results), [inputs, results])
-  const sensitivity = useMemo(() => computeSensitivity(project, inputs), [project, inputs])
+  // the parametric swings, scaled to the chosen method's total so they sit around the same number
+  const sensitivity = useMemo(() => {
+    const k = fr.parametric.grand ? results.grand / fr.parametric.grand : 1
+    return computeSensitivity(project, inputs).map((x) => ({ ...x, lowGrandUsd: x.lowGrandUsd * k, highGrandUsd: x.highGrandUsd * k, swingUsd: x.swingUsd * k }))
+  }, [project, inputs, fr, results.grand])
   const kpis = useMemo(() => estimateKpis(project, inputs, results, cashFlow), [project, inputs, results, cashFlow])
   const years = useMemo(() => annualCashFlow(cashFlow), [cashFlow])
   const maturity = maturityOf(inputs)
-  const range = estimateRange(results.grand, maturity)
+  const range = { low: chosen.low / inputs.overhead.fxEurPerUsd, high: chosen.high / inputs.overhead.fxEurPerUsd, lowPct: chosen.low / chosen.eur - 1, highPct: chosen.high / chosen.eur - 1 }
   const [copied, setCopied] = useState(false)
   const [naming, setNaming] = useState(false)
   const [vName, setVName] = useState('')
@@ -74,8 +85,8 @@ export function ResultsPage({
   ]
 
   const summary =
-    `برآورد کل پروژه در مرحلهٔ ${MATURITY[maturity].label} ${fmtEUR(toEur(results.grand))} معادل ${fmtRial(toRial(results.grand))} است؛ ` +
-    `با توجه به سطح تعریف پروژه، هزینهٔ نهایی به احتمال زیاد بین ${fmtEURm(toEur(range.low))} و ${fmtEURm(toEur(range.high))} یورو خواهد بود. ` +
+    `برآورد کل پروژه به روش ${METHOD_META[chosen.method].short} در مرحلهٔ ${MATURITY[maturity].label} ${fmtEUR(toEur(results.grand))} معادل ${fmtRial(toRial(results.grand))} (یورو ${Math.round(inputs.overhead.fxRialPerEur ?? 0).toLocaleString('en-US')} ریال) است؛ ` +
+    `هزینهٔ نهایی به احتمال زیاد بین ${fmtEURm(toEur(range.low))} و ${fmtEURm(toEur(range.high))} یورو خواهد بود. ` +
     `از انتخاب مشاور طراح تا راه‌اندازی حدود ${toFa(totalMonths)} ماه زمان لازم است و اوج نیاز نقدینگی در ماه ${toFa(kpis.peakMonth)} است.`
 
   // 5x5 likelihood x impact grid — counts + worst band per cell.
@@ -113,7 +124,7 @@ export function ResultsPage({
 
   async function exportXlsx() {
     setBusy('xlsx')
-    try { await exportEstimateToExcel(project, inputs, results, versionLabel) } finally { setBusy('') }
+    try { await exportEstimateToExcel(project, inputs, results, versionLabel, fr.methods.list, chosen.method) } finally { setBusy('') }
   }
 
   function printReport() {
@@ -122,7 +133,7 @@ export function ResultsPage({
   }
 
   async function saveVersion() {
-    await onSave({ label: vName.trim() || `نسخهٔ ${new Date().toLocaleDateString('fa-IR')}`, grandTotalEur: toEur(results.grand), grandTotalRial: toRial(results.grand) })
+    await onSave({ label: vName.trim() || `نسخهٔ ${new Date().toLocaleDateString('fa-IR')}` })
     setNaming(false); setVName(''); setSavedOk(true)
     setTimeout(() => setSavedOk(false), 2200)
   }
@@ -130,7 +141,7 @@ export function ResultsPage({
   return (
     <div className="h-full overflow-y-auto est-font est-scroll">
       <div className="comp-print-offscreen" ref={printRef} aria-hidden="true">
-        <EstimatorPrintReport project={project} inputs={inputs} results={results} versionLabel={versionLabel} />
+        <EstimatorPrintReport project={project} inputs={inputs} results={results} versionLabel={versionLabel} methods={fr.methods.list} chosen={chosen.method} />
       </div>
 
       {/* action bar */}
@@ -158,13 +169,14 @@ export function ResultsPage({
         </div>
       </div>
 
-      <div ref={reportRef} className="mx-auto max-w-6xl px-4 py-6 space-y-4">
+      <div ref={reportRef} className="mx-auto max-w-6xl px-4 py-6 space-y-4 pb-24 lg:pb-8">
         {/* executive summary */}
         <section className="est-exec est-fade-in">
           <div className="est-exec-main">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="est-chip"><Landmark size={12} /> خلاصهٔ مدیریتی</span>
               <span className="est-chip is-soft">مرحلهٔ {MATURITY[maturity].label}</span>
+              <span className="est-chip is-soft"><i className="inline-block h-2 w-2 rounded-sm" style={{ background: METHOD_META[chosen.method].color }} /> روش {METHOD_META[chosen.method].short}</span>
             </div>
             <h1 className="text-xl md:text-2xl font-black leading-snug" style={{ color: INK }}>{project.name}</h1>
             <p className="text-[11.5px] mt-1" style={{ color: MUTED_FG }}>{scopeLabels(project).map((l) => l.replace(/\d+/g, (d) => toFa(d))).join(' · ')}</p>
@@ -178,15 +190,21 @@ export function ResultsPage({
             <b className="est-mono est-total"><AnimatedNumber value={toEur(results.grand)} format={fmtEUR} /></b>
             <span className="est-mono text-sm" style={{ color: INK }}>{fmtRial(toRial(results.grand))}</span>
             <div className="mt-4">
-              <div className="text-[10.5px] mb-1.5" style={{ color: MUTED_FG }}>بازهٔ دقت ({fmtPct(range.lowPct)} تا +{fmtPct(range.highPct)})</div>
-              <div className="est-range-lg"><span style={{ insetInlineStart: `${(-range.lowPct / (range.highPct - range.lowPct)) * 100}%` }} /></div>
-              <div className="flex justify-between est-mono text-xs mt-1.5" style={{ color: INK_SOFT }}>
-                <span>{fmtEURm(toEur(range.low))}</span><span style={{ color: SAFETY }}>پایه</span><span>{fmtEURm(toEur(range.high))}</span>
+              <div className="text-[10.5px] mb-1.5" style={{ color: MUTED_FG }}>بازهٔ برآورد ({fmtPct(range.lowPct)} تا +{fmtPct(range.highPct)})</div>
+              <div className="est-range-lg"><span style={{ insetInlineStart: `${(-range.lowPct / ((range.highPct - range.lowPct) || 1)) * 100}%` }} /></div>
+              <div className="flex justify-between text-xs mt-1.5" style={{ color: INK_SOFT }}>
+                <span className="est-mono">{fmtEURm(toEur(range.low))}</span><span style={{ color: SAFETY }}>برآورد</span><span className="est-mono">{fmtEURm(toEur(range.high))}</span>
               </div>
             </div>
-            <p className="text-[10.5px] leading-relaxed mt-3" style={{ color: MUTED_FG }}>{MATURITY[maturity].hint}. با پیشرفت طراحی، مرحله را در «مشخصات» به‌روز کنید تا بازه تنگ‌تر شود.</p>
+            <p className="text-[10.5px] leading-relaxed mt-3" style={{ color: MUTED_FG }}>{chosen.method === 'parametric' ? `${MATURITY[maturity].hint}. با پیشرفت طراحی، مرحله را در گام ۱ به‌روز کنید تا بازه تنگ‌تر شود.` : chosen.note}</p>
           </div>
         </section>
+
+        <Card>
+          <CardTitle icon={<Layers3 size={15} />} title="مقایسهٔ روش‌های برآورد"
+            hint={<>همهٔ روش‌ها روی یک محور؛ نوار بازهٔ هر روش و خط عمودی برآورد آن است. روی هر روش بزنید تا مبنای عدد نهایی شود — ساختار شکست هزینه و جریان نقدینگی به نسبت روش پارامتریک به همان عدد تخصیص داده می‌شود.{fr.methods.fellBack && <b style={{ color: '#f0b45a' }}> روش انتخاب‌شده داده ندارد؛ برآورد پارامتریک نمایش داده می‌شود.</b>}</>} />
+          <MethodLadder list={fr.methods.list} chosen={chosen.method} onPick={(m) => onChange({ ...inputs, method: m })} />
+        </Card>
 
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
           <Kpi icon={<CalendarRange size={16} />} label="مدت تا راه‌اندازی" value={`${toFa(kpis.totalMonths)} ماه`} sub={`اجرا ${toFa(inputs.lifecycle.executionMonths)} ماه`} delay={40} />

@@ -1,10 +1,10 @@
-import { AlertTriangle, ArrowLeft, CalendarRange, Coins, GitBranch, Layers, PackageSearch, Plus, Radio, ShieldAlert, Signpost, Trash2, Waves, Wind, Workflow } from 'lucide-react'
-import type { EstFullInputs, EstLongLeadItem, EstProject, EstRisk } from '../types'
+import { AlertTriangle, ArrowLeft, CalendarRange, Coins, GitBranch, Layers, Lock, PackageSearch, Pencil, Plus, ShieldAlert, Signpost, Trash2, Waves, Wind } from 'lucide-react'
+import type { EstBenchmark, EstFullInputs, EstLongLeadItem, EstProject, EstRisk } from '../types'
 import { computeAutoStationCounts, MATURITY, maturityOf } from '../lib/calc'
 import { BORDER, INK, INK_SOFT, MUTED_FG, SAFETY, SECTION_COLOR, SURFACE, SURFACE_2, toFa } from '../lib/theme'
 import { Btn, Field, Section, Segmented } from '../components/ui'
+import { METHOD_META } from '../lib/methods'
 import { LivePanel } from '../components/LivePanel'
-import type { EstMaturity } from '../types'
 
 const RISK_CATEGORY_LABEL: Record<EstRisk['category'], string> = {
   fx: 'ارزی', procurement: 'تأمین کالا', geotechnical: 'ژئوتکنیک', schedule: 'زمان‌بندی',
@@ -13,12 +13,15 @@ const RISK_CATEGORY_LABEL: Record<EstRisk['category'], string> = {
 
 
 export function SpecsPage({
-  project, inputs, onChange, onCalculate,
+  project, inputs, benchmarks, nowYear, onChange, onCalculate, onEditStart,
 }: {
   project: EstProject
   inputs: EstFullInputs
+  benchmarks: EstBenchmark[]
+  nowYear: number
   onChange: (next: EstFullInputs) => void
   onCalculate: () => void
+  onEditStart: () => void
 }) {
   const patch = (fn: (draft: EstFullInputs) => EstFullInputs) => onChange(fn(inputs))
 
@@ -57,18 +60,14 @@ export function SpecsPage({
         <div className="est-fade-in">
           <p className="text-[11px] font-semibold" style={{ color: SAFETY }}>گام ۲ از ۳</p>
           <h1 className="text-lg font-extrabold" style={{ color: INK }}>مشخصات فنی و زمان‌بندی «{project.name}»</h1>
-          <p className="text-[11.5px] mt-1 leading-relaxed" style={{ color: MUTED_FG }}>فقط بخش‌هایی که در دامنهٔ پروژه انتخاب شده‌اند نمایش داده می‌شوند. نرخ‌های واحد از مبانی محاسبات سازمان خوانده می‌شوند و هر تغییر همان لحظه در برآورد زنده دیده می‌شود.</p>
+          <p className="text-[11.5px] mt-1 leading-relaxed" style={{ color: MUTED_FG }}>فقط مشخصات فیزیکی و زمانی همین پروژه پرسیده می‌شود؛ نرخ‌های واحد، سربارها و ذخایر از «مبانی برآورد» خوانده می‌شوند و هر تغییر همان لحظه در برآورد زنده دیده می‌شود.</p>
         </div>
 
-        <div className="est-card rounded-2xl p-4 est-fade-in" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-bold" style={{ color: INK }}>مرحلهٔ تعریف پروژه</p>
-              <p className="text-[11px] mt-0.5" style={{ color: MUTED_FG }}>{MATURITY[maturityOf(inputs)].hint} — بازهٔ دقت برآورد از همین انتخاب تعیین می‌شود.</p>
-            </div>
-            <Segmented<EstMaturity> value={maturityOf(inputs)} onChange={(v) => patch((d) => ({ ...d, maturity: v }))}
-              options={(Object.keys(MATURITY) as EstMaturity[]).map((k) => [k, MATURITY[k].label])} />
-          </div>
+        <div className="est-startbar est-fade-in">
+          <span><Coins size={14} /> یورو <b className="est-mono">{toFa(Math.round(inputs.overhead.fxRialPerEur ?? 0).toLocaleString('en-US'))}</b> ریال</span>
+          <span><i style={{ background: METHOD_META[inputs.method ?? 'parametric'].color }} /> روش: <b>{METHOD_META[inputs.method ?? 'parametric'].short}</b></span>
+          <span>مرحله: <b>{MATURITY[maturityOf(inputs)].label}</b></span>
+          <button type="button" onClick={onEditStart}><Pencil size={12} /> تغییر</button>
         </div>
 
         <div className="est-card rounded-2xl px-5 est-fade-in" style={{ background: SURFACE, border: `1px solid ${BORDER}`, animationDelay: '80ms' }}>
@@ -152,58 +151,9 @@ export function SpecsPage({
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-x-2">
-                <Field label="هزینه واحد فرستنده توپک" unit="$" value={inputs.specs.launcher.unitCostUsd} step={5000}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, launcher: { ...d.specs.launcher, unitCostUsd: v } } }))} />
-                <Field label="هزینه واحد گیرنده توپک" unit="$" value={inputs.specs.receiver.unitCostUsd} step={5000}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, receiver: { ...d.specs.receiver, unitCostUsd: v } } }))} />
-                <Field label="هزینه واحد شیر بین‌راهی" unit="$" value={inputs.specs.blockValve.unitCostUsd} step={5000}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, blockValve: { ...d.specs.blockValve, unitCostUsd: v } } }))} />
-              </div>
-              <p className="text-[10px] mt-2" style={{ color: MUTED_FG }}>برآورد پارامتریک بر پایهٔ نرخ واحد هر ایستگاه.</p>
+              <p className="text-[10.5px] mt-1 flex items-center gap-1" style={{ color: MUTED_FG }}><Lock size={11} /> هزینهٔ واحد هر ایستگاه از مبانی برآورد خوانده می‌شود.</p>
             </Section>
           )}
-
-          {project.tieInCount > 0 && (
-            <Section title={`ایستگاه‌های انشعاب (${toFa(project.tieInCount)} عدد)`} subtitle="هزینهٔ واحد هر انشعاب" icon={<Workflow size={17} />} accent={SECTION_COLOR.tieIn}>
-              <Field label="هزینه واحد هر ایستگاه انشعاب" unit="$" value={inputs.specs.tieIn.unitCostUsd} step={5000}
-                onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, tieIn: { ...d.specs.tieIn, unitCostUsd: v } } }))}
-                hint="برآورد پارامتریک بر پایهٔ نرخ واحد هر ایستگاه." />
-            </Section>
-          )}
-          {project.hasTelecomScada && (
-            <Section title="مخابرات و اسکادا" subtitle="نرخ کیلومتری یا مبلغ مقطوع" icon={<Radio size={17} />} accent={SECTION_COLOR.telecom}>
-              <div className="mb-3"><Segmented full value={inputs.specs.telecom.mode}
-                onChange={(m) => patch((d) => ({ ...d, specs: { ...d.specs, telecom: { ...d.specs.telecom, mode: m } } }))}
-                options={[['perKm', 'نرخ به ازای هر کیلومتر'], ['lumpSum', 'مبلغ مقطوع']]} /></div>
-              {inputs.specs.telecom.mode === 'perKm' ? (
-                <Field label="نرخ مخابرات و اسکادا" unit="$/km" value={inputs.specs.telecom.perKmUsd} step={500}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, telecom: { ...d.specs.telecom, perKmUsd: v } } }))} />
-              ) : (
-                <Field label="مبلغ مقطوع مخابرات و اسکادا" unit="$" value={inputs.specs.telecom.lumpSumUsd} step={50000}
-                  onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, telecom: { ...d.specs.telecom, lumpSumUsd: v } } }))} />
-              )}
-            </Section>
-          )}
-
-          <Section title="نرخ ارز، سربار و ذخایر" subtitle="مهندسی، مدیریت، بیمه، پیش‌بینی‌نشده و نوسان" icon={<Coins size={17} />}>
-            <div className="grid grid-cols-2 gap-x-3">
-              <Field label="نرخ یورو" unit="یورو/دلار" value={inputs.overhead.fxEurPerUsd} step={0.01}
-                onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, fxEurPerUsd: v } }))} />
-              <Field label="نرخ ریال" unit="ریال/دلار" value={inputs.overhead.fxRialPerUsd} step={1000}
-                onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, fxRialPerUsd: v } }))} />
-              <Field label="مهندسی و طراحی" percent value={inputs.overhead.eng} step={0.01}
-                onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, eng: v } }))} />
-              <Field label="مدیریت پروژه (EPCM)" percent value={inputs.overhead.pm} step={0.01}
-                onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, pm: v } }))} />
-              <Field label="بیمه و ضمانت‌نامه" percent value={inputs.overhead.ins} step={0.005}
-                onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, ins: v } }))} />
-              <Field label="پیش‌بینی‌نشده (Contingency)" percent value={inputs.overhead.contingency} step={0.01}
-                onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, contingency: v } }))} />
-              <Field label="ذخیره نوسان ارزی/تورمی" percent value={inputs.overhead.escalation} step={0.01}
-                onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, escalation: v } }))} />
-            </div>
-          </Section>
 
           <Section title="چرخهٔ عمر و زمان‌بندی" subtitle="مدت هر فاز؛ جریان نقدینگی از همین ساخته می‌شود" icon={<CalendarRange size={17} />} accent="#9085e9" defaultOpen>
             <p className="text-[10px] mb-2" style={{ color: MUTED_FG }}>جریان نقدینگی و مدت کل پروژه به‌صورت خودکار بر اساس این مدت‌ها محاسبه می‌شود.</p>
@@ -296,12 +246,29 @@ export function SpecsPage({
           </Section>
         </div>
 
+        <div className="est-bases est-fade-in">
+          <Lock size={15} style={{ color: SAFETY }} />
+          <p>از مبانی برآورد خوانده می‌شود و اینجا پرسیده نمی‌شود: قیمت فولاد و عملیات اجرایی هر کیلومتر، پوشش لوله، هزینهٔ واحد فرستنده و گیرندهٔ توپک، شیر بین‌راهی و انشعاب، نرخ مخابرات و اسکادا، منحنی تجهیزات دوار، درصدهای مهندسی، مدیریت، بیمه، پیش‌بینی‌نشده و ذخیرهٔ نوسان.</p>
+        </div>
+
         <div className="flex justify-end">
           <Btn kind="primary" onClick={onCalculate}><Layers size={15} /> مشاهدهٔ برآورد و گزارش <ArrowLeft size={14} /></Btn>
         </div>
       </div>
-      <LivePanel project={project} inputs={inputs} onOpenResults={onCalculate} />
+      <LivePanel project={project} inputs={inputs} benchmarks={benchmarks} nowYear={nowYear} onOpenResults={onCalculate} />
       </div>
+      <style>{SPECS_STYLE}</style>
     </div>
   )
 }
+
+const SPECS_STYLE = `
+  .est-startbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .55rem .6rem; border-radius: 14px; background: ${SURFACE}; border: 1px solid ${BORDER}; }
+  .est-startbar > span { display: inline-flex; align-items: center; gap: .35rem; font-size: 12px; color: ${INK_SOFT}; padding: .3rem .6rem; border-radius: 10px; background: ${SURFACE_2}; }
+  .est-startbar b { color: ${INK}; }
+  .est-startbar i { width: 8px; height: 8px; border-radius: 3px; display: inline-block; }
+  .est-startbar button { margin-inline-start: auto; display: inline-flex; align-items: center; gap: .3rem; font-size: 12px; font-weight: 700; color: ${SAFETY}; padding: .35rem .7rem; border-radius: 10px; min-height: 36px; }
+  .est-startbar button:hover { background: rgba(242,183,5,.08); }
+  .est-bases { display: flex; gap: .65rem; align-items: flex-start; padding: .85rem 1rem; border-radius: 14px; background: rgba(242,183,5,.05); border: 1px dashed rgba(242,183,5,.3); }
+  .est-bases p { font-size: 11.5px; line-height: 1.95; color: ${INK_SOFT}; }
+`

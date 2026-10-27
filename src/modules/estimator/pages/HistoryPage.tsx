@@ -27,7 +27,7 @@ export function HistoryPage({
 
   return (
     <div className="h-full overflow-y-auto est-font est-scroll">
-      <div className="mx-auto max-w-5xl px-4 py-6 space-y-4">
+      <div className="mx-auto max-w-5xl px-4 py-6 space-y-4 pb-24 lg:pb-8">
         <div className="flex flex-wrap items-end justify-between gap-3 est-fade-in">
           <div>
             <p className="text-[11px] font-semibold" style={{ color: SAFETY }}>نسخه‌های برآورد</p>

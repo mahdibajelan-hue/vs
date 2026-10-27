@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { formatJalali } from '../../../lib/jalali'
-import type { EstFullInputs, EstProject, EstResults } from '../types'
-import { annualCashFlow, buildCashFlowTimeline, computeSensitivity, estimateKpis, estimateRange, LIFECYCLE_PHASE_LABEL, MATURITY, maturityOf, scopeLabels, SENSITIVITY_PCT } from '../lib/calc'
+import type { EstFullInputs, EstMethod, EstProject, EstResults } from '../types'
+import { METHOD_META, type MethodResult } from '../lib/methods'
+import { annualCashFlow, buildCashFlowTimeline, computeEstimate, computeSensitivity, estimateKpis, estimateRange, LIFECYCLE_PHASE_LABEL, MATURITY, maturityOf, scopeLabels, SENSITIVITY_PCT } from '../lib/calc'
 import { SECTION_COLOR, STATUS, fmtEUR, fmtEURm, fmtPct, fmtRial, fmtRialBn, toFa } from '../lib/theme'
 import { RouteSchematic } from './RouteSchematic'
 
@@ -27,7 +28,7 @@ const PAGE: React.CSSProperties = {
   width: 794, height: 1123, boxSizing: 'border-box', padding: '0 0 0 0', background: '#FFFFFF', color: INK, position: 'relative', overflow: 'hidden',
   fontFamily: "'Vazirmatn', Tahoma, Arial, sans-serif",
 }
-const num: React.CSSProperties = { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontVariantNumeric: 'tabular-nums' }
+const num: React.CSSProperties = { fontFamily: "'Fira Code', ui-monospace, monospace", fontVariantNumeric: 'tabular-nums' }
 
 function riskBand(score: number) {
   if (score <= 4) return { label: 'کم', color: STATUS.good }
@@ -37,12 +38,14 @@ function riskBand(score: number) {
 }
 
 export function EstimatorPrintReport({
-  project, inputs, results, versionLabel,
+  project, inputs, results, versionLabel, methods = [], chosen = 'parametric',
 }: {
   project: EstProject
   inputs: EstFullInputs
   results: EstResults
   versionLabel?: string
+  methods?: MethodResult[]
+  chosen?: EstMethod
 }) {
   const eurRate = inputs.overhead.fxEurPerUsd
   const rialRate = inputs.overhead.fxRialPerUsd
@@ -50,10 +53,13 @@ export function EstimatorPrintReport({
   const cf = buildCashFlowTimeline(inputs, results)
   const k = estimateKpis(project, inputs, results, cf)
   const m = maturityOf(inputs)
-  const rg = estimateRange(results.grand, m)
+  const ch = methods.find((x) => x.method === chosen)
+  const rg = ch ? { low: ch.low / eurRate, high: ch.high / eurRate, lowPct: ch.low / ch.eur - 1, highPct: ch.high / ch.eur - 1 } : estimateRange(results.grand, m)
   const years = annualCashFlow(cf)
   const maxYear = Math.max(1, ...years.map((y) => y.usd))
-  const sens = computeSensitivity(project, inputs).slice(0, 5)
+  const pg = computeEstimate(project, inputs).grand
+  const sk = pg ? results.grand / pg : 1
+  const sens = computeSensitivity(project, inputs).slice(0, 5).map((x) => ({ ...x, swingUsd: x.swingUsd * sk }))
   const maxSwing = Math.max(1, ...sens.map((s) => s.swingUsd))
   const shares = [...results.sections].sort((a, b) => b.totalUsd - a.totalUsd)
   const designWindow = inputs.lifecycle.consultantSelectionMonths + inputs.lifecycle.basicDesignMonths
@@ -72,7 +78,7 @@ export function EstimatorPrintReport({
   const pts = cf.map((p, i) => `${(i / Math.max(1, cf.length - 1)) * W},${H - (p.cumulativeUsd / (results.grand || 1)) * H}`).join(' ')
 
   const summary =
-    `برآورد هزینهٔ سرمایه‌ای پروژهٔ «${project.name}» شامل ${scopeLabels(project).join('، ')} در مرحلهٔ ${MATURITY[m].label} ` +
+    `برآورد هزینهٔ سرمایه‌ای پروژهٔ «${project.name}» شامل ${scopeLabels(project).join('، ')} به روش ${METHOD_META[chosen].short} در مرحلهٔ ${MATURITY[m].label} ` +
     `${fmtEUR(eur(results.grand))} (معادل ${fmtRialBn(results.grand * rialRate)}) برآورد می‌شود و با توجه به سطح تعریف پروژه، ` +
     `هزینهٔ نهایی به احتمال زیاد بین ${fmtEURm(eur(rg.low))} و ${fmtEURm(eur(rg.high))} یورو خواهد بود. ` +
     `از شروع انتخاب مشاور تا راه‌اندازی حدود ${toFa(k.totalMonths)} ماه زمان لازم است و بیشترین نیاز نقدینگی در ماه ${toFa(k.peakMonth)} رخ می‌دهد.` +
@@ -82,20 +88,20 @@ export function EstimatorPrintReport({
     <div dir="rtl" lang="fa">
       {/* ─────────────── page 1: decision ─────────────── */}
       <div className="est-page" style={PAGE}>
-        <Header project={project} page={1} today={today} versionLabel={versionLabel} maturity={MATURITY[m].label} />
-        <div style={{ padding: '18px 40px 0' }}>
+        <Header project={project} page={1} today={today} versionLabel={versionLabel} maturity={MATURITY[m].label} rate={inputs.overhead.fxRialPerEur ?? rialRate * eurRate} />
+        <div style={{ padding: '14px 40px 0' }}>
           <div style={{ border: `1px solid ${LINE}`, borderRadius: 14, padding: '4px 10px 6px', background: '#F7F9FC' }}>
-            <RouteSchematic project={project} lengthKm={k.lengthKm} height={104} animated={false} light />
+            <RouteSchematic project={project} lengthKm={k.lengthKm} height={66} animated={false} light />
           </div>
 
-          <div style={{ display: 'flex', gap: 18, marginTop: 16, alignItems: 'stretch' }}>
+          <div style={{ display: 'flex', gap: 18, marginTop: 12, alignItems: 'stretch' }}>
             <div style={{ flex: 1.15, background: NAVY, color: '#fff', borderRadius: 14, padding: '16px 20px' }}>
               <div style={{ fontSize: 11, opacity: 0.75 }}>برآورد کل هزینهٔ سرمایه‌ای</div>
               <div style={{ ...num, fontSize: 32, fontWeight: 700, color: '#FFD15C', marginTop: 2 }}>{fmtEUR(eur(results.grand))}</div>
               <div style={{ ...num, fontSize: 13, opacity: 0.9 }}>{fmtRial(results.grand * rialRate)}</div>
-              <div style={{ marginTop: 12, fontSize: 10, opacity: 0.8 }}>بازهٔ دقت ({fmtPct(rg.lowPct)} تا +{fmtPct(rg.highPct)})</div>
+              <div style={{ marginTop: 12, fontSize: 10, opacity: 0.8 }}>بازهٔ برآورد ({fmtPct(rg.lowPct)} تا +{fmtPct(rg.highPct)})</div>
               <div style={{ position: 'relative', height: 7, borderRadius: 9, marginTop: 5, background: 'linear-gradient(270deg,#5B9BE8,#FFD15C 40%,#F08A8A)' }}>
-                <span style={{ position: 'absolute', top: -4, right: `${(-rg.lowPct / (rg.highPct - rg.lowPct)) * 100}%`, width: 4, height: 15, background: '#fff', borderRadius: 2 }} />
+                <span style={{ position: 'absolute', top: -4, right: `${(-rg.lowPct / ((rg.highPct - rg.lowPct) || 1)) * 100}%`, width: 4, height: 15, background: '#fff', borderRadius: 2 }} />
               </div>
               <div style={{ ...num, display: 'flex', justifyContent: 'space-between', fontSize: 11, marginTop: 4 }}>
                 <span>{fmtEURm(eur(rg.low))}</span><span>{fmtEURm(eur(rg.high))}</span>
@@ -110,7 +116,18 @@ export function EstimatorPrintReport({
           </div>
 
           <SectionHead>خلاصهٔ مدیریتی</SectionHead>
-          <p style={{ fontSize: 12, lineHeight: 2.05, color: '#2B3A4A', margin: 0, textAlign: 'justify' }}>{summary}</p>
+          <p style={{ fontSize: 11.5, lineHeight: 1.9, color: '#2B3A4A', margin: 0, textAlign: 'justify' }}>{summary}</p>
+
+          {methods.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 12 }}>
+              {methods.map((x) => (
+                <div key={x.method} style={{ borderRadius: 10, padding: '7px 10px', border: `1.5px solid ${x.method === chosen ? METHOD_META[x.method].color : LINE}`, background: x.method === chosen ? '#FFF8E6' : '#F7F9FC' }}>
+                  <div style={{ fontSize: 9.5, color: MUTED, display: 'flex', alignItems: 'center', gap: 4 }}><i style={{ width: 7, height: 7, borderRadius: 2, background: METHOD_META[x.method].color, display: 'inline-block' }} />{METHOD_META[x.method].short}{x.method === chosen ? ' · مبنا' : ''}</div>
+                  <div style={{ ...num, fontSize: 13, fontWeight: 700, color: x.available ? NAVY : MUTED }}>{x.available ? fmtEURm(x.eur) : 'بدون داده'}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <SectionHead>ساختار شکست هزینه</SectionHead>
           <div style={{ display: 'flex', gap: 22 }}>
@@ -140,8 +157,8 @@ export function EstimatorPrintReport({
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 10.5, color: MUTED, marginBottom: 8 }}>سهم هر بخش از هزینهٔ مستقیم</div>
               {shares.map((s) => (
-                <div key={s.key} style={{ marginBottom: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#3B4A5A', marginBottom: 3 }}>
+                <div key={s.key} style={{ marginBottom: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#3B4A5A', marginBottom: 2 }}>
                     <span>{s.chartLabel}</span><span style={num}>{fmtPct(s.totalUsd / (results.direct || 1))}</span>
                   </div>
                   <div style={{ height: 8, background: '#EEF2F6', borderRadius: 5, overflow: 'hidden' }}>
@@ -161,7 +178,7 @@ export function EstimatorPrintReport({
 
       {/* ─────────────── page 2: plan ─────────────── */}
       <div className="est-page" style={PAGE}>
-        <Header project={project} page={2} today={today} versionLabel={versionLabel} maturity={MATURITY[m].label} />
+        <Header project={project} page={2} today={today} versionLabel={versionLabel} maturity={MATURITY[m].label} rate={inputs.overhead.fxRialPerEur ?? rialRate * eurRate} />
         <div style={{ padding: '6px 40px 0' }}>
           <SectionHead>چرخهٔ عمر و نیاز نقدینگی</SectionHead>
           <div style={{ display: 'flex', height: 22, borderRadius: 7, overflow: 'hidden' }} dir="ltr">
@@ -282,9 +299,9 @@ export function EstimatorPrintReport({
   )
 }
 
-function Header({ project, page, today, versionLabel, maturity }: { project: EstProject; page: number; today: string; versionLabel?: string; maturity: string }) {
+function Header({ project, page, today, versionLabel, maturity, rate }: { project: EstProject; page: number; today: string; versionLabel?: string; maturity: string; rate: number }) {
   return (
-    <div style={{ background: NAVY, color: '#fff', padding: page === 1 ? '26px 40px 22px' : '14px 40px', position: 'relative' }}>
+    <div style={{ background: NAVY, color: '#fff', padding: page === 1 ? '20px 40px 16px' : '14px 40px', position: 'relative' }}>
       <div style={{ position: 'absolute', insetInlineStart: 0, top: 0, bottom: 0, width: 8, background: AMBER }} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 20 }}>
         <div style={{ minWidth: 0 }}>
@@ -295,6 +312,7 @@ function Header({ project, page, today, versionLabel, maturity }: { project: Est
         <div style={{ textAlign: 'left', fontSize: 10.5, lineHeight: 1.8, opacity: 0.9, flexShrink: 0 }}>
           <div>تاریخ: <span style={num}>{today}</span></div>
           <div>مرحله: {maturity}</div>
+          <div>نرخ یورو: <span style={num}>{Math.round(rate).toLocaleString('en-US')}</span> ریال</div>
           {versionLabel && <div>نسخه: {versionLabel}</div>}
         </div>
       </div>
@@ -313,7 +331,7 @@ function Footer({ page }: { page: number }) {
 
 function SectionHead({ children }: { children: ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '18px 0 9px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '14px 0 8px' }}>
       <span style={{ width: 4, height: 15, borderRadius: 2, background: AMBER }} />
       <span style={{ fontSize: 13, fontWeight: 800, color: INK }}>{children}</span>
       <span style={{ flex: 1, height: 1, background: LINE }} />
@@ -334,9 +352,9 @@ function Tile({ label, value, sub }: { label: string; value: string; sub?: strin
 function Row({ label, v, share, mark, strong }: { label: string; v: number; share: number; mark?: string; strong?: boolean }) {
   return (
     <tr style={{ borderBottom: `1px solid ${LINE}`, background: strong ? '#EEF2F6' : undefined, fontWeight: strong ? 800 : 400 }}>
-      <td style={{ padding: '4px 6px', borderRight: mark ? `3px solid ${mark}` : undefined }}>{label}</td>
-      <td style={{ ...num, textAlign: 'left', padding: '4px' }}>{fmtEUR(v)}</td>
-      <td style={{ ...num, textAlign: 'left', padding: '4px', color: MUTED }}>{fmtPct(share)}</td>
+      <td style={{ padding: '3px 6px', borderRight: mark ? `3px solid ${mark}` : undefined }}>{label}</td>
+      <td style={{ ...num, textAlign: 'left', padding: '3px 4px' }}>{fmtEUR(v)}</td>
+      <td style={{ ...num, textAlign: 'left', padding: '3px 4px', color: MUTED }}>{fmtPct(share)}</td>
     </tr>
   )
 }

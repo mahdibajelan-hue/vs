@@ -112,6 +112,11 @@ export interface EstSectionSpecs {
 }
 
 export interface EstOverheadInputs {
+  /** the day's euro rate on the official FX system (rial per euro), asked when an estimate starts;
+   * fxRialPerUsd is derived from it and the euro/dollar parity */
+  fxRialPerEur?: number
+  /** yearly escalation applied to library costs to bring them to today's money (fraction) */
+  benchEscalation?: number
   eng: number
   pm: number
   ins: number
@@ -153,9 +158,17 @@ export interface EstLongLeadItem {
 /** How mature the definition behind an estimate is — sets the accuracy range shown with it. */
 export type EstMaturity = 'concept' | 'feasibility' | 'basic'
 
+/** How the final number is reached: bottom-up from unit rates, from the library's average cost per
+ * inch-km, scaled from the closest similar projects, or a weighted blend of the available ones. */
+export type EstMethod = 'parametric' | 'historical' | 'analog' | 'blended'
+
 export interface EstFullInputs {
   /** absent on estimates saved before the field existed — read as 'concept' */
   maturity?: EstMaturity
+  /** absent on older estimates — read as 'parametric' */
+  method?: EstMethod
+  /** blend weights; methods without data are dropped and the rest re-normalised */
+  weights?: { parametric: number; historical: number; analog: number }
   overhead: EstOverheadInputs
   lifecycle: EstLifecycleInputs
   specs: EstSectionSpecs
@@ -223,3 +236,28 @@ export interface EstEstimateRecord {
   createdBy: string | null
   createdAt: string
 }
+
+/** One recent project in the benchmark library — its estimated or final cost, normalised to euros. */
+export interface EstBenchmark {
+  id: string
+  name: string
+  location: string
+  kind: 'estimate' | 'actual'
+  setting: 'onshore' | 'offshore' | 'mixed'
+  terrain: 'flat' | 'mixed' | 'mountain'
+  lengthKm: number
+  diameterIn: number
+  hasCompressor: boolean
+  /** Jalali year the cost refers to */
+  costYear: number
+  amount: number
+  currency: 'EUR' | 'USD' | 'IRR'
+  fxRialPerEur: number | null
+  fxEurPerUsd: number | null
+  costEur: number
+  notes: string
+  createdBy: string | null
+  createdAt: string
+}
+
+export type EstBenchmarkDraft = Omit<EstBenchmark, 'id' | 'createdBy' | 'createdAt' | 'costEur'>

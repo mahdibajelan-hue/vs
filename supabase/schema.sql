@@ -4053,7 +4053,7 @@ create policy "est_estimates_delete_own" on est_estimates
 
 create index if not exists idx_est_estimates_project on est_estimates (project_id, created_at desc);
 
--- Singleton assumptions row (Ministry-of-Petroleum-guideline default rates, overhead percentages,
+-- Singleton assumptions row (the organisation's default unit rates, overhead percentages,
 -- and lifecycle durations) — every new calculation seeds from this instead of hardcoded client
 -- constants once an admin has set it. The boolean primary key pinned to true is the standard
 -- Postgres singleton-table trick: only one row can ever exist.
@@ -4077,6 +4077,41 @@ create policy "est_assumptions_write_admin" on est_assumptions
 
 drop trigger if exists trg_set_updated_at on est_assumptions;
 create trigger trg_set_updated_at before update on est_assumptions for each row execute function set_updated_at_and_by();
+
+-- Benchmark library: estimated or final costs of recent pipeline projects, entered by users and
+-- read by everyone; normalised to euros at entry (cost_eur) so the historical and analog methods
+-- can average and scale them. Editable by whoever entered the row, or an admin.
+create table if not exists est_benchmarks (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  location text not null default '',
+  kind text not null default 'estimate' check (kind in ('estimate', 'actual')),
+  setting text not null default 'onshore' check (setting in ('onshore', 'offshore', 'mixed')),
+  terrain text not null default 'mixed' check (terrain in ('flat', 'mixed', 'mountain')),
+  length_km numeric not null check (length_km > 0),
+  diameter_in numeric not null check (diameter_in > 0),
+  has_compressor boolean not null default false,
+  cost_year int not null,
+  amount numeric not null check (amount > 0),
+  currency text not null default 'EUR' check (currency in ('EUR', 'USD', 'IRR')),
+  fx_rial_per_eur numeric,
+  fx_eur_per_usd numeric,
+  cost_eur numeric not null check (cost_eur > 0),
+  notes text not null default '',
+  created_by uuid default auth.uid() references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table est_benchmarks enable row level security;
+drop policy if exists "est_benchmarks_select_all" on est_benchmarks;
+create policy "est_benchmarks_select_all" on est_benchmarks for select to authenticated using (true);
+drop policy if exists "est_benchmarks_write_own" on est_benchmarks;
+create policy "est_benchmarks_write_own" on est_benchmarks for all to authenticated
+  using (created_by = auth.uid() or is_admin_user())
+  with check (created_by = auth.uid() or is_admin_user());
+drop trigger if exists trg_set_updated_at on est_benchmarks;
+create trigger trg_set_updated_at before update on est_benchmarks for each row execute function set_updated_at();
+create index if not exists idx_est_benchmarks_setting on est_benchmarks (setting, diameter_in);
 
 -- ============================================================================
 -- 21. Project Lifecycle & Control Tower — stage/gate governance, master-plan

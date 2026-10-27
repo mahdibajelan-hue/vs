@@ -65,4 +65,4 @@ export const fmtRialBn = (n: number) => (n / 1_000_000_000).toLocaleString('en-U
 export const fmtPct = (n: number) => (n * 100).toLocaleString('en-US', { maximumFractionDigits: 1 }) + '%'
 export const toFa = (s: number | string) => String(s).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)])
 
-export const EST_FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');`
+export const EST_FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=Fira+Code:wght@400;500;600&display=swap');`

@@ -55,11 +55,11 @@ export function SettingsPage() {
 
   return (
     <div className="h-full overflow-y-auto est-font">
-      <div className="mx-auto max-w-3xl px-4 py-6 space-y-4">
+      <div className="mx-auto max-w-3xl px-4 py-6 space-y-4 pb-24 lg:pb-8">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-bold flex items-center gap-2" style={{ color: INK }}>
-              <Lock size={14} style={{ color: SAFETY }} /> تنظیمات — مبانی محاسبات
+              <Lock size={14} style={{ color: SAFETY }} /> مبانی برآورد
             </p>
             <p className="text-[11px] mt-0.5" style={{ color: MUTED_FG }}>
               این نرخ‌ها مبنای همه پروژه‌های جدید هستند و در بخش «مشخصات و آپشن‌ها» دیگر قابل ویرایش نیستند — فقط اینجا و فقط برای مدیر سامانه.
@@ -152,12 +152,12 @@ export function SettingsPage() {
 
           <Section title="نرخ ارز، سربار و ذخایر" icon={<Coins size={17} />}>
             <div className="grid grid-cols-2 gap-x-3">
-              <Field label="نرخ یورو" unit="یورو/دلار" value={draft.overhead.fxEurPerUsd} step={0.01}
+              <Field label="برابری یورو و دلار" unit="یورو/دلار" value={draft.overhead.fxEurPerUsd} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, fxEurPerUsd: v } }))}
-                hint="نرخ تبدیل دلار به یورو برای نمایش نتایج؛ محاسبات داخلی همیشه بر مبنای دلار انجام می‌شود." />
-              <Field label="نرخ ریال" unit="ریال/دلار" value={draft.overhead.fxRialPerUsd} step={1000}
-                onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, fxRialPerUsd: v } }))}
-                hint="نرخ تبدیل دلار به ریال؛ برای تبدیل هزینه تملک اراضی (که به ریال وارد می‌شود) نیز از همین نرخ استفاده می‌شود." />
+                hint="نرخ‌های واحد به دلار نگه‌داری می‌شوند و با این برابری به یورو تبدیل می‌شوند. نرخ ریالی یورو در شروع هر برآورد از کاربر پرسیده می‌شود." />
+              <Field label="تعدیل سالانهٔ هزینه‌های کتابخانه" percent value={draft.overhead.benchEscalation ?? 0.04} step={0.005}
+                onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, benchEscalation: v } }))}
+                hint="هزینهٔ پروژه‌های مرجع با این نرخ سالانه به قیمت امروز (یورو) برگردانده می‌شود؛ روش‌های تاریخی و قیاسی از آن استفاده می‌کنند." />
               <Field label="مهندسی و طراحی" percent value={draft.overhead.eng} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, eng: v } }))}
                 hint="درصدی از هزینه مستقیم که صرف مهندسی پایه و تفصیلی می‌شود؛ در جریان نقدینگی هم در طول ماه‌های طراحی پایه توزیع می‌شود." />

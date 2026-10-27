@@ -1,4 +1,5 @@
-import type { EstFullInputs, EstProject, EstResults } from '../types'
+import type { EstFullInputs, EstMethod, EstProject, EstResults } from '../types'
+import { METHOD_META, type MethodResult } from './methods'
 import { annualCashFlow, buildCashFlowTimeline, computeSensitivity, estimateKpis, estimateRange, LIFECYCLE_PHASE_LABEL, MATURITY, maturityOf } from './calc'
 
 const RISK_CATEGORY_LABEL: Record<string, string> = {
@@ -11,13 +12,14 @@ const safeName = (s: string) => s.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'esti
 /** Workbook with one sheet per view of the estimate — summary, cost breakdown, monthly and yearly
  * cash flow, risks, long-lead items and the assumptions behind the number. Amounts are written as
  * numbers (not formatted text) so they can be summed and charted in Excel. */
-export async function exportEstimateToExcel(project: EstProject, inputs: EstFullInputs, results: EstResults, versionLabel?: string) {
+export async function exportEstimateToExcel(project: EstProject, inputs: EstFullInputs, results: EstResults, versionLabel?: string, methods: MethodResult[] = [], chosen: EstMethod = 'parametric') {
   const XLSX = await import('xlsx')
   const eur = inputs.overhead.fxEurPerUsd, rial = inputs.overhead.fxRialPerUsd
   const cf = buildCashFlowTimeline(inputs, results)
   const k = estimateKpis(project, inputs, results, cf)
   const m = maturityOf(inputs)
-  const rg = estimateRange(results.grand, m)
+  const chm = methods.find((x) => x.method === chosen)
+  const rg = chm ? { low: chm.low / eur, high: chm.high / eur } : estimateRange(results.grand, m)
   const round = (n: number) => Math.round(n)
   const wb = XLSX.utils.book_new()
   const sheet = (rows: Record<string, unknown>[], name: string, widths: number[]) => {
@@ -32,6 +34,8 @@ export async function exportEstimateToExcel(project: EstProject, inputs: EstFull
     { 'شرح': 'نسخه', 'مقدار': versionLabel ?? 'محاسبهٔ جاری' },
     { 'شرح': 'تاریخ تهیه', 'مقدار': new Date().toLocaleDateString('fa-IR') },
     { 'شرح': 'مرحلهٔ تعریف', 'مقدار': MATURITY[m].label },
+    { 'شرح': 'روش برآورد', 'مقدار': METHOD_META[chosen].label },
+    { 'شرح': 'نرخ یورو در سامانه (ریال)', 'مقدار': round(inputs.overhead.fxRialPerEur ?? rial / eur) },
     { 'شرح': 'برآورد کل (یورو)', 'مقدار': round(results.grand * eur) },
     { 'شرح': 'برآورد کل (ریال)', 'مقدار': round(results.grand * rial) },
     { 'شرح': 'برآورد کل (دلار)', 'مقدار': round(results.grand) },
@@ -51,6 +55,7 @@ export async function exportEstimateToExcel(project: EstProject, inputs: EstFull
       .map(([l, v, r]) => ({ 'سرفصل': l, 'گروه': 'غیرمستقیم و ذخایر', 'دلار': round(v), 'یورو': round(v * eur), 'ریال': round(v * rial), 'سهم از کل': +(v / results.grand).toFixed(4), 'توضیح': `${(r * 100).toFixed(1)}٪` })),
     { 'سرفصل': 'جمع کل برآورد', 'گروه': 'جمع', 'دلار': round(results.grand), 'یورو': round(results.grand * eur), 'ریال': round(results.grand * rial), 'سهم از کل': 1, 'توضیح': '' },
   ]
+  if (methods.length) sheet(methods.map((x) => ({ 'روش': METHOD_META[x.method].label, 'مبنای عدد نهایی': x.method === chosen ? 'بله' : '', 'برآورد (یورو)': x.available ? round(x.eur) : null, 'کران پایین (یورو)': x.available ? round(x.low) : null, 'کران بالا (یورو)': x.available ? round(x.high) : null, 'توضیح': x.available ? x.note : x.reason ?? '' })), 'روش‌های برآورد', [28, 14, 18, 18, 18, 60])
   sheet(cbs, 'ریز برآورد', [30, 16, 16, 16, 20, 10, 50])
 
   sheet(cf.map((p) => ({ 'ماه': p.month, 'فاز': LIFECYCLE_PHASE_LABEL[p.phase], 'هزینهٔ ماه (یورو)': round(p.monthlyUsd * eur), 'تجمعی (یورو)': round(p.cumulativeUsd * eur), 'پیشرفت مالی تجمعی': +(p.cumulativeUsd / (results.grand || 1)).toFixed(4) })), 'نقدینگی ماهانه', [6, 20, 18, 18, 16])
@@ -92,7 +97,7 @@ export function printReportElement(el: HTMLElement, title: string) {
   const w = window.open('', '_blank', 'width=900,height=1200')
   if (!w) return false
   w.document.write(`<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>${title.replace(/</g, '&lt;')}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;600;700&display=swap">
 <style>@page{size:A4;margin:0}html,body{margin:0;background:#E5E9EF}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .est-page{margin:12px auto;box-shadow:0 6px 24px rgba(15,47,65,.18)}
 @media print{html,body{background:#fff}.est-page{margin:0;box-shadow:none;break-after:page;page-break-after:always}.est-page:last-child{break-after:auto;page-break-after:auto}}</style>

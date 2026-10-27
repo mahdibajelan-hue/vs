@@ -174,9 +174,9 @@ export function Btn({ children, onClick, kind = 'ghost', disabled, title, type =
 }
 
 export const EST_GLOBAL_STYLE = `
-  @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;600;700&display=swap');
   .est-font { font-family: 'Vazirmatn', Tahoma, Arial, sans-serif; color: ${INK}; --ease: cubic-bezier(0.23, 1, 0.32, 1); }
-  .est-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .est-mono { font-family: 'Fira Code', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
   .est-input { outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
   .est-input:hover { border-color: #2a3c52 !important; }
   .est-input:focus { box-shadow: 0 0 0 3px rgba(242,183,5,.18); border-color: ${SAFETY} !important; }

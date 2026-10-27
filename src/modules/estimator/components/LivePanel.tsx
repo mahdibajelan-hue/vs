@@ -1,18 +1,21 @@
 import { useMemo } from 'react'
 import { ArrowLeft, CalendarRange, Gauge, Ruler } from 'lucide-react'
-import type { EstFullInputs, EstProject } from '../types'
-import { buildCashFlowTimeline, computeEstimate, estimateKpis, estimateRange, MATURITY, maturityOf } from '../lib/calc'
+import type { EstBenchmark, EstFullInputs, EstProject } from '../types'
+import { buildCashFlowTimeline, estimateKpis, MATURITY, maturityOf } from '../lib/calc'
+import { finalResults, METHOD_META } from '../lib/methods'
 import { BORDER, fmtEUR, fmtEURm, fmtPct, fmtRialBn, INK, INK_SOFT, MUTED_FG, SAFETY, SECTION_COLOR, SURFACE, toFa } from '../lib/theme'
 import { AnimatedNumber, Btn } from './ui'
 
 /** Running total next to the inputs: every change re-prices the project immediately, so the
  * estimator sees which input actually moves the number before going to the report. */
-export function LivePanel({ project, inputs, onOpenResults }: { project: EstProject; inputs: EstFullInputs; onOpenResults: () => void }) {
-  const results = useMemo(() => computeEstimate(project, inputs), [project, inputs])
+export function LivePanel({ project, inputs, benchmarks, nowYear, onOpenResults }: { project: EstProject; inputs: EstFullInputs; benchmarks: EstBenchmark[]; nowYear: number; onOpenResults: () => void }) {
+  const fr = useMemo(() => finalResults(project, inputs, benchmarks, nowYear), [project, inputs, benchmarks, nowYear])
+  const results = fr.results
+  const chosen = fr.methods.chosen
   const kpis = useMemo(() => estimateKpis(project, inputs, results, buildCashFlowTimeline(inputs, results)), [project, inputs, results])
   const eur = (usd: number) => usd * inputs.overhead.fxEurPerUsd
   const m = maturityOf(inputs)
-  const range = estimateRange(results.grand, m)
+  const range = { low: chosen.low / inputs.overhead.fxEurPerUsd, high: chosen.high / inputs.overhead.fxEurPerUsd, lowPct: chosen.low / chosen.eur - 1, highPct: chosen.high / chosen.eur - 1 }
   const parts = [...results.sections.map((s) => ({ key: s.key, label: s.chartLabel, v: s.totalUsd, c: SECTION_COLOR[s.key] })),
     { key: 'ind', label: 'مهندسی، مدیریت، بیمه', v: results.indirect, c: '#6B7A8F' },
     { key: 'res', label: 'ذخایر', v: results.contingency + results.escalation, c: '#3F4C5E' }]
@@ -22,7 +25,7 @@ export function LivePanel({ project, inputs, onOpenResults }: { project: EstProj
       <aside className="est-live est-fade-in" aria-label="برآورد زنده">
         <div className="flex items-center justify-between">
           <span className="est-live-tag"><span className="est-live-dot" /> برآورد زنده</span>
-          <span className="text-[10.5px]" style={{ color: MUTED_FG }}>مرحلهٔ {MATURITY[m].label}</span>
+          <span className="text-[10.5px] inline-flex items-center gap-1" style={{ color: MUTED_FG }}><i className="inline-block h-2 w-2 rounded-sm" style={{ background: METHOD_META[chosen.method].color }} />{METHOD_META[chosen.method].short} · {MATURITY[m].label}</span>
         </div>
         <div>
           <div className="text-[11px]" style={{ color: MUTED_FG }}>برآورد کل</div>
@@ -32,9 +35,9 @@ export function LivePanel({ project, inputs, onOpenResults }: { project: EstProj
 
         <div>
           <div className="flex justify-between text-[10.5px] mb-1" style={{ color: MUTED_FG }}>
-            <span>بازهٔ دقت ({fmtPct(range.lowPct)} تا +{fmtPct(range.highPct)})</span>
+            <span>بازهٔ برآورد ({fmtPct(range.lowPct)} تا +{fmtPct(range.highPct)})</span>
           </div>
-          <div className="est-range"><span style={{ insetInlineStart: `${(-range.lowPct / (range.highPct - range.lowPct)) * 100}%` }} /></div>
+          <div className="est-range"><span style={{ insetInlineStart: `${(-range.lowPct / ((range.highPct - range.lowPct) || 1)) * 100}%` }} /></div>
           <div className="flex justify-between est-mono text-[11px] mt-1" style={{ color: INK_SOFT }}>
             <span>{fmtEURm(eur(range.low))}</span><span>{fmtEURm(eur(range.high))}</span>
           </div>

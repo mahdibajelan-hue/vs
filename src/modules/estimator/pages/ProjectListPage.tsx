@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ArrowLeft, Calculator, Check, FileStack, GitBranch, Layers, Plus, Radio, Search, Trash2, Waves, Wind, Workflow, X } from 'lucide-react'
+import { ArrowLeft, BookMarked, Calculator, Check, FileStack, GitBranch, Layers, Plus, Radio, Search, Trash2, Waves, Wind, Workflow, X } from 'lucide-react'
 import { formatJalali } from '../../../lib/jalali'
 import { useEstimatorStore } from '../store/useEstimatorStore'
 import type { EstProjectDraft } from '../types'
@@ -7,6 +7,7 @@ import { scopeLabels } from '../lib/calc'
 import { BORDER, fmtEUR, fmtEURm, INK, INK_SOFT, MUTED_FG, SAFETY, SECTION_COLOR, SURFACE, SURFACE_2, toFa } from '../lib/theme'
 import { AnimatedNumber, Btn, Stepper, TextField } from '../components/ui'
 import { RouteSchematic } from '../components/RouteSchematic'
+import { Guide } from '../components/Guide'
 
 const EMPTY_DRAFT: EstProjectDraft = { name: '', hasOnshore: true, hasOffshore: false, hasCompressorStation: false, tieInCount: 0, hasTelecomScada: true }
 
@@ -18,7 +19,7 @@ const PRESETS: { key: string; title: string; hint: string; scope: Omit<EstProjec
   { key: 'subsea', title: 'خط زیردریایی', hint: 'فقط بخش دریایی', scope: { hasOnshore: false, hasOffshore: true, hasCompressorStation: false, tieInCount: 0, hasTelecomScada: false } },
 ]
 
-export function ProjectListPage() {
+export function ProjectListPage({ onOpenLibrary }: { onOpenLibrary: () => void }) {
   const projects = useEstimatorStore((s) => s.projects)
   const summaries = useEstimatorStore((s) => s.summaries)
   const fetchSummaries = useEstimatorStore((s) => s.fetchSummaries)
@@ -36,20 +37,22 @@ export function ProjectListPage() {
 
   return (
     <div className="h-full overflow-y-auto est-font est-scroll">
-      <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
+      <div className="mx-auto max-w-6xl px-4 py-6 space-y-6 pb-24 lg:pb-8">
         {/* hero: what the module does, as the route it estimates */}
         <section className="est-hero est-fade-in">
           <div className="est-hero-text">
             <span className="est-eyebrow"><Calculator size={13} /> برآورد پارامتریک هزینهٔ سرمایه‌ای</span>
             <h1>از مسیر خط لوله تا عدد قابل تصویب</h1>
-            <p>دامنهٔ پروژه را تعریف کنید، مشخصات فنی را وارد کنید و برآورد کل، بازهٔ دقت، جریان نقدینگی سال‌به‌سال، ریسک‌ها و اقلام بلندمدت‌تأمین را در یک گزارش قابل چاپ بگیرید. هر محاسبه به‌صورت نسخه ذخیره می‌شود تا تغییر برآورد در طول زمان قابل پیگیری باشد.</p>
+            <p>برآورد هزینهٔ سرمایه‌ای خطوط لوله به چهار روش — پارامتریک، تاریخی، قیاسی و ترکیبی — با نرخ روز یورو، بازهٔ برآورد، جریان نقدینگی سال‌به‌سال و گزارش قابل چاپ. کتابخانهٔ پروژه‌های مرجع، هزینهٔ پروژه‌های اخیر را مبنای برآورد بعدی می‌کند.</p>
             <ol className="est-flow-steps">
-              <li><b>۱</b> تعریف دامنه</li>
-              <li><b>۲</b> مشخصات فنی و زمان‌بندی</li>
-              <li><b>۳</b> برآورد، نسخه و گزارش</li>
+              <li><b>۱</b> تعریف پروژه</li>
+              <li><b>۲</b> نرخ یورو و روش</li>
+              <li><b>۳</b> مشخصات فنی</li>
+              <li><b>۴</b> برآورد و گزارش</li>
             </ol>
             <div className="flex flex-wrap gap-2 mt-5">
               <Btn kind="primary" onClick={() => setCreating(true)}><Plus size={15} /> تعریف پروژهٔ جدید</Btn>
+              <Btn kind="ghost" onClick={onOpenLibrary}><BookMarked size={15} /> کتابخانهٔ مرجع</Btn>
             </div>
           </div>
           <div className="est-hero-art" aria-hidden>
@@ -64,6 +67,8 @@ export function ProjectListPage() {
             </div>
           </div>
         </section>
+
+        <Guide onOpenLibrary={onOpenLibrary} />
 
         {/* portfolio strip */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
