@@ -78,7 +78,7 @@ export const useEstimatorStore = create<EstimatorStoreState>()((set, get) => ({
       name: d.name, location: d.location, kind: d.kind, setting: d.setting, terrain: d.terrain,
       length_km: d.lengthKm, diameter_in: d.diameterIn, has_compressor: d.hasCompressor, cost_year: d.costYear,
       amount: d.amount, currency: d.currency, fx_rial_per_eur: d.fxRialPerEur, fx_eur_per_usd: d.fxEurPerUsd,
-      cost_eur: d.costEur, notes: d.notes,
+      cost_eur: d.costEur, notes: d.notes, use_in_estimates: d.useInEstimates,
     }
     const { error } = id ? await supabase.from('est_benchmarks').update(row).eq('id', id) : await supabase.from('est_benchmarks').insert(row)
     if (reportError('ذخیرهٔ پروژهٔ مرجع', error)) return false

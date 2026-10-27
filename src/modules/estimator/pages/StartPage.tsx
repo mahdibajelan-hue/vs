@@ -33,7 +33,7 @@ export function StartPage({ project, inputs, benchmarks, nowYear, onChange, onNe
   }
 
   const preview = useMemo(() => (valid ? runMethods(project, inputs, benchmarks, nowYear) : null), [valid, project, inputs, benchmarks, nowYear])
-  const pipelineRows = benchmarks.filter((b) => (project.hasOnshore && b.setting !== 'offshore') || (project.hasOffshore && b.setting !== 'onshore')).length
+  const pipelineRows = benchmarks.filter((b) => b.useInEstimates !== false).filter((b) => (project.hasOnshore && b.setting !== 'offshore') || (project.hasOffshore && b.setting !== 'onshore')).length
 
   return (
     <div className="h-full overflow-y-auto est-scroll">

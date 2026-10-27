@@ -256,6 +256,8 @@ export interface EstBenchmark {
   fxEurPerUsd: number | null
   costEur: number
   notes: string
+  /** false keeps the row visible in the library but out of the historical and analog methods (outliers) */
+  useInEstimates: boolean
   createdBy: string | null
   createdAt: string
 }

@@ -32,7 +32,9 @@ export function LibraryPage({ nowYear }: { nowYear: number }) {
     .filter((b) => kind === 'all' || b.kind === kind)
     .filter((b) => !q.trim() || `${b.name} ${b.location}`.includes(q.trim()))
     .map((b) => ({ b, m: benchmarkMetrics(b, nowYear, rate) })), [benchmarks, setting, kind, q, nowYear, rate])
-  const sum = useMemo(() => librarySummary(rows.map((r) => r.b), nowYear, rate), [rows, nowYear, rate])
+  // averages and distributions use only the rows the methods use; outliers stay visible on the chart and as cards
+  const used = useMemo(() => rows.filter((r) => r.b.useInEstimates), [rows])
+  const sum = useMemo(() => librarySummary(used.map((r) => r.b), nowYear, rate), [used, nowYear, rate])
 
   return (
     <div className="h-full overflow-y-auto est-scroll">
@@ -47,7 +49,7 @@ export function LibraryPage({ nowYear }: { nowYear: number }) {
         </section>
 
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-          <Kpi icon={<BookMarked size={16} />} label="پروژه‌های ثبت‌شده" value={toFa(sum.count)} sub={`${toFa(sum.actual)} تمام‌شده`} delay={0} />
+          <Kpi icon={<BookMarked size={16} />} label="پروژه‌های ثبت‌شده" value={toFa(rows.length)} sub={`${toFa(sum.count)} در برآورد · ${toFa(sum.actual)} تمام‌شده`} delay={0} />
           <Kpi icon={<Ruler size={16} />} label="طول کل" value={`${toFa(Math.round(sum.totalKm).toLocaleString('en-US'))} km`} tone="#3987e5" delay={40} />
           <Kpi icon={<Sigma size={16} />} label="میانهٔ هر کیلومتر" value={sum.count ? fmtEURm(sum.perKm.median) : '—'} sub="یورو، قیمت امروز" tone="#199e70" delay={80} />
           <Kpi icon={<TrendingUp size={16} />} label="میانهٔ هر اینچ‌-کیلومتر" value={sum.count ? `€${fmtK(sum.perInchKm.median)}` : '—'} sub={sum.count ? `میانگین €${fmtK(sum.perInchKm.mean)}` : undefined} tone={SAFETY} delay={120} />
@@ -100,11 +102,11 @@ export function LibraryPage({ nowYear }: { nowYear: number }) {
               </Card>
 
               <Card delay={60}>
-                <CardTitle icon={<Sigma size={15} />} title="هزینهٔ هر اینچ‌-کیلومتر" hint="خط نازک: کمینه تا بیشینه · نوار: نیمهٔ میانی پروژه‌ها · خط سفید: میانه" />
+                <CardTitle icon={<Sigma size={15} />} title="هزینهٔ هر اینچ‌-کیلومتر" hint="فقط پروژه‌هایی که در برآورد استفاده می‌شوند · خط نازک: کمینه تا بیشینه · نوار: نیمهٔ میانی · خط سفید: میانه" />
                 <div className="space-y-5 mt-2">
                   {(['onshore', 'offshore', 'mixed'] as const).map((s) => {
-                    const st = stats(rows.filter((r) => r.b.setting === s).map((r) => r.m.perInchKm))
-                    const all = stats(rows.map((r) => r.m.perInchKm))
+                    const st = stats(used.filter((r) => r.b.setting === s).map((r) => r.m.perInchKm))
+                    const all = stats(used.map((r) => r.m.perInchKm))
                     const span = all.max - all.min || 1
                     const x = (v: number) => ((v - all.min) / span) * 100
                     return (
@@ -130,7 +132,7 @@ export function LibraryPage({ nowYear }: { nowYear: number }) {
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {rows.map(({ b, m }, i) => (
-                <article key={b.id} className="est-bm est-fade-in" style={{ animationDelay: `${Math.min(i, 10) * 35}ms`, ['--sc' as string]: SETTING_COLOR[b.setting] }}>
+                <article key={b.id} className={`est-bm est-fade-in ${b.useInEstimates ? '' : 'is-out'}`} style={{ animationDelay: `${Math.min(i, 10) * 35}ms`, ['--sc' as string]: SETTING_COLOR[b.setting] }}>
                   <header className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-extrabold truncate" style={{ color: INK }}>{b.name}</p>
@@ -143,7 +145,9 @@ export function LibraryPage({ nowYear }: { nowYear: number }) {
                     {b.setting !== 'offshore' && <span className="est-pill">{TERRAIN_LABEL[b.terrain]}</span>}
                     <span className="est-pill est-mono" dir="ltr">{b.diameterIn}″ · {b.lengthKm} km</span>
                     {b.hasCompressor && <span className="est-pill">با تقویت فشار</span>}
+                    {!b.useInEstimates && <span className="est-pill" style={{ color: '#f0b45a', borderColor: 'rgba(240,180,90,.4)' }}>خارج از برآورد</span>}
                   </div>
+                  {b.notes && <p className="est-bm-notes">{b.notes}</p>}
                   <div className="grid grid-cols-3 gap-2 pt-2.5" style={{ borderTop: `1px dashed ${BORDER}` }}>
                     <Fig label="به قیمت امروز" value={fmtEURm(m.eurNow)} strong />
                     <Fig label="هر کیلومتر" value={fmtEURm(m.perKm)} />
@@ -179,7 +183,7 @@ function BenchmarkForm({ initial, nowYear, onClose }: { initial: EstBenchmark | 
   const saveBenchmark = useEstimatorStore((s) => s.saveBenchmark)
   const [d, setD] = useState<EstBenchmarkDraft>(initial ?? {
     name: '', location: '', kind: 'actual', setting: 'onshore', terrain: 'mixed', lengthKm: 0, diameterIn: 0, hasCompressor: false,
-    costYear: nowYear, amount: 0, currency: 'EUR', fxRialPerEur: null, fxEurPerUsd: 0.92, notes: '',
+    costYear: nowYear, amount: 0, currency: 'EUR', fxRialPerEur: null, fxEurPerUsd: 0.92, notes: '', useInEstimates: true,
   })
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -219,7 +223,7 @@ function BenchmarkForm({ initial, nowYear, onClose }: { initial: EstBenchmark | 
           <TextField label="محل / استان" value={d.location} onChange={(v) => set('location', v)} placeholder="اختیاری" />
           <div className="grid grid-cols-2 gap-3">
             <div><span className="block text-xs font-medium mb-1" style={{ color: INK_SOFT }}>نوع هزینه</span><Segmented full value={d.kind} onChange={(v) => set('kind', v)} options={[['actual', 'تمام‌شده'], ['estimate', 'برآوردی']]} /></div>
-            <label className="block"><span className="block text-xs font-medium mb-1" style={{ color: INK_SOFT }}>تقویت فشار دارد؟</span><Segmented full value={d.hasCompressor ? 'y' : 'n'} onChange={(v) => set('hasCompressor', v === 'y')} options={[['n', 'خیر'], ['y', 'بله']]} /></label>
+            <label className="block"><span className="block text-xs font-medium mb-1" style={{ color: INK_SOFT }}>تقویت فشار / تلمبه‌خانه دارد؟</span><Segmented full value={d.hasCompressor ? 'y' : 'n'} onChange={(v) => set('hasCompressor', v === 'y')} options={[['n', 'خیر'], ['y', 'بله']]} /></label>
           </div>
           <div><span className="block text-xs font-medium mb-1" style={{ color: INK_SOFT }}>مسیر</span><Segmented full value={d.setting} onChange={(v) => set('setting', v)} options={[['onshore', 'خشکی'], ['offshore', 'دریایی'], ['mixed', 'هر دو']]} /></div>
           {d.setting !== 'offshore' && <div><span className="block text-xs font-medium mb-1" style={{ color: INK_SOFT }}>توپوگرافی غالب</span><Segmented full value={d.terrain} onChange={(v) => set('terrain', v)} options={[['flat', 'دشت'], ['mixed', 'ترکیبی'], ['mountain', 'کوهستانی']]} /></div>}
@@ -238,6 +242,7 @@ function BenchmarkForm({ initial, nowYear, onClose }: { initial: EstBenchmark | 
             <span>معادل یورویی</span><b className="est-mono">{eur > 0 ? fmtEUR(eur) : '—'}</b>
             {eur > 0 && d.lengthKm > 0 && d.diameterIn > 0 && <small className="est-mono">{fmtEURm(eur / d.lengthKm)}/km · €{fmtK(eur / d.lengthKm / d.diameterIn)}/inch-km</small>}
           </div>
+          <div><span className="block text-xs font-medium mb-1" style={{ color: INK_SOFT }}>در روش‌های تاریخی و قیاسی استفاده شود؟</span><Segmented full value={d.useInEstimates ? 'y' : 'n'} onChange={(v) => set('useInEstimates', v === 'y')} options={[['y', 'بله'], ['n', 'خیر — دادهٔ پرت یا غیرقابل‌مقایسه']]} /></div>
           <label className="block"><span className="block text-xs font-medium mb-1" style={{ color: INK_SOFT }}>توضیحات</span>
             <textarea value={d.notes} onChange={(e) => set('notes', e.target.value)} rows={2} className="est-input w-full rounded-lg px-3 py-2 text-sm" style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK }} placeholder="دامنه، شرایط خاص، منبع عدد…" />
           </label>
@@ -271,6 +276,9 @@ const LIB_STYLE = `
   .est-box-med { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: #fff; }
   .est-bm { position: relative; padding: 1rem 1.05rem; border-radius: 16px; background: ${SURFACE}; border: 1px solid ${BORDER}; border-top: 3px solid var(--sc); transition: border-color .18s ease, transform .2s var(--ease); }
   .est-bm:hover { transform: translateY(-2px); }
+  .est-bm.is-out { opacity: .72; border-top-style: dashed; }
+  .est-bm-notes { font-size: 10.5px; line-height: 1.8; color: ${MUTED_FG}; margin: 0 0 .6rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .est-bm-notes:hover { -webkit-line-clamp: unset; }
   .est-bm-actions { position: absolute; left: .55rem; bottom: .55rem; display: flex; gap: .1rem; }
   @media (hover: hover) { .est-bm-actions { opacity: 0; transition: opacity .15s ease; } .est-bm:hover .est-bm-actions, .est-bm-actions:focus-within { opacity: 1; } }
   .est-kind { display: inline-flex; align-items: center; gap: .25rem; font-size: 10.5px; font-weight: 700; padding: .15rem .5rem; border-radius: 99px; color: ${INK_SOFT}; background: rgba(255,255,255,.05); border: 1px solid ${BORDER}; white-space: nowrap; }

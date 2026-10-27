@@ -177,7 +177,7 @@ export function blendedMethod(parts: MethodResult[], weights = DEFAULT_WEIGHTS):
 
 /** every method side by side, plus the one the estimate is based on */
 export function runMethods(project: EstProjectDraft, inputs: EstFullInputs, benchmarks: EstBenchmark[], nowYear: number) {
-  const ctx: Ctx = { project, inputs, benchmarks, nowYear }
+  const ctx: Ctx = { project, inputs, benchmarks: benchmarks.filter((b) => b.useInEstimates !== false), nowYear }
   const p = parametricMethod(ctx), h = historicalMethod(ctx), a = analogMethod(ctx)
   const b = blendedMethod([p, h, a], inputs.weights ?? DEFAULT_WEIGHTS)
   const list = [p, h, a, b]

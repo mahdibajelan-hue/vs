@@ -14,7 +14,7 @@ assert.equal(escalate(100, 1405, 1402, 0.1), 100, 'future-dated rows are not dis
 const s = stats([4, 1, 3, 2])
 assert.equal(s.median, 2.5); assert.equal(s.min, 1); assert.equal(s.max, 4); assert.equal(s.n, 4)
 
-const bm = (id, setting, terrain, km, inch, eur, extra = {}) => ({ id, name: 'P' + id, location: '', kind: 'actual', setting, terrain, lengthKm: km, diameterIn: inch, hasCompressor: false, costYear: 1404, amount: eur, currency: 'EUR', fxRialPerEur: null, fxEurPerUsd: null, costEur: eur, notes: '', createdBy: null, createdAt: '', ...extra })
+const bm = (id, setting, terrain, km, inch, eur, extra = {}) => ({ id, name: 'P' + id, location: '', kind: 'actual', setting, terrain, lengthKm: km, diameterIn: inch, hasCompressor: false, useInEstimates: true, costYear: 1404, amount: eur, currency: 'EUR', fxRialPerEur: null, fxEurPerUsd: null, costEur: eur, notes: '', createdBy: null, createdAt: '', ...extra })
 // flat-equivalent per inch-km: 1 mixed-terrain project at 1.3 × base
 const m = benchmarkMetrics(bm('a', 'onshore', 'mixed', 100, 40, 40 * 100 * 1.3 * 1000), 1404, 0)
 close(m.perInchKm, 1300); close(m.flatPerInchKm, 1000)
@@ -57,6 +57,9 @@ assert.ok(hc.eur > h.eur)
 const hc2 = historicalMethod({ project: pc, inputs, benchmarks: lib.map((b) => ({ ...b, hasCompressor: true })), nowYear: 1404 })
 close(hc2.eur, h.eur)
 
+// rows marked out of estimates are ignored by the methods
+const withOutlier = [...lib, bm('x', 'onshore', 'flat', 100, 40, 400_000_000, { useInEstimates: false })]
+close(runMethods(project, { ...inputs, method: 'historical' }, withOutlier, 1404).chosen.eur, 2_500_000)
 const sum = librarySummary(lib, 1404, 0)
 assert.equal(sum.count, 3); assert.equal(sum.onshore.n, 2); close(sum.onshore.median, 1250)
 console.log('estimator methods ok')

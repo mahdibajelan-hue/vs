@@ -4098,10 +4098,13 @@ create table if not exists est_benchmarks (
   fx_eur_per_usd numeric,
   cost_eur numeric not null check (cost_eur > 0),
   notes text not null default '',
+  -- false keeps an outlier visible in the library but out of the historical and analog methods
+  use_in_estimates boolean not null default true,
   created_by uuid default auth.uid() references auth.users (id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table est_benchmarks add column if not exists use_in_estimates boolean not null default true;
 alter table est_benchmarks enable row level security;
 drop policy if exists "est_benchmarks_select_all" on est_benchmarks;
 create policy "est_benchmarks_select_all" on est_benchmarks for select to authenticated using (true);

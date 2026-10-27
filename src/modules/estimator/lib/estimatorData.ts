@@ -84,6 +84,7 @@ export interface EstBenchmarkRow {
   fx_eur_per_usd: number | string | null
   cost_eur: number | string
   notes: string
+  use_in_estimates: boolean | null
   created_by: string | null
   created_at: string
 }
@@ -96,6 +97,6 @@ export function estBenchmarkFromRow(r: EstBenchmarkRow): EstBenchmark {
     lengthKm: Number(r.length_km), diameterIn: Number(r.diameter_in), hasCompressor: r.has_compressor,
     costYear: r.cost_year, amount: Number(r.amount), currency: r.currency,
     fxRialPerEur: n(r.fx_rial_per_eur), fxEurPerUsd: n(r.fx_eur_per_usd), costEur: Number(r.cost_eur),
-    notes: r.notes, createdBy: r.created_by, createdAt: r.created_at,
+    notes: r.notes, useInEstimates: r.use_in_estimates !== false, createdBy: r.created_by, createdAt: r.created_at,
   }
 }
