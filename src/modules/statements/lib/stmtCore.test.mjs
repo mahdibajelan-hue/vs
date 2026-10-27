@@ -35,8 +35,12 @@ assert.equal(c.lines.length, 1); assert.equal(c.lines[0].sysCumAmount, 1200); as
 const prevLines = [{ ...e.lines[0], cumAmount: 600 }, { ...e.lines[1], cumAmount: 2400 }, { sourceKind: 'doc', sourceId: 'gone', cumAmount: 300, code: 'X', title: 'حذف‌شده', unit: '٪', groupLabel: 'فرایند', unitPrice: 1, baseQty: 100, baseAmount: 300 }]
 const w = withPrevious(e.lines, prevLines)
 // the basis is the source cumulative to the month end: doc 2 fell below what was approved (2000 < 2400) → its month is −400 (a correction)
-assert.deepEqual(w.map((l) => [l.sourceId, l.prevAmount, l.cumAmount]), [['1', 600, 600], ['2', 2400, 2000], ['3', 0, 0], ['gone', 300, 300]])
-assert.equal(w.reduce((a, l) => a + l.cumAmount - l.prevAmount, 0), -400)
+// a line removed at the source ('gone', approved 300) is simply not in the new statement …
+assert.deepEqual(w.map((l) => [l.sourceId, l.prevAmount, l.cumAmount]), [['1', 600, 600], ['2', 2400, 2000], ['3', 0, 0]])
+// … and the previous of the statement is the WHOLE approved cumulative (600 + 2400 + 300 = 3300): month = 2600 − 3300 = −700,
+// i.e. doc 2's correction (−400) and the removed line's approved 300 come off; nothing is paid twice
+const tw = totals(w, { advRecoveryPct: 0, retPct: 0, taxPct: 0, insPct: 0 }, null, Infinity, 3300)
+assert.equal(tw.cumAmount, 2600); assert.equal(tw.prevAmount, 3300); assert.equal(tw.thisAmount, -700)
 assert.equal(w[1].detail.belowPrev, true)
 
 // totals + deductions (advance recovery stops at what is left of the advance)

@@ -193,7 +193,7 @@ export const usePstStore = create<State>()((set, get) => {
         const cap = (part === 'E' ? cfg.capE : part === 'P' ? cfg.capP : cfg.capC) ?? c.cap
         const pendingAdv = get().statements.filter((s) => s.contractId === contractId && !s.finCertificateId).reduce((a, s) => a + s.deductions.advance, 0)
         const advanceLeft = Math.max(0, (c.value * c.advPct) / 100 - (get().advanceRecovered.get(contractId) ?? 0) - pendingAdv)
-        return { contract: c, part, period, built, lines, totals: totals(lines, rates, cap, advanceLeft), prev, rates, advanceLeft }
+        return { contract: c, part, period, built, lines, totals: totals(lines, rates, cap, advanceLeft, prev?.cumAmount ?? 0), prev, rates, advanceLeft }
       } catch (e) { fail('خواندن داده‌های منبع', e as { message: string }); return null }
     },
 
@@ -212,7 +212,7 @@ export const usePstStore = create<State>()((set, get) => {
       const ls = (get().lines.get(s.id) ?? []).map((l) => (l.id === lineId ? { ...l, cumAmount: cum } : l))
       const c = get().contracts.find((x) => x.id === s.contractId)!, cfg = get().cfgOf(s.contractId)
       const pendingAdv = get().statements.filter((x) => x.contractId === s.contractId && !x.finCertificateId && x.id !== s.id).reduce((a, x) => a + x.deductions.advance, 0)
-      const t = totals(ls, { advRecoveryPct: cfg.advRecoveryPct, retPct: cfg.retPct, taxPct: cfg.taxPct, insPct: cfg.insPct }, s.cap, Math.max(0, (c.value * c.advPct) / 100 - (get().advanceRecovered.get(s.contractId) ?? 0) - pendingAdv))
+      const t = totals(ls, { advRecoveryPct: cfg.advRecoveryPct, retPct: cfg.retPct, taxPct: cfg.taxPct, insPct: cfg.insPct }, s.cap, Math.max(0, (c.value * c.advPct) / 100 - (get().advanceRecovered.get(s.contractId) ?? 0) - pendingAdv), s.prevAmount)
       const { error } = await supabase.rpc('pst_set_line', { p_line: lineId, p_cum: cum, p_note: note ?? null, p_totals: { cum_amount: t.cumAmount, this_amount: t.thisAmount, deductions: t.deductions, payable: t.payable } })
       if (fail('ثبت مبلغ', error)) return false
       await refresh(); await get().loadLines(get().statements.find((x) => x.id === s.id) ?? s)

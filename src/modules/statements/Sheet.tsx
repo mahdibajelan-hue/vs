@@ -38,7 +38,9 @@ export function Warnings({ list, t }: { list: string[]; t?: Totals }) {
 
 type L = GenLine & { id?: string }
 /** the statement lines, grouped (discipline / material group / contract chapter), with the stage detail of each line */
-export function LinesTable({ part, lines, editable, onEdit }: { part: Part; lines: L[]; editable?: boolean; onEdit?: (l: L, cum: number) => void }) {
+/** `removedPrev` = approved amount of the previous statement's lines that have no source any more; they are not lines here but
+ *  are part of «تأییدشدهٔ قبل», so a footer row shows them to make the columns add up */
+export function LinesTable({ part, lines, editable, onEdit, removedPrev = 0 }: { part: Part; lines: L[]; editable?: boolean; onEdit?: (l: L, cum: number) => void; removedPrev?: number }) {
   const [closed, setClosed] = useState<Record<string, boolean>>({})
   const [q, setQ] = useState('')
   const [onlyThis, setOnlyThis] = useState(false)
@@ -68,6 +70,7 @@ export function LinesTable({ part, lines, editable, onEdit }: { part: Part; line
                 ...(open ? g.lines.map((l) => <LineRow key={`${l.sourceKind}:${l.sourceId}`} l={l} part={part} editable={editable} onEdit={onEdit} />) : []),
               ]
             })}
+            {Math.abs(removedPrev) > 0.5 && <tr className="g"><td colSpan={8}>ردیف‌هایی از صورت‌وضعیت قبل که دیگر منبع ندارند (حذف، جایگزینی یا خروج از محدوده) — در این صورت‌وضعیت نمی‌آیند؛ مبلغ تأییدشدهٔ قبلی‌شان در «تأییدشدهٔ قبل» کسر شده است</td><td className="n">{short(removedPrev)}</td><td className="n pst-this">{short(-removedPrev)}</td></tr>}
             {!groups.length && <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem' }}>ردیفی نیست.</td></tr>}
           </tbody>
         </table>
@@ -78,14 +81,14 @@ export function LinesTable({ part, lines, editable, onEdit }: { part: Part; line
 
 function LineRow({ l, part, editable, onEdit }: { l: L; part: Part; editable?: boolean; onEdit?: (l: L, cum: number) => void }) {
   const [v, setV] = useState<string | null>(null)
-  const d = l.detail as { stages?: { label: string; pct: number; reached: boolean }[]; steps?: { label: string; pct: number; qty: number; amount: number }[]; seq?: string; pending?: number; over?: boolean; belowPrev?: boolean; orphan?: boolean }
+  const d = l.detail as { stages?: { label: string; pct: number; reached: boolean }[]; steps?: { label: string; pct: number; qty: number; amount: number }[]; seq?: string; pending?: number; over?: boolean; belowPrev?: boolean }
   const qtyCell = part === 'E' ? <>{fa(l.sysCumQty)}٪<span className="pst-meter"><i style={{ width: `${l.sysCumQty}%` }} /></span></> : <>{fa(l.sysCumQty, 2)}<span className="pst-meter"><i style={{ width: `${pct(l.sysCumQty, l.baseQty)}%` }} /></span></>
   const commit = () => { if (v == null) return; const x = Number(v.replace(/[٬,]/g, '').replace(/[۰-۹]/g, (c) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c)))); setV(null); if (Number.isFinite(x) && Math.abs(x - l.cumAmount) > 0.5) onEdit?.(l, x) }
   return (
     <tr className={`l ${l.edited ? 'is-edited' : ''}`}>
       <td className="n" dir="ltr" style={{ textAlign: 'right' }}>{l.code || '—'}</td>
       <td style={{ minWidth: '16rem' }}>
-        <div>{l.title} {l.edited && <span className="pst-tag">اصلاح‌شده</span>} {d.over && <span className="pst-tag is-warn">بیش از مقدار پیمان</span>} {l.cumAmount < l.prevAmount - 0.5 && <span className="pst-tag is-warn">کمتر از تأیید قبل — اصلاح منفی</span>} {d.orphan && <span className="pst-tag is-warn" title="منبع این ردیف دیگر نیست (حذف، جایگزینی یا خروج از محدوده)؛ مبلغ تأییدشده ثابت مانده است">منبع ندارد — مبلغ تأییدشده ثابت</span>}</div>
+        <div>{l.title} {l.edited && <span className="pst-tag">اصلاح‌شده</span>} {d.over && <span className="pst-tag is-warn">بیش از مقدار پیمان</span>} {l.cumAmount < l.prevAmount - 0.5 && <span className="pst-tag is-warn">کمتر از تأیید قبل — اصلاح منفی</span>}</div>
         {d.stages && <div className="pst-detail">{d.stages.map((s) => <span key={s.label} className={s.reached ? 'is-yes' : ''}>{s.reached ? '✓' : '○'} {s.label} {fa(s.pct)}٪</span>)}</div>}
         {d.steps && <div className="pst-detail">{d.steps.map((s) => <span key={s.label} className={s.qty > 0 ? 'is-yes' : ''}>{s.label} {fa(s.pct)}٪ · {fa(s.qty, 2)} {l.unit}</span>)}</div>}
         {!!d.pending && <div className="pst-detail"><span>در انتظار تأیید نظارت: {fa(d.pending, 2)} {l.unit}</span></div>}
