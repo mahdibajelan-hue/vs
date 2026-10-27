@@ -140,7 +140,7 @@ function List({ onOpen }: { onOpen: (id: string) => void }) {
       </div>
       <div className="ps-table-wrap">
         <table className="ps-table">
-          <thead><tr><th>قرارداد</th><th>بخش</th><th>شماره</th><th>دوره</th><th>این دوره (ناخالص)</th><th>کسور</th><th>خالص</th><th>تجمعی</th><th>وضعیت</th></tr></thead>
+          <thead><tr><th>قرارداد</th><th>بخش</th><th>شماره</th><th>دوره</th><th>این ماه (ناخالص)</th><th>کسور</th><th>خالص</th><th>تجمعی</th><th>وضعیت</th></tr></thead>
           <tbody>
             {rows.map((s) => (
               <tr key={s.id} className="is-click" onClick={() => onOpen(s.id)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(s.id) }}>

@@ -43,7 +43,7 @@ const toDb = (l: GenLine) => ({ source_kind: l.sourceKind, source_id: l.sourceId
 const ERR: [RegExp, string][] = [
   [/not_allowed|42501|permission/i, 'دسترسی این کار را ندارید.'], [/open_exists/, 'برای این قرارداد و بخش یک صورت‌وضعیت باز (پیش‌نویس، در بررسی یا برگشتی) هست؛ ابتدا آن را تأیید یا باطل کنید.'],
   [/not_after_last/, 'دورهٔ انتخاب‌شده باید بعد از آخرین صورت‌وضعیت این بخش باشد.'], [/exists/, 'برای این ماه قبلاً صورت‌وضعیت ساخته شده است.'], [/locked/, 'این صورت‌وضعیت قفل است و تغییر نمی‌کند.'],
-  [/below_previous/, 'مبلغ تجمعی نمی‌تواند از مبلغ پذیرفته‌شدهٔ صورت‌وضعیت قبلی کمتر باشد.'], [/reason_required/, 'برای برگشت، علت را بنویسید.'], [/not_last/, 'فقط آخرین صورت‌وضعیت هر بخش را می‌توان باطل کرد.'],
+[/reason_required/, 'برای برگشت، علت را بنویسید.'], [/not_last/, 'فقط آخرین صورت‌وضعیت هر بخش را می‌توان باطل کرد.'],
   [/not_approved/, 'فقط صورت‌وضعیت تأییدشده به مالی ارسال می‌شود.'], [/bad_transition/, 'این تغییر وضعیت در حالت فعلی ممکن نیست.'], [/does not exist|schema cache/, 'جدول‌های ماژول ساخته نشده است.'],
 ]
 const msg = (e: { message: string }) => ERR.find(([r]) => r.test(e.message))?.[1] ?? e.message
@@ -184,8 +184,9 @@ export const usePstStore = create<State>()((set, get) => {
       const pid = get().projectId!, c = get().contracts.find((x) => x.id === contractId)!, cfg = get().cfgOf(contractId)
       try {
         const built = await (part === 'E' ? sourceE : part === 'P' ? sourceP : sourceC)(pid, cfg, c, period)
-        // the previous statement of this contract part (the latest before the period, not voided)
-        const prev = get().statements.filter((s) => s.contractId === contractId && s.part === part && s.to < period.from).sort((a, b) => b.to.localeCompare(a.to))[0] ?? null
+        // the previous APPROVED statement of this contract part (approved or posted, the latest before the month): its accepted
+        // cumulative amounts are the «previous»; the month = cumulative to the end of the selected month − those
+        const prev = get().statements.filter((s) => s.contractId === contractId && s.part === part && s.to < period.from && (s.status === 'approved' || s.status === 'posted')).sort((a, b) => b.to.localeCompare(a.to))[0] ?? null
         const prevLines = prev ? (get().lines.get(prev.id) ?? (await get().loadLines(prev))) : []
         const lines = withPrevious(built.lines, prevLines)
         const rates: Rates = { advRecoveryPct: cfg.advRecoveryPct, retPct: cfg.retPct, taxPct: cfg.taxPct, insPct: cfg.insPct }

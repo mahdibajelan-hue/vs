@@ -34,7 +34,9 @@ assert.equal(c.lines.length, 1); assert.equal(c.lines[0].sysCumAmount, 1200); as
 // previous statement: the period is cumulative − previous; never below the previous; orphan lines kept
 const prevLines = [{ ...e.lines[0], cumAmount: 600 }, { ...e.lines[1], cumAmount: 2400 }, { sourceKind: 'doc', sourceId: 'gone', cumAmount: 300, code: 'X', title: 'حذف‌شده', unit: '٪', groupLabel: 'فرایند', unitPrice: 1, baseQty: 100, baseAmount: 300 }]
 const w = withPrevious(e.lines, prevLines)
-assert.deepEqual(w.map((l) => [l.sourceId, l.prevAmount, l.cumAmount]), [['1', 600, 600], ['2', 2400, 2400], ['3', 0, 0], ['gone', 300, 300]])
+// the basis is the source cumulative to the month end: doc 2 fell below what was approved (2000 < 2400) → its month is −400 (a correction)
+assert.deepEqual(w.map((l) => [l.sourceId, l.prevAmount, l.cumAmount]), [['1', 600, 600], ['2', 2400, 2000], ['3', 0, 0], ['gone', 300, 300]])
+assert.equal(w.reduce((a, l) => a + l.cumAmount - l.prevAmount, 0), -400)
 assert.equal(w[1].detail.belowPrev, true)
 
 // totals + deductions (advance recovery stops at what is left of the advance)
@@ -42,4 +44,12 @@ const t = totals([{ sysCumAmount: 1000, cumAmount: 1000, prevAmount: 0 }, { sysC
 assert.equal(t.thisAmount, 3000); assert.equal(t.overCap, 500); assert.equal(t.capLeft, -500)
 assert.deepEqual(t.deductions, { advance: 150, retention: 150, tax: 75, insurance: 150, total: 525 })
 assert.equal(t.payable, 2475)
+// month 2 of a part: cumulative to the end of month 2 − approved cumulative of month 1 = this month
+const m1 = withPrevious(buildE([doc('1', 1000, '2026-09-01', null)], DEFAULT_ENG_SPLIT, periodOf('1405-07').to, 'C1').lines, [])
+const m2 = withPrevious(buildE([doc('1', 1000, '2026-09-01', '2026-10-30')], DEFAULT_ENG_SPLIT, periodOf('1405-08').to, 'C1').lines, m1)
+assert.equal(m1[0].cumAmount, 600); assert.equal(m2[0].cumAmount, 1000); assert.equal(m2[0].prevAmount, 600)
+assert.equal(totals(m2, { advRecoveryPct: 0, retPct: 0, taxPct: 0, insPct: 0 }, null).thisAmount, 400)
+// a negative month reverses retention / tax / insurance, recovers no advance
+const neg = totals([{ sysCumAmount: 800, cumAmount: 800, prevAmount: 1000 }], { advRecoveryPct: 10, retPct: 5, taxPct: 2.5, insPct: 5 }, null)
+assert.equal(neg.thisAmount, -200); assert.deepEqual(neg.deductions, { advance: 0, retention: -10, tax: -5, insurance: -10, total: -25 }); assert.equal(neg.payable, -175)
 console.log('statements/core: all assertions passed')

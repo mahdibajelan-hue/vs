@@ -69,13 +69,13 @@ export function NewStatement({ initial, onDone }: { initial?: { contractId?: str
 
       {pv && period && part && (
         <section className="ps-card" style={{ '--pc': PART_META[part].color } as CSSProperties}>
-          <header className="ps-card-head"><b><Sparkles size={15} /> ۴. پیش‌نمایش صورت‌وضعیت {PART_META[part].title} — {period.label}</b><small style={{ color: 'var(--text-muted)' }}>{pv.prev ? `قبلی: شمارهٔ ${fa(pv.prev.no)} (${pv.prev.periodKey})` : 'اولین صورت‌وضعیت این بخش'}</small></header>
+          <header className="ps-card-head"><b><Sparkles size={15} /> ۴. پیش‌نمایش صورت‌وضعیت {PART_META[part].title} — {period.label}</b><small style={{ color: 'var(--text-muted)' }}>{pv.prev ? `صورت‌وضعیت تأییدشدهٔ قبل: شمارهٔ ${fa(pv.prev.no)} (${pv.prev.periodKey})` : 'اولین صورت‌وضعیت این بخش (قبلی = صفر)'}</small></header>
           <Warnings list={pv.built.warnings} t={pv.totals} />
           <Ledger prev={pv.totals.prevAmount} now={pv.totals.thisAmount} cap={pv.totals.cap} color={PART_META[part].color} />
           <Figures t={pv.totals} part={part} />
           <div style={{ display: 'grid', gap: '.8rem', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 22rem), 1fr))' }}>
             <Deductions t={pv.totals} rates={pv.rates} />
-            <p className="ps-hint" style={{ lineHeight: 2 }}>مبلغ هر ردیف از داده‌های ماژول منبع تا پایان {period.label} حساب شده و هرگز از مبلغ پذیرفته‌شدهٔ صورت‌وضعیت قبلی کمتر نمی‌شود. پس از ساخت، پیش‌نویس را بررسی کنید؛ مبلغ تجمعی هر ردیف را می‌توان (با ثبت سابقه) اصلاح کرد و سپس برای بررسی فرستاد.</p>
+            <p className="ps-hint" style={{ lineHeight: 2 }}>مبنا همیشه «تجمعی تا پایان {period.label}» است که از داده‌های ماژول منبع حساب می‌شود؛ صورت‌وضعیت این ماه = تجمعی − مبلغ تأییدشدهٔ صورت‌وضعیت قبل{pv.prev ? ` (شمارهٔ ${fa(pv.prev.no)})` : ''}. ردیفی که تجمعی‌اش از تأیید قبل کمتر شده، با این ماه منفی (اصلاح) علامت می‌خورد. پس از ساخت، پیش‌نویس را بررسی کنید؛ مبلغ تجمعی هر ردیف را می‌توان (با ثبت سابقه) اصلاح کرد و سپس برای بررسی فرستاد.</p>
           </div>
           <LinesTable part={part} lines={pv.lines} />
           <div className="pst-bar-actions">

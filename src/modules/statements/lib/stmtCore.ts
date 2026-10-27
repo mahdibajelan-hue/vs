@@ -123,11 +123,14 @@ export function buildC(rows: ActRow[], unmapped = 0): Built {
 
 // ── previous statement, totals and deductions ────────────────────────────────────────────────────────────────────
 export const lineKey = (l: Pick<GenLine, 'sourceKind' | 'sourceId'>) => `${l.sourceKind}:${l.sourceId}`
-/** carry the previous statement's accepted cumulative amount; a line never accepts less than before. Lines that were in the
- *  previous statement but have no source any more are kept at their previous amount (zero for the period). */
+/** The basis of every statement: each line's cumulative amount up to the END of the selected month (from its source), against
+ *  the cumulative amount APPROVED in the previous statement; the month = cumulative − previous approved. A line whose source
+ *  cumulative fell below what was approved before keeps its true cumulative and gets a negative month (a correction), flagged.
+ *  A line approved before whose source no longer exists (removed, superseded, moved out of the contract scope) stays at its
+ *  approved amount — it is neither paid again nor reversed without a reviewer's decision — and is flagged. */
 export function withPrevious(lines: GenLine[], prev: Pick<GenLine, 'sourceKind' | 'sourceId' | 'cumAmount' | 'code' | 'title' | 'unit' | 'groupLabel' | 'unitPrice' | 'baseQty' | 'baseAmount'>[]): GenLine[] {
   const pm = new Map(prev.map((p) => [lineKey(p), p]))
-  const out: GenLine[] = lines.map((l) => { const p = pm.get(lineKey(l)); const pa = p?.cumAmount ?? 0; pm.delete(lineKey(l)); return { ...l, prevAmount: pa, cumAmount: Math.max(l.sysCumAmount, pa), detail: { ...l.detail, ...(l.sysCumAmount + 0.5 < pa ? { belowPrev: true } : {}) } } })
+  const out: GenLine[] = lines.map((l) => { const p = pm.get(lineKey(l)); const pa = p?.cumAmount ?? 0; pm.delete(lineKey(l)); return { ...l, prevAmount: pa, cumAmount: l.sysCumAmount, detail: { ...l.detail, ...(l.sysCumAmount + 0.5 < pa ? { belowPrev: true } : {}) } } })
   for (const p of pm.values()) if (p.cumAmount > 0) out.push({ ...p, sysCumQty: 0, sysCumAmount: 0, prevAmount: p.cumAmount, cumAmount: p.cumAmount, edited: false, note: '', detail: { orphan: true } })
   return out
 }
@@ -138,8 +141,10 @@ export interface Totals { cumSys: number; cumAmount: number; prevAmount: number;
 export function totals(lines: Pick<GenLine, 'sysCumAmount' | 'cumAmount' | 'prevAmount'>[], rates: Rates, cap: number | null, advanceLeft = Infinity): Totals {
   const r = (x: number) => Math.round(x)
   const cumSys = lines.reduce((s, l) => s + l.sysCumAmount, 0), cumAmount = lines.reduce((s, l) => s + l.cumAmount, 0), prevAmount = lines.reduce((s, l) => s + l.prevAmount, 0)
-  const thisAmount = cumAmount - prevAmount, base = Math.max(0, thisAmount)
-  const advance = r(Math.min(base * rates.advRecoveryPct / 100, Math.max(0, advanceLeft))), retention = r(base * rates.retPct / 100), tax = r(base * rates.taxPct / 100), insurance = r(base * rates.insPct / 100)
+  // the month = cumulative − previous approved; retention, tax and insurance follow its sign (a negative month reverses them),
+  // advance recovery only applies to a positive month
+  const thisAmount = cumAmount - prevAmount
+  const advance = r(Math.min(Math.max(0, thisAmount) * rates.advRecoveryPct / 100, Math.max(0, advanceLeft))), retention = r(thisAmount * rates.retPct / 100), tax = r(thisAmount * rates.taxPct / 100), insurance = r(thisAmount * rates.insPct / 100)
   const total = advance + retention + tax + insurance
   return { cumSys: r(cumSys), cumAmount: r(cumAmount), prevAmount: r(prevAmount), thisAmount: r(thisAmount), cap, capLeft: cap == null ? null : r(cap - cumAmount), overCap: cap == null ? 0 : r(Math.max(0, cumAmount - cap)),
     deductions: { advance, retention, tax, insurance, total }, payable: r(thisAmount - total) }

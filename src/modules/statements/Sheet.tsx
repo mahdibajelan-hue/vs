@@ -7,9 +7,9 @@ import { fa, pct, rial, short } from './ui'
 export function Figures({ t, part }: { t: Totals; part: Part }) {
   return (
     <div className="pst-figs" style={{ '--pc': PART_META[part].color } as CSSProperties}>
-      <div className="pst-fig"><small>کارکرد تجمعی پذیرفته</small><b>{short(t.cumAmount)}</b><span>سیستم: {short(t.cumSys)}</span></div>
-      <div className="pst-fig"><small>تا صورت‌وضعیت قبل</small><b>{short(t.prevAmount)}</b></div>
-      <div className="pst-fig is-this"><small>کارکرد این دوره (ناخالص)</small><b>{short(t.thisAmount)}</b><span>{rial(t.thisAmount)} ریال</span></div>
+      <div className="pst-fig"><small>تجمعی تا پایان ماه</small><b>{short(t.cumAmount)}</b><span>از منبع: {short(t.cumSys)}</span></div>
+      <div className="pst-fig"><small>− تأییدشدهٔ صورت‌وضعیت قبل</small><b>{short(t.prevAmount)}</b></div>
+      <div className="pst-fig is-this"><small>= صورت‌وضعیت این ماه (ناخالص)</small><b>{short(t.thisAmount)}</b><span>{rial(t.thisAmount)} ریال</span></div>
       <div className="pst-fig"><small>جمع کسور</small><b>{short(t.deductions.total)}</b></div>
       <div className="pst-fig is-key"><small>خالص قابل پرداخت</small><b>{short(t.payable)}</b><span>{rial(t.payable)} ریال</span></div>
     </div>
@@ -20,7 +20,9 @@ export function Deductions({ t, rates }: { t: Totals; rates: { advRecoveryPct: n
   const rows: [string, number, number][] = [['کسر استهلاک پیش‌پرداخت', rates.advRecoveryPct, t.deductions.advance], ['کسر حسن انجام کار (سپرده)', rates.retPct, t.deductions.retention], ['کسر مالیات', rates.taxPct, t.deductions.tax], ['کسر بیمه', rates.insPct, t.deductions.insurance]]
   return (
     <table className="pst-ded"><tbody>
-      <tr><td>کارکرد این دوره (ناخالص)</td><td /><td>{rial(t.thisAmount)}</td></tr>
+      <tr><td>تجمعی تا پایان ماه</td><td /><td>{rial(t.cumAmount)}</td></tr>
+      <tr><td>تأییدشدهٔ صورت‌وضعیت قبل</td><td /><td>− {rial(t.prevAmount)}</td></tr>
+      <tr><td><b>صورت‌وضعیت این ماه (ناخالص)</b></td><td /><td><b>{rial(t.thisAmount)}</b></td></tr>
       {rows.map(([l, p, v]) => <tr key={l}><td>{l}</td><td className="pst-num" style={{ color: 'var(--text-muted)' }}>{fa(p, 2)}٪</td><td>− {rial(v)}</td></tr>)}
       <tr className="is-total"><td>خالص قابل پرداخت (ریال)</td><td /><td>{rial(t.payable)}</td></tr>
     </tbody></table>
@@ -53,7 +55,7 @@ export function LinesTable({ part, lines, editable, onEdit }: { part: Part; line
       </div>
       <div className="ps-table-wrap" style={{ maxHeight: '70vh', overflow: 'auto' }}>
         <table className="pst-lines">
-          <thead><tr><th>کد</th><th>شرح</th><th>واحد</th><th>مقدار پیمان</th><th>مبلغ پیمان</th><th>{qtyHead}</th><th>مبلغ سیستم</th><th>تجمعی پذیرفته</th><th>قبلی</th><th>این دوره</th></tr></thead>
+          <thead><tr><th>کد</th><th>شرح</th><th>واحد</th><th>مقدار پیمان</th><th>مبلغ پیمان</th><th>{qtyHead}</th><th>مبلغ سیستم</th><th>تجمعی تا پایان ماه</th><th>تأییدشدهٔ قبل</th><th>این ماه</th></tr></thead>
           <tbody>
             {groups.map((g) => {
               const open = !closed[g.label]
@@ -83,7 +85,7 @@ function LineRow({ l, part, editable, onEdit }: { l: L; part: Part; editable?: b
     <tr className={`l ${l.edited ? 'is-edited' : ''}`}>
       <td className="n" dir="ltr" style={{ textAlign: 'right' }}>{l.code || '—'}</td>
       <td style={{ minWidth: '16rem' }}>
-        <div>{l.title} {l.edited && <span className="pst-tag">اصلاح‌شده</span>} {d.over && <span className="pst-tag is-warn">بیش از مقدار پیمان</span>} {d.belowPrev && <span className="pst-tag is-warn">سیستم کمتر از قبلی</span>} {d.orphan && <span className="pst-tag is-warn">منبع حذف شده</span>}</div>
+        <div>{l.title} {l.edited && <span className="pst-tag">اصلاح‌شده</span>} {d.over && <span className="pst-tag is-warn">بیش از مقدار پیمان</span>} {l.cumAmount < l.prevAmount - 0.5 && <span className="pst-tag is-warn">کمتر از تأیید قبل — اصلاح منفی</span>} {d.orphan && <span className="pst-tag is-warn" title="منبع این ردیف دیگر نیست (حذف، جایگزینی یا خروج از محدوده)؛ مبلغ تأییدشده ثابت مانده است">منبع ندارد — مبلغ تأییدشده ثابت</span>}</div>
         {d.stages && <div className="pst-detail">{d.stages.map((s) => <span key={s.label} className={s.reached ? 'is-yes' : ''}>{s.reached ? '✓' : '○'} {s.label} {fa(s.pct)}٪</span>)}</div>}
         {d.steps && <div className="pst-detail">{d.steps.map((s) => <span key={s.label} className={s.qty > 0 ? 'is-yes' : ''}>{s.label} {fa(s.pct)}٪ · {fa(s.qty, 2)} {l.unit}</span>)}</div>}
         {!!d.pending && <div className="pst-detail"><span>در انتظار تأیید نظارت: {fa(d.pending, 2)} {l.unit}</span></div>}
@@ -93,7 +95,7 @@ function LineRow({ l, part, editable, onEdit }: { l: L; part: Part; editable?: b
       <td className="n">{rial(l.baseAmount)}</td>
       <td className="n">{qtyCell}</td>
       <td className="n">{rial(l.sysCumAmount)}</td>
-      <td className="n">{editable && l.id ? <input className="pst-cellin" inputMode="numeric" value={v ?? rial(l.cumAmount)} onFocus={() => setV(String(Math.round(l.cumAmount)))} onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setV(null) }} aria-label={`تجمعی پذیرفتهٔ ${l.title}`} /> : rial(l.cumAmount)}</td>
+      <td className="n">{editable && l.id ? <input className="pst-cellin" inputMode="numeric" value={v ?? rial(l.cumAmount)} onFocus={() => setV(String(Math.round(l.cumAmount)))} onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setV(null) }} aria-label={`تجمعی تا پایان ماهِ ${l.title}`} /> : rial(l.cumAmount)}</td>
       <td className="n">{rial(l.prevAmount)}</td>
       <td className="n pst-this">{rial(l.cumAmount - l.prevAmount)}</td>
     </tr>

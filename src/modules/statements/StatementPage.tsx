@@ -23,7 +23,7 @@ export function StatementPage({ id, onBack }: { id: string; onBack: () => void }
   const editable = s.status === 'draft' || s.status === 'submitted'
   const idx = s.status === 'rejected' ? 1 : FLOW.findIndex((f) => f.key === s.status)
   const act = async (k: string, f: () => Promise<unknown>) => { setBusy(k); await f(); setBusy(null) }
-  const regen = () => act('regen', async () => { const p = await st.preview(s.contractId, s.part, periodOf(s.periodKey)); if (!p) return; setWarn(p.built.warnings); const kept = new Map(lines.filter((l) => l.edited).map((l) => [`${l.sourceKind}:${l.sourceId}`, l])); p.lines = p.lines.map((l) => { const k = kept.get(`${l.sourceKind}:${l.sourceId}`); return k && k.cumAmount >= l.prevAmount ? { ...l, cumAmount: k.cumAmount, edited: true, note: k.note } : l }); await st.save(p, s) })
+  const regen = () => act('regen', async () => { const p = await st.preview(s.contractId, s.part, periodOf(s.periodKey)); if (!p) return; setWarn(p.built.warnings); const kept = new Map(lines.filter((l) => l.edited).map((l) => [`${l.sourceKind}:${l.sourceId}`, l])); p.lines = p.lines.map((l) => { const k = kept.get(`${l.sourceKind}:${l.sourceId}`); return k ? { ...l, cumAmount: k.cumAmount, edited: true, note: k.note } : l }); await st.save(p, s) })
   const reject = () => { const r = window.prompt('علت برگشت برای اصلاح:'); if (r && r.trim()) void act('reject', () => st.setStatus(s, 'rejected', r.trim())) }
 
   return (
@@ -67,7 +67,7 @@ export function StatementPage({ id, onBack }: { id: string; onBack: () => void }
       </section>
 
       <section className="ps-card">
-        <header className="ps-card-head"><b>ردیف‌های صورت‌وضعیت</b>{editable && <small style={{ color: 'var(--text-muted)' }}>{s.status === 'draft' ? 'تهیه‌کننده' : 'بررسی‌کننده'} می‌تواند «تجمعی پذیرفته» هر ردیف را اصلاح کند؛ ردیف اصلاح‌شده علامت می‌خورد.</small>}</header>
+        <header className="ps-card-head"><b>ردیف‌های صورت‌وضعیت</b>{editable && <small style={{ color: 'var(--text-muted)' }}>{s.status === 'draft' ? 'تهیه‌کننده' : 'بررسی‌کننده'} می‌تواند «تجمعی تا پایان ماه» هر ردیف را اصلاح کند (کمتر از تأیید قبل = اصلاح منفی)؛ ردیف اصلاح‌شده علامت می‌خورد.</small>}</header>
         {lines.length ? <LinesTable part={s.part} lines={lines} editable={editable} onEdit={(l, v) => void st.setLine(s, (l as Line).id, v)} /> : <div className="pst-empty"><Loader2 className="animate-spin" /></div>}
       </section>
     </div>

@@ -29,14 +29,14 @@ export function Ledger({ prev, now, cap, color }: { prev: number; now: number; c
   const w = (x: number) => `${total > 0 ? (Math.max(0, x) / total) * 100 : 0}%`
   return (
     <div className="pst-ledger" style={{ '--pc': color } as CSSProperties}>
-      <div className="pst-ledger-bar" role="img" aria-label={`قبلی ${short(prev)}، این دوره ${short(now)}${cap != null ? `، سقف ${short(cap)}` : ''}`}>
-        <i className="is-prev" style={{ width: w(prev - Math.max(0, over - Math.max(0, now))) }} />
+      <div className="pst-ledger-bar" role="img" aria-label={`تأییدشدهٔ قبل ${short(prev)}، این ماه ${short(now)}${cap != null ? `، سقف ${short(cap)}` : ''}`}>
+        <i className="is-prev" style={{ width: w((now < 0 ? prev + now : prev) - Math.max(0, over - Math.max(0, now))) }} />
         <i className="is-this" style={{ width: w(Math.max(0, now) - Math.min(over, Math.max(0, now))) }} />
         {over > 0 && <i className="is-over" style={{ width: w(over) }} />}
       </div>
       <div className="pst-ledger-legend">
-        <span><i style={{ background: `color-mix(in srgb, ${color} 55%, var(--bg-panel-solid))` }} />تا صورت‌وضعیت قبل: {short(prev)}</span>
-        <span><i style={{ background: color }} />این دوره: {short(now)}</span>
+        <span><i style={{ background: `color-mix(in srgb, ${color} 55%, var(--bg-panel-solid))` }} />تأییدشدهٔ صورت‌وضعیت قبل: {short(prev)}</span>
+        <span><i style={{ background: color }} />این ماه: {short(now)}</span>
         {cap != null && (over > 0 ? <span style={{ color: '#ef4444', fontWeight: 800 }}><i style={{ background: '#ef4444' }} />بیش از سقف: {short(over)}</span> : <span>باقی‌مانده تا سقف: {short(cap - prev - Math.max(0, now))} از {short(cap)}</span>)}
       </div>
     </div>
