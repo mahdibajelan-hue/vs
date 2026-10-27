@@ -56,7 +56,7 @@ export function NewStatement({ initial, onDone }: { initial?: { contractId?: str
 
       {contractId && part && (
         <section className="ps-card">
-          <header className="ps-card-head"><b>۳. صورت‌وضعیت کدام ماه؟</b>{lastTo && <small style={{ color: 'var(--text-muted)' }}>آخرین صورت‌وضعیت این بخش تا {fa(mine.length)} دوره ثبت شده است</small>}</header>
+          <header className="ps-card-head"><b>۳. صورت‌وضعیت کدام ماه؟</b>{lastTo && <small style={{ color: 'var(--text-muted)' }}>{fa(mine.length)} صورت‌وضعیت قبلی؛ فقط ماه‌های بعد از آن قابل انتخاب است</small>}</header>
           {open ? <p className="ps-hint is-warn">صورت‌وضعیت شمارهٔ {fa(open.no)} این بخش هنوز باز است ({open.status === 'draft' ? 'پیش‌نویس' : open.status === 'submitted' ? 'در بررسی' : 'برگشتی'})؛ ابتدا آن را به تأیید برسانید یا باطل کنید.</p> : (
             <div className="pst-months">
               {months.map((m) => { const taken = !!lastTo && m.from <= lastTo; return <button key={m.key} type="button" className="pst-month" aria-pressed={period?.key === m.key} disabled={taken || busy} title={taken ? 'این ماه پیش از آخرین صورت‌وضعیت است' : undefined} onClick={() => void run(m)}>{m.label}</button> })}
@@ -70,7 +70,7 @@ export function NewStatement({ initial, onDone }: { initial?: { contractId?: str
       {pv && period && part && (
         <section className="ps-card" style={{ '--pc': PART_META[part].color } as CSSProperties}>
           <header className="ps-card-head"><b><Sparkles size={15} /> ۴. پیش‌نمایش صورت‌وضعیت {PART_META[part].title} — {period.label}</b><small style={{ color: 'var(--text-muted)' }}>{pv.prev ? `قبلی: شمارهٔ ${fa(pv.prev.no)} (${pv.prev.periodKey})` : 'اولین صورت‌وضعیت این بخش'}</small></header>
-          <Warnings list={pv.built.warnings} />
+          <Warnings list={pv.built.warnings} t={pv.totals} />
           <Ledger prev={pv.totals.prevAmount} now={pv.totals.thisAmount} cap={pv.totals.cap} color={PART_META[part].color} />
           <Figures t={pv.totals} part={part} />
           <div style={{ display: 'grid', gap: '.8rem', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 22rem), 1fr))' }}>

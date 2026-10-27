@@ -78,7 +78,7 @@ function Dashboard({ onOpen, onNew }: { onOpen: (id: string) => void; onNew: (p?
   const kpi = (label: string, value: string, sub: string, c: string) => <div className="ps-kpi" style={{ '--c': c } as CSSProperties}><small>{label}</small><b>{value}</b><span>{sub}</span></div>
   return (
     <div className="ps-stack">
-      <div className="ps-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 12rem), 1fr))' }}>
+      <div className="ps-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr))' }}>
         {kpi('پیش‌نویس / برگشتی', fa(drafts.length), 'منتظر تکمیل و ارسال', '#64748b')}
         {kpi('در انتظار بررسی', fa(waiting.length), waiting.length ? `خالص ${short(waiting.reduce((a, s) => a + s.payable, 0))} ریال` : 'کارتابل خالی است', '#3b82f6')}
         {kpi('تأییدشده، ثبت‌نشده در مالی', fa(ready.length), ready.length ? `خالص ${short(ready.reduce((a, s) => a + s.payable, 0))} ریال` : '—', '#10b981')}
@@ -102,7 +102,7 @@ function ContractCard({ c, onOpen, onNew }: { c: Contract; onOpen: (id: string) 
     <article className="pst-con">
       <div className="pst-con-head">
         <span className="pst-con-no" dir="ltr">{c.no}</span>
-        <div><h3>{c.title}</h3><small>سقف {short(c.cap)} ریال · صورت‌وضعیت‌شده تا کنون {short(total)} ({fa(pct(total, c.cap), 1)}٪)</small></div>
+        <div><h3>{c.title}</h3><small>سقف {short(c.cap)} ریال · صورت‌وضعیت‌شده تا کنون {short(total)} <span style={total > c.cap ? { color: '#ef4444', fontWeight: 800 } : undefined}>({fa(c.cap > 0 ? (total / c.cap) * 100 : 0, 1)}٪{total > c.cap ? ' — بیش از سقف' : ''})</span></small></div>
       </div>
       <div className="pst-stack" role="img" aria-label={`سهم بخش‌ها از سقف: ${PARTS.map((p) => `${p} ${fa(pct(cum(p), c.cap), 1)}٪`).join('، ')}`}>
         {PARTS.map((p) => <i key={p} style={{ width: `${pct(cum(p), c.cap)}%`, '--pc': PART_META[p].color } as CSSProperties} />)}

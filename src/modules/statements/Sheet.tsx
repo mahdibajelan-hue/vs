@@ -27,7 +27,9 @@ export function Deductions({ t, rates }: { t: Totals; rates: { advRecoveryPct: n
   )
 }
 
-export function Warnings({ list }: { list: string[] }) {
+/** source gaps, plus the ceiling overrun of the cumulative amount */
+export function Warnings({ list, t }: { list: string[]; t?: Totals }) {
+  if (t && t.overCap > 0) list = [...list, `مبلغ تجمعی ${short(t.overCap)} ریال از سقف (${short(t.cap ?? 0)}) بیشتر است؛ سقف بخش را در «تنظیمات» بررسی کنید یا محدودهٔ منبع (بسته‌های کالا / فهرست‌بها) را به این قرارداد محدود کنید.`]
   if (!list.length) return null
   return <div className="pst-warn" role="note">{list.map((w) => <span key={w}><AlertTriangle size={13} aria-hidden style={{ verticalAlign: '-2px' }} /> {w}</span>)}</div>
 }

@@ -46,7 +46,7 @@ export function StatementPage({ id, onBack }: { id: string; onBack: () => void }
           {(s.status === 'draft' || s.status === 'rejected') && <button type="button" className="ps-btn" disabled={!!busy} onClick={() => void regen()} title="مبالغ سیستمی دوباره از ماژول منبع خوانده می‌شود؛ اصلاحات دستی ردیف‌ها حفظ می‌شود">{busy === 'regen' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} بازسازی از داده‌های تازه</button>}
           {s.status === 'draft' && <button type="button" className="ps-btn is-primary" disabled={!!busy || !lines.length} onClick={() => void act('submit', () => st.setStatus(s, 'submitted'))}><Send size={14} /> ارسال برای بررسی</button>}
           {s.status === 'submitted' && <>
-            <button type="button" className="ps-btn is-ok" disabled={!!busy} onClick={() => void act('approve', () => st.setStatus(s, 'approved'))}><CheckCircle2 size={14} /> تأیید صورت‌وضعیت</button>
+            <button type="button" className="ps-btn is-ok" disabled={!!busy} onClick={() => { if (t.overCap > 0 && !window.confirm('مبلغ تجمعی از سقف بیشتر است. با این وجود تأیید شود؟')) return; void act('approve', () => st.setStatus(s, 'approved')) }}><CheckCircle2 size={14} /> تأیید صورت‌وضعیت</button>
             <button type="button" className="ps-btn is-bad" disabled={!!busy} onClick={reject}><Undo2 size={14} /> برگشت برای اصلاح</button>
           </>}
           {s.status === 'approved' && <button type="button" className="ps-btn is-primary" disabled={!!busy} onClick={() => { if (window.confirm('صورت‌وضعیت در دفتر ماژول «قراردادها و مالی» ثبت شود؟ پس از ثبت، قفل می‌شود.')) void act('post', () => st.post(s)) }}>{busy === 'post' ? <Loader2 size={14} className="animate-spin" /> : <Landmark size={14} />} ثبت در قراردادها و مالی</button>}
@@ -57,7 +57,7 @@ export function StatementPage({ id, onBack }: { id: string; onBack: () => void }
       </section>
 
       <section className="ps-card">
-        <Warnings list={warn} />
+        <Warnings list={warn} t={t} />
         <Ledger prev={t.prevAmount} now={t.thisAmount} cap={t.cap} color={color} />
         <Figures t={t} part={s.part} />
         <div style={{ display: 'grid', gap: '.8rem', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 22rem), 1fr))' }}>
