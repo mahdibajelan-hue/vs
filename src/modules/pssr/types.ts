@@ -3,11 +3,18 @@ export type CheckStatus = 'pending' | 'ok' | 'fail' | 'na'
 export type PunchCategory = 'A' | 'B' | 'C'
 export type PunchStatus = 'open' | 'closed' | 'verified'
 
-export interface PssrSystem { id: string; projectId: string; code: string; name: string; kind: PssrKind; kmFrom: number | null; kmTo: number | null; targetGasIn: string | null; note: string; createdAt: string }
-export interface PssrTemplateItem { id: number; kind: PssrKind | 'all'; category: string; seq: number; title: string; mandatory: boolean; active: boolean }
-export interface PssrCheck { id: string; systemId: string; category: string; seq: number; title: string; mandatory: boolean; status: CheckStatus; evidence: string; fileUrl: string | null; checkedBy: string | null; checkedAt: string | null }
+export interface PssrSystem { id: string; projectId: string; code: string; name: string; kind: PssrKind; kmFrom: number | null; kmTo: number | null; targetGasIn: string | null; note: string; createdAt: string
+  /** the header of the official PSSR form */
+  startupType: string; teamLead: string; reviewDate: string | null
+  /** the six confirmations of the form's «جمع‌بندی», by key of SUMMARY_ITEMS */
+  summary: Record<string, boolean> }
+export type Priority = 'A' | 'B' | 'C'
+export interface PssrTemplateItem { id: number; kind: PssrKind | 'all'; category: string; seq: number; title: string; mandatory: boolean; active: boolean
+  /** the official form's area (بخش اداری / محوطه / بخش تأسیسات), row number, priority and the system kinds it applies to */
+  area: string; priority: Priority; refNo: number | null; kinds: (PssrKind | 'all')[] | null; source: string }
+export interface PssrCheck { id: string; systemId: string; category: string; seq: number; title: string; mandatory: boolean; status: CheckStatus; evidence: string; fileUrl: string | null; checkedBy: string | null; checkedAt: string | null; area: string; priority: Priority | ''; refNo: number | null; templateItemId: number | null }
 export interface PssrMeeting { id: string; systemId: string; heldOn: string; attendees: string; notes: string; createdBy: string | null }
-export interface PssrPunch { id: string; systemId: string; meetingId: string | null; category: PunchCategory; title: string; discipline: string; owner: string; dueDate: string | null; status: PunchStatus; raisedBy: string | null; raisedAt: string; closeNote: string; closedBy: string | null; closedAt: string | null; verifiedBy: string | null; verifiedAt: string | null }
+export interface PssrPunch { id: string; systemId: string; meetingId: string | null; /** the checklist item whose «خیر» opened it */ checkId: string | null; category: PunchCategory; title: string; discipline: string; owner: string; dueDate: string | null; status: PunchStatus; raisedBy: string | null; raisedAt: string; closeNote: string; closedBy: string | null; closedAt: string | null; verifiedBy: string | null; verifiedAt: string | null }
 /** one person of one sign step: step `seq` (label `roleLabel`) is done when any / all of its persons sign; a manual step
  * is a hand-signed form whose scan its persons confirm in the system */
 export interface PssrSigner { id: string; projectId: string; seq: number; roleLabel: string; personLabel: string; signerEmail: string; rule: 'any' | 'all'; manual: boolean }
@@ -33,7 +40,22 @@ export const GASIN_CHECKS: { key: string; label: string; value?: string }[] = [
 ]
 
 export const KIND_FA: Record<PssrKind, string> = { pipeline: 'خط لوله / قطعه', station: 'ایستگاه', facility: 'تأسیسات', utility: 'سرویس‌های جانبی' }
-export const CHECK_FA: Record<CheckStatus, string> = { pending: 'بررسی نشده', ok: 'تأیید', fail: 'رد / ناقص', na: 'غیرقابل‌اعمال' }
+/** the official form's three answer columns: بلی / خیر / بدون کاربرد */
+export const CHECK_FA: Record<CheckStatus, string> = { pending: 'بررسی نشده', ok: 'بلی', fail: 'خیر', na: 'بدون کاربرد' }
+export const OFFICIAL_SOURCE = 'PSSR-PL-208'
+export const PRIORITY_FA: Record<Priority, string> = { A: 'A — الزامی پیش از راه‌اندازی', B: 'B — پیش از تحویل موقت', C: 'C — بهبود' }
+export const PRIORITY_COLOR: Record<Priority, string> = { A: '#ef4444', B: '#f59e0b', C: '#64748b' }
+export const AREA_ORDER = ['بخش اداری', 'محوطه', 'بخش تأسیسات']
+export const STARTUP_TYPES = ['راه‌اندازی اولیه (تأسیسات / خط جدید)', 'راه‌اندازی پس از تعمیرات اساسی', 'راه‌اندازی پس از تغییرات (MOC)', 'راه‌اندازی مجدد پس از توقف طولانی']
+/** «جمع‌بندی» of the official form: the signatories confirm all six before the facility is declared ready to start */
+export const SUMMARY_ITEMS: { key: string; label: string }[] = [
+  { key: 'design', label: 'در ساختار و ساخت‌وساز تجهیزات، مشخصات طراحی رعایت شده است.' },
+  { key: 'maint', label: 'دستورالعمل‌های تعمیر و نگهداری در محل به تعداد کافی موجود است.' },
+  { key: 'safety', label: 'دستورالعمل‌های ایمنی و واکنش در شرایط اضطراری در محل به تعداد کافی موجود است.' },
+  { key: 'pha', label: 'برای تأسیسات جدید، تجزیه و تحلیل خطرات فرایندی اولیه (PHA) انجام شده و پیشنهادات برطرف شده است.' },
+  { key: 'training', label: 'هر یک از افراد درگیر در عملیات راه‌اندازی به طور کامل آموزش دیده‌اند.' },
+  { key: 'moc', label: 'تغییرات صورت‌گرفته برای اصلاح در تأسیسات بررسی شده و توسط مسئول مدیریت تغییرات تصویب شده است.' },
+]
 export const PUNCH_CAT_FA: Record<PunchCategory, string> = { A: 'A — پیش از RFSU', B: 'B — پیش از تحویل موقت', C: 'C — بهبود' }
 export const PUNCH_STATUS_FA: Record<PunchStatus, string> = { open: 'باز', closed: 'بسته شد (منتظر تأیید)', verified: 'تأییدشده' }
 

@@ -8,7 +8,7 @@
  *    confirmed in the system by the step's persons with the scan attached.
  *  - the gas-in permit can be approved only after RFSU and with every day-of-gas-in check confirmed.
  */
-import { GASIN_CHECKS, type GasinPermit, type PssrCheck, type PssrMeeting, type PssrPunch, type PssrSigner, type PssrSignoff } from '../types'
+import { GASIN_CHECKS, SUMMARY_ITEMS, type GasinPermit, type PssrCheck, type PssrMeeting, type PssrPunch, type PssrSigner, type PssrSignoff } from '../types'
 
 export type PssrStage = 'mc' | 'pssr' | 'ready' | 'signing' | 'rfsu' | 'permit' | 'gasin' | 'live'
 export const STAGE_FA: Record<PssrStage, string> = { mc: 'تکمیل مکانیکی', pssr: 'در حال PSSR', ready: 'آمادهٔ امضای RFSU', signing: 'در حال امضای RFSU', rfsu: 'RFSU صادر شد', permit: 'مجوز تزریق گاز', gasin: 'تزریق گاز در جریان', live: 'تحت گاز' }
@@ -16,7 +16,7 @@ export const STAGE_ORDER: PssrStage[] = ['mc', 'pssr', 'ready', 'signing', 'rfsu
 export const STAGE_COLOR: Record<PssrStage, string> = { mc: '#64748b', pssr: '#f59e0b', ready: '#3b82f6', signing: '#a855f7', rfsu: '#10b981', permit: '#0ea5e9', gasin: '#f97316', live: '#16a34a' }
 
 export type SignerRow = Pick<PssrSigner, 'seq' | 'roleLabel' | 'personLabel' | 'signerEmail' | 'rule' | 'manual'>
-export interface Blocker { kind: 'no_meeting' | 'check_pending' | 'check_failed' | 'punch_a'; label: string }
+export interface Blocker { kind: 'no_meeting' | 'check_pending' | 'check_failed' | 'punch_a' | 'summary'; label: string }
 export interface ChainPerson { label: string; email: string; state: 'signed' | 'rejected' | 'pending'; by: string | null; at: string | null; comment: string; fileUrl: string | null; manualSigner: string; manualSignedOn: string | null }
 export interface ChainStep { seq: number; label: string; rule: 'any' | 'all'; manual: boolean; persons: ChainPerson[]; state: 'signed' | 'rejected' | 'next' | 'waiting'; at: string | null }
 export interface SystemStatus {
@@ -58,7 +58,7 @@ export function chainOf(signers: SignerRow[], signoffs: PssrSignoff[]): ChainSte
   })
 }
 
-export function systemStatus(input: { checks: PssrCheck[]; meetings: Pick<PssrMeeting, 'id'>[]; punches: PssrPunch[]; signers: SignerRow[]; signoffs: PssrSignoff[]; permit?: GasinPermit | null }, today = new Date().toISOString().slice(0, 10)): SystemStatus {
+export function systemStatus(input: { checks: PssrCheck[]; meetings: Pick<PssrMeeting, 'id'>[]; punches: PssrPunch[]; signers: SignerRow[]; signoffs: PssrSignoff[]; permit?: GasinPermit | null; summary?: Record<string, boolean> | null }, today = new Date().toISOString().slice(0, 10)): SystemStatus {
   const { checks, meetings, punches } = input
   const mand = checks.filter((c) => c.mandatory)
   const blockers: Blocker[] = []
@@ -69,11 +69,15 @@ export function systemStatus(input: { checks: PssrCheck[]; meetings: Pick<PssrMe
   }
   const openA = punches.filter((p) => p.category === 'A' && p.status !== 'verified')
   for (const p of openA) blockers.push({ kind: 'punch_a', label: `پانچ A باز: ${p.title}` })
+  // a system on the official form also needs the form's six-statement summary confirmed before anyone signs
+  const official = checks.some((c) => !!c.priority)
+  const summaryOk = !official || SUMMARY_ITEMS.every((x) => input.summary?.[x.key])
+  if (!summaryOk) blockers.push({ kind: 'summary', label: `جمع‌بندی فرم PSSR: ${SUMMARY_ITEMS.filter((x) => !input.summary?.[x.key]).length} مورد از ۶ مورد تأیید نشده است` })
 
   const punchStat = (k: 'A' | 'B' | 'C') => { const l = punches.filter((p) => p.category === k); return { open: l.filter((p) => p.status !== 'verified').length, total: l.length } }
   const aTotal = punches.filter((p) => p.category === 'A').length
-  const denom = mand.length + aTotal + 1
-  const met = mand.filter(isResolved).length + (aTotal - openA.length) + (meetings.length ? 1 : 0)
+  const denom = mand.length + aTotal + 1 + (official ? 1 : 0)
+  const met = mand.filter(isResolved).length + (aTotal - openA.length) + (meetings.length ? 1 : 0) + (official && summaryOk ? 1 : 0)
   const chain = chainOf(input.signers, input.signoffs)
   const allSigned = chain.length > 0 && chain.every((s) => s.state === 'signed')
   const anySign = chain.some((s) => s.persons.some((p) => p.state !== 'pending'))

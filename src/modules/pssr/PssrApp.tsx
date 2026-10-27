@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { formatJalali } from '../../lib/jalali'
 import { usePssrStore, type PssrAdvisories } from './store/usePssrStore'
+import { FormHeader, OfficialChecklist, SummaryBox, printOfficialForm } from './OfficialForm'
 import { canSign, permitApprovers, projectReadiness, STAGE_COLOR, STAGE_FA, STAGE_ORDER, systemStatus, type ChainPerson, type PssrStage, type SignerRow, type SystemStatus } from './lib/pssrCore'
 import { CHECK_FA, DEFAULT_SIGN_CHAIN, GASIN_CHECKS, GASIN_LOG_FA, GASIN_STATUS_FA, KIND_FA, PUNCH_CAT_FA, PUNCH_STATUS_FA, type CheckStatus, type GasinLog, type GasinLogKind, type GasinPermit, type PssrCheck, type PssrKind, type PssrPunch, type PssrSystem, type PunchCategory } from './types'
 import { PssrGuide } from './PssrGuide'
@@ -41,7 +42,7 @@ export function PssrApp({ onExitToHub }: { onExitToHub: () => void; onBackToRada
   const chain: SignerRow[] = useMemo(() => (st.signers.length ? st.signers : DEFAULT_SIGN_CHAIN), [st.signers])
   const statusOf = useMemo(() => {
     const m = new Map<string, SystemStatus>()
-    for (const sys of st.systems) m.set(sys.id, systemStatus({ checks: st.checks.filter((c) => c.systemId === sys.id), meetings: st.meetings.filter((x) => x.systemId === sys.id), punches: st.punches.filter((p) => p.systemId === sys.id), signers: chain, signoffs: st.signoffs.filter((x) => x.systemId === sys.id), permit: st.permits.find((x) => x.systemId === sys.id) ?? null }))
+    for (const sys of st.systems) m.set(sys.id, systemStatus({ checks: st.checks.filter((c) => c.systemId === sys.id), meetings: st.meetings.filter((x) => x.systemId === sys.id), punches: st.punches.filter((p) => p.systemId === sys.id), signers: chain, signoffs: st.signoffs.filter((x) => x.systemId === sys.id), permit: st.permits.find((x) => x.systemId === sys.id) ?? null, summary: sys.summary }))
     return m
   }, [st.systems, st.checks, st.meetings, st.punches, st.signoffs, st.permits, chain])
   const summary = projectReadiness([...statusOf.values()])
@@ -197,6 +198,7 @@ function SystemPage({ id, status, chain, onBack }: { id: string; status?: System
   const [editing, setEditing] = useState(false)
   if (!sys || !status) return <Empty text="سیستم یافت نشد." />
   const stageIdx = STAGE_ORDER.indexOf(status.stage)
+  const official = st.checks.some((c) => c.systemId === id && !!c.priority)
   return (
     <div className="ps-sysp" style={{ '--acc': STAGE_COLOR[status.stage] } as CSSProperties}>
       <nav className="ps-sysnav">
@@ -225,7 +227,8 @@ function SystemPage({ id, status, chain, onBack }: { id: string; status?: System
           </div>
         )}
       </header>
-      <Section n={1} id="ps-checks" title="چک‌لیست PSSR" mode="input" hint="برای هر بند وضعیت را انتخاب کنید و مدرک (شمارهٔ صورت‌جلسه، لینک یا توضیح) را بنویسید. بندهای الزامی باید «تأیید» یا «غیرقابل‌اعمال» باشند.">
+      <Section n={1} id="ps-checks" title={official ? 'چک‌لیست PSSR خطوط لوله و تأسیسات وابسته' : 'چک‌لیست PSSR'} mode="input" hint={official ? 'سربرگ فرم را پر کنید، سپس به هر بند «بلی»، «خیر» یا «بدون کاربرد» پاسخ دهید و توضیح یا مدرک بگذارید. «خیر» خودکار پانچی با اولویت همان بند باز می‌کند؛ بندهای اولویت A باید پیش از RFSU «بلی» یا «بدون کاربرد» باشند.' : 'برای هر بند وضعیت را انتخاب کنید و مدرک (شمارهٔ صورت‌جلسه، لینک یا توضیح) را بنویسید. بندهای الزامی باید «بلی» یا «بدون کاربرد» باشند.'}>
+        <FormHeader sys={sys} official={official} locked={stageIdx >= STAGE_ORDER.indexOf('rfsu')} />
         <Checklist systemId={id} />
       </Section>
       <Section n={2} id="ps-meet" title="جلسهٔ PSSR" mode="input" hint="تاریخ، حاضران و خلاصهٔ جلسهٔ بازدید PSSR را ثبت کنید. یافته‌های جلسه را در بخش بعد به‌صورت پانچ وارد کنید.">
@@ -292,6 +295,10 @@ function Checklist({ systemId }: { systemId: string }) {
   const cats = [...new Set(list.map((c) => c.category))]
   const adv = st.advisories
   if (!list.length) return <p className="ps-hint">برای این سیستم بندی ساخته نشده؛ قالب چک‌لیست را در «تنظیمات» ببینید.</p>
+  if (list.some((c) => c.priority)) {
+    const sys = st.systems.find((x) => x.id === systemId)
+    return <OfficialChecklist systemId={systemId} advice={(t) => (adv ? adviceFor(t, adv, sys) : null)} />
+  }
   return (
     <div className="ps-checks">
       {cats.map((cat) => (
@@ -448,8 +455,12 @@ function Rfsu({ sys, status }: { sys: PssrSystem; status: SystemStatus }) {
   const step = status.nextStep
   const signable = step ? step.persons.filter((p) => canSign(step, p, profile?.email, !!profile?.isAdmin)) : []
   const issued = AFTER_RFSU.includes(status.stage)
+  const checks = st.checks.filter((c) => c.systemId === sys.id)
+  const official = checks.some((c) => !!c.priority)
   return (
     <div className="ps-stack">
+      {official && <SummaryBox sys={sys} locked={issued || status.chain.some((c) => c.state === 'signed')} />}
+      {official && <div><button type="button" className="ps-btn" onClick={() => printOfficialForm(sys, status, checks, st.punches.filter((p) => p.systemId === sys.id), project?.officialName ?? '')}><Printer size={14} /> چاپ فرم کامل PSSR</button></div>}
       <ol className="ps-chain">
         {status.chain.map((c) => (
           <li key={c.seq} className={`is-${c.state}`}>
@@ -809,8 +820,8 @@ function Settings({ chain }: { chain: SignerRow[] }) {
       <section className="ps-card">
         <header className="ps-card-head"><b><ListChecks size={15} /> قالب چک‌لیست PSSR</b></header>
         <p className="ps-hint">این قالب موقت است تا فرم‌های واقعی شما جایگزین شود. هر سیستم تازه یک نسخه از بندهای نوع خودش (و «همه») می‌گیرد؛ تغییر قالب روی سیستم‌های قبلی اثر ندارد.</p>
-        <div className="ps-table-wrap"><table className="ps-table"><thead><tr><th>نوع</th><th>دسته</th><th>بند</th><th>الزامی</th></tr></thead>
-          <tbody>{st.templates.filter((x) => x.active).map((x) => <tr key={x.id}><td>{x.kind === 'all' ? 'همه' : KIND_FA[x.kind]}</td><td>{x.category}</td><td>{x.title}</td><td>{x.mandatory ? 'بله' : '—'}</td></tr>)}</tbody></table></div>
+        <div className="ps-table-wrap"><table className="ps-table"><thead><tr><th>ردیف</th><th>نوع</th><th>بخش / دسته</th><th>بند</th><th>اولویت</th></tr></thead>
+          <tbody>{st.templates.filter((x) => x.active).sort((a, b) => (a.refNo ?? 999) - (b.refNo ?? 999) || a.seq - b.seq).map((x) => <tr key={x.id}><td>{x.refNo != null ? fa(x.refNo) : '—'}</td><td>{x.kinds?.length ? x.kinds.map((k) => (k === 'all' ? 'همه' : KIND_FA[k as PssrKind] ?? k)).join('، ') : x.kind === 'all' ? 'همه' : KIND_FA[x.kind]}</td><td>{x.area ? `${x.area} · ` : ''}{x.category}</td><td>{x.title}</td><td>{x.priority || (x.mandatory ? 'الزامی' : '—')}</td></tr>)}</tbody></table></div>
         {isAdmin && (
           <div className="ps-inline-form">
             <Field label="نوع"><select value={t.kind} onChange={(e) => setT({ ...t, kind: e.target.value as PssrKind | 'all' })}><option value="all">همه</option>{Object.entries(KIND_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { systemStatus, chainOf, canSign, projectReadiness, permitApprovers } from './pssrCore.ts'
-import { DEFAULT_SIGN_CHAIN, GASIN_CHECKS } from '../types.ts'
+import { DEFAULT_SIGN_CHAIN, GASIN_CHECKS, SUMMARY_ITEMS } from '../types.ts'
 
 const chk = (id, status, mandatory = true) => ({ id, systemId: 's', category: 'x', seq: 1, title: 'بند ' + id, mandatory, status, evidence: '', fileUrl: null, checkedBy: null, checkedAt: null })
 const pun = (id, category, status, dueDate = null) => ({ id, systemId: 's', meetingId: null, category, title: 'پانچ ' + id, discipline: '', owner: '', dueDate, status, raisedBy: null, raisedAt: '2026-01-01', closeNote: '', closedBy: null, closedAt: null, verifiedBy: null, verifiedAt: null })
@@ -50,4 +50,11 @@ const live = systemStatus({ ...ready, signoffs: all, permit: permit('completed')
 assert.equal(live.stage, 'live')
 const p = projectReadiness([live, systemStatus({ checks: [chk(1, 'pending')], meetings: [], punches: [pun(9, 'A', 'open')], signers, signoffs: [] })])
 assert.equal(p.withRfsu, 1); assert.equal(p.rfsuPct, 50); assert.equal(p.livePct, 50); assert.equal(p.openA, 1)
+// official form: checks carrying a priority also need the six «جمع‌بندی» confirmations before the chain opens
+const off = { ...ready, checks: ready.checks.map((c) => ({ ...c, priority: 'A' })), signoffs: [] }
+let o = systemStatus(off)
+assert.ok(o.blockers.some((b) => b.kind === 'summary')); assert.notEqual(o.stage, 'ready')
+o = systemStatus({ ...off, summary: Object.fromEntries(SUMMARY_ITEMS.map((x) => [x.key, true])) })
+assert.ok(!o.blockers.some((b) => b.kind === 'summary')); assert.equal(o.stage, 'ready')
+assert.ok(!systemStatus({ ...ready, signoffs: [] }).blockers.some((b) => b.kind === 'summary'), 'legacy lists need no summary')
 console.log('pssr/core: all assertions passed')

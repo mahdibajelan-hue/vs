@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
+import { OFFICIAL_SOURCE, type Priority } from '../types'
 import type { GasinCheck, GasinLog, GasinLogKind, GasinPermit, PssrCheck, PssrKind, PssrMeeting, PssrPunch, PssrSigner, PssrSignoff, PssrSystem, PssrTemplateItem, PunchCategory, CheckStatus } from '../types'
 
 type Row = Record<string, any>
@@ -7,10 +8,10 @@ const s = (v: unknown) => (v == null ? '' : String(v))
 const sn = (v: unknown) => (v == null || v === '' ? null : String(v))
 const nn = (v: unknown) => (v == null || v === '' ? null : Number(v))
 
-const sysOf = (r: Row): PssrSystem => ({ id: r.id, projectId: r.master_project_id, code: s(r.code), name: s(r.name), kind: r.kind, kmFrom: nn(r.km_from), kmTo: nn(r.km_to), targetGasIn: sn(r.target_gas_in), note: s(r.note), createdAt: s(r.created_at) })
-const checkOf = (r: Row): PssrCheck => ({ id: r.id, systemId: r.system_id, category: s(r.category), seq: Number(r.seq ?? 0), title: s(r.title), mandatory: !!r.mandatory, status: r.status, evidence: s(r.evidence), fileUrl: sn(r.file_url), checkedBy: sn(r.checked_by), checkedAt: sn(r.checked_at) })
+const sysOf = (r: Row): PssrSystem => ({ id: r.id, projectId: r.master_project_id, code: s(r.code), name: s(r.name), kind: r.kind, kmFrom: nn(r.km_from), kmTo: nn(r.km_to), targetGasIn: sn(r.target_gas_in), note: s(r.note), createdAt: s(r.created_at), startupType: s(r.startup_type), teamLead: s(r.team_lead), reviewDate: sn(r.review_date), summary: (r.summary ?? {}) as Record<string, boolean> })
+const checkOf = (r: Row): PssrCheck => ({ id: r.id, systemId: r.system_id, category: s(r.category), seq: Number(r.seq ?? 0), title: s(r.title), mandatory: !!r.mandatory, status: r.status, evidence: s(r.evidence), fileUrl: sn(r.file_url), checkedBy: sn(r.checked_by), checkedAt: sn(r.checked_at), area: s(r.area), priority: (r.priority ?? '') as PssrCheck['priority'], refNo: nn(r.ref_no), templateItemId: nn(r.template_item_id) })
 const meetOf = (r: Row): PssrMeeting => ({ id: r.id, systemId: r.system_id, heldOn: s(r.held_on), attendees: s(r.attendees), notes: s(r.notes), createdBy: sn(r.created_by) })
-const punchOf = (r: Row): PssrPunch => ({ id: r.id, systemId: r.system_id, meetingId: sn(r.meeting_id), category: r.category, title: s(r.title), discipline: s(r.discipline), owner: s(r.owner), dueDate: sn(r.due_date), status: r.status, raisedBy: sn(r.raised_by), raisedAt: s(r.raised_at), closeNote: s(r.close_note), closedBy: sn(r.closed_by), closedAt: sn(r.closed_at), verifiedBy: sn(r.verified_by), verifiedAt: sn(r.verified_at) })
+const punchOf = (r: Row): PssrPunch => ({ id: r.id, systemId: r.system_id, meetingId: sn(r.meeting_id), checkId: sn(r.check_id), category: r.category, title: s(r.title), discipline: s(r.discipline), owner: s(r.owner), dueDate: sn(r.due_date), status: r.status, raisedBy: sn(r.raised_by), raisedAt: s(r.raised_at), closeNote: s(r.close_note), closedBy: sn(r.closed_by), closedAt: sn(r.closed_at), verifiedBy: sn(r.verified_by), verifiedAt: sn(r.verified_at) })
 const signerOf = (r: Row): PssrSigner => ({ id: r.id, projectId: r.master_project_id, seq: Number(r.seq), roleLabel: s(r.role_label), personLabel: s(r.person_label), signerEmail: s(r.signer_email), rule: r.step_rule === 'all' ? 'all' : 'any', manual: !!r.is_manual })
 const signoffOf = (r: Row): PssrSignoff => ({ id: r.id, systemId: r.system_id, seq: Number(r.seq), roleLabel: s(r.role_label), personLabel: s(r.person_label), decision: r.decision, comment: s(r.comment), signedBy: s(r.signed_by), signedAt: s(r.signed_at), manualSigner: s(r.manual_signer), manualSignedOn: sn(r.manual_signed_on), fileUrl: sn(r.file_url) })
 const permitOf = (r: Row): GasinPermit => ({ id: r.id, systemId: r.system_id, ptwNo: s(r.ptw_no), plannedAt: sn(r.planned_at), checks: (r.checks ?? {}) as Record<string, GasinCheck>, status: r.status, approvedBy: sn(r.approved_by), approvedAt: sn(r.approved_at), startedAt: sn(r.started_at), completedAt: sn(r.completed_at), finalPressure: nn(r.final_pressure), notes: s(r.notes) })
@@ -21,7 +22,10 @@ export interface PssrAdvisories { ncr: { code: string; text: string }[]; docs: {
   /** hydrotest sections of the line (testing module) not yet accepted */
   ht: { code: string; kmFrom: number; kmTo: number; failed: boolean }[] }
 const NCR_DONE = new Set(['closed', 'void']), DOC_DONE = new Set(['approved', 'superseded']), MOC_DONE = new Set(['closed', 'rejected', 'cancelled', 'implemented'])
-const tplOf = (r: Row): PssrTemplateItem => ({ id: Number(r.id), kind: r.kind, category: s(r.category), seq: Number(r.seq ?? 0), title: s(r.title), mandatory: !!r.mandatory, active: !!r.is_active })
+const tplOf = (r: Row): PssrTemplateItem => ({ id: Number(r.id), kind: r.kind, category: s(r.category), seq: Number(r.seq ?? 0), title: s(r.title), mandatory: !!r.mandatory, active: !!r.is_active, area: s(r.area), priority: (r.priority || 'B') as Priority, refNo: nn(r.ref_no), kinds: Array.isArray(r.kinds) ? r.kinds : null, source: s(r.source) })
+/** does a template item apply to a system of this kind? (the official items list their kinds; older ones have one kind) */
+export const appliesTo = (t: Pick<PssrTemplateItem, 'kind' | 'kinds'>, kind: PssrKind) => (t.kinds?.length ? t.kinds.includes('all') || t.kinds.includes(kind) : t.kind === 'all' || t.kind === kind)
+const checkRow = (systemId: string, t: PssrTemplateItem) => ({ system_id: systemId, template_item_id: t.id, category: t.category, seq: t.seq, title: t.title, mandatory: t.mandatory, area: t.area, priority: t.priority, ref_no: t.refNo })
 
 interface State {
   projectId: string | null
@@ -50,6 +54,10 @@ interface State {
   setPermitStatus: (systemId: string, status: GasinPermit['status'], by: string, extra?: { finalPressure?: number | null; note?: string }) => Promise<boolean>
   addLog: (permitId: string, l: { kind: GasinLogKind; pressure: number | null; location: string; note: string }, by: string) => Promise<boolean>
   addTemplate: (t: { kind: PssrKind | 'all'; category: string; title: string; mandatory: boolean }) => Promise<boolean>
+  /** puts the official PSSR form's items on a system (the ones for its kind, not already there) and drops the older sample items nobody answered */
+  loadOfficial: (systemId: string) => Promise<number>
+  saveHeader: (systemId: string, h: { startupType: string; teamLead: string; reviewDate: string | null }) => Promise<boolean>
+  setSummary: (systemId: string, summary: Record<string, boolean>) => Promise<boolean>
 }
 
 const now = () => new Date().toISOString()
@@ -102,14 +110,26 @@ export const usePssrStore = create<State>()((set, get) => {
       const { data, error } = await supabase.from('pssr_systems').insert({ master_project_id: pid, code: p.code.trim(), name: p.name.trim(), kind: p.kind, km_from: p.kmFrom, km_to: p.kmTo, target_gas_in: p.targetGasIn, note: p.note, created_by: by }).select('id').single()
       if (error || !data) { set({ error: error?.message ?? 'خطا' }); return null }
       // the system's checklist: a copy of the template for its kind, so later template edits never rewrite a reviewed list
-      const items = get().templates.filter((t) => t.active && (t.kind === 'all' || t.kind === p.kind))
-      if (items.length) await supabase.from('pssr_checks').insert(items.map((t) => ({ system_id: data.id, template_item_id: t.id, category: t.category, seq: t.seq, title: t.title, mandatory: t.mandatory })))
+      const items = get().templates.filter((t) => t.active && appliesTo(t, p.kind))
+      if (items.length) await supabase.from('pssr_checks').insert(items.map((t) => checkRow(data.id, t)))
       await get().load(pid)
       return data.id as string
     },
     updateSystem: (id, p) => ok(supabase.from('pssr_systems').update({ ...(p.name != null ? { name: p.name } : {}), ...(p.kind ? { kind: p.kind } : {}), ...(p.kmFrom !== undefined ? { km_from: p.kmFrom } : {}), ...(p.kmTo !== undefined ? { km_to: p.kmTo } : {}), ...(p.targetGasIn !== undefined ? { target_gas_in: p.targetGasIn } : {}), ...(p.note != null ? { note: p.note } : {}) }).eq('id', id)),
     deleteSystem: (id) => ok(supabase.from('pssr_systems').delete().eq('id', id)),
-    setCheck: (id, status, evidence, by, fileUrl) => ok(supabase.from('pssr_checks').update({ status, evidence, checked_by: by, checked_at: now(), ...(fileUrl !== undefined ? { file_url: fileUrl } : {}) }).eq('id', id)),
+    setCheck: async (id, status, evidence, by, fileUrl) => {
+      const up = await supabase.from('pssr_checks').update({ status, evidence, checked_by: by, checked_at: now(), ...(fileUrl !== undefined ? { file_url: fileUrl } : {}) }).eq('id', id)
+      if (up.error) { set({ error: up.error.message }); return false }
+      // a «خیر» on an item of the official form opens a punch of the item's priority (once per item), so nothing found stays only in the checklist
+      const c = get().checks.find((x) => x.id === id)
+      if (status === 'fail' && c?.priority && !get().punches.some((p) => p.checkId === id)) {
+        const title = `${c.refNo ? `بند ${c.refNo.toLocaleString('fa-IR')}: ` : ''}${c.title}${evidence.trim() ? ` — ${evidence.trim()}` : ''}`
+        const ins = await supabase.from('pssr_punches').insert({ system_id: c.systemId, check_id: id, category: c.priority, title: title.slice(0, 500), discipline: c.category, raised_by: by })
+        if (ins.error) set({ error: ins.error.message })
+      }
+      const pid = get().projectId; if (pid) await get().load(pid)
+      return true
+    },
     addMeeting: (systemId, heldOn, attendees, notes, by) => ok(supabase.from('pssr_meetings').insert({ system_id: systemId, held_on: heldOn, attendees, notes, created_by: by })),
     addPunch: (p, by) => ok(supabase.from('pssr_punches').insert({ system_id: p.systemId, meeting_id: p.meetingId, category: p.category, title: p.title, discipline: p.discipline, owner: p.owner, due_date: p.dueDate, raised_by: by })),
     closePunch: (id, note, by) => ok(supabase.from('pssr_punches').update({ status: 'closed', close_note: note, closed_by: by, closed_at: now() }).eq('id', id)),
@@ -156,6 +176,21 @@ export const usePssrStore = create<State>()((set, get) => {
       return ok(supabase.from('pssr_gasin_logs').insert({ permit_id: cur.id, kind: status === 'aborted' ? 'incident' : 'note', pressure: extra?.finalPressure ?? null, note: extra?.note ? `${note}: ${extra.note}` : note, by_user: by }))
     },
     addLog: (permitId, l, by) => ok(supabase.from('pssr_gasin_logs').insert({ permit_id: permitId, kind: l.kind, pressure: l.pressure, location: l.location, note: l.note, by_user: by })),
+    loadOfficial: async (systemId) => {
+      const sys = get().systems.find((x) => x.id === systemId); if (!sys) return 0
+      const mine = get().checks.filter((c) => c.systemId === systemId)
+      const have = new Set(mine.map((c) => c.templateItemId))
+      const items = get().templates.filter((t) => t.active && t.source === OFFICIAL_SOURCE && appliesTo(t, sys.kind) && !have.has(t.id))
+      if (items.length) { const r = await supabase.from('pssr_checks').insert(items.map((t) => checkRow(systemId, t))); if (r.error) { set({ error: r.error.message }); return 0 } }
+      // the older sample items that were never answered are replaced; answered ones stay as evidence
+      const official = new Set(get().templates.filter((t) => t.source === OFFICIAL_SOURCE).map((t) => t.id))
+      const stale = mine.filter((c) => c.status === 'pending' && !c.evidence && (c.templateItemId == null || !official.has(c.templateItemId))).map((c) => c.id)
+      if (stale.length) { const d = await supabase.from('pssr_checks').delete().in('id', stale); if (d.error) set({ error: d.error.message }) }
+      const pid = get().projectId; if (pid) await get().load(pid)
+      return items.length
+    },
+    saveHeader: (systemId, h) => ok(supabase.from('pssr_systems').update({ startup_type: h.startupType, team_lead: h.teamLead, review_date: h.reviewDate }).eq('id', systemId)),
+    setSummary: (systemId, summary) => ok(supabase.from('pssr_systems').update({ summary }).eq('id', systemId)),
     addTemplate: (t) => ok(supabase.from('pssr_template_items').insert({ kind: t.kind, category: t.category, title: t.title, mandatory: t.mandatory, seq: 100 + get().templates.length })),
   }
 })

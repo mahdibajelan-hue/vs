@@ -226,3 +226,35 @@
 .ps-quick-grid { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); }
 .ps-quick-grid .ps-btn { min-height: 64px; justify-content: center; font-size: 15px; }
 @media (max-width: 640px) { .ps-check-edit { grid-template-columns: 1fr auto; } .ps-check-edit select, .ps-check-edit input { grid-column: 1 / -1; } }
+
+/* official PSSR form: grouped checklist with the form's three answer columns */
+.ps-of-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; position: sticky; top: 0; z-index: 2; padding: .5rem 0; background: var(--bg-surface, var(--bg-app)); }
+.ps-of-prog { flex: 1 1 16rem; font-size: 12px; } .ps-of-prog b { font-size: 14px; }
+.ps-of-search { display: inline-flex; align-items: center; gap: .3rem; padding: 0 .5rem; border: 1px solid var(--border-soft); border-radius: .6rem; } .ps-of-search input { border: 0; background: transparent; min-width: 12rem; padding: .35rem 0; }
+.ps-of-area h4 { font-size: 13px; font-weight: 900; margin: .3rem 0 .45rem; padding-inline-start: .5rem; border-inline-start: 3px solid #3b82f6; }
+.ps-of-cat { border: 1px solid var(--border-soft); border-radius: .8rem; margin-bottom: .45rem; overflow: hidden; }
+.ps-of-cat > summary { display: flex; align-items: center; gap: .5rem; padding: .55rem .7rem; cursor: pointer; list-style: none; font-size: 12.5px; }
+.ps-of-cat > summary::-webkit-details-marker { display: none; }
+.ps-of-cat > summary svg { transition: transform 160ms ease-out; } .ps-of-cat:not([open]) > summary svg { transform: rotate(90deg); }
+.ps-of-cat > summary small { color: var(--text-muted); white-space: nowrap; }
+.ps-of-meter { flex: 1; max-width: 10rem; height: .35rem; border-radius: 99px; background: color-mix(in srgb, #64748b 18%, transparent); overflow: hidden; margin-inline-start: auto; } .ps-of-meter i { display: block; height: 100%; background: #10b981; }
+.ps-of-item { display: grid; grid-template-columns: 2.2rem 1.6rem minmax(0, 1fr) auto minmax(8rem, 12rem) auto; gap: .5rem; align-items: center; padding: .5rem .7rem; border-top: 1px solid var(--border-soft); font-size: 12.5px; }
+.ps-of-item.is-fail { background: color-mix(in srgb, #ef4444 6%, transparent); } .ps-of-item.is-ok .ps-of-ref { color: #10b981; }
+.ps-of-ref { font-weight: 900; color: var(--text-muted); text-align: center; }
+.ps-of-pri { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: .45rem; font-weight: 900; font-size: 11px; color: var(--c); background: color-mix(in srgb, var(--c) 15%, transparent); }
+.ps-of-text { display: grid; gap: .15rem; line-height: 1.8; }
+.ps-of-ans { display: inline-flex; border: 1px solid var(--border-soft); border-radius: .6rem; overflow: hidden; }
+.ps-of-ans button { padding: .4rem .65rem; min-height: 2.2rem; font-size: 12px; font-weight: 800; color: var(--text-muted); white-space: nowrap; transition: background-color 160ms ease, color 160ms ease; }
+.ps-of-ans button + button { border-inline-start: 1px solid var(--border-soft); }
+.ps-of-ans button[aria-pressed='true'] { color: #fff; background: var(--c); }
+.ps-of-ans button:active { transform: scale(.97); }
+.ps-of-note { padding: .35rem .5rem; border: 1px solid var(--border-soft); border-radius: .5rem; background: transparent; font-size: 12px; }
+.ps-of-file { cursor: pointer; color: var(--text-muted); display: inline-grid; place-items: center; width: 2rem; height: 2rem; border-radius: .5rem; } .ps-of-file:hover { background: color-mix(in srgb, #64748b 12%, transparent); }
+.ps-of-summary { display: grid; gap: .4rem; padding: .75rem .85rem; border-radius: .8rem; border: 1px dashed color-mix(in srgb, #3b82f6 45%, var(--border-soft)); font-size: 12.5px; line-height: 1.9; }
+.ps-of-summary .ps-checkbox { align-items: flex-start; font-size: 12.5px; } .ps-of-summary .ps-checkbox input { margin-top: .45rem; }
+@media (max-width: 760px) {
+  .ps-of-item { grid-template-columns: 2rem 1.5rem minmax(0, 1fr) auto; }
+  .ps-of-text { grid-column: 3 / -1; }
+  .ps-of-ans { grid-column: 1 / -1; justify-self: start; } .ps-of-ans button { min-height: 2.6rem; padding-inline: .9rem; }
+  .ps-of-note { grid-column: 1 / 4; } .ps-of-file { grid-column: 4; }
+}
