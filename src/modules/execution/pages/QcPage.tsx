@@ -8,7 +8,6 @@ import { fa } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
 import type { QcFindingRow } from '../epcTypes'
 import type { ExTab } from '../ExecutionApp'
-import { WeldsPage } from './WeldsPage'
 import { NcrPanel } from '../components/NcrPanel'
 
 const KIND_FA = { defect: 'عیب جوش/اجرا', nonconformity: 'عدم انطباق', observation: 'مشاهده' } as const
@@ -16,7 +15,7 @@ const SEV_FA = { low: 'کم', medium: 'متوسط', high: 'زیاد' } as const
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0)
 
 /** Quality control view built on the technical forms already recorded: completion/approval of forms, radiography acceptance, repair progress, and the register of findings. */
-export function QcPage({ projectId, sub }: { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }) { return sub === 'welds' ? <WeldsPage projectId={projectId} sub={sub} /> : <EpcGate><Inner projectId={projectId} /></EpcGate> }
+export function QcPage({ projectId }: { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }) { return <EpcGate><Inner projectId={projectId} /></EpcGate> }
 function Inner({ projectId }: { projectId: string }) {
   const m = useExecutionModel(projectId)
   const epc = useEpcStore()

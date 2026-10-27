@@ -10,7 +10,8 @@ import type { WeldRow } from '../epcTypes'
 import { buildProfile, SHARED } from '../lib/weldProfile'
 import { ATTR_LABEL, type Attr } from '../lib/weldCentral'
 import { FORM_BY_KEY } from '../lib/formCatalog'
-import { WSTATE_FA, weldLifecycle, type WState } from '../lib/weldLifecycle'
+import { WSTATE_FA, type WState } from '../lib/weldLifecycle'
+import { buildWeldFiles, weldFileStats, type WeldFile } from '../lib/weldFile'
 import { fmtD } from '../../finance/components/fn'
 
 const STAGES: { key: WeldStage; label: string }[] = [{ key: 'fitup', label: 'فیت‌آپ' }, { key: 'weld', label: 'جوش' }, { key: 'rt_request', label: 'درخواست RT' }, { key: 'rt', label: 'RT' }, { key: 'repair', label: 'تعمیر' }, { key: 'coating', label: 'پوشش' }]
@@ -48,16 +49,10 @@ function Inner({ projectId }: { projectId: string }) {
     }
     return out
   }, [epc.lineWelds, lineById, reportById, projectId])
-  // quality chain per weld (fit-up → weld → RT → repair → RT again → coating → coating test), derived from the rows
-  const life = useMemo(() => {
-    const ev = new Map<string, import('../lib/weldLifecycle').WEvent[]>()
-    for (const lw of epc.lineWelds) {
-      if (lw.projectId !== projectId) continue
-      const l = lineById.get(lw.lineId); const r = l ? reportById.get(l.reportId) : undefined; if (!l || !r || r.status === 'rejected') continue
-      const a = ev.get(lw.weldId) ?? []; a.push({ formKey: r.formKey, date: r.reportDate, result: String(l.detail.result ?? ''), vt: String(l.detail.vt ?? ''), repairDone: String(l.detail.repairDone ?? ''), lineId: l.id }); ev.set(lw.weldId, a)
-    }
-    return new Map([...ev].map(([id, e]) => [id, weldLifecycle(e)]))
-  }, [epc.lineWelds, lineById, reportById, projectId])
+  // the weld file: the one record per weld (central facts + every stage) that this page and the rest of the module read
+  const files = useMemo(() => buildWeldFiles({ projectId, welds: epc.welds, links: epc.lineWelds, lines: m.lines, reports: m.reports }), [epc.welds, epc.lineWelds, m.lines, m.reports, projectId])
+  const life = useMemo(() => new Map(files.map((f) => [f.id, f])), [files])
+  const stats = useMemo(() => weldFileStats(files), [files])
   const [lifeF, setLifeF] = useState<WState | ''>('')
   const conflicts = epc.weldConflicts.filter((c) => c.projectId === projectId)
   const suspects = epc.weldSuspects.filter((s) => s.projectId === projectId)
@@ -70,10 +65,11 @@ function Inner({ projectId }: { projectId: string }) {
       <div className="fn-kpis">
         <KpiCard label="سرجوش‌های شناخته‌شده" value={fa(welds.length)} sub="شاخصی روی فرم‌ها؛ متن فرم‌ها دست‌نخورده" />
         <KpiCard label="بدون درخواست/گزارش RT" value={fa(welds.filter((w) => !info.get(w.id)?.stages.rt).length)} tone="warn" />
-        <KpiCard label="نیازمند تعمیر" value={fa([...life.values()].filter((x) => x.state === 'needs_repair').length)} tone={[...life.values()].some((x) => x.state === 'needs_repair') ? 'bad' : 'good'} onClick={() => setLifeF(lifeF === 'needs_repair' ? '' : 'needs_repair')} />
-        <KpiCard label="تعمیرشده، منتظر RT مجدد" value={fa([...life.values()].filter((x) => x.state === 'repaired').length)} tone="warn" onClick={() => setLifeF(lifeF === 'repaired' ? '' : 'repaired')} />
-        <KpiCard label="RT پذیرفته، منتظر پوشش" value={fa([...life.values()].filter((x) => x.state === 'rt_accepted').length)} onClick={() => setLifeF(lifeF === 'rt_accepted' ? '' : 'rt_accepted')} />
-        <KpiCard label="پوشش‌شده، منتظر تست پوشش" value={fa([...life.values()].filter((x) => x.state === 'coated').length)} onClick={() => setLifeF(lifeF === 'coated' ? '' : 'coated')} />
+        <KpiCard label="نرخ تعمیر (RT)" value={stats.repairRate == null ? '—' : `${fa(Math.round(stats.repairRate * 100))}٪`} sub={`${fa(stats.rtDone)} سرجوش رادیوگرافی‌شده`} tone={stats.repairRate != null && stats.repairRate > 0.05 ? 'warn' : 'good'} />
+        <KpiCard label="نیازمند تعمیر" value={fa(stats.needsRepair)} tone={stats.needsRepair ? 'bad' : 'good'} onClick={() => setLifeF(lifeF === 'needs_repair' ? '' : 'needs_repair')} />
+        <KpiCard label="تعمیرشده، منتظر RT مجدد" value={fa(stats.repaired)} tone="warn" onClick={() => setLifeF(lifeF === 'repaired' ? '' : 'repaired')} />
+        <KpiCard label="RT پذیرفته، منتظر پوشش" value={fa(stats.rtAccepted)} onClick={() => setLifeF(lifeF === 'rt_accepted' ? '' : 'rt_accepted')} />
+        <KpiCard label="پوشش‌شده، منتظر تست پوشش" value={fa(stats.coated)} onClick={() => setLifeF(lifeF === 'coated' ? '' : 'coated')} />
         <KpiCard label="ناسازگاری باز" value={fa(conflicts.length)} tone={conflicts.length ? 'bad' : 'good'} />
         <KpiCard label="موارد مشکوک به یکی‌بودن" value={fa(suspects.length)} tone={suspects.length ? 'warn' : 'good'} hint="هرگز خودکار ادغام نمی‌شوند" />
       </div>
@@ -82,13 +78,14 @@ function Inner({ projectId }: { projectId: string }) {
         const mine = epc.lineWelds.filter((x) => x.weldId === open).map((x) => { const l = lineById.get(x.lineId), r = l ? reportById.get(l.reportId) : undefined; return l && r ? { l, r } : null }).filter((x): x is NonNullable<typeof x> => !!x).sort((a, b) => a.r.reportDate.localeCompare(b.r.reportDate))
         const prof = buildProfile(mine.map(({ l, r }) => ({ formKey: r.formKey, date: r.reportDate, detail: l.detail })))
         const KEYS = ['result', 'vt', 'repairDone', 'vtCheck', 'rtReqNo', 'rtReportNo', 'defect', 'defectType', 'stamp', 'coatType', 'batchNo']
-        return <Section title={`کارت سرجوش — ${label(w)}`} hint="مشخصات مرکزی در جدول مرکزی ذخیره می‌شود؛ مقدارهای زیرِ آن (چیپ‌ها) صرفاً خلاصهٔ آخرین مقدارهای ثبت‌شده در ردیف‌های فرم‌هاست و چیزی را عوض نمی‌کند." action={<button className="im-btn im-btn-sm" onClick={() => setOpen('')}>بستن</button>}>
+        return <Section title={`پروندهٔ سرجوش — ${label(w)}`} hint="مشخصات مشترک (لوله، قطر، ضخامت، طول، خم) یک‌بار در جدول مرکزی ذخیره می‌شود و هر مرحله (فیت‌آپ، جوشکاری، RT، تعمیر، پوشش و تست پوشش) از ردیف‌های فرم‌های متصل به همین سرجوش خوانده می‌شود؛ همهٔ بخش‌های ماژول همین پرونده را می‌خوانند." action={<button className="im-btn im-btn-sm" onClick={() => setOpen('')}>بستن</button>}>
           <div style={{ marginBottom: 10 }}>
             <b>مشخصات مرکزی سرجوش</b> <span className="im-helper">(یک مقدار برای همهٔ فرم‌ها؛ تغییر نیازمند دلیل است و در تاریخچه می‌ماند)</span>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>{(Object.keys(ATTR_LABEL) as Attr[]).map((a) => <label key={a} className="im-helper" style={{ display: 'grid', gap: 2 }}>{ATTR_LABEL[a]}
               <input key={`${w.id}${a}${w.central[a] ?? ''}`} disabled={!can} defaultValue={w.central[a] ?? ''} dir="ltr" style={{ width: 110 }} onBlur={(e) => { const v = e.target.value.trim(); if (v === (w.central[a] ?? '')) return; let note = ''; if (w.central[a]) { note = window.prompt(`دلیل تغییر «${ATTR_LABEL[a]}» از ${w.central[a]} به ${v || '(خالی)'}:`) ?? ''; if (!note.trim()) { e.target.value = w.central[a] ?? ''; return } } void epc.weldSetAttr(w.id, a, v, note) }} /></label>)}</div>
             {epc.weldHistory.filter((h) => h.weldId === w.id).length > 0 && <details style={{ marginTop: 6 }}><summary className="im-helper">تاریخچهٔ تغییر مشخصات</summary><table className="ex-lines"><tbody>{epc.weldHistory.filter((h) => h.weldId === w.id).map((h) => <tr key={h.id}><td>{fmtD(h.at.slice(0, 10))}</td><td>{ATTR_LABEL[h.attr]}</td><td dir="ltr">{h.oldValue ?? '—'} ← {h.newValue ?? '—'}</td><td>{h.source === 'manual' ? 'دستی' : h.source === 'backfill' ? 'انتقال از سوابق' : 'از فرم'}</td><td dir="auto">{h.note}</td></tr>)}</tbody></table></details>}
           </div>
+          {life.get(w.id) && <StageStrip f={life.get(w.id)!} />}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>{SHARED.map((a) => { const f = prof[a.attr]; return <Chip key={a.attr} tone={f ? 'good' : 'neutral'}>{a.label}: {f ? <b dir="ltr">{f.value}</b> : '—'}{f ? ` (از ${FORM_BY_KEY[f.from]?.title ?? f.from})` : ''}</Chip> })}</div>
           <div className="fn-tbl-wrap" style={{ maxHeight: 320 }}><table className="ex-lines"><thead><tr><th>تاریخ</th><th>فرم</th><th>شمارهٔ گزارش</th><th>وضعیت گزارش</th><th>اطلاعات مرحله</th></tr></thead><tbody>
             {mine.map(({ l, r }) => <tr key={l.id}><td>{fmtD(r.reportDate)}</td><td>{FORM_BY_KEY[r.formKey]?.title ?? r.formKey}</td><td className="fn-code">{r.reportNo}</td><td>{r.status}</td><td dir="auto">{KEYS.filter((k) => String(l.detail[k] ?? '').trim()).map((k) => `${FORM_BY_KEY[r.formKey]?.columns.find((c) => c.key === k)?.label ?? k}: ${l.detail[k]}`).join(' · ') || '—'}</td></tr>)}
@@ -128,6 +125,38 @@ function Inner({ projectId }: { projectId: string }) {
           {epc.weldMerges.filter((x) => x.projectId === projectId).length > 0 && <div style={{ marginTop: 10 }}><b>ادغام‌های انجام‌شده</b>{epc.weldMerges.filter((x) => x.projectId === projectId).map((x) => <div key={x.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span dir="ltr">{label(byId.get(x.fromWeld))} → {label(byId.get(x.intoWeld))}</span><span className="sub">{x.reason}</span>{can && <button className="im-btn im-btn-sm" onClick={() => act('ex_weld_unmerge', { p_merge: x.id })}>لغو ادغام</button>}</div>)}</div>}
         </Section>
       )}
+    </div>
+  )
+}
+
+/** the stages of one weld file side by side: date, the form it came from and its verdict */
+function StageStrip({ f }: { f: WeldFile }) {
+  const cell = (title: string, ref: { date: string; reportNo: string; approved: boolean } | undefined, body: React.ReactNode, tone: 'good' | 'bad' | 'warn' | 'neutral' = 'good') => (
+    <div style={{ border: '1px solid var(--im-line, rgba(148,163,184,.3))', borderRadius: 10, padding: '8px 10px', display: 'grid', gap: 3, minWidth: 150, opacity: ref ? 1 : 0.55, borderTop: `3px solid ${ref ? (tone === 'bad' ? '#ef4444' : tone === 'warn' ? '#f59e0b' : tone === 'good' ? '#10b981' : '#64748b') : '#64748b'}` }}>
+      <b style={{ fontSize: 12.5 }}>{title}</b>
+      {ref ? <><small>{fmtD(ref.date)} · <span className="fn-code">{ref.reportNo}</span>{ref.approved ? '' : ' · تأییدنشده'}</small><span style={{ fontSize: 12 }}>{body}</span></> : <small className="sub">ثبت نشده</small>}
+    </div>
+  )
+  const res = (v: string) => (v === 'acc' || v === 'ok' ? 'پذیرفته' : v === 'rej' ? 'مردود' : v === 'rep' ? 'تعمیر' : v || '—')
+  const st = f.welding?.stamps
+  return (
+    <div style={{ display: 'grid', gap: 6, marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Chip tone={f.state === 'needs_repair' || f.state === 'coat_failed' ? 'bad' : f.state === 'coat_tested' ? 'good' : 'warn'}>{WSTATE_FA[f.state]}</Chip>
+        {f.next && <span className="im-helper" style={{ margin: 0 }}>گام بعدی: <b>{f.next}</b></span>}
+        {f.cycle > 0 && <Chip tone="warn">چرخهٔ تعمیر {fa(f.cycle)}</Chip>}
+        {f.pending > 0 && <Chip tone="neutral">{fa(f.pending)} ردیف تأییدنشده</Chip>}
+        {f.anomalies.map((a) => <Chip key={a} tone="bad">{a}</Chip>)}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {cell('آماده‌سازی (فیت‌آپ)', f.fitup, res(f.fitup?.result ?? ''), f.fitup?.result === 'rej' ? 'bad' : 'good')}
+        {cell(f.welding?.tieIn ? 'جوشکاری (TIE-IN)' : 'جوشکاری', f.welding, <>{st && (st.root || st.cap) ? <span dir="ltr">R:{st.root || '—'} · H:{st.hot || '—'} · F:{st.fill || '—'} · C:{st.cap || '—'}</span> : 'مهر جوشکار ثبت نشده'}<br />VT: {res(f.welding?.vt ?? '')}</>, f.welding?.vt === 'rej' ? 'bad' : 'good')}
+        {cell('درخواست RT', f.rtRequest, f.rtRequest?.reqNo ? <span dir="ltr">{f.rtRequest.reqNo}</span> : '—', 'neutral')}
+        {cell('رادیوگرافی', f.rt, <>{res(f.rt?.result ?? '')}{f.rt?.defect ? ` · ${f.rt.defect}` : ''}{f.rt && f.rt.count > 1 ? ` · ${fa(f.rt.count)} بار` : ''}</>, f.rt?.result === 'rep' ? 'bad' : 'good')}
+        {cell('تعمیر', f.repairs.at(-1), f.repairs.length ? `${fa(f.repairs.length)} مورد${f.repairs.at(-1)?.defect ? ` · ${f.repairs.at(-1)!.defect}` : ''}${f.repairs.at(-1)?.done ? ' · انجام شد' : ' · انجام نشده'}` : '—', f.repairs.at(-1)?.done ? 'good' : 'warn')}
+        {cell('پوشش سرجوش (عایق)', f.coating, <>{res(f.coating?.result ?? '')}{f.coating?.thicknessUm != null ? ` · حداقل ضخامت ${fa(f.coating.thicknessUm)} µm` : ''}</>, f.coating?.result === 'rej' ? 'bad' : 'good')}
+        {cell('تست پوشش', f.coatTest, res(f.coatTest?.verdict ?? ''), f.coatTest?.verdict === 'rej' ? 'bad' : 'good')}
+      </div>
     </div>
   )
 }

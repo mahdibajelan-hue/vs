@@ -10,6 +10,7 @@ import { deviationDrivers } from '../lib/progress'
 import { daysBetween, jalaliText } from '../lib/periods'
 import { EX_ROLE_LABEL_FA, type ExRole } from '../types'
 import { fa, pct } from './common'
+import { buildWeldFiles, weldFileStats } from '../lib/weldFile'
 
 interface Task { key: string; roles: ExRole[]; title: string; detail: string; tone: 'good' | 'warn' | 'bad'; go: [ExTab, string?] }
 const TONE = { good: '#10b981', warn: '#f59e0b', bad: '#ef4444' }
@@ -25,6 +26,8 @@ export function RoleDesk({ m, onGo }: { m: ExecutionModel; onGo: (t: ExTab, s?: 
   const ex = useExecutionStore()
   const ncrs = useEpcStore((x) => x.ncrs)
   const look = useEpcStore((x) => x.lookahead)
+  const welds = useEpcStore((x) => x.welds), links = useEpcStore((x) => x.lineWelds)
+  const ws = useMemo(() => weldFileStats(buildWeldFiles({ projectId: m.projectId, welds, links, lines: m.lines, reports: m.reports })), [welds, links, m])
   const mine = ex.myRoles(m.projectId)
   const all = ex.can(m.projectId, '*')
   const s = useMemo(() => {
@@ -59,6 +62,7 @@ export function RoleDesk({ m, onGo }: { m: ExecutionModel; onGo: (t: ExTab, s?: 
     { key: 'today', roles: ['contractor', 'site_head'], title: s.missingToday.length ? `گزارش امروز ${fa(s.missingToday.length)} جبهه ثبت نشده` : `گزارش امروز: ${fa(s.today.length)} گزارش`, detail: s.missingToday.length ? s.missingToday.join('، ') : 'همهٔ جبهه‌های موردانتظار گزارش دارند', tone: s.missingToday.length ? 'warn' : 'good', go: ['daily', 'work'] },
     { key: 'ret', roles: ['contractor', 'site_head'], title: `برگشت‌خورده یا نیازمند تکمیل: ${fa(s.returned.length)}`, detail: s.drafts.length ? `${fa(s.drafts.length)} پیش‌نویس روزهای قبل هنوز ارسال نشده` : 'پیش‌نویس جامانده‌ای نیست', tone: s.returned.length ? 'bad' : s.drafts.length ? 'warn' : 'good', go: ['daily', 'work'] },
     { key: 'inbox', roles: ['supervision', 'consultant'], title: `کارتابل بررسی: ${fa(s.waiting.length)} گزارش`, detail: s.late.length ? `${fa(s.late.length)} گزارش بیش از مهلت ${fa(m.settings.reviewDays ?? 2)} روزه` : 'گزارشی از مهلت بررسی نگذشته', tone: s.late.length ? 'bad' : s.waiting.length ? 'warn' : 'good', go: ['review'] },
+    { key: 'welds', roles: ['site_head', 'contractor', 'supervision', 'consultant'], title: `سرجوش‌ها: ${fa(ws.needsRepair)} نیازمند تعمیر · ${fa(ws.withoutRt)} بدون RT`, detail: `${fa(ws.repaired)} تعمیرشده منتظر RT مجدد · ${fa(ws.rtAccepted)} منتظر پوشش · نرخ تعمیر ${ws.repairRate == null ? '—' : `${fa(Math.round(ws.repairRate * 100))}٪`}`, tone: ws.needsRepair ? 'bad' : ws.withoutRt || ws.repaired ? 'warn' : 'good', go: ['welds'] },
     { key: 'ncr', roles: ['supervision', 'consultant', 'manager'], title: `NCR باز: ${fa(s.openNcr.length)}`, detail: s.lateNcr.length ? `${fa(s.lateNcr.length)} مورد از مهلت گذشته` : 'NCR مهلت‌گذشته‌ای نیست', tone: s.lateNcr.length ? 'bad' : s.openNcr.length ? 'warn' : 'good', go: ['qc', 'qc'] },
     { key: 'drivers', roles: ['manager', 'planner', 'approver'], title: s.drivers.length ? `عقب‌افتادگی ${dev == null ? '—' : fa(Math.abs(dev * 100), 1)} واحد درصد — ${fa(Math.min(3, s.drivers.length))} عامل اصلی` : 'فعالیتی از برنامه عقب نیست', detail: s.drivers.slice(0, 3).map((x) => short(x.activity.title, 40)).join('، ') || '—', tone: s.drivers.length ? (dev != null && dev < -0.05 ? 'bad' : 'warn') : 'good', go: ['progress'] },
     { key: 'look', roles: ['planner', 'site_head', 'manager'], title: `برنامهٔ سه‌هفته‌ای: ${fa(s.thisWeek.length)} تعهد این هفته`, detail: s.thisWeek.length ? `${fa(s.thisWeek.filter((l) => l.committed).length)} تعهد قطعی` : 'برای این هفته تعهدی ثبت نشده — PPC ساخته نمی‌شود', tone: s.thisWeek.length ? 'good' : 'warn', go: ['plan', 'lookahead'] },

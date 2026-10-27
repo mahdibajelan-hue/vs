@@ -1,6 +1,6 @@
 import { NavScroller } from './components/NavScroller'
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Bot, CalendarRange, ClipboardList, Cpu, FileBarChart2, Gauge, HardHat, Inbox, Loader2, Settings2, ShieldCheck, TrendingUp } from 'lucide-react'
+import { AlertTriangle, BookOpen, Bot, Flame, CalendarRange, ClipboardList, Cpu, FileBarChart2, Gauge, HardHat, Inbox, Loader2, Settings2, ShieldCheck, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -13,21 +13,23 @@ import './execution.css'
 import { useExecutionStore } from './store/useExecutionStore'
 import { useExecutionModel } from './lib/useExecutionModel'
 import { PortfolioStrip } from './components/epc/PortfolioStrip'
+import { ExecutionGuide } from './components/ExecutionGuide'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 
 export const EXECUTION_ACCENT = '#f97316'
-export type ExTab = 'dashboard' | 'daily' | 'review' | 'progress' | 'productivity' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'settings'
+export type ExTab = 'dashboard' | 'daily' | 'review' | 'welds' | 'progress' | 'productivity' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'settings'
 type Sub = { id: string; label: string }
 const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[] }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
   { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'کارکرد روزانه' }, { id: 'forms', label: 'فرم‌های فنی (جوش، پوشش، …)' }, { id: 'designed', label: 'فرم‌های طراحی‌شده' }, { id: 'today', label: 'امروز در کارگاه' }] },
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
+  { id: 'welds', label: 'سرجوش‌ها (پروندهٔ جوش)', icon: Flame, color: '#f43f5e' },
   { id: 'progress', label: 'پیشرفت فیزیکی', icon: TrendingUp, color: '#14b8a6' },
   { id: 'productivity', label: 'بهره‌وری و پیش‌بینی', icon: Cpu, color: '#8b5cf6', subs: [{ id: 'rates', label: 'بهره‌وری اکیپ‌ها' }, { id: 'forecast', label: 'پیش‌بینی فعالیت‌ها' }, { id: 'scenarios', label: 'سناریوهای جبرانی' }] },
   { id: 'plan', label: 'برنامهٔ کوتاه‌مدت و آمادگی', icon: CalendarRange, color: '#0ea5e9', subs: [{ id: 'lookahead', label: 'برنامهٔ سه‌هفته‌ای' }, { id: 'readiness', label: 'آمادگی فعالیت‌ها' }, { id: 'import', label: 'ورود برنامه از اکسل' }] },
   { id: 'assistant', label: 'دستیار هوشمند', icon: Bot, color: '#ec4899' },
   { id: 'reports', label: 'گزارش‌های دوره‌ای', icon: FileBarChart2, color: '#94a3b8', subs: [{ id: 'week', label: 'هفتگی' }, { id: 'month', label: 'ماهانه' }, { id: 'cum', label: 'تجمعی از ابتدا' }, { id: 'contract', label: 'صورت‌وضعیت پیمان (۳ ستونی)' }, { id: 'statement', label: 'صورت‌وضعیت کارکرد' }, { id: 'ledger', label: 'مغایرت اجرایی و صورت‌وضعیت' }, { id: 'personnel', label: 'جوشکاران و عایق‌کاران' }, { id: 'mrs', label: 'لوله‌های ورودی (MRS)' }, { id: 'archive', label: 'بایگانی فرم‌های فنی' }, { id: 'mgmt-week', label: 'گزارش مدیریتی هفتگی' }, { id: 'mgmt-month', label: 'گزارش مدیریتی ماهانه' }, { id: 'delays', label: 'تأخیرات و کلیم' }] },
-  { id: 'qc', label: 'کنترل کیفیت', icon: ShieldCheck, color: '#22c55e', subs: [{ id: 'qc', label: 'مغایرت‌ها و NCR' }, { id: 'welds', label: 'سرجوش‌ها' }] },
+  { id: 'qc', label: 'کنترل کیفیت', icon: ShieldCheck, color: '#22c55e' },
   { id: 'gaps', label: 'کامل‌بودن و کسری', icon: AlertTriangle, color: '#ef4444' },
   { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#64748b', subs: [{ id: 'roles', label: 'افراد، نقش‌ها و تنظیمات پایه' }, { id: 'rules', label: 'فهرست‌ها، مقادیر پیمان، تقویم و قواعد' }, { id: 'tpl', label: 'کتابخانهٔ قالب‌های فرم‌های فنی' }, { id: 'actions', label: 'اقدام‌های کارگاهی و تطبیق با فهرست‌بها' }] },
 ]
@@ -45,6 +47,7 @@ const Reports = L(() => import('./pages/ReportsRouter'), 'ReportsRouter')
 const Today = L(() => import('./pages/TodayPage'), 'TodayPage')
 const Designed = L(() => import('./pages/DesignedForms'), 'DesignedForms')
 const Qc = L(() => import('./pages/QcPage'), 'QcPage')
+const Welds = L(() => import('./pages/WeldsPage'), 'WeldsPage')
 const Gaps = L(() => import('./pages/GapsPage'), 'GapsPage')
 const Settings = L(() => import('./pages/SettingsPage'), 'SettingsPage')
 
@@ -60,6 +63,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const [subs, setSubs] = useState<Partial<Record<ExTab, string>>>({})
   const [projectId, setProjectId] = useState<string | null>(null)
   const [locked, setLocked] = useState(false)
+  const [guide, setGuide] = useState(false)
 
   useEffect(() => {
     if (!mdLoaded) fetchMasterData()
@@ -98,6 +102,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       case 'reports': return <Reports {...p} />
       case 'gaps': return <Gaps {...p} />
       case 'qc': return <Qc {...p} />
+      case 'welds': return <Welds {...p} />
       case 'settings': return <Settings {...p} />
     }
   }
@@ -116,6 +121,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
             {projects.length > 0 && (locked
               ? <span className="im-select-pill" style={{ pointerEvents: 'none' }}>{projects.find((p) => p.id === projectId)?.officialName}</span>
               : <select className="im-select-pill" value={projectId ?? ''} onChange={(e) => setProjectId(e.target.value || null)} aria-label="پروژه">{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select>)}
+            <button type="button" className="im-btn im-btn-primary im-btn-sm" onClick={() => setGuide(true)}><BookOpen size={14} /> راهنما</button>
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
@@ -152,6 +158,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           </div>
         )}
       </main>
+      {guide && <ExecutionGuide onClose={() => setGuide(false)} />}
     </div>
   )
 }
