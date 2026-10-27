@@ -7,7 +7,7 @@ export function ProjectEstimationCard({ onSelect, locked, badge }: { onSelect: (
       number="05"
       title="برآورد پروژه‌ها"
       englishTag="Project Estimation & Cost Intelligence"
-      description="ماشین‌حساب برآورد مالی EPC خط لوله، متره، بنچمارک هزینه و پیش‌بینی."
+      description="برآورد پارامتریک هزینهٔ سرمایه‌ای خطوط لوله، بازهٔ دقت، جریان نقدینگی سالانه و گزارش قابل چاپ."
       icon={Calculator}
       accent="#db2777"
       locked={locked}

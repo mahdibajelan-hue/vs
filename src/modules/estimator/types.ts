@@ -150,7 +150,12 @@ export interface EstLongLeadItem {
   notes: string
 }
 
+/** How mature the definition behind an estimate is — sets the accuracy range shown with it. */
+export type EstMaturity = 'concept' | 'feasibility' | 'basic'
+
 export interface EstFullInputs {
+  /** absent on estimates saved before the field existed — read as 'concept' */
+  maturity?: EstMaturity
   overhead: EstOverheadInputs
   lifecycle: EstLifecycleInputs
   specs: EstSectionSpecs
@@ -168,8 +173,7 @@ export interface EstSensitivityItem {
   swingUsd: number
 }
 
-/** Ministry-guideline-sourced default assumptions — the org-wide baseline every new calculation
- * seeds from. A singleton row, editable only by admins (see est_assumptions RLS). */
+/** Org-wide default assumptions — the baseline every new calculation seeds from. A singleton row, editable only by admins (see est_assumptions RLS). */
 export interface EstAssumptions {
   overhead: EstOverheadInputs
   lifecycle: EstLifecycleInputs

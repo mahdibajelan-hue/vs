@@ -1,28 +1,24 @@
-import { Calculator, Trash2, Plus } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CalendarRange, Coins, GitBranch, Layers, PackageSearch, Plus, Radio, ShieldAlert, Signpost, Trash2, Waves, Wind, Workflow } from 'lucide-react'
 import type { EstFullInputs, EstLongLeadItem, EstProject, EstRisk } from '../types'
-import { computeAutoStationCounts } from '../lib/calc'
+import { computeAutoStationCounts, MATURITY, maturityOf } from '../lib/calc'
 import { BORDER, INK, INK_SOFT, MUTED_FG, SAFETY, SECTION_COLOR, SURFACE, SURFACE_2, toFa } from '../lib/theme'
-import { Field, Section } from '../components/ui'
+import { Btn, Field, Section, Segmented } from '../components/ui'
+import { LivePanel } from '../components/LivePanel'
+import type { EstMaturity } from '../types'
 
 const RISK_CATEGORY_LABEL: Record<EstRisk['category'], string> = {
   fx: 'ارزی', procurement: 'تأمین کالا', geotechnical: 'ژئوتکنیک', schedule: 'زمان‌بندی',
   hse: 'HSE', contractor: 'پیمانکار', permit: 'مجوز/تملک', weather: 'آب‌وهوا', other: 'سایر',
 }
 
-function segButtonStyle(active: boolean): React.CSSProperties {
-  return active
-    ? { background: SAFETY, color: '#1A1400', borderColor: SAFETY }
-    : { background: SURFACE_2, color: MUTED_FG, borderColor: BORDER }
-}
 
 export function SpecsPage({
-  project, inputs, onChange, onCalculate, saving,
+  project, inputs, onChange, onCalculate,
 }: {
   project: EstProject
   inputs: EstFullInputs
   onChange: (next: EstFullInputs) => void
   onCalculate: () => void
-  saving: boolean
 }) {
   const patch = (fn: (draft: EstFullInputs) => EstFullInputs) => onChange(fn(inputs))
 
@@ -51,18 +47,33 @@ export function SpecsPage({
   const hasPipeline = project.hasOnshore || project.hasOffshore
   const totalLengthKm = (project.hasOnshore ? inputs.specs.onshore.lengthKm : 0) + (project.hasOffshore ? inputs.specs.offshore.lengthKm : 0)
   const autoStations = computeAutoStationCounts(totalLengthKm)
+  const designWindow = inputs.lifecycle.consultantSelectionMonths + inputs.lifecycle.basicDesignMonths
+  const lateLL = inputs.longLeadItems.filter((it) => it.leadTimeMonths > designWindow).length
 
   return (
-    <div className="h-full overflow-y-auto est-font">
-      <div className="mx-auto max-w-3xl px-4 py-6 space-y-4">
-        <div>
-          <p className="text-sm font-bold" style={{ color: INK }}>۲. مشخصات و آپشن‌های هر بخش</p>
-          <p className="text-[11px] mt-0.5" style={{ color: MUTED_FG }}>فقط بخش‌هایی که در تعریف پروژه «{project.name}» فعال شده‌اند نمایش داده می‌شوند. نرخ‌های واحد از بخش تنظیمات خوانده می‌شوند.</p>
+    <div className="h-full overflow-y-auto est-font est-scroll">
+      <div className="mx-auto max-w-6xl px-4 pt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px] items-start">
+      <div className="space-y-4 min-w-0 pb-6">
+        <div className="est-fade-in">
+          <p className="text-[11px] font-semibold" style={{ color: SAFETY }}>گام ۲ از ۳</p>
+          <h1 className="text-lg font-extrabold" style={{ color: INK }}>مشخصات فنی و زمان‌بندی «{project.name}»</h1>
+          <p className="text-[11.5px] mt-1 leading-relaxed" style={{ color: MUTED_FG }}>فقط بخش‌هایی که در دامنهٔ پروژه انتخاب شده‌اند نمایش داده می‌شوند. نرخ‌های واحد از مبانی محاسبات سازمان خوانده می‌شوند و هر تغییر همان لحظه در برآورد زنده دیده می‌شود.</p>
         </div>
 
-        <div className="est-card rounded-2xl px-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+        <div className="est-card rounded-2xl p-4 est-fade-in" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold" style={{ color: INK }}>مرحلهٔ تعریف پروژه</p>
+              <p className="text-[11px] mt-0.5" style={{ color: MUTED_FG }}>{MATURITY[maturityOf(inputs)].hint} — بازهٔ دقت برآورد از همین انتخاب تعیین می‌شود.</p>
+            </div>
+            <Segmented<EstMaturity> value={maturityOf(inputs)} onChange={(v) => patch((d) => ({ ...d, maturity: v }))}
+              options={(Object.keys(MATURITY) as EstMaturity[]).map((k) => [k, MATURITY[k].label])} />
+          </div>
+        </div>
+
+        <div className="est-card rounded-2xl px-5 est-fade-in" style={{ background: SURFACE, border: `1px solid ${BORDER}`, animationDelay: '80ms' }}>
           {project.hasOnshore && (
-            <Section title="خط لوله خشکی" accent={SECTION_COLOR.onshore} defaultOpen>
+            <Section title="خط لوله خشکی" subtitle="طول، قطر، ضخامت، توپوگرافی و تملک اراضی" icon={<GitBranch size={17} />} accent={SECTION_COLOR.onshore} defaultOpen>
               <div className="grid grid-cols-2 gap-x-3">
                 <Field label="طول خط" unit="کیلومتر" value={inputs.specs.onshore.lengthKm}
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, onshore: { ...d.specs.onshore, lengthKm: v } } }))} />
@@ -81,7 +92,7 @@ export function SpecsPage({
           )}
 
           {project.hasOffshore && (
-            <Section title="خط لوله دریایی" accent={SECTION_COLOR.offshore} defaultOpen>
+            <Section title="خط لوله دریایی" subtitle="طول، قطر، ضخامت و دشواری آب کم‌عمق" icon={<Waves size={17} />} accent={SECTION_COLOR.offshore} defaultOpen>
               <div className="grid grid-cols-2 gap-x-3">
                 <Field label="طول خط" unit="کیلومتر" value={inputs.specs.offshore.lengthKm}
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, lengthKm: v } } }))} />
@@ -89,49 +100,35 @@ export function SpecsPage({
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, diameterIn: v } } }))} />
                 <Field label="ضخامت جداره" unit="میلی‌متر" value={inputs.specs.offshore.wtMm} step={0.5}
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, wtMm: v } } }))} />
-                <Field label="ضریب آب کم‌عمق" value={inputs.specs.offshore.shallowWaterSurchargePct} step={0.01}
+                <Field label="اضافه‌هزینهٔ آب کم‌عمق" percent value={inputs.specs.offshore.shallowWaterSurchargePct} step={0.01}
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, shallowWaterSurchargePct: v } } }))}
-                  hint="۰ برای آب عمیق (بدون دشواری اجرایی) — ۰٫۰۵ تا ۰٫۱۰ برای آب کم‌عمق ساحلی — ۰٫۱۵ تا ۰٫۲۵ برای مناطق بسیار کم‌عمق/جزر و مدی با دشواری اجرای بالا" />
+                  hint="۰ برای آب عمیق — ۵ تا ۱۰ برای آب کم‌عمق ساحلی — ۱۵ تا ۲۵ برای مناطق بسیار کم‌عمق یا جزر و مدی" />
               </div>
             </Section>
           )}
 
           {project.hasCompressorStation && (
-            <Section title="ایستگاه تقویت فشار" accent={SECTION_COLOR.compressor} defaultOpen>
+            <Section title="ایستگاه تقویت فشار" subtitle="تعداد، توان و نوع درایور" icon={<Wind size={17} />} accent={SECTION_COLOR.compressor} defaultOpen>
               <div className="grid grid-cols-2 gap-x-3">
                 <Field label="تعداد ایستگاه" value={inputs.specs.compressor.stationCount}
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, compressor: { ...d.specs.compressor, stationCount: Math.max(1, Math.round(v)) } } }))} />
                 <Field label="توان اسمی هر ایستگاه" unit="مگاوات" value={inputs.specs.compressor.ratedPowerMwPerStation} step={0.5}
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, compressor: { ...d.specs.compressor, ratedPowerMwPerStation: v } } }))} />
               </div>
-              <div className="flex gap-2 mt-1">
-                {(['gasTurbine', 'electric'] as const).map((dt) => (
-                  <button key={dt} type="button"
-                    onClick={() => patch((d) => ({ ...d, specs: { ...d.specs, compressor: { ...d.specs.compressor, driverType: dt } } }))}
-                    className="flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
-                    style={segButtonStyle(inputs.specs.compressor.driverType === dt)}>
-                    {dt === 'gasTurbine' ? 'درایور توربین گازی' : 'درایور الکتروموتور'}
-                  </button>
-                ))}
-              </div>
+              <Segmented full value={inputs.specs.compressor.driverType}
+                onChange={(dt) => patch((d) => ({ ...d, specs: { ...d.specs, compressor: { ...d.specs.compressor, driverType: dt } } }))}
+                options={[['gasTurbine', 'درایور توربین گازی'], ['electric', 'درایور الکتروموتور']]} />
               <p className="text-[10px] mt-2 leading-relaxed" style={{ color: MUTED_FG }}>
-                برآورد قیمت تجهیزات دوار بر مبنای منحنی هزینه راهنمای وزارت نفت (۲۰۱۹، دلار بر کیلووات) است.
+                قیمت تجهیزات دوار از منحنی هزینه بر حسب توان اسمی محاسبه و به هزینهٔ کل ایستگاه تعمیم داده می‌شود.
               </p>
             </Section>
           )}
 
           {hasPipeline && (
-            <Section title="ایستگاه‌های فرستنده/گیرنده توپک و شیر بین‌راهی" accent={SECTION_COLOR.launcher} defaultOpen>
-              <div className="flex gap-2 mb-2">
-                {(['auto', 'manual'] as const).map((m) => (
-                  <button key={m} type="button"
-                    onClick={() => patch((d) => ({ ...d, specs: { ...d.specs, stations: { ...d.specs.stations, mode: m } } }))}
-                    className="flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
-                    style={segButtonStyle(inputs.specs.stations.mode === m)}>
-                    {m === 'auto' ? 'محاسبه خودکار بر اساس طول خط' : 'ورود دستی تعداد'}
-                  </button>
-                ))}
-              </div>
+            <Section title="ایستگاه‌های توپک‌رانی و شیر بین‌راهی" subtitle="تعداد خودکار از طول خط یا ورود دستی" icon={<Signpost size={17} />} accent={SECTION_COLOR.launcher}>
+              <div className="mb-3"><Segmented full value={inputs.specs.stations.mode}
+                onChange={(m) => patch((d) => ({ ...d, specs: { ...d.specs, stations: { ...d.specs.stations, mode: m } } }))}
+                options={[['auto', 'خودکار از طول خط'], ['manual', 'ورود دستی تعداد']]} /></div>
 
               {inputs.specs.stations.mode === 'auto' ? (
                 <div className="rounded-lg p-3 mb-3 text-xs" style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK_SOFT }}>
@@ -163,29 +160,22 @@ export function SpecsPage({
                 <Field label="هزینه واحد شیر بین‌راهی" unit="$" value={inputs.specs.blockValve.unitCostUsd} step={5000}
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, blockValve: { ...d.specs.blockValve, unitCostUsd: v } } }))} />
               </div>
-              <p className="text-[10px] mt-2" style={{ color: MUTED_FG }}>برآورد مهندسی-پارامتریک، خارج از محدوده راهنمای رسمی وزارت نفت</p>
+              <p className="text-[10px] mt-2" style={{ color: MUTED_FG }}>برآورد پارامتریک بر پایهٔ نرخ واحد هر ایستگاه.</p>
             </Section>
           )}
 
           {project.tieInCount > 0 && (
-            <Section title={`ایستگاه‌های انشعاب (${project.tieInCount} عدد)`} accent={SECTION_COLOR.tieIn}>
+            <Section title={`ایستگاه‌های انشعاب (${toFa(project.tieInCount)} عدد)`} subtitle="هزینهٔ واحد هر انشعاب" icon={<Workflow size={17} />} accent={SECTION_COLOR.tieIn}>
               <Field label="هزینه واحد هر ایستگاه انشعاب" unit="$" value={inputs.specs.tieIn.unitCostUsd} step={5000}
                 onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, tieIn: { ...d.specs.tieIn, unitCostUsd: v } } }))}
-                hint="برآورد مهندسی-پارامتریک، خارج از محدوده راهنمای رسمی وزارت نفت" />
+                hint="برآورد پارامتریک بر پایهٔ نرخ واحد هر ایستگاه." />
             </Section>
           )}
           {project.hasTelecomScada && (
-            <Section title="مخابرات و اسکادا" accent={SECTION_COLOR.telecom}>
-              <div className="flex gap-2 mb-2">
-                {(['perKm', 'lumpSum'] as const).map((m) => (
-                  <button key={m} type="button"
-                    onClick={() => patch((d) => ({ ...d, specs: { ...d.specs, telecom: { ...d.specs.telecom, mode: m } } }))}
-                    className="flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
-                    style={segButtonStyle(inputs.specs.telecom.mode === m)}>
-                    {m === 'perKm' ? 'نرخ به ازای هر کیلومتر' : 'مبلغ مقطوع'}
-                  </button>
-                ))}
-              </div>
+            <Section title="مخابرات و اسکادا" subtitle="نرخ کیلومتری یا مبلغ مقطوع" icon={<Radio size={17} />} accent={SECTION_COLOR.telecom}>
+              <div className="mb-3"><Segmented full value={inputs.specs.telecom.mode}
+                onChange={(m) => patch((d) => ({ ...d, specs: { ...d.specs, telecom: { ...d.specs.telecom, mode: m } } }))}
+                options={[['perKm', 'نرخ به ازای هر کیلومتر'], ['lumpSum', 'مبلغ مقطوع']]} /></div>
               {inputs.specs.telecom.mode === 'perKm' ? (
                 <Field label="نرخ مخابرات و اسکادا" unit="$/km" value={inputs.specs.telecom.perKmUsd} step={500}
                   onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, telecom: { ...d.specs.telecom, perKmUsd: v } } }))} />
@@ -196,26 +186,26 @@ export function SpecsPage({
             </Section>
           )}
 
-          <Section title="نرخ ارز و سربار پروژه">
+          <Section title="نرخ ارز، سربار و ذخایر" subtitle="مهندسی، مدیریت، بیمه، پیش‌بینی‌نشده و نوسان" icon={<Coins size={17} />}>
             <div className="grid grid-cols-2 gap-x-3">
               <Field label="نرخ یورو" unit="یورو/دلار" value={inputs.overhead.fxEurPerUsd} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, fxEurPerUsd: v } }))} />
               <Field label="نرخ ریال" unit="ریال/دلار" value={inputs.overhead.fxRialPerUsd} step={1000}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, fxRialPerUsd: v } }))} />
-              <Field label="مهندسی و طراحی" value={inputs.overhead.eng} step={0.01}
+              <Field label="مهندسی و طراحی" percent value={inputs.overhead.eng} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, eng: v } }))} />
-              <Field label="مدیریت پروژه (EPCM)" value={inputs.overhead.pm} step={0.01}
+              <Field label="مدیریت پروژه (EPCM)" percent value={inputs.overhead.pm} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, pm: v } }))} />
-              <Field label="بیمه و ضمانت‌نامه" value={inputs.overhead.ins} step={0.005}
+              <Field label="بیمه و ضمانت‌نامه" percent value={inputs.overhead.ins} step={0.005}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, ins: v } }))} />
-              <Field label="پیش‌بینی‌نشده (Contingency)" value={inputs.overhead.contingency} step={0.01}
+              <Field label="پیش‌بینی‌نشده (Contingency)" percent value={inputs.overhead.contingency} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, contingency: v } }))} />
-              <Field label="ذخیره نوسان ارزی/تورمی" value={inputs.overhead.escalation} step={0.01}
+              <Field label="ذخیره نوسان ارزی/تورمی" percent value={inputs.overhead.escalation} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, escalation: v } }))} />
             </div>
           </Section>
 
-          <Section title="چرخه عمر پروژه" defaultOpen>
+          <Section title="چرخهٔ عمر و زمان‌بندی" subtitle="مدت هر فاز؛ جریان نقدینگی از همین ساخته می‌شود" icon={<CalendarRange size={17} />} accent="#9085e9" defaultOpen>
             <p className="text-[10px] mb-2" style={{ color: MUTED_FG }}>جریان نقدینگی و مدت کل پروژه به‌صورت خودکار بر اساس این مدت‌ها محاسبه می‌شود.</p>
             <div className="grid grid-cols-2 gap-x-3">
               <Field label="انتخاب مشاور طراح" unit="ماه" value={inputs.lifecycle.consultantSelectionMonths}
@@ -229,13 +219,12 @@ export function SpecsPage({
             </div>
           </Section>
 
-          <Section title={`اقلام بلندمدت‌تأمین / Long Lead Items (${inputs.longLeadItems.length})`}>
+          <Section title={`اقلام بلندمدت‌تأمین (${toFa(inputs.longLeadItems.length)})`} subtitle={lateLL ? `${toFa(lateLL)} قلم دیرتر از پایان طراحی پایه آماده می‌شود` : 'اقلامی که مدت تأمینشان زمان‌بندی را تعیین می‌کند'} icon={<PackageSearch size={17} />} accent={lateLL ? '#d03b3b' : '#c98500'}>
             <p className="text-[10px] mb-2 leading-relaxed" style={{ color: MUTED_FG }}>
               اقلامی که سفارش و تحویل آن‌ها زمان زیادی می‌برد و باید خیلی زودتر از شروع اجرا آغاز شود؛ اگر مدت تأمین از مجموع «انتخاب مشاور + طراحی پایه» بیشتر باشد، سفارش باید همان ابتدای طراحی آغاز شود وگرنه اجرای پروژه عقب می‌افتد.
             </p>
             <div className="space-y-2">
               {inputs.longLeadItems.map((it) => {
-                const designWindow = inputs.lifecycle.consultantSelectionMonths + inputs.lifecycle.basicDesignMonths
                 const atRisk = it.leadTimeMonths > designWindow
                 return (
                   <div key={it.id} className="rounded-lg p-2.5" style={{ border: `1px solid ${atRisk ? '#d03b3b' : BORDER}` }}>
@@ -256,7 +245,7 @@ export function SpecsPage({
                       placeholder="توضیحات" className="est-input w-full rounded-md px-2 py-1 text-[11px]"
                       style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK_SOFT }} />
                     {atRisk && (
-                      <p className="text-[10px] mt-1.5" style={{ color: '#d03b3b' }}>
+                      <p className="text-[10px] mt-1.5 flex items-center gap-1" style={{ color: '#e66767' }}><AlertTriangle size={11} />
                         مدت تأمین ({toFa(it.leadTimeMonths)} ماه) از دوره مشاور+طراحی پایه ({toFa(designWindow)} ماه) بیشتر است — سفارش باید زودتر آغاز شود.
                       </p>
                     )}
@@ -269,7 +258,7 @@ export function SpecsPage({
             </div>
           </Section>
 
-          <Section title={`ریسک‌های پروژه (${inputs.risks.length})`}>
+          <Section title={`ریسک‌های پروژه (${toFa(inputs.risks.length)})`} subtitle="احتمال × اثر و اقدام کاهش" icon={<ShieldAlert size={17} />} accent="#e66767">
             <div className="space-y-2">
               {inputs.risks.map((r) => (
                 <div key={r.id} className="rounded-lg p-2.5" style={{ border: `1px solid ${BORDER}` }}>
@@ -307,14 +296,11 @@ export function SpecsPage({
           </Section>
         </div>
 
-        <button
-          onClick={onCalculate}
-          disabled={saving}
-          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold disabled:opacity-60 transition-transform hover:scale-[1.01]"
-          style={{ background: SAFETY, color: '#1A1400' }}
-        >
-          <Calculator size={16} /> {saving ? 'در حال محاسبه...' : 'محاسبه برآورد هزینه'}
-        </button>
+        <div className="flex justify-end">
+          <Btn kind="primary" onClick={onCalculate}><Layers size={15} /> مشاهدهٔ برآورد و گزارش <ArrowLeft size={14} /></Btn>
+        </div>
+      </div>
+      <LivePanel project={project} inputs={inputs} onOpenResults={onCalculate} />
       </div>
     </div>
   )

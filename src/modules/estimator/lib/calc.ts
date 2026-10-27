@@ -1,5 +1,5 @@
 import type {
-  EstAssumptions, EstCashFlowPoint, EstFullInputs, EstLongLeadItem, EstProjectDraft, EstResults,
+  EstAssumptions, EstCashFlowPoint, EstMaturity, EstProject, EstFullInputs, EstLongLeadItem, EstProjectDraft, EstResults,
   EstSectionResult, EstSensitivityItem, OnshoreSpec, OffshoreSpec, CoatingSpec, CompressorSpec,
   StationUnitSpec, TelecomScadaSpec,
 } from '../types'
@@ -7,28 +7,17 @@ import type {
 /* ---------------------------------------------------------------------------
  * Cost engine.
  *
- * Onshore/offshore pipeline sections follow the category-percentage structure of the National
- * Iranian Oil Company's official cost-estimation guideline ("راهنمای برآورد هزینه طرح‌ها و
- * پروژه‌ها — فصل احداث خطوط لوله دریا و خشکی"): direct cost is built from a handful of
- * per-km rates, exactly like the guideline breaks total cost down by category (Material /
- * Construction / Engineering / Test & Commissioning for onshore; an equivalent split with
- * Offshore Construction and Mobilization/Demobilization for offshore). Every rate except land
- * acquisition is an org-wide admin-set assumption (est_assumptions) rather than a per-project
- * input — land acquisition varies by local price far more than any other line, so it stays a
- * direct, per-project Rial entry (see OnshoreSpec.rowCostRialPerKm).
+ * Pipeline sections (onshore/offshore) are built from a handful of per-km category rates
+ * (material, linework, crossings, test & commissioning, HSE; laying and mobilization offshore).
+ * Every rate except land acquisition is an org-wide admin-set assumption (est_assumptions) rather
+ * than a per-project input — land acquisition varies by local price far more than any other line,
+ * so it stays a direct, per-project Rial entry (see OnshoreSpec.rowCostRialPerKm).
  *
- * The compressor/pressure-boosting section uses the guideline's own quantitative formulas
- * (Chapter 4 of the same guideline series, "احداث تلمبه‌خانه‌های نفت و ایستگاه‌های تقویت فشار
- * گاز"): rotary-equipment price is read off the guideline's 2019 USD/kW cost curve by rated
- * power, then grossed up to a full station cost using the guideline's own rotary-equipment share
- * of total station cost (Table 4-8 shows this near 25-30% for large single-unit stations) — this
- * keeps the number sourced from the guideline's real cost curve rather than inventing one.
+ * The compressor section prices rotary equipment from a USD/kW cost curve by rated power, then
+ * grosses it up to a full station cost by the rotary-equipment share of total station cost.
  *
- * Pipe coating, launcher/receiver/tie-in/block-valve stations, and telecom & SCADA are OUTSIDE
- * the scope of both uploaded guideline chapters (which explicitly restrict themselves to
- * pipeline segments and to pump/compressor stations only) — those sections use parametric
- * per-unit cost defaults instead, clearly labeled in the UI as engineering estimates rather than
- * guideline figures. All defaults below are the *fallback* seed values — once an admin sets
+ * Coating, launcher/receiver/tie-in/block-valve stations and telecom & SCADA use parametric
+ * per-unit rates. All defaults below are the *fallback* seed values — once an admin sets
  * org-wide assumptions (est_assumptions), new calculations seed from those instead; see
  * buildDefaultInputs.
  * ------------------------------------------------------------------------- */
@@ -118,12 +107,12 @@ function calcOffshore(s: OffshoreSpec): EstSectionResult {
 function calcCoating(s: CoatingSpec, totalLengthKm: number): EstSectionResult {
   return {
     key: 'coating', label: 'پوشش خطوط لوله', chartLabel: 'پوشش لوله',
-    totalUsd: s.usdPerKm * totalLengthKm, note: 'برآورد مهندسی-پارامتریک (خارج از محدوده راهنمای رسمی)',
+    totalUsd: s.usdPerKm * totalLengthKm, note: 'برآورد پارامتریک بر پایهٔ نرخ واحد',
   }
 }
 
-/** Guideline 2019 rotary-equipment cost curve (USD per kW), Table 4-11, linearly interpolated
- * between the tabulated power points. Below/above the tabulated range, the nearest edge value is
+/** Rotary-equipment cost curve (USD per kW), linearly interpolated between the tabulated power
+ * points. Below/above the tabulated range, the nearest edge value is
  * held flat rather than extrapolated, since the curve is only validated within 3.3–25 MW. */
 const COMPRESSOR_USD_PER_KW: [number, number][] = [
   [3.3, 502.4], [4, 467.0], [4.9, 432.3], [5.7, 408.2], [6.6, 386.1],
@@ -143,8 +132,8 @@ function compressorUsdPerKw(mw: number) {
   return t[t.length - 1][1]
 }
 
-/** Rotary equipment (compressor + driver) share of total station EPC cost, per the guideline's
- * Table 4-8 breakdown for large single-unit stations. A gas-turbine driver runs a few points
+/** Rotary equipment (compressor + driver) share of total station EPC cost for large single-unit
+ * stations. A gas-turbine driver runs a few points
  * higher than an electric motor (turbine package + auxiliaries cost more than a motor). */
 const ROTARY_SHARE = { electric: 0.28, gasTurbine: 0.24 }
 
@@ -155,19 +144,19 @@ function calcCompressor(s: CompressorSpec): EstSectionResult {
   return {
     key: 'compressor', label: 'ایستگاه تقویت فشار', chartLabel: 'تقویت فشار',
     totalUsd: totalPerStation * s.stationCount,
-    note: `بر مبنای منحنی قیمت تجهیزات دوار راهنمای وزارت نفت (۲۰۱۹) و سهم تقریبی ${Math.round(ROTARY_SHARE[s.driverType] * 100)}٪ برای تجهیزات دوار از هزینه کل ایستگاه`,
+    note: `منحنی هزینهٔ تجهیزات دوار بر حسب توان و سهم حدود ${Math.round(ROTARY_SHARE[s.driverType] * 100)}٪ تجهیزات دوار از هزینهٔ کل ایستگاه`,
   }
 }
 
 function calcUnitStation(key: 'launcher' | 'receiver' | 'tieIn' | 'blockValve', label: string, s: StationUnitSpec): EstSectionResult {
-  return { key, label, chartLabel: label, totalUsd: s.count * s.unitCostUsd, note: 'برآورد مهندسی-پارامتریک (خارج از محدوده راهنمای رسمی)' }
+  return { key, label, chartLabel: label, totalUsd: s.count * s.unitCostUsd, note: 'برآورد پارامتریک بر پایهٔ نرخ واحد' }
 }
 
 function calcTelecom(s: TelecomScadaSpec, totalLengthKm: number): EstSectionResult {
   const total = s.mode === 'perKm' ? s.perKmUsd * Math.max(totalLengthKm, 1) : s.lumpSumUsd
   return {
     key: 'telecom', label: 'مخابرات و اسکادا', chartLabel: 'مخابرات و اسکادا',
-    totalUsd: total, note: 'برآورد مهندسی-پارامتریک (خارج از محدوده راهنمای رسمی)',
+    totalUsd: total, note: 'برآورد پارامتریک بر پایهٔ نرخ واحد',
   }
 }
 
@@ -416,4 +405,91 @@ export function computeSensitivity(project: EstProjectDraft, inputs: EstFullInpu
   addDriver('contingency', 'پیش‌بینی‌نشده', true, (d, f) => { d.overhead.contingency *= f })
 
   return items.sort((a, b) => b.swingUsd - a.swingUsd)
+}
+
+/* ---------------------------------------------------------------------------
+ * Reading an estimate: accuracy range, yearly cash need, headline indicators, version deltas.
+ * ------------------------------------------------------------------------- */
+
+/** Accuracy range by how far the definition has matured — the less is designed, the wider the
+ * band (and skewed upward: early estimates under-run far more often than they over-run). */
+export const MATURITY: Record<EstMaturity, { label: string; hint: string; low: number; high: number }> = {
+  concept: { label: 'مفهومی', hint: 'تعریف کلی مسیر و ظرفیت؛ مناسب غربالگری گزینه‌ها', low: -0.3, high: 0.5 },
+  feasibility: { label: 'امکان‌سنجی', hint: 'مسیر، قطر و ایستگاه‌ها انتخاب شده‌اند؛ مناسب تصویب اولیهٔ بودجه', low: -0.2, high: 0.3 },
+  basic: { label: 'طراحی پایه', hint: 'طراحی پایه کامل و استعلام اقلام اصلی گرفته شده؛ مناسب تخصیص بودجه', low: -0.15, high: 0.2 },
+}
+
+export function maturityOf(inputs: EstFullInputs): EstMaturity {
+  return inputs.maturity ?? 'concept'
+}
+
+export function estimateRange(grandUsd: number, maturity: EstMaturity) {
+  const m = MATURITY[maturity]
+  return { low: grandUsd * (1 + m.low), high: grandUsd * (1 + m.high), lowPct: m.low, highPct: m.high }
+}
+
+/** Monthly timeline folded into project years (year 1 = months 1–12 from the start of consultant
+ * selection) — the shape a budget request is made in. */
+export function annualCashFlow(points: EstCashFlowPoint[]) {
+  const years: { year: number; usd: number; cumulativeUsd: number; phases: string[] }[] = []
+  for (const p of points) {
+    const y = Math.ceil(p.month / 12)
+    let row = years[y - 1]
+    if (!row) { row = { year: y, usd: 0, cumulativeUsd: 0, phases: [] }; years[y - 1] = row }
+    row.usd += p.monthlyUsd
+    row.cumulativeUsd = p.cumulativeUsd
+    if (!row.phases.includes(p.phase)) row.phases.push(p.phase)
+  }
+  return years
+}
+
+export function totalLengthKm(project: EstProjectDraft, inputs: EstFullInputs) {
+  return (project.hasOnshore ? inputs.specs.onshore.lengthKm : 0) + (project.hasOffshore ? inputs.specs.offshore.lengthKm : 0)
+}
+
+/** The handful of numbers a project executive asks for first. */
+export function estimateKpis(project: EstProjectDraft, inputs: EstFullInputs, results: EstResults, cashFlow: EstCashFlowPoint[]) {
+  const km = totalLengthKm(project, inputs)
+  const peak = cashFlow.reduce((best, p) => (p.monthlyUsd > best.monthlyUsd ? p : best), cashFlow[0] ?? { month: 0, monthlyUsd: 0 } as EstCashFlowPoint)
+  const designWindow = inputs.lifecycle.consultantSelectionMonths + inputs.lifecycle.basicDesignMonths
+  const totalMonths = inputs.lifecycle.consultantSelectionMonths + inputs.lifecycle.basicDesignMonths + inputs.lifecycle.epcContractorSelectionMonths + inputs.lifecycle.executionMonths
+  const highRisks = inputs.risks.filter((r) => r.likelihood * r.impact >= 10).length
+  return {
+    lengthKm: km,
+    usdPerKm: km > 0 ? results.grand / km : 0,
+    totalMonths,
+    peakMonth: peak.month,
+    peakMonthlyUsd: peak.monthlyUsd,
+    reserveShare: results.grand > 0 ? (results.contingency + results.escalation) / results.grand : 0,
+    highRisks,
+    lateLongLead: inputs.longLeadItems.filter((it) => it.leadTimeMonths > designWindow).length,
+  }
+}
+
+/** Section-by-section difference between two saved versions (b − a), largest movers first. */
+export function compareResults(a: EstResults, b: EstResults) {
+  const keys = new Map<string, { key: string; label: string; a: number; b: number }>()
+  for (const s of a.sections) keys.set(s.key, { key: s.key, label: s.label, a: s.totalUsd, b: 0 })
+  for (const s of b.sections) {
+    const row = keys.get(s.key)
+    if (row) row.b = s.totalUsd
+    else keys.set(s.key, { key: s.key, label: s.label, a: 0, b: s.totalUsd })
+  }
+  const sections = [...keys.values()].map((r) => ({ ...r, delta: r.b - r.a })).sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta))
+  const lines = [
+    { key: 'indirect', label: 'مهندسی، مدیریت و بیمه', a: a.indirect, b: b.indirect },
+    { key: 'reserve', label: 'پیش‌بینی‌نشده و ذخیرهٔ نوسان', a: a.contingency + a.escalation, b: b.contingency + b.escalation },
+  ].map((r) => ({ ...r, delta: r.b - r.a }))
+  return { sections, lines, grand: { a: a.grand, b: b.grand, delta: b.grand - a.grand, pct: a.grand ? (b.grand - a.grand) / a.grand : 0 } }
+}
+
+/** What a project contains, as short labels — used on cards and in report headers. */
+export function scopeLabels(p: Pick<EstProject, 'hasOnshore' | 'hasOffshore' | 'hasCompressorStation' | 'hasTelecomScada' | 'tieInCount'>) {
+  const out: string[] = []
+  if (p.hasOnshore) out.push('خط لوله خشکی')
+  if (p.hasOffshore) out.push('خط لوله دریایی')
+  if (p.hasCompressorStation) out.push('ایستگاه تقویت فشار')
+  if (p.tieInCount > 0) out.push(`${p.tieInCount} انشعاب`)
+  if (p.hasTelecomScada) out.push('مخابرات و اسکادا')
+  return out
 }

@@ -124,7 +124,7 @@ function pad2(n: number): string {
 
 export function isoToJalali(iso: string): JalaliDate | null {
   if (!iso) return null
-  const [gy, gm, gd] = iso.split('-').map(Number)
+  const [gy, gm, gd] = iso.slice(0, 10).split('-').map(Number)
   if (!gy || !gm || !gd) return null
   return toJalali(gy, gm, gd)
 }

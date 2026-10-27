@@ -8,6 +8,8 @@ import {
   type EstAssumptionsRow, type EstEstimateRow, type EstProjectRow,
 } from '../lib/estimatorData'
 
+export interface EstProjectSummary { latestEur: number; latestRial: number; latestAt: string; versions: number }
+
 function reportError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
   useSystemStore.getState().setStorageError(`خطا در ${action}: ${friendlyErrorMessage(error)}`)
@@ -19,6 +21,8 @@ interface EstimatorStoreState {
   currentProjectId: string | null
   currentProject: EstProject | null
   estimates: EstEstimateRecord[]
+  /** latest saved total and version count per project, for the project list */
+  summaries: Record<string, EstProjectSummary>
   assumptions: EstAssumptions | null
   loadingProjects: boolean
   loadingEstimates: boolean
@@ -29,6 +33,7 @@ interface EstimatorStoreState {
   fetchAssumptions: () => Promise<void>
   saveAssumptions: (a: EstAssumptions) => Promise<boolean>
   fetchProjects: () => Promise<void>
+  fetchSummaries: () => Promise<void>
   createProject: (draft: EstProjectDraft) => Promise<string | null>
   selectProject: (id: string | null) => Promise<void>
   deleteProject: (id: string) => Promise<void>
@@ -51,6 +56,7 @@ export const useEstimatorStore = create<EstimatorStoreState>()((set, get) => ({
   currentProjectId: null,
   currentProject: null,
   estimates: [],
+  summaries: {},
   assumptions: null,
   loadingProjects: true,
   loadingEstimates: false,
@@ -75,6 +81,18 @@ export const useEstimatorStore = create<EstimatorStoreState>()((set, get) => ({
     if (reportError('ذخیره مبانی محاسبات', error)) return false
     set({ assumptions: a })
     return true
+  },
+
+  fetchSummaries: async () => {
+    const { data, error } = await supabase.from('est_estimates').select('project_id, grand_total_eur, grand_total_rial, created_at').order('created_at', { ascending: false })
+    if (reportError('بارگذاری خلاصهٔ برآوردها', error)) return
+    const out: Record<string, EstProjectSummary> = {}
+    for (const r of (data ?? []) as { project_id: string; grand_total_eur: number; grand_total_rial: number; created_at: string }[]) {
+      const cur = out[r.project_id]
+      if (cur) cur.versions++
+      else out[r.project_id] = { latestEur: Number(r.grand_total_eur), latestRial: Number(r.grand_total_rial), latestAt: r.created_at, versions: 1 }
+    }
+    set({ summaries: out })
   },
 
   fetchProjects: async () => {
@@ -155,11 +173,13 @@ export const useEstimatorStore = create<EstimatorStoreState>()((set, get) => ({
     set({ saving: false })
     if (reportError('ذخیره محاسبه در تاریخچه', error)) return
     await get().fetchEstimates(projectId)
+    void get().fetchSummaries()
   },
 
   deleteEstimate: async (id, projectId) => {
     const { error } = await supabase.from('est_estimates').delete().eq('id', id)
     if (reportError('حذف رکورد تاریخچه', error)) return
     await get().fetchEstimates(projectId)
+    void get().fetchSummaries()
   },
 }))

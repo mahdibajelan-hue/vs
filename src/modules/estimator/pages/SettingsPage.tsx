@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Check, Lock, RotateCcw, Save, ShieldAlert } from 'lucide-react'
+import { CalendarRange, Check, Coins, GitBranch, Lock, Paintbrush, RotateCcw, Save, ShieldAlert, Signpost, Waves, Wind } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useEstimatorStore } from '../store/useEstimatorStore'
 import { buildDefaultAssumptions } from '../lib/calc'
 import type { EstAssumptions } from '../types'
-import { BORDER, INK, MUTED_FG, SAFETY } from '../lib/theme'
+import { BORDER, INK, MUTED_FG, SAFETY, SECTION_COLOR } from '../lib/theme'
 import { Card, Field, Section } from '../components/ui'
 
 export function SettingsPage() {
@@ -49,7 +49,7 @@ export function SettingsPage() {
     }
   }
 
-  function resetToGuideline() {
+  function resetToBase() {
     setDraft(buildDefaultAssumptions())
   }
 
@@ -65,13 +65,13 @@ export function SettingsPage() {
               این نرخ‌ها مبنای همه پروژه‌های جدید هستند و در بخش «مشخصات و آپشن‌ها» دیگر قابل ویرایش نیستند — فقط اینجا و فقط برای مدیر سامانه.
             </p>
           </div>
-          <button onClick={resetToGuideline} className="flex items-center gap-1.5 text-xs" style={{ color: MUTED_FG }}>
-            <RotateCcw size={13} /> بازگشت به مقادیر دستورالعمل
+          <button onClick={resetToBase} className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs" style={{ color: MUTED_FG }}>
+            <RotateCcw size={13} /> بازگشت به مقادیر پایه
           </button>
         </div>
 
         <Card className="px-5">
-          <Section title="خط لوله خشکی" defaultOpen>
+          <Section title="خط لوله خشکی" icon={<GitBranch size={17} />} accent={SECTION_COLOR.onshore} defaultOpen>
             <div className="grid grid-cols-2 gap-x-3">
               <Field label="قیمت فولاد" unit="$/تن" value={draft.specs.onshore.steelUsdPerTon} step={10}
                 onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, onshore: { ...d.specs.onshore, steelUsdPerTon: v } } }))}
@@ -97,7 +97,7 @@ export function SettingsPage() {
             </div>
           </Section>
 
-          <Section title="خط لوله دریایی">
+          <Section title="خط لوله دریایی" icon={<Waves size={17} />} accent={SECTION_COLOR.offshore}>
             <div className="grid grid-cols-2 gap-x-3">
               <Field label="قیمت فولاد" unit="$/تن" value={draft.specs.offshore.steelUsdPerTon} step={10}
                 onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, steelUsdPerTon: v } } }))}
@@ -108,29 +108,29 @@ export function SettingsPage() {
               <Field label="بسیج/جمع‌آوری شناور" unit="$" value={draft.specs.offshore.mobDemobUsd} step={100000}
                 onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, mobDemobUsd: v } } }))}
                 hint="هزینه ثابت اعزام و بازگشت شناور خط‌گذار، مستقل از طول خط." />
-              <Field label="خدمات عمومی پروژه" value={draft.specs.offshore.generalServicesPct} step={0.01}
+              <Field label="خدمات عمومی پروژه" percent value={draft.specs.offshore.generalServicesPct} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, generalServicesPct: v } } }))}
                 hint="درصد اضافه برای پشتیبانی عمومی پروژه دریایی (لجستیک، بازرسی، مدیریت شناور)." />
             </div>
             <p className="text-[10px] mt-1" style={{ color: MUTED_FG }}>ضریب آب کم‌عمق در همان پروژه (بخش مشخصات) وارد می‌شود، چون به عمق آب مسیر هر پروژه بستگی دارد.</p>
           </Section>
 
-          <Section title="پوشش خطوط لوله">
+          <Section title="پوشش خطوط لوله" icon={<Paintbrush size={17} />} accent={SECTION_COLOR.coating}>
             <Field label="نرخ پوشش لوله" unit="$/km" value={draft.specs.coating.usdPerKm} step={1000}
               onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, coating: { ...d.specs.coating, usdPerKm: v } } }))}
               hint="هزینه پوشش ضدخوردگی (مانند سه‌لایه پلی‌اتیلن یا FBE) به ازای هر کیلومتر کل خط (خشکی + دریایی)؛ به‌صورت یک ردیف مستقل در برآورد نمایش داده می‌شود." />
           </Section>
 
-          <Section title="ایستگاه تقویت فشار">
+          <Section title="ایستگاه تقویت فشار" icon={<Wind size={17} />} accent={SECTION_COLOR.compressor}>
             <div className="grid grid-cols-2 gap-x-3">
               <Field label="توان اسمی پیش‌فرض" unit="مگاوات" value={draft.specs.compressor.ratedPowerMwPerStation} step={0.5}
                 onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, compressor: { ...d.specs.compressor, ratedPowerMwPerStation: v } } }))}
                 hint="توان پیشنهادی هر ایستگاه برای پروژه‌های جدید؛ در هر پروژه با توجه به دبی و افت فشار واقعی قابل تغییر است." />
             </div>
-            <p className="text-[10px] mt-1" style={{ color: MUTED_FG }}>منحنی قیمت تجهیزات دوار (USD/kW) مستقیماً از راهنمای وزارت نفت است و در این صفحه قابل ویرایش نیست.</p>
+            <p className="text-[10px] mt-1" style={{ color: MUTED_FG }}>قیمت تجهیزات دوار از منحنی هزینه بر حسب توان (دلار بر کیلووات) محاسبه می‌شود و در این بخش قابل ویرایش نیست.</p>
           </Section>
 
-          <Section title="ایستگاه‌های جانبی (خارج از محدوده راهنمای رسمی)">
+          <Section title="ایستگاه‌های جانبی و مخابرات" subtitle="نرخ واحد پارامتریک" icon={<Signpost size={17} />} accent={SECTION_COLOR.launcher}>
             <div className="grid grid-cols-2 gap-x-3">
               <Field label="هزینه واحد ایستگاه فرستنده توپک" unit="$" value={draft.specs.launcher.unitCostUsd} step={5000}
                 onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, launcher: { ...d.specs.launcher, unitCostUsd: v } } }))}
@@ -150,7 +150,7 @@ export function SettingsPage() {
             </div>
           </Section>
 
-          <Section title="نرخ ارز و سربار پروژه">
+          <Section title="نرخ ارز، سربار و ذخایر" icon={<Coins size={17} />}>
             <div className="grid grid-cols-2 gap-x-3">
               <Field label="نرخ یورو" unit="یورو/دلار" value={draft.overhead.fxEurPerUsd} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, fxEurPerUsd: v } }))}
@@ -158,25 +158,25 @@ export function SettingsPage() {
               <Field label="نرخ ریال" unit="ریال/دلار" value={draft.overhead.fxRialPerUsd} step={1000}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, fxRialPerUsd: v } }))}
                 hint="نرخ تبدیل دلار به ریال؛ برای تبدیل هزینه تملک اراضی (که به ریال وارد می‌شود) نیز از همین نرخ استفاده می‌شود." />
-              <Field label="مهندسی و طراحی" value={draft.overhead.eng} step={0.01}
+              <Field label="مهندسی و طراحی" percent value={draft.overhead.eng} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, eng: v } }))}
                 hint="درصدی از هزینه مستقیم که صرف مهندسی پایه و تفصیلی می‌شود؛ در جریان نقدینگی هم در طول ماه‌های طراحی پایه توزیع می‌شود." />
-              <Field label="مدیریت پروژه (EPCM)" value={draft.overhead.pm} step={0.01}
+              <Field label="مدیریت پروژه (EPCM)" percent value={draft.overhead.pm} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, pm: v } }))}
                 hint="درصدی از هزینه مستقیم برای مدیریت پیمان، دفتر فنی و نظارت کارفرما/مشاور در طول اجرا." />
-              <Field label="بیمه و ضمانت‌نامه" value={draft.overhead.ins} step={0.005}
+              <Field label="بیمه و ضمانت‌نامه" percent value={draft.overhead.ins} step={0.005}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, ins: v } }))}
                 hint="هزینه بیمه‌های مسئولیت/تمام‌خطر پیمانکار و کارمزد ضمانت‌نامه‌های بانکی پروژه." />
-              <Field label="پیش‌بینی‌نشده (Contingency)" value={draft.overhead.contingency} step={0.01}
+              <Field label="پیش‌بینی‌نشده (Contingency)" percent value={draft.overhead.contingency} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, contingency: v } }))}
                 hint="ذخیره برای ریسک‌های شناخته‌شده اما دقیقاً کمّی‌نشده؛ روی جمع هزینه مستقیم و سربار اعمال می‌شود." />
-              <Field label="ذخیره نوسان ارزی/تورمی" value={draft.overhead.escalation} step={0.01}
+              <Field label="ذخیره نوسان ارزی/تورمی" percent value={draft.overhead.escalation} step={0.01}
                 onChange={(v) => patch((d) => ({ ...d, overhead: { ...d.overhead, escalation: v } }))}
                 hint="ذخیره برای افزایش قیمت‌ها و نرخ ارز طی دوره اجرای پروژه، جدا از پیش‌بینی‌نشده." />
             </div>
           </Section>
 
-          <Section title="چرخه عمر پیش از اجرا (پیش‌فرض)">
+          <Section title="چرخهٔ عمر (پیش‌فرض)" icon={<CalendarRange size={17} />} accent="#9085e9">
             <div className="grid grid-cols-2 gap-x-3">
               <Field label="انتخاب مشاور طراح" unit="ماه" value={draft.lifecycle.consultantSelectionMonths}
                 onChange={(v) => patch((d) => ({ ...d, lifecycle: { ...d.lifecycle, consultantSelectionMonths: v } }))}

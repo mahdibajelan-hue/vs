@@ -3,16 +3,17 @@ import {
   BarChart, Bar, AreaChart, Area, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, LabelList, Legend, ReferenceLine,
 } from 'recharts'
-import { Check, Copy, FileDown, Save } from 'lucide-react'
-import { exportElementToPdf } from '../../../lib/export'
+import { AlertTriangle, CalendarRange, Check, Copy, FileDown, FileSpreadsheet, Gauge, Landmark, LineChart, PackageSearch, PieChart as PieIcon, Printer, Ruler, Save, ShieldAlert, Table2, TrendingUp, X } from 'lucide-react'
 import type { EstFullInputs, EstProject, EstRisk } from '../types'
-import { computeEstimate, buildCashFlowTimeline, computeSensitivity, SENSITIVITY_PCT } from '../lib/calc'
+import { annualCashFlow, computeEstimate, buildCashFlowTimeline, computeSensitivity, estimateKpis, estimateRange, LIFECYCLE_PHASE_LABEL, MATURITY, maturityOf, scopeLabels, SENSITIVITY_PCT } from '../lib/calc'
+import { exportEstimateToExcel, exportReportPagesToPdf, printReportElement } from '../lib/exportEstimate'
+import { RouteSchematic } from '../components/RouteSchematic'
 import {
   BORDER, fmtEUR, fmtEURm, fmtPct, fmtRial, fmtRialBn, fmtUSD, GRID, INK, INK_SOFT, MUTED_FG,
   SAFETY, SECTION_COLOR, STATUS, SURFACE, SURFACE_2, TOOLTIP_ITEM_STYLE, TOOLTIP_LABEL_STYLE,
   TOOLTIP_STYLE, toFa,
 } from '../lib/theme'
-import { Card } from '../components/ui'
+import { AnimatedNumber, Btn, Card, CardTitle, Kpi } from '../components/ui'
 import { EstimatorPrintReport } from '../components/EstimatorPrintReport'
 
 const RISK_CATEGORY_LABEL: Record<EstRisk['category'], string> = {
@@ -32,17 +33,27 @@ function riskBand(score: number) {
 }
 
 export function ResultsPage({
-  project, inputs, onSave, saving,
+  project, inputs, onSave, saving, versionLabel,
 }: {
   project: EstProject
   inputs: EstFullInputs
-  onSave: (args: { grandTotalEur: number; grandTotalRial: number }) => void
+  onSave: (args: { label: string; grandTotalEur: number; grandTotalRial: number }) => void | Promise<void>
   saving: boolean
+  /** set when the page shows a saved version rather than the working inputs */
+  versionLabel?: string
 }) {
   const results = useMemo(() => computeEstimate(project, inputs), [project, inputs])
   const cashFlow = useMemo(() => buildCashFlowTimeline(inputs, results), [inputs, results])
   const sensitivity = useMemo(() => computeSensitivity(project, inputs), [project, inputs])
+  const kpis = useMemo(() => estimateKpis(project, inputs, results, cashFlow), [project, inputs, results, cashFlow])
+  const years = useMemo(() => annualCashFlow(cashFlow), [cashFlow])
+  const maturity = maturityOf(inputs)
+  const range = estimateRange(results.grand, maturity)
   const [copied, setCopied] = useState(false)
+  const [naming, setNaming] = useState(false)
+  const [vName, setVName] = useState('')
+  const [busy, setBusy] = useState<'' | 'pdf' | 'xlsx'>('')
+  const [savedOk, setSavedOk] = useState(false)
   const reportRef = useRef<HTMLDivElement>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
@@ -62,11 +73,10 @@ export function ResultsPage({
     { key: 'execution', label: 'اجرا و راه‌اندازی', months: inputs.lifecycle.executionMonths },
   ]
 
-  const activeSectionLabels = results.sections.map((s) => s.label).join('، ')
   const summary =
-    `این گزارش برآورد هزینهٔ پروژهٔ «${project.name}» را در ${toFa(results.sections.length)} بخش (${activeSectionLabels}) ارائه می‌دهد. ` +
-    `برآورد کل پروژه ${fmtEUR(toEur(results.grand))} معادل ${fmtRial(toRial(results.grand))} است. ` +
-    `چرخهٔ عمر پروژه از انتخاب مشاور طراح تا پایان راه‌اندازی حدود ${toFa(totalMonths)} ماه برآورد می‌شود.`
+    `برآورد کل پروژه در مرحلهٔ ${MATURITY[maturity].label} ${fmtEUR(toEur(results.grand))} معادل ${fmtRial(toRial(results.grand))} است؛ ` +
+    `با توجه به سطح تعریف پروژه، هزینهٔ نهایی به احتمال زیاد بین ${fmtEURm(toEur(range.low))} و ${fmtEURm(toEur(range.high))} یورو خواهد بود. ` +
+    `از انتخاب مشاور طراح تا راه‌اندازی حدود ${toFa(totalMonths)} ماه زمان لازم است و اوج نیاز نقدینگی در ماه ${toFa(kpis.peakMonth)} است.`
 
   // 5x5 likelihood x impact grid — counts + worst band per cell.
   const heatGrid = Array.from({ length: 5 }, (_, impactIdx) =>
@@ -95,65 +105,102 @@ export function ResultsPage({
 
   async function exportPdf() {
     if (!printRef.current) return
-    await exportElementToPdf(printRef.current, `estimate-${project.name}.pdf`, {
-      orientation: 'portrait', backgroundColor: '#ffffff', fitToOnePage: true,
-    })
+    setBusy('pdf')
+    try {
+      await exportReportPagesToPdf(printRef.current, `estimate-${project.name}.pdf`)
+    } finally { setBusy('') }
+  }
+
+  async function exportXlsx() {
+    setBusy('xlsx')
+    try { await exportEstimateToExcel(project, inputs, results, versionLabel) } finally { setBusy('') }
+  }
+
+  function printReport() {
+    if (!printRef.current) return
+    if (!printReportElement(printRef.current, `برآورد ${project.name}`)) alert('پنجرهٔ چاپ باز نشد؛ اجازهٔ باز شدن پنجره (pop-up) را برای این سایت فعال کنید.')
+  }
+
+  async function saveVersion() {
+    await onSave({ label: vName.trim() || `نسخهٔ ${new Date().toLocaleDateString('fa-IR')}`, grandTotalEur: toEur(results.grand), grandTotalRial: toRial(results.grand) })
+    setNaming(false); setVName(''); setSavedOk(true)
+    setTimeout(() => setSavedOk(false), 2200)
   }
 
   return (
-    <div className="h-full overflow-y-auto est-font">
+    <div className="h-full overflow-y-auto est-font est-scroll">
       <div className="comp-print-offscreen" ref={printRef} aria-hidden="true">
-        <EstimatorPrintReport project={project} inputs={inputs} results={results} totalMonths={totalMonths} />
+        <EstimatorPrintReport project={project} inputs={inputs} results={results} versionLabel={versionLabel} />
       </div>
 
-      <div ref={reportRef} className="mx-auto max-w-4xl px-4 py-6 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 no-print">
-          <div>
-            <p className="text-sm font-bold" style={{ color: INK }}>۳. نتیجه برآورد هزینه</p>
-            <p className="text-[11px] mt-0.5" style={{ color: MUTED_FG }}>پروژه: {project.name}</p>
+      {/* action bar */}
+      <div className="est-actionbar no-print">
+        <div className="mx-auto max-w-6xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold" style={{ color: SAFETY }}>{versionLabel ? 'نسخهٔ ذخیره‌شده' : 'گام ۳ از ۳ — برآورد و گزارش'}</p>
+            <p className="text-sm font-extrabold truncate" style={{ color: INK }}>{versionLabel ?? project.name}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => onSave({ grandTotalEur: toEur(results.grand), grandTotalRial: toRial(results.grand) })}
-              disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium disabled:opacity-60 transition-transform hover:scale-[1.02]"
-              style={{ background: SAFETY, color: '#1A1400' }}>
-              <Save size={14} /> {saving ? 'در حال ذخیره...' : 'ذخیره در تاریخچه'}
-            </button>
-            <button onClick={exportPdf}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-transform hover:scale-[1.02]"
-              style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK }}>
-              <FileDown size={14} /> گزارش جامع PDF
-            </button>
-            <button onClick={copySms}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium transition-transform hover:scale-[1.02]"
-              style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK }}>
-              {copied ? <Check size={14} color={STATUS.good} /> : <Copy size={14} />}
-              {copied ? 'کپی شد' : 'خلاصه پیامکی'}
-            </button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {naming ? (
+              <form className="est-name-form" onSubmit={(e) => { e.preventDefault(); void saveVersion() }}>
+                <input autoFocus value={vName} onChange={(e) => setVName(e.target.value)} placeholder="نام نسخه، مثلاً «پس از استعلام لوله»" className="est-input" />
+                <Btn kind="primary" type="submit" disabled={saving}><Save size={14} /> {saving ? 'در حال ذخیره…' : 'ذخیره'}</Btn>
+                <Btn kind="quiet" onClick={() => setNaming(false)} title="انصراف"><X size={14} /></Btn>
+              </form>
+            ) : (
+              <Btn kind="primary" onClick={() => setNaming(true)} disabled={saving}>{savedOk ? <><Check size={14} /> ذخیره شد</> : <><Save size={14} /> ذخیرهٔ نسخه</>}</Btn>
+            )}
+            <Btn kind="ghost" onClick={printReport} title="گزارش دوصفحه‌ای A4؛ در پنجرهٔ چاپ «ذخیره به‌صورت PDF» هم هست"><Printer size={14} /> چاپ</Btn>
+            <Btn kind="ghost" onClick={() => void exportPdf()} disabled={busy === 'pdf'}><FileDown size={14} /> {busy === 'pdf' ? 'در حال ساخت…' : 'PDF'}</Btn>
+            <Btn kind="ghost" onClick={() => void exportXlsx()} disabled={busy === 'xlsx'}><FileSpreadsheet size={14} /> اکسل</Btn>
+            <Btn kind="quiet" onClick={copySms} title="خلاصهٔ کوتاه برای پیام">{copied ? <Check size={14} color={STATUS.good} /> : <Copy size={14} />} {copied ? 'کپی شد' : 'خلاصه'}</Btn>
           </div>
         </div>
+      </div>
 
-        {/* Management report header */}
-        <div className="est-card rounded-2xl p-6" style={{ background: `linear-gradient(160deg, ${SURFACE}, ${SURFACE_2})`, border: `1px solid ${BORDER}` }}>
-          <div className="text-[11px] uppercase tracking-widest mb-1" style={{ color: MUTED_FG }}>گزارش مدیریتی برآورد هزینه</div>
-          <h1 className="text-xl font-extrabold mb-3" style={{ color: INK }}>{project.name}</h1>
-          <p className="text-sm leading-relaxed mb-5" style={{ color: INK_SOFT }}>{summary}</p>
-          <div className="flex flex-wrap items-end gap-6">
-            <div>
-              <div className="text-[11px] mb-0.5" style={{ color: MUTED_FG }}>برآورد کل (یورو)</div>
-              <div className="text-3xl md:text-4xl font-extrabold est-mono" style={{ color: SAFETY }}>{fmtEUR(toEur(results.grand))}</div>
+      <div ref={reportRef} className="mx-auto max-w-6xl px-4 py-6 space-y-4">
+        {/* executive summary */}
+        <section className="est-exec est-fade-in">
+          <div className="est-exec-main">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="est-chip"><Landmark size={12} /> خلاصهٔ مدیریتی</span>
+              <span className="est-chip is-soft">مرحلهٔ {MATURITY[maturity].label}</span>
             </div>
-            <div>
-              <div className="text-[11px] mb-0.5" style={{ color: MUTED_FG }}>برآورد کل (ریال)</div>
-              <div className="text-xl md:text-2xl font-extrabold est-mono" style={{ color: INK }}>{fmtRial(toRial(results.grand))}</div>
+            <h1 className="text-xl md:text-2xl font-black leading-snug" style={{ color: INK }}>{project.name}</h1>
+            <p className="text-[11.5px] mt-1" style={{ color: MUTED_FG }}>{scopeLabels(project).map((l) => l.replace(/\d+/g, (d) => toFa(d))).join(' · ')}</p>
+            <div className="mt-3 rounded-xl overflow-hidden" style={{ background: 'rgba(10,18,28,.55)', border: `1px solid ${BORDER}` }}>
+              <RouteSchematic project={project} lengthKm={kpis.lengthKm} height={112} />
             </div>
+            <p className="text-[13px] leading-[2] mt-3" style={{ color: INK_SOFT }}>{summary}</p>
           </div>
+          <div className="est-exec-total">
+            <span className="text-[11px]" style={{ color: MUTED_FG }}>برآورد کل هزینهٔ سرمایه‌ای</span>
+            <b className="est-mono est-total"><AnimatedNumber value={toEur(results.grand)} format={fmtEUR} /></b>
+            <span className="est-mono text-sm" style={{ color: INK }}>{fmtRial(toRial(results.grand))}</span>
+            <div className="mt-4">
+              <div className="text-[10.5px] mb-1.5" style={{ color: MUTED_FG }}>بازهٔ دقت ({fmtPct(range.lowPct)} تا +{fmtPct(range.highPct)})</div>
+              <div className="est-range-lg"><span style={{ insetInlineStart: `${(-range.lowPct / (range.highPct - range.lowPct)) * 100}%` }} /></div>
+              <div className="flex justify-between est-mono text-xs mt-1.5" style={{ color: INK_SOFT }}>
+                <span>{fmtEURm(toEur(range.low))}</span><span style={{ color: SAFETY }}>پایه</span><span>{fmtEURm(toEur(range.high))}</span>
+              </div>
+            </div>
+            <p className="text-[10.5px] leading-relaxed mt-3" style={{ color: MUTED_FG }}>{MATURITY[maturity].hint}. با پیشرفت طراحی، مرحله را در «مشخصات» به‌روز کنید تا بازه تنگ‌تر شود.</p>
+          </div>
+        </section>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <Kpi icon={<CalendarRange size={16} />} label="مدت تا راه‌اندازی" value={`${toFa(kpis.totalMonths)} ماه`} sub={`اجرا ${toFa(inputs.lifecycle.executionMonths)} ماه`} delay={40} />
+          <Kpi icon={<Ruler size={16} />} label="هزینهٔ هر کیلومتر" value={kpis.usdPerKm ? fmtEURm(toEur(kpis.usdPerKm)) : '—'} sub={kpis.lengthKm ? `${toFa(kpis.lengthKm)} کیلومتر` : undefined} tone="#3987e5" delay={80} />
+          <Kpi icon={<TrendingUp size={16} />} label="اوج نیاز ماهانه" value={fmtEURm(toEur(kpis.peakMonthlyUsd))} sub={`ماه ${toFa(kpis.peakMonth)}`} tone="#9085e9" delay={120} />
+          <Kpi icon={<Gauge size={16} />} label="سهم ذخایر از کل" value={fmtPct(kpis.reserveShare)} sub="پیش‌بینی‌نشده + نوسان" tone="#199e70" delay={160} />
+          <Kpi icon={<ShieldAlert size={16} />} label="ریسک بالا و بحرانی" value={toFa(kpis.highRisks)} sub={`از ${toFa(inputs.risks.length)} ریسک`} tone={kpis.highRisks ? STATUS.critical : STATUS.good} delay={200} />
+          <Kpi icon={<PackageSearch size={16} />} label="تأمین دیرهنگام" value={toFa(kpis.lateLongLead)} sub="قلم بلندمدت پرخطر" tone={kpis.lateLongLead ? STATUS.serious : STATUS.good} delay={240} />
         </div>
 
         {/* Section share + magnitude */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
-            <h2 className="font-bold mb-3 text-sm" style={{ color: INK }}>سهم هر بخش از هزینه کل</h2>
+            <CardTitle icon={<PieIcon size={15} />} title="سهم هر بخش از هزینهٔ مستقیم" />
             <ResponsiveContainer width="100%" height={240}>
               <PieChart>
                 <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={90} paddingAngle={2} strokeWidth={0}>
@@ -166,7 +213,7 @@ export function ResultsPage({
           </Card>
 
           <Card>
-            <h2 className="font-bold mb-3 text-sm" style={{ color: INK }}>مقایسه مبلغ هر بخش</h2>
+            <CardTitle icon={<Table2 size={15} />} title="مقایسهٔ مبلغ هر بخش" />
             <div dir="ltr">
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={barData} layout="vertical" margin={{ left: 10, right: 40 }}>
@@ -186,8 +233,7 @@ export function ResultsPage({
 
         {/* Lifecycle + cash flow */}
         <Card>
-          <h2 className="font-bold mb-1 text-sm" style={{ color: INK }}>چرخه عمر پروژه و جریان نقدینگی</h2>
-          <p className="text-[11px] mb-3" style={{ color: MUTED_FG }}>جمع مدت پیش از راه‌اندازی: <span className="est-mono font-bold" style={{ color: INK }}>{toFa(totalMonths)} ماه</span></p>
+          <CardTitle icon={<LineChart size={15} />} title="چرخهٔ عمر و جریان نقدینگی" hint={<>جمع مدت تا راه‌اندازی: <span className="est-mono font-bold" style={{ color: INK }}>{toFa(totalMonths)} ماه</span> — هزینهٔ مهندسی در دورهٔ طراحی پایه و بقیه با منحنی S در دورهٔ اجرا توزیع شده است.</>} />
 
           <div className="flex h-7 w-full overflow-hidden rounded-lg mb-3" dir="ltr">
             {lifecyclePhases.map((p) => (
@@ -243,11 +289,42 @@ export function ResultsPage({
               <Area type="monotone" dataKey="cumulativeUsd" name="تجمعی" stroke={SAFETY} strokeWidth={2} fill="url(#est-cum-fill)" animationDuration={700} />
             </AreaChart>
           </ResponsiveContainer>
+
+          <p className="text-[11px] mb-1.5 mt-5" style={{ color: MUTED_FG }}>نیاز نقدینگی سال‌به‌سال (مبنای درخواست بودجهٔ سالانه)</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ minWidth: 520 }}>
+              <thead>
+                <tr className="text-xs" style={{ borderBottom: `1px solid ${BORDER}`, color: MUTED_FG }}>
+                  <th className="text-right py-1.5 font-medium">سال پروژه</th>
+                  <th className="text-right py-1.5 font-medium">فازها</th>
+                  <th className="text-left py-1.5 font-medium">نیاز سال (یورو)</th>
+                  <th className="text-left py-1.5 font-medium">نیاز سال (ریال)</th>
+                  <th className="text-left py-1.5 font-medium">تجمعی</th>
+                </tr>
+              </thead>
+              <tbody>
+                {years.map((y) => (
+                  <tr key={y.year} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                    <td className="py-1.5 est-mono" style={{ color: INK }}>سال {toFa(y.year)}</td>
+                    <td className="py-1.5 text-[11px]" style={{ color: MUTED_FG }}>{y.phases.map((ph) => LIFECYCLE_PHASE_LABEL[ph]).join('، ')}</td>
+                    <td className="py-1.5 text-left est-mono" style={{ color: INK }}>{y.usd ? fmtEUR(toEur(y.usd)) : '—'}</td>
+                    <td className="py-1.5 text-left est-mono" style={{ color: MUTED_FG }}>{y.usd ? fmtRialBn(toRial(y.usd)) : '—'}</td>
+                    <td className="py-1.5 text-left">
+                      <span className="inline-flex items-center gap-2 est-mono text-xs" style={{ color: INK_SOFT }}>
+                        <span className="inline-block h-1.5 w-16 rounded-full overflow-hidden" style={{ background: SURFACE_2 }}><span className="block h-full est-grow" style={{ width: `${(y.cumulativeUsd / (results.grand || 1)) * 100}%`, background: SAFETY }} /></span>
+                        {fmtPct(y.cumulativeUsd / (results.grand || 1))}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
         {/* CBS detail table */}
         <Card>
-          <h2 className="font-bold mb-3 text-sm" style={{ color: INK }}>ریز برآورد به تفکیک بخش</h2>
+          <CardTitle icon={<Table2 size={15} />} title="ساختار شکست هزینه" />
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ minWidth: 520 }}>
               <thead>
@@ -295,13 +372,13 @@ export function ResultsPage({
             </table>
           </div>
           <div className="text-xs mt-3" style={{ color: MUTED_FG }}>
-            هزینه پایه محاسبات (دلار آمریکا، بر اساس جداول مرجع): <span className="est-mono" style={{ color: INK_SOFT }}>{fmtUSD(results.grand)}</span>
+            مبنای محاسبات به دلار آمریکا: <span className="est-mono" style={{ color: INK_SOFT }}>{fmtUSD(results.grand)}</span>
           </div>
         </Card>
 
         {/* Long-lead items */}
         <Card>
-          <h2 className="font-bold mb-1 text-sm" style={{ color: INK }}>اقلام بلندمدت‌تأمین (Long Lead Items)</h2>
+          <CardTitle icon={<PackageSearch size={15} />} title="اقلام بلندمدت‌تأمین" />
           <p className="text-[11px] leading-relaxed mb-3" style={{ color: MUTED_FG }}>
             اقلام بلندمدت‌تأمین، تجهیزات یا موادی هستند که فاصله سفارش تا تحویل آن‌ها آن‌قدر طولانی است که خودشان می‌توانند تعیین‌کننده زمان‌بندی کل پروژه باشند، نه عملیات اجرایی.
             اگر سفارش این اقلام دیر آغاز شود، حتی با اجرای سریع بقیه پروژه، تاریخ راه‌اندازی نهایی عقب می‌افتد؛ به همین دلیل باید معمولاً هم‌زمان با طراحی پایه سفارش داده شوند.
@@ -342,7 +419,7 @@ export function ResultsPage({
 
         {/* Sensitivity analysis */}
         <Card>
-          <h2 className="font-bold mb-1 text-sm" style={{ color: INK }}>تحلیل حساسیت برآورد (Sensitivity Analysis)</h2>
+          <CardTitle icon={<Gauge size={15} />} title="تحلیل حساسیت برآورد" />
           <p className="text-[11px] leading-relaxed mb-3" style={{ color: MUTED_FG }}>
             این نمودار — که به آن «تورنادو» هم گفته می‌شود — نشان می‌دهد اگر هر یک از فرضیات زیر به‌تنهایی {toFa(Math.round(SENSITIVITY_PCT * 100))}٪ کمتر یا بیشتر شود (و بقیه فرضیات ثابت بمانند)، جمع کل برآورد چقدر تغییر می‌کند.
             هر چه میله یک ردیف بلندتر باشد، آن فرضیه برای دقت برآورد نهایی حساس‌تر است و باید با دقت بیشتری راستی‌آزمایی شود.
@@ -372,7 +449,7 @@ export function ResultsPage({
 
         {/* Risk heat map */}
         <Card>
-          <h2 className="font-bold mb-3 text-sm" style={{ color: INK }}>ریسک‌های پروژه</h2>
+          <CardTitle icon={<AlertTriangle size={15} />} title="ریسک‌های پروژه" />
           <div className="flex flex-wrap items-start gap-4 mb-2">
             <div className="shrink-0">
               <p className="text-[10px] mb-1" style={{ color: MUTED_FG }}>نقشه حرارتی (احتمال × اثر)</p>
@@ -438,10 +515,25 @@ export function ResultsPage({
         </Card>
 
         <div className="text-[11px] leading-relaxed px-1 pb-6" style={{ color: MUTED_FG }}>
-          توجه: نرخ‌های واحد خطوط لوله و ایستگاه تقویت فشار بر مبنای ساختار هزینه راهنمای برآورد وزارت نفت است و برای پوشش لوله، ایستگاه‌های فرستنده/گیرنده توپک، انشعاب، شیر بین‌راهی و مخابرات/اسکادا — که خارج از محدوده راهنمای رسمی هستند — از برآورد مهندسی-پارامتریک استفاده شده است.
-          پیش از ارائه نهایی و تصمیم‌گیری سرمایه‌گذاری، با فهرست‌بهای مصوب و استعلام بازار روز راستی‌آزمایی شوند.
+          این برآورد پارامتریک و بر پایهٔ مبانی محاسباتی سازمان است؛ پیش از تصمیم نهایی سرمایه‌گذاری، نرخ‌های اصلی (لوله، شیرآلات، تجهیزات دوار و عملیات اجرایی) با استعلام بازار و فهرست‌بهای روز راستی‌آزمایی شوند.
         </div>
       </div>
+      <style>{RESULTS_STYLE}</style>
     </div>
   )
 }
+
+const RESULTS_STYLE = `
+  .est-actionbar { position: sticky; top: 0; z-index: 6; background: rgba(10,18,28,.88); backdrop-filter: blur(10px); border-bottom: 1px solid ${BORDER}; }
+  .est-name-form { display: flex; align-items: center; gap: .35rem; }
+  .est-name-form input { width: min(62vw, 250px); background: ${SURFACE_2}; border: 1px solid ${BORDER}; color: ${INK}; border-radius: 10px; padding: .5rem .7rem; font-size: 12px; }
+  .est-exec { display: grid; gap: 1rem; grid-template-columns: 1fr; padding: 1.3rem; border-radius: 22px; border: 1px solid ${BORDER};
+    background: radial-gradient(110% 120% at 100% 0%, rgba(242,183,5,.09), transparent 55%), radial-gradient(90% 120% at 0% 100%, rgba(57,135,229,.10), transparent 60%), ${SURFACE}; }
+  @media (min-width: 1024px) { .est-exec { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); padding: 1.6rem 1.8rem; } }
+  .est-exec-total { display: flex; flex-direction: column; padding: 1.2rem 1.3rem; border-radius: 18px; background: rgba(10,18,28,.6); border: 1px solid ${BORDER}; }
+  .est-total { font-size: clamp(1.9rem, 3.6vw, 2.7rem); line-height: 1.15; color: ${SAFETY}; font-weight: 700; margin: .25rem 0 .2rem; text-shadow: 0 0 28px rgba(242,183,5,.25); }
+  .est-chip { display: inline-flex; align-items: center; gap: .3rem; font-size: 11px; font-weight: 700; color: ${SAFETY}; background: rgba(242,183,5,.08); border: 1px solid rgba(242,183,5,.25); padding: .2rem .55rem; border-radius: 99px; }
+  .est-chip.is-soft { color: ${INK_SOFT}; background: rgba(255,255,255,.04); border-color: ${BORDER}; }
+  .est-range-lg { position: relative; height: 10px; border-radius: 99px; background: linear-gradient(270deg, rgba(57,135,229,.55), rgba(242,183,5,.3) 40%, rgba(230,103,103,.6)); }
+  .est-range-lg span { position: absolute; top: -5px; width: 4px; height: 20px; border-radius: 2px; background: ${SAFETY}; transform: translateX(50%); box-shadow: 0 0 12px rgba(242,183,5,.6); }
+`
