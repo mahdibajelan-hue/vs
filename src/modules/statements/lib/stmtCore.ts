@@ -16,7 +16,7 @@ export const PART_META: Record<Part, { title: string; long: string; source: stri
   C: { title: 'اجرا', long: 'عملیات اجرایی و ساختمانی', source: 'مقادیر کارکرد تأییدشدهٔ نظارت × قیمت واحد ردیف‌های پیمان (ماژول مدیریت اجرا)', color: '#fb923c', unitWord: 'ردیف پیمان' },
 }
 export type StStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'posted'
-export const STATUS_FA: Record<StStatus, string> = { draft: 'پیش‌نویس', submitted: 'در انتظار بررسی', approved: 'تأییدشده', rejected: 'برگشت برای اصلاح', posted: 'ثبت‌شده در مالی' }
+export const STATUS_FA: Record<StStatus, string> = { draft: 'پیش‌نویس', submitted: 'در انتظار بررسی', approved: 'تأییدشده', rejected: 'برگشت برای اصلاح', posted: 'تأیید نهایی شد' }
 export const STATUS_COLOR: Record<StStatus, string> = { draft: '#64748b', submitted: '#3b82f6', approved: '#10b981', rejected: '#ef4444', posted: '#8b5cf6' }
 
 // ── Jalali month periods ───────────────────────────────────────────────────────────────────────────────────────

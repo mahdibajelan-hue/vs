@@ -3,12 +3,13 @@ import { ArrowRight, Ban, CheckCircle2, Landmark, Loader2, Printer, RefreshCw, S
 import { usePstStore, type Line, type Statement } from './store/usePstStore'
 import { PART_META, STATUS_COLOR, periodOf, type StStatus, type Totals } from './lib/stmtCore'
 import { Deductions, Figures, LinesTable, Warnings } from './Sheet'
-import { fa, jd, Ledger, PartChip, StatusChip } from './ui'
+import { fa, jd, Ledger, PartChip, short, StatusChip } from './ui'
 import { printStatement } from './print'
 
-const FLOW: { key: StStatus; label: string }[] = [{ key: 'draft', label: 'پیش‌نویس' }, { key: 'submitted', label: 'بررسی کارفرما/مشاور' }, { key: 'approved', label: 'تأیید' }, { key: 'posted', label: 'ثبت در مالی' }]
+const FLOW: { key: StStatus; label: string }[] = [{ key: 'draft', label: 'پیش‌نویس' }, { key: 'submitted', label: 'بررسی کارفرما/مشاور' }, { key: 'posted', label: 'تأیید نهایی' }]
+const PAY_FA: Record<string, string> = { certified: 'در انتظار پرداخت', partially_paid: 'پرداخت جزئی', paid: 'پرداخت‌شده' }
 
-export function StatementPage({ id, onBack }: { id: string; onBack: () => void }) {
+export function StatementPage({ id, onBack, onPay }: { id: string; onBack: () => void; onPay?: () => void }) {
   const st = usePstStore()
   const s = st.statements.find((x) => x.id === id)
   const [busy, setBusy] = useState<string | null>(null)
@@ -41,15 +42,15 @@ export function StatementPage({ id, onBack }: { id: string; onBack: () => void }
           {FLOW.map((f, i) => <li key={f.key} className={i < idx ? 'is-done' : i === idx ? 'is-on' : ''}>{i < idx ? '✓' : fa(i + 1)} {f.label}</li>)}
         </ol>
         {s.status === 'rejected' && <p className="ps-hint is-warn">برگشت داده شد: {s.rejectReason} — داده‌ها را اصلاح کنید و «بازسازی از داده‌های تازه» بزنید یا به پیش‌نویس برگردانید.</p>}
-        {s.status === 'posted' && <p className="ps-hint"><Landmark size={13} aria-hidden /> در {jd(s.postedAt)} در دفتر صورت‌وضعیت‌های ماژول «قراردادها و مالی» با شمارهٔ {s.part}-{String(s.no).padStart(2, '0')} ({s.periodKey}) ثبت شد؛ تأیید نهایی و پرداخت از همان‌جا پیگیری می‌شود.</p>}
+        {s.status === 'posted' && (() => { const fc = s.finCertificateId ? st.certs.get(s.finCertificateId) : undefined; return <p className="ps-hint"><Landmark size={13} aria-hidden /> تأیید نهایی در {jd(s.postedAt)} — در دفتر صورت‌وضعیت‌ها با شمارهٔ {s.part}-{String(s.no).padStart(2, '0')} ({s.periodKey}) ثبت شد{fc ? <> · {PAY_FA[fc.status] ?? fc.status}: پرداخت‌شده {short(fc.paid)} از خالص {short(fc.payable)} ریال</> : null}. {onPay && <button type="button" className="ps-link" onClick={onPay}>ثبت پرداخت ←</button>}</p> })()}
         <div className="pst-bar-actions">
           {(s.status === 'draft' || s.status === 'rejected') && <button type="button" className="ps-btn" disabled={!!busy} onClick={() => void regen()} title="مبالغ سیستمی دوباره از ماژول منبع خوانده می‌شود؛ اصلاحات دستی ردیف‌ها حفظ می‌شود">{busy === 'regen' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} بازسازی از داده‌های تازه</button>}
           {s.status === 'draft' && <button type="button" className="ps-btn is-primary" disabled={!!busy || !lines.length} onClick={() => void act('submit', () => st.setStatus(s, 'submitted'))}><Send size={14} /> ارسال برای بررسی</button>}
           {s.status === 'submitted' && <>
-            <button type="button" className="ps-btn is-ok" disabled={!!busy} onClick={() => { if (t.overCap > 0 && !window.confirm('مبلغ تجمعی از سقف بیشتر است. با این وجود تأیید شود؟')) return; void act('approve', () => st.setStatus(s, 'approved')) }}><CheckCircle2 size={14} /> تأیید صورت‌وضعیت</button>
+            <button type="button" className="ps-btn is-ok" disabled={!!busy} onClick={() => { if (!window.confirm(t.overCap > 0 ? 'مبلغ تجمعی از سقف بیشتر است. با این وجود تأیید نهایی شود؟ پس از تأیید، صورت‌وضعیت قفل و در دفتر صورت‌وضعیت‌ها برای پرداخت ثبت می‌شود.' : 'تأیید نهایی شود؟ پس از تأیید، صورت‌وضعیت قفل و در دفتر صورت‌وضعیت‌ها برای پرداخت ثبت می‌شود.')) return; void act('approve', () => st.setStatus(s, 'approved')) }}><CheckCircle2 size={14} /> تأیید نهایی</button>
             <button type="button" className="ps-btn is-bad" disabled={!!busy} onClick={reject}><Undo2 size={14} /> برگشت برای اصلاح</button>
           </>}
-          {s.status === 'approved' && <button type="button" className="ps-btn is-primary" disabled={!!busy} onClick={() => { if (window.confirm('صورت‌وضعیت در دفتر ماژول «قراردادها و مالی» ثبت شود؟ پس از ثبت، قفل می‌شود.')) void act('post', () => st.post(s)) }}>{busy === 'post' ? <Loader2 size={14} className="animate-spin" /> : <Landmark size={14} />} ثبت در قراردادها و مالی</button>}
+          {s.status === 'approved' && <button type="button" className="ps-btn is-primary" disabled={!!busy} onClick={() => { if (window.confirm('تأیید نهایی ثبت شود؟')) void act('post', () => st.post(s)) }}>{busy === 'post' ? <Loader2 size={14} className="animate-spin" /> : <Landmark size={14} />} ثبت تأیید نهایی</button>}
           <span className="sp" />
           <button type="button" className="ps-btn" onClick={() => c && printStatement(s, c, lines, cfg)}><Printer size={14} /> چاپ</button>
           {(s.status === 'draft' || s.status === 'rejected' || s.status === 'submitted') && <button type="button" className="ps-btn is-ghost" disabled={!!busy} onClick={() => { if (window.confirm('این صورت‌وضعیت باطل شود؟ ماه و شمارهٔ آن آزاد می‌شود و سابقه‌اش می‌ماند.')) void act('void', async () => { if (await st.voidStmt(s)) onBack() }) }}><Ban size={14} /> باطل کردن</button>}

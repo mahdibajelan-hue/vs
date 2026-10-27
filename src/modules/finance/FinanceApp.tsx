@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { Banknote, FileText, Gauge, LineChart, Loader2, Receipt, Settings2, ShieldAlert, Wallet } from 'lucide-react'
+import { Banknote, FileText, Gauge, LineChart, Loader2, Settings2, ShieldAlert, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -19,18 +19,16 @@ export const FINANCE_ACCENT = '#059669'
 const L = <T extends Record<string, unknown>>(f: () => Promise<T>, k: keyof T) => lazy(() => f().then((m) => ({ default: m[k] as React.ComponentType<{ masterProjectId: string }> })))
 const ChangesBridgePage = L(() => import('./pages/control/ChangesBridgePage'), 'ChangesBridgePage')
 const ObligationsPage = L(() => import('./pages/control/ObligationsPage'), 'ObligationsPage')
-const PipelinePage = L(() => import('./pages/control/PipelinePage'), 'PipelinePage')
 const BudgetPage = L(() => import('./pages/BudgetPage'), 'BudgetPage')
 const CostManagementPage = L(() => import('./pages/CostManagementPage'), 'CostManagementPage')
 const LandBridgePage = L(() => import('./pages/control/LandBridgePage'), 'LandBridgePage')
 const ExceptionsPage = L(() => import('./pages/control/ExceptionsPage'), 'ExceptionsPage')
-const ReportsCenter = L(() => import('./pages/v3/ReportsCenter'), 'ReportsCenter')
+const ReportsCenter = lazy(() => import('./pages/v3/ReportsCenter').then((m) => ({ default: m.ReportsCenter })))
 const ControlSettingsPage = lazy(() => import('./pages/control/ControlSettingsPage').then((m) => ({ default: m.ControlSettingsPage as React.ComponentType<{ masterProjectId: string | null }> })))
 const ContractsManage = L(() => import('./pages/v3/ContractsManage'), 'ContractsManage')
 const GuaranteesManage = L(() => import('./pages/v3/RegistersManage'), 'GuaranteesManage')
 const ClaimsManage = L(() => import('./pages/v3/RegistersManage'), 'ClaimsManage')
 const RetentionManage = L(() => import('./pages/v3/RegistersManage'), 'RetentionManage')
-const BillingManage = lazy(() => import('./pages/v3/BillingManage').then((m) => ({ default: m.BillingManage })))
 const DashboardPage = lazy(() => import('./pages/v2/DashboardPage').then((m) => ({ default: m.DashboardPage })))
 const ContractsRegister = lazy(() => import('./pages/v2/ContractsPage').then((m) => ({ default: m.ContractsRegister })))
 const BudgetPlanPage = L(() => import('./pages/v2/BudgetPage'), 'BudgetPlanPage')
@@ -38,14 +36,13 @@ const CashPage = L(() => import('./pages/v2/CashPage'), 'CashPage')
 const ContractDocsPage = lazy(() => import('./pages/v3/ContractDocsPage').then((m) => ({ default: m.ContractDocsPage })))
 const CashFlowForecastPage = lazy(() => import('./pages/CashFlowForecastPage').then((m) => ({ default: m.CashFlowForecastPage })))
 
-export type FinTab = 'dashboard' | 'contracts' | 'billing' | 'budget' | 'cash' | 'attention' | 'admin'
+export type FinTab = 'dashboard' | 'contracts' | 'budget' | 'cash' | 'attention' | 'admin'
 type Sub = { id: string; label: string }
 const NAV: { id: FinTab; label: string; icon: LucideIcon; color: string; subs?: Sub[]; project?: boolean }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#6366f1' },
   { id: 'contracts', label: 'قراردادها', icon: FileText, color: '#10b981', project: true, subs: [{ id: 'list', label: 'فهرست و پرونده' }, { id: 'changes', label: 'تغییرات و الحاقیه' }, { id: 'guarantees', label: 'ضمانت‌نامه و مفاصاحساب' }, { id: 'claims', label: 'ادعا و حسن انجام کار' }, { id: 'manage', label: 'ثبت و ویرایش' }, { id: 'docs', label: 'متن قرارداد و پرسش' }] },
   { id: 'budget', label: 'بودجه و هزینه', icon: Wallet, color: '#f59e0b', project: true, subs: [{ id: 'plan', label: 'ردیف‌ها و مصرف' }, { id: 'cost', label: 'هزینهٔ نهایی' }, { id: 'land', label: 'تملک اراضی' }, { id: 'annual', label: 'بودجهٔ کل و سالانه' }] },
   { id: 'cash', label: 'نقدینگی', icon: LineChart, color: '#14b8a6', project: true, subs: [{ id: 'project', label: 'پروژه: کارفرما و پیمانکار' }, { id: 'portfolio', label: 'سبد پروژه‌ها' }] },
-  { id: 'billing', label: 'صورت‌وضعیت و پرداخت', icon: Receipt, color: '#0ea5e9', project: true, subs: [{ id: 'pipeline', label: 'گردش' }, { id: 'certificates', label: 'ثبت صورت‌وضعیت' }, { id: 'payments', label: 'ثبت پرداخت' }] },
   { id: 'attention', label: 'نیازمند تصمیم', icon: ShieldAlert, color: '#ef4444', project: true },
   { id: 'admin', label: 'گزارش و تنظیمات', icon: Settings2, color: '#94a3b8', subs: [{ id: 'reports', label: 'گزارش‌ها' }, { id: 'settings', label: 'تنظیمات و سابقه' }] },
 ]
@@ -94,11 +91,10 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
     const p = pid as string
     switch (tab) {
       case 'contracts': return sub === 'docs' ? <ContractDocsPage masterProjectId={p} /> : sub === 'changes' ? <ChangesBridgePage masterProjectId={p} /> : sub === 'guarantees' ? <><GuaranteesManage masterProjectId={p} /><div style={{ height: 16 }} /><ObligationsPage masterProjectId={p} /></> : sub === 'claims' ? <><ClaimsManage masterProjectId={p} /><div style={{ height: 16 }} /><RetentionManage masterProjectId={p} /></> : sub === 'manage' ? <ContractsManage masterProjectId={p} /> : <ContractsRegister masterProjectId={p} onGo={go} />
-      case 'billing': return sub === 'certificates' ? <BillingManage masterProjectId={p} view="certificates" /> : sub === 'payments' ? <BillingManage masterProjectId={p} view="payments" /> : <PipelinePage masterProjectId={p} />
       case 'budget': return sub === 'cost' ? <CostManagementPage masterProjectId={p} /> : sub === 'land' ? <LandBridgePage masterProjectId={p} /> : sub === 'annual' ? <BudgetPage masterProjectId={p} /> : <BudgetPlanPage masterProjectId={p} />
       case 'cash': return sub === 'portfolio' ? <CashFlowForecastPage /> : <CashPage masterProjectId={p} />
       case 'attention': return <ExceptionsPage masterProjectId={p} />
-      case 'admin': return sub === 'settings' ? <ControlSettingsPage masterProjectId={pid} /> : pid ? <ReportsCenter masterProjectId={pid} /> : <div className="im-card im-empty">یک پروژه را انتخاب کنید.</div>
+      case 'admin': return sub === 'settings' ? <ControlSettingsPage masterProjectId={pid} /> : pid ? <ReportsCenter masterProjectId={pid} only={['consumption', 'growth', 'guarantees', 'claims']} /> : <div className="im-card im-empty">یک پروژه را انتخاب کنید.</div>
       default: return null
     }
   }

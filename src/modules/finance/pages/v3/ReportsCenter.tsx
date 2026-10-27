@@ -17,18 +17,18 @@ import { Chip, DataTable, KpiCard, fmtBn, fmtD, fmtPct, type Col } from '../../c
 import { ChartTip, HBars, PB, Ring, Tile, axisProps, gridProps } from '../../components/charts'
 import { FIN_CERTIFICATE_STATUS_LABEL_FA, FIN_CLAIM_TYPE_LABEL_FA } from '../../types'
 
-type ReportId = 'delay' | 'matrix' | 'aging' | 'flow' | 'consumption' | 'growth' | 'advance' | 'guarantees' | 'claims' | 'contractors'
-const CATALOG: { group: string; items: { id: ReportId; label: string; hint: string }[] }[] = [
+export type ReportId = 'delay' | 'matrix' | 'aging' | 'flow' | 'consumption' | 'growth' | 'advance' | 'guarantees' | 'claims' | 'contractors'
+const FULL_CATALOG: { group: string; items: { id: ReportId; label: string; hint: string }[] }[] = [
   { group: 'صورت‌وضعیت و پرداخت', items: [
     { id: 'delay', label: 'تأخیر مراحل صورت‌وضعیت', hint: 'هر صورت‌وضعیت در چهار مرحله و تجمع تأخیرها' },
     { id: 'matrix', label: 'نقشهٔ حرارتی تأخیر', hint: 'قرارداد در برابر مرحله' },
     { id: 'aging', label: 'سنی‌بندی بدهی', hint: 'مانده پرداخت‌نشده بر پایهٔ سن' },
-    { id: 'flow', label: 'تأیید در برابر پرداخت', hint: 'ماه‌به‌ماه و تجمعی؛ شکاف = بدهی انباشته' }] },
-  { group: 'بودجه و قرارداد', items: [
-    { id: 'consumption', label: 'مصرف بودجه', hint: 'به‌تفکیک ردیف یا دستهٔ هزینه' },
-    { id: 'growth', label: 'رشد قراردادها', hint: 'مبلغ اولیه تا جاری و الحاقیه‌ها' },
+    { id: 'flow', label: 'تأیید در برابر پرداخت', hint: 'ماه‌به‌ماه و تجمعی؛ شکاف = بدهی انباشته' },
     { id: 'advance', label: 'پیش‌پرداخت و حسن انجام کار', hint: 'استهلاک پیش‌پرداخت و کسور' },
     { id: 'contractors', label: 'کارنامهٔ پیمانکاران', hint: 'تعهد، پرداخت، تأخیر و ادعا' }] },
+  { group: 'بودجه و قرارداد', items: [
+    { id: 'consumption', label: 'مصرف بودجه', hint: 'به‌تفکیک ردیف یا دستهٔ هزینه' },
+    { id: 'growth', label: 'رشد قراردادها', hint: 'مبلغ اولیه تا جاری و الحاقیه‌ها' }] },
   { group: 'ریسک مالی', items: [
     { id: 'guarantees', label: 'تقویم سررسید ضمانت‌نامه‌ها', hint: 'تمدید و آزادسازی' },
     { id: 'claims', label: 'ادعاها', hint: 'به‌تفکیک نوع و سن ادعاهای باز' }] },
@@ -38,9 +38,15 @@ const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigi
 const monthName = (idx: number) => { const { jy, jm } = idxToYM(idx); return `${JALALI_MONTHS[jm - 1]} ${String(jy).slice(2).replace(/\d/g, (x) => '۰۱۲۳۴۵۶۷۸۹'[+x])}` }
 const heat = (d: number, max: number) => (d <= 0 || max <= 0 ? undefined : `color-mix(in srgb, #fd625e ${Math.round(15 + 55 * Math.min(1, d / max))}%, transparent)`)
 
-/** Varied reports for one project. Every report is computed by pure functions in financeReports.ts. */
-export function ReportsCenter({ masterProjectId }: { masterProjectId: string }) {
-  const [rid, setRid] = useState<ReportId>('delay')
+/** reports of statements and payments — shown in the statements module (where statements are approved and paid) */
+export const STATEMENT_REPORTS: ReportId[] = ['delay', 'matrix', 'aging', 'flow', 'advance', 'contractors']
+/** reports of budget, contracts and financial risk — the finance module */
+export const CONTRACT_REPORTS: ReportId[] = ['consumption', 'growth', 'guarantees', 'claims']
+
+/** Varied reports for one project. Every report is computed by pure functions in financeReports.ts; `only` limits the catalog. */
+export function ReportsCenter({ masterProjectId, only }: { masterProjectId: string; only?: ReportId[] }) {
+  const CATALOG = only ? FULL_CATALOG.map((g) => ({ ...g, items: g.items.filter((i) => only.includes(i.id)) })).filter((g) => g.items.length) : FULL_CATALOG
+  const [rid, setRid] = useState<ReportId>(CATALOG[0].items[0].id)
   const [contractId, setContractId] = useState('')
   const [by, setBy] = useState<'line' | 'category'>('line')
   const { thresholds } = useThresholds()

@@ -52,6 +52,8 @@ interface State {
   projectId: string | null; loading: boolean; error: string | null; flash: string | null
   contracts: Contract[]; cfg: Map<string, Cfg>; seqs: (PaySeq & { contractId: string })[]; statements: Statement[]; lines: Map<string, Line[]>; lookups: Lookups
   advanceRecovered: Map<string, number>
+  /** finance-register state of the statements' certificates (payment follows there) */
+  certs: Map<string, { status: string; paid: number; payable: number }>
   load: (projectId: string) => Promise<void>
   cfgOf: (contractId: string) => Cfg
   loadLines: (s: Statement) => Promise<Line[]>
@@ -128,7 +130,7 @@ export const usePstStore = create<State>()((set, get) => {
 
   return {
     projectId: null, loading: false, error: null, flash: null,
-    contracts: [], cfg: new Map(), seqs: [], statements: [], lines: new Map(), advanceRecovered: new Map(),
+    contracts: [], cfg: new Map(), seqs: [], statements: [], lines: new Map(), advanceRecovered: new Map(), certs: new Map(),
     lookups: { groups: [], materials: [], packages: [], books: [], docContracts: [] },
 
     load: async (projectId) => {
@@ -142,7 +144,7 @@ export const usePstStore = create<State>()((set, get) => {
         supabase.from('pst_contract_cfg').select('*').eq('master_project_id', projectId),
         supabase.from('pst_pay_sequences').select('*').eq('master_project_id', projectId).order('created_at'),
         supabase.from('pst_statements').select('*').eq('master_project_id', projectId).is('voided_at', null).order('period_to', { ascending: false }),
-        ids.length ? supabase.from('fin_payment_certificates').select('contract_id, advance_recovery_amount, status').in('contract_id', ids) : none,
+        ids.length ? supabase.from('fin_payment_certificates').select('id, contract_id, advance_recovery_amount, status, paid_amount, payable_amount').in('contract_id', ids) : none,
         supabase.from('mtl_groups').select('id, title').order('sort'),
         supabase.from('mtl_materials').select('id, material_code, description, group_id').eq('master_project_id', projectId).order('material_code'),
         supabase.from('mtl_packages').select('id, code, title').eq('master_project_id', projectId).order('code'),
@@ -158,8 +160,9 @@ export const usePstStore = create<State>()((set, get) => {
       for (const r of (cf.data ?? []) as Row[]) cfg.set(r.contract_id, { contractId: r.contract_id, capE: nn(r.cap_e), capP: nn(r.cap_p), capC: nn(r.cap_c), advRecoveryPct: n(r.adv_recovery_pct), retPct: n(r.ret_pct), taxPct: n(r.tax_pct), insPct: n(r.ins_pct), engSplit: Array.isArray(r.eng_split) ? r.eng_split : DEFAULT_ENG_SPLIT, eDocContract: r.e_doc_contract, pPackages: r.p_packages, cBooks: r.c_books, saved: true })
       const rec = new Map<string, number>()
       for (const x of (certs.data ?? []) as Row[]) if (x.status !== 'rejected') rec.set(x.contract_id, (rec.get(x.contract_id) ?? 0) + n(x.advance_recovery_amount))
+      const certMap = new Map(((certs.data ?? []) as Row[]).map((x) => [x.id as string, { status: x.status as string, paid: n(x.paid_amount), payable: n(x.payable_amount) }]))
       set({
-        loading: false, contracts, cfg, advanceRecovered: rec,
+        loading: false, contracts, cfg, advanceRecovered: rec, certs: certMap,
         seqs: ((sq.data ?? []) as Row[]).map((r) => ({ id: r.id, contractId: r.contract_id, title: r.title ?? '', groupId: r.group_id, materialId: r.material_id, steps: r.steps ?? [] })),
         statements: ((st.data ?? []) as Row[]).map(stmtRow),
         lookups: {

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useModuleStore } from '../../../../store/useModuleStore'
 import { ArrowRight, Search } from 'lucide-react'
 import { useFinanceStore } from '../../store/useFinanceStore'
 import { useFinanceControlStore } from '../../store/useFinanceControlStore'
@@ -158,7 +159,7 @@ function ContractFile({ row, onBack, onGo }: { row: Row; onBack: () => void; onG
               { key: 'd', label: 'تاریخ', render: (p) => fmtD(p.paymentDate) }, { key: 'm', label: 'روش', render: (p) => p.method || '—' }, { key: 'r', label: 'مرجع', render: (p) => <span className="fn-code">{p.referenceNumber || '—'}</span> }, { key: 'a', label: 'مبلغ (میلیارد)', num: true, render: (p) => fmtBn(p.amount) },
             ]} />
           </Section>
-          <p style={{ marginTop: 10 }}><button className="im-ghostlink" onClick={() => onGo('billing', 'certificates')}>ثبت صورت‌وضعیت یا پرداخت جدید ←</button></p>
+          <p style={{ marginTop: 10 }}><button className="im-ghostlink" onClick={() => useModuleStore.getState().enterModule('statements', undefined, 'pay')}>تأیید صورت‌وضعیت و ثبت پرداخت در ماژول «تولید صورت‌وضعیت» ←</button></p>
         </>
       )}
       {tab === 'guar' && (

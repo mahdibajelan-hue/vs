@@ -110,3 +110,6 @@
 .pst-empty b { color: var(--text-primary); font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { .pst-ledger-bar > i, .pst-stack i, .pst-flash { transition: none; animation: none; } }
 .pst tr.is-click { cursor: pointer; } .pst tr.is-click:hover td, .pst tr.is-click:focus-visible td { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
+
+/* the finance register's pages hosted inside this module (FinanceDesk): their im-/fn- variables without the full-screen shell */
+.pst .im-root.pst-fin { height: auto; min-height: 0; overflow: visible; display: block; background: transparent; }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { BookOpen, FilePlus2, LayoutDashboard, ListChecks, Loader2, ReceiptText, Settings2 } from 'lucide-react'
+import { BadgeCheck, BarChart3, BookOpen, FilePlus2, LayoutDashboard, ListChecks, Loader2, ReceiptText, Settings2 } from 'lucide-react'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
@@ -9,11 +9,14 @@ import { NewStatement } from './NewStatement'
 import { StatementPage } from './StatementPage'
 import { SettingsPage } from './SettingsPage'
 import { StatementsGuide } from './StatementsGuide'
+import { PaymentDesk, StatementReports } from './FinanceDesk'
+import { useModuleStore } from '../../store/useModuleStore'
 import { fa, PartChip, pct, short, StatusChip } from './ui'
 import '../pssr/pssr.css'
 import './statements.css'
 
-type Tab = 'dash' | 'list' | 'new' | 'settings'
+type Tab = 'dash' | 'list' | 'new' | 'pay' | 'reports' | 'settings'
+const TABS: Tab[] = ['dash', 'list', 'new', 'pay', 'reports', 'settings']
 
 /**
  * تولید صورت‌وضعیت — monthly E / P / C payment statements of the project's contracts, generated from the engineering,
@@ -23,7 +26,8 @@ export function StatementsApp({ onExitToHub }: { onExitToHub: () => void; onBack
   const projectId = useProjectContextStore((s) => s.projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const st = usePstStore()
-  const [tab, setTab] = useState<Tab>('dash')
+  // entry from another module, e.g. «قراردادها و مالی» → «تأیید نهایی و پرداخت»
+  const [tab, setTab] = useState<Tab>(() => { const t = useModuleStore.getState().takeEntryTab() as Tab | null; return t && TABS.includes(t) ? t : 'dash' })
   const [open, setOpen] = useState<string | null>(null)
   const [preset, setPreset] = useState<{ contractId?: string; part?: Part } | undefined>()
   const [cfgContract, setCfgContract] = useState('')
@@ -48,7 +52,7 @@ export function StatementsApp({ onExitToHub }: { onExitToHub: () => void; onBack
         </div>
       </header>
       <nav className="ps-tabs" aria-label="بخش‌ها">
-        {([['dash', 'داشبورد', LayoutDashboard], ['list', 'صورت‌وضعیت‌ها', ListChecks], ['new', 'صورت‌وضعیت جدید', FilePlus2], ['settings', 'تنظیمات و توالی پرداخت', Settings2]] as const).map(([k, l, I]) => (
+        {([['dash', 'داشبورد', LayoutDashboard], ['list', 'صورت‌وضعیت‌ها', ListChecks], ['new', 'صورت‌وضعیت جدید', FilePlus2], ['pay', 'تأیید نهایی و پرداخت', BadgeCheck], ['reports', 'گزارش‌ها', BarChart3], ['settings', 'تنظیمات و توالی پرداخت', Settings2]] as const).map(([k, l, I]) => (
           <button key={k} type="button" className={`ps-tab ${tab === k && !open ? 'is-on' : ''}`} onClick={() => go(k)}><I size={15} aria-hidden />{l}</button>
         ))}
       </nav>
@@ -57,9 +61,11 @@ export function StatementsApp({ onExitToHub }: { onExitToHub: () => void; onBack
           : st.error ? <div className="pst-empty"><b>خطا</b>{st.error}</div>
           : st.loading && !st.contracts.length ? <div className="pst-empty"><Loader2 className="animate-spin" /> در حال بارگذاری…</div>
           : !st.contracts.length ? <div className="pst-empty"><b>این پروژه قراردادی ندارد.</b>قراردادها را در ماژول «قراردادها و مالی» تعریف کنید؛ صورت‌وضعیت‌ها برای هر قرارداد ساخته می‌شوند.</div>
-          : open ? <StatementPage id={open} onBack={() => setOpen(null)} />
+          : open ? <StatementPage id={open} onBack={() => setOpen(null)} onPay={() => { setOpen(null); setTab('pay') }} />
           : tab === 'dash' ? <Dashboard onOpen={setOpen} onNew={startNew} />
           : tab === 'list' ? <List onOpen={setOpen} />
+          : tab === 'pay' ? <PaymentDesk projectId={projectId} />
+          : tab === 'reports' ? <StatementReports projectId={projectId} />
           : tab === 'new' ? <NewStatement key={JSON.stringify(preset ?? {})} initial={preset} onDone={(id) => { if (id) setOpen(id); setTab('list') }} />
           : <SettingsPage contractId={cfgContract} onContract={setCfgContract} />}
       </main>
