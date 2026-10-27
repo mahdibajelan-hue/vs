@@ -75,7 +75,7 @@ export function NewStatement({ initial, onDone }: { initial?: { contractId?: str
           <Figures t={pv.totals} part={part} />
           <div style={{ display: 'grid', gap: '.8rem', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 22rem), 1fr))' }}>
             <Deductions t={pv.totals} rates={pv.rates} />
-            <p className="ps-hint" style={{ lineHeight: 2 }}>مبنا همیشه «تجمعی تا پایان {period.label}» است که از داده‌های ماژول منبع حساب می‌شود؛ صورت‌وضعیت این ماه = تجمعی − مبلغ تأییدشدهٔ صورت‌وضعیت قبل{pv.prev ? ` (شمارهٔ ${fa(pv.prev.no)})` : ''}. ردیفی که تجمعی‌اش از تأیید قبل کمتر شده، با این ماه منفی (اصلاح) علامت می‌خورد. پس از ساخت، پیش‌نویس را بررسی کنید؛ مبلغ تجمعی هر ردیف را می‌توان (با ثبت سابقه) اصلاح کرد و سپس برای بررسی فرستاد.</p>
+            <p className="ps-hint" style={{ lineHeight: 2 }}>ردیف‌ها با مقادیر فهرست پیمان و ریز محاسبات، «تجمعی تا پایان {period.label}» را از داده‌های ماژول منبع نشان می‌دهند. در جمع‌بندی، مبلغ صورت‌وضعیت قبل{pv.prev ? ` (شمارهٔ ${fa(pv.prev.no)})` : ''} به‌صورت یک عدد کسر می‌شود: صورت‌وضعیت این ماه = تجمعی − مبلغ صورت‌وضعیت قبل. پس از ساخت، پیش‌نویس را بررسی کنید و در صورت نیاز مبلغ تجمعی هر ردیف را (با ثبت سابقه) اصلاح کنید.</p>
           </div>
           <LinesTable part={part} lines={pv.lines} />
           <div className="pst-bar-actions">
