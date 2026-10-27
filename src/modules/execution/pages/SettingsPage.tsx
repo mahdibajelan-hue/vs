@@ -91,6 +91,7 @@ function RulesView({ projectId }: { projectId: string }) {
           <label>مهلت بررسی نظارت (روز)<NumInput value={s.reviewDays} label="مهلت بررسی" decimals={0} onCommit={(n) => can && save({ reviewDays: n })} /></label>
           <label>مهلت تکمیل کسری (روز)<NumInput value={s.gapDueDays} label="مهلت کسری" decimals={0} onCommit={(n) => can && save({ gapDueDays: n })} /></label>
           <label>مهلت اخطار کتبی تأخیر (روز)<NumInput value={s.delayNoticeDays ?? 14} label="مهلت اخطار تأخیر" decimals={0} onCommit={(n) => can && save({ delayNoticeDays: n })} /></label>
+          <label>ساعت کار هر روز کارگاه (برای تبدیل ساعت توقف به روز)<NumInput value={s.workdayHours ?? 10} label="ساعت کار روزانه" decimals={1} onCommit={(n) => can && n > 0 && save({ workdayHours: n })} /></label>
         </div>
       </Section>
       <FrontsEditor projectId={projectId} can={can} />

@@ -4,7 +4,9 @@ import { useEpcModel } from '../lib/useEpcModel'
 import { useEpcStore } from '../store/useEpcStore'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { periodOf, jalaliText, addDays, type Period } from '../lib/periods'
-import { cumulative } from '../lib/progress'
+import { cumulative, deviationDrivers } from '../lib/progress'
+import { buildDelays, RESPONSIBILITY_FA } from '../lib/delays'
+import { forecast } from '../lib/forecast'
 import { compensationScenarios, rankScenarios } from '../lib/engine/scenarios'
 import { lookaheadWeeks, ppc, deviationCauses, type LookaheadItem } from '../lib/engine/lookahead'
 import { weekdayOf } from '../lib/periods'
@@ -38,6 +40,11 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
   const late = [...m.insights.values()].filter((i) => i.remaining > 0 && (i.forecast.lateRisk === 'high' || i.forecast.lateRisk === 'medium')).sort((a, b) => (a.forecast.onTimeProb ?? 1) - (b.forecast.onTimeProb ?? 1)).slice(0, 5)
   const title = (id: string) => e.actById.get(id)?.title ?? '—'
   const crit = m.alerts.filter((a) => a.severity === 'critical')
+  // for the director: where the gap comes from, when the work will end at this pace, and who carries the lost time
+  const drivers = deviationDrivers({ activities: e.activities, baselines: e.baselines, blines: e.blines, reports: e.reports, lines: e.lines, asOf: m.today, groupWeights: e.settings.groupWeights }).filter((d) => d.points > 0.0005).slice(0, 3)
+  const fc = forecast({ curve: e.curve, actual: e.approved.overall, planned: e.planned.overall, activities: e.activities, today: m.today })
+  const dl = buildDelays({ stoppages: e.stoppages, reports: e.reports, today: m.today, noticeDays: e.settings.delayNoticeDays ?? 14, hoursPerDay: e.settings.workdayHours, from: per.from, to: per.to })
+  const short = (t: string) => (t.length > 70 ? `${t.slice(0, 70).trim()}…` : t)
   const T = ({ children }: { children: React.ReactNode }) => <h3 style={{ margin: '14px 0 6px', fontSize: 14 }}>{children}</h3>
   return (
     <div style={{ display: 'grid', gap: 10 }}>
@@ -52,6 +59,7 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
           <header className="ex-paper-head"><div><small>{name}</small><h2>گزارش مدیریتی کنترل اجرا — {per.label}</h2></div><div style={{ textAlign: 'end' }}><span>تاریخ تهیه: <b>{jalaliText(m.today)}</b></span></div></header>
           <T>۱. پیشرفت</T>
           <p>پیشرفت فیزیکی تأییدشده {pct(e.approved.overall)}، برنامه‌ای {pct(e.planned.overall)}{m.spi != null ? `، SPI = ${fa(m.spi, 2)}` : ''}.</p>
+          <p>{fc.forecastFinish ? `با سرعت چهار هفتهٔ اخیر، پایان پیش‌بینی ${jalaliText(fc.forecastFinish)}${fc.slipDays != null ? ` (${fc.slipDays > 0 ? `${fa(fc.slipDays)} روز دیرتر از` : 'مطابق'} برنامه)` : ''} است.` : 'سرعت اخیر برای پیش‌بینی پایان کافی نیست.'}{drivers.length ? ` بیشترین سهم عقب‌افتادگی: ${drivers.map((d) => `${short(d.activity.title)} (${fa(d.points * 100, 1)} واحد درصد)`).join('؛ ')}.` : ''}</p>
           <T>۲. احجام اجراشده در دوره (تأییدشدهٔ نظارت)</T>
           <table><thead><tr><th>فعالیت</th><th>واحد</th><th className="num">دوره</th><th className="num">تجمعی</th><th className="num">باقیمانده</th></tr></thead><tbody>{rows.length ? rows.map((r) => <tr key={r.a.id}><td>{r.a.title}</td><td>{r.a.unit}</td><td className="num">{fa(r.inP, 2)}</td><td className="num">{fa(r.cum, 2)}</td><td className="num">{fa(Math.max(0, r.base - r.cum), 2)}</td></tr>) : <tr><td colSpan={5}>کارکرد تأییدشده‌ای در این دوره نیست.</td></tr>}</tbody></table>
           {m.metrics.length > 0 && <><T>شاخص‌های تجمیعی</T><table><tbody>{m.metrics.map((x) => <tr key={x.key}><td>{x.label}</td><td className="num">{fa(x.done, 0)} {x.unit}</td><td className="num">باقیمانده {fa(x.remaining, 0)}</td><td className="num">{pct(x.pct, 0)}</td></tr>)}</tbody></table></>}
@@ -60,6 +68,7 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
           <table><thead><tr><th>فعالیت</th><th className="num">نرخ اکیپ/روز</th><th className="num">در ساعت مفید</th><th className="num">اطمینان داده</th></tr></thead><tbody>{[...m.insights.values()].filter((i) => i.prod.rates.perCrewDay != null).map((i) => <tr key={i.activityId}><td>{title(i.activityId)}</td><td className="num">{f1(i.prod.rates.perCrewDay, 2)}</td><td className="num">{f1(i.prod.rates.perUsefulHour, 3)}</td><td className="num">{({ high: 'بالا', medium: 'متوسط', low: 'کم', none: '—' })[i.prod.quality.confidence]}</td></tr>)}</tbody></table>
           <T>۴. توقف‌ها، محدودیت‌ها و موانع</T>
           <p>{byCat.size ? [...byCat].sort((a, b) => b[1] - a[1]).map(([c, h]) => `${CAT_FA[c] ?? c}: ${fa(h, 0)} ساعت`).join(' · ') : 'توقفی ثبت نشده است.'}</p>
+          {dl.count > 0 && <p>مسئولیت توقف‌های تأییدشدهٔ دوره: {(['employer', 'contractor', 'force_majeure', 'third_party', 'shared', ''] as const).map((k) => { const h = dl.rows.filter((r) => r.responsibility === k).reduce((t, r) => t + r.hours, 0); return h ? `${RESPONSIBILITY_FA[k]} ${fa(h, 1)} ساعت` : null }).filter(Boolean).join(' · ')}. برآورد تمدید زمان دوره: {fa(dl.eot.days, 1)} روز{dl.concurrentDates.length ? ` · ${fa(dl.concurrentDates.length)} روز تأخیر همزمان نیازمند تفکیک` : ''}{dl.noticeLost ? ` · ${fa(dl.noticeLost)} اخطار کتبی از دست‌رفته` : ''}.</p>}
           <T>۵. آمادگی مهندسی و تأمین</T>
           <p>{[...m.insights.values()].filter((i) => i.readiness.state === 'blocked' || i.readiness.state === 'at_risk').map((i) => `${title(i.activityId)} (${i.readiness.state === 'blocked' ? 'مسدود' : 'در معرض خطر'}${i.readiness.blockers.length ? `: ${i.readiness.blockers.join('؛ ')}` : ''})`).join(' — ') || 'مانعی برای فعالیت‌های دارای پیش‌نیاز ثبت نشده است.'}</p>
           <T>۶. تعهدات کوتاه‌مدت</T>

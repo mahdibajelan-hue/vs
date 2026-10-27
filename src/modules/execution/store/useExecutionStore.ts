@@ -71,6 +71,8 @@ interface State {
   decideWhole: (id: string, decision: 'approved' | 'rejected' | 'returned', note: string) => Promise<boolean>
   reopenReport: (id: string, reason: string) => Promise<boolean>
   syncGaps: (projectId: string, items: DetectedGap[]) => Promise<boolean>
+  /** sets the responsible person of many follow-ups at once (one request per person) */
+  assignGaps: (groups: { responsible: string; ids: string[] }[]) => Promise<boolean>
   updateGap: (id: string, patch: { status?: GapStatus; responsible?: string | null; dueDate?: string | null; note?: string; generatedReportId?: string | null }) => Promise<boolean>
   assessStoppage: (id: string, resp: Exclude<Stoppage['responsibility'], ''>, critical: boolean, note: string) => Promise<boolean>
   noticeStoppage: (id: string, date: string, ref: string) => Promise<boolean>
@@ -377,6 +379,13 @@ export const useExecutionStore = create<State>((set, get) => ({
     const { error } = await supabase.rpc('ex_gap_sync', { p_project: projectId, p_items: payload })
     if (report('همگام‌سازی کسری‌ها', error)) return false
     await get().fetchAll(); return true
+  },
+  assignGaps: async (groups) => {
+    const res = await Promise.all(groups.map((g) => supabase.from('ex_gap_items').update({ responsible: g.responsible, updated_at: new Date().toISOString() }).in('id', g.ids)))
+    if (report('تعیین مسئول کسری‌ها', res.find((x) => x.error)?.error ?? null)) return false
+    const at = new Map(groups.flatMap((g) => g.ids.map((id) => [id, g.responsible] as const)))
+    set({ gaps: get().gaps.map((x) => (at.has(x.id) ? { ...x, responsible: at.get(x.id)! } : x)) })
+    return true
   },
   updateGap: async (id, p) => {
     const row: Row = { updated_at: new Date().toISOString() }

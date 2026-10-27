@@ -8,6 +8,7 @@ import { Tile } from '../../finance/components/charts'
 import { Bar, Empty, fa, pct } from '../components/common'
 import { ProgressCurve } from '../components/ProgressCurve'
 import type { ProgressRow } from '../lib/progress'
+import { DriversTable } from '../components/DriversTable'
 
 /** Physical progress: approved cumulative ÷ base quantity per activity, weighted per weighting basis (each totals 100%); planned, actual and deviation. Financial value of the work is not mixed in. */
 export function ProgressPage({ projectId }: { projectId: string }) {
@@ -44,6 +45,7 @@ export function ProgressPage({ projectId }: { projectId: string }) {
         <KpiCard i={3} label="تأخیر یا پیشی پایان" value={fc.slipDays == null ? '—' : `${fc.slipDays > 0 ? '+' : ''}${fa(fc.slipDays)} روز`} tone={fc.slipDays == null ? 'neutral' : fc.slipDays > 30 ? 'bad' : fc.slipDays > 0 ? 'warn' : 'good'} sub="پیش‌بینی منهای پایان برنامه‌ای" />
       </div>
       <Tile title="منحنی پیشرفت هفتگی" hint="برنامه (خطی بین تاریخ شروع و پایان هر فعالیت) در برابر کارکرد تأییدشده و ثبت‌شده"><ProgressCurve data={m.curve} /></Tile>
+      {m.planned.overall != null && <Section title="عوامل اصلی عقب‌افتادگی" hint="فعالیت‌هایی که بیشترین سهم را در فاصلهٔ پیشرفت برنامه‌ای و واقعی دارند (با همان وزن‌های پیشرفت کل) — جبران از بالای این فهرست بیشترین اثر را دارد" flush><DriversTable m={m} limit={10} /></Section>}
       {m.approved.groups.length > 1 && <Section title="پیشرفت به‌تفکیک مبنای وزن‌دهی" hint="هر مبنا جدا و با مجموع ۱۰۰٪ محاسبه می‌شود؛ مقدارهای ناهم‌جنس هرگز مستقیم جمع نمی‌شوند." flush><DataTable rows={m.approved.groups} rowKey={(g) => g.group} cols={[{ key: 'g', label: 'مبنا', render: (g) => g.group || 'کل پروژه' }, { key: 'w', label: 'مجموع وزن', num: true, render: (g) => fa(g.weightSum, 2) }, { key: 'o', label: '', render: (g) => <Chip tone={g.ok ? 'good' : 'bad'}>{g.ok ? '۱۰۰٪' : 'مجموع ۱۰۰ نیست'}</Chip> }, { key: 'p', label: 'پیشرفت', render: (g) => <><Bar value={g.pct} /><span className="sub">{pct(g.pct)}</span></> }]} /></Section>}
       {chapters.length > 1 && <Section title="پیشرفت به‌تفکیک فصل" hint="میانگین وزنی پیشرفت ردیف‌های هر فصل؛ فصل‌ها به ترتیب وزن" flush>
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><thead><tr><th>فهرست‌بها</th><th>فصل</th><th className="num">وزن</th><th className="num">ردیف</th><th>پیشرفت</th></tr></thead>

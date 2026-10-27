@@ -66,6 +66,8 @@ export interface ExSettings {
   gapDueDays: number
   /** days after a stoppage within which the contractor must send the written delay notice (contract clause) */
   delayNoticeDays: number
+  /** working hours of a site day: a time-extension estimate turns excusable stoppage hours into days with it */
+  workdayHours?: number
   /** fronts expected to send a daily work report every working day (labels from the shared front list) */
   expectedFronts: string[]
   projectStart: string

@@ -13,6 +13,7 @@ import { SignaturesCard } from '../components/SignaturesCard'
 import { useEpcStore as useEpcStoreSig } from '../store/useEpcStore'
 import { PaperModal, type PaperCtx } from '../components/ReportPaper'
 import type { Report } from '../types'
+import { daysBetween } from '../lib/periods'
 import { EmployerPanel } from '../components/epc/EmployerPanel'
 import { VersionsCard } from '../components/epc/VersionsCard'
 import { epcSettings } from '../lib/epcSettings'
@@ -74,12 +75,13 @@ export function ReviewPage({ projectId }: { projectId: string }) {
     { key: 'fr', label: 'جبهه', render: (r) => r.front || '—' },
     { key: 'p', label: 'ردیف‌های باقی‌مانده', num: true, render: (r) => { const ls = m.linesByReport.get(r.id) ?? []; return `${fa(ls.filter((l) => l.status === 'pending').length)} از ${fa(ls.length)}` } },
     { key: 'sent', label: 'ارسال', render: (r) => fmtD((r.submittedAt ?? '').slice(0, 10)), sort: (r) => r.submittedAt ?? '' },
+    ...(scope === 'wait' ? [{ key: 'age', label: 'در انتظار', num: true, sort: (r: Report) => r.submittedAt ?? '', render: (r: Report) => { const d = r.submittedAt ? daysBetween(r.submittedAt.slice(0, 10), m.today) : 0; const late = d > (m.settings.reviewDays ?? 2); return <span className={late ? 'ex-bad' : undefined} title={late ? `بیش از مهلت بررسی (${fa(m.settings.reviewDays ?? 2)} روز)` : undefined}>{fa(d)} روز{late ? ' — دیرکرد' : ''}</span> } } as Col<Report>] : []),
     { key: 's', label: 'وضعیت', render: (r) => <ReportStatusChip status={r.status} /> },
   ]
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div className="fn-kpis">
-        <KpiCard i={0} label="در انتظار بررسی" value={fa(m.reports.filter((r) => r.status === 'submitted').length)} tone={m.reports.some((r) => r.status === 'submitted') ? 'warn' : 'good'} />
+        <KpiCard i={0} label="در انتظار بررسی" value={fa(m.reports.filter((r) => r.status === 'submitted').length)} tone={m.reports.some((r) => r.status === 'submitted') ? 'warn' : 'good'} sub={(() => { const late = m.reports.filter((r) => (r.status === 'submitted' || r.status === 'partially_approved') && r.submittedAt && daysBetween(r.submittedAt.slice(0, 10), m.today) > (m.settings.reviewDays ?? 2)).length; return late ? `${fa(late)} گزارش بیش از مهلت ${fa(m.settings.reviewDays ?? 2)} روزه` : `مهلت بررسی ${fa(m.settings.reviewDays ?? 2)} روز` })()} />
         <KpiCard i={1} label="تأیید جزئی" value={fa(m.reports.filter((r) => r.status === 'partially_approved').length)} />
         <KpiCard i={2} label="برگشت‌خورده" value={fa(m.reports.filter((r) => r.status === 'returned').length)} />
         <KpiCard i={3} label="تأییدشده" value={fa(m.reports.filter((r) => r.status === 'approved').length)} tone="good" />
@@ -111,6 +113,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [paper, setPaper] = useState(false)
+  const actions = useEpcStoreSig((x) => x.workActions)
   if (!r) return null
   const epc = epcSettings(m.settings as unknown as Record<string, unknown>)
   const empOn = epc.employerStep !== 'off'
@@ -122,7 +125,10 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
   const set = (id: string, p: Partial<Dec>, q: number) => setDec((d) => { const base: Dec = { decision: 'approved', qty: q, note: '' }; return { ...d, [id]: Object.assign(base, d[id], p) } })
   const pending = lines.filter((l) => l.status === 'pending')
   const decided = Object.entries(dec)
-  const needNote = decided.some(([, d]) => d.decision !== 'approved' && !d.note.trim())
+  // approving less than reported is a decision on the contractor's quantity: like a return or a rejection it needs a written reason
+  const qtyOf = (id: string) => lines.find((l) => l.id === id)?.qty ?? 0
+  const cut = (id: string, d: Dec) => d.decision === 'approved' && d.qty < qtyOf(id) - 1e-9
+  const needNote = decided.some(([id, d]) => (d.decision !== 'approved' || cut(id, d)) && !d.note.trim())
   const approveAll = () => setDec((d) => { const x = { ...d }; for (const l of pending) if (!x[l.id]) x[l.id] = { decision: 'approved', qty: l.qty, note: '' }; return x })
   const submit = async () => {
     setBusy(true)
@@ -135,6 +141,8 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
   const orgName = orgs.find((o) => o.id === r.contractorOrgId)?.name ?? '—'
   const hist = m.history.filter((h) => h.reportId === reportId)
   const paperCtx = (): PaperCtx => ({ signatures: useEpcStoreSig.getState().signatures.filter((g) => g.reportId === reportId), projectName: project?.officialName ?? '', orgName, people: ex.people, report: r, form, lines, resources: m.resources.filter((x) => x.reportId === reportId), stoppages: m.stoppages.filter((x) => x.reportId === reportId), acts: m.actById, prev: before, baseOf: (a) => m.baseOf(a, r.reportDate), metrics: form ? cumulativeMetrics(form, r, lines, m.reports, m.lines) : undefined })
+  // action fields are stored under generated keys: show the label the project gave them
+  const fieldLabel = (actionKey: string, k: string) => actions.find((a) => a.projectId === m.projectId && a.key === actionKey)?.fields.find((f) => f.key === k)?.label ?? k
   const detailText = (l: (typeof lines)[number]) => (form ? form.columns.slice(0, 5).map((c) => { const v = l.detail[c.key]; const o = c.options?.find((x) => x.value === String(v)); return v == null || v === '' ? '' : `${c.label}: ${o ? o.label : String(v)}` }).filter(Boolean).join(' · ') : '')
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -159,7 +167,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
               return (
                 <tr key={l.id}>
                   <td>{fa(i + 1)}</td>
-                  <td style={{ minWidth: 220 }}>{a ? <><b>{a.title}</b><span className="sub fn-code">{a.itemNo}{l.location ? ` · ${l.location}` : ''}{l.kmFrom != null ? ` · km ${l.kmFrom}${l.kmTo != null ? `–${l.kmTo}` : ''}` : ''}</span></> : l.detail.actionKey ? <><b>{String(l.detail.actionTitle ?? l.detail.actionKey)}</b><span className="sub">اقدام کارگاهی{l.location ? ` · ${l.location}` : ''}{l.kmFrom != null ? ` · km ${l.kmFrom}${l.kmTo != null ? `–${l.kmTo}` : ''}` : ''}{Object.entries(l.detail).filter(([k, v]) => !k.startsWith('action') && String(v ?? '').trim()).map(([k, v]) => ` · ${k}: ${v}`).join('')}</span></> : <span>{detailText(l) || '—'}</span>}{l.note && <small className="sub">{l.note}</small>}</td>
+                  <td style={{ minWidth: 220 }}>{a ? <><b>{a.title}</b><span className="sub fn-code">{a.itemNo}{l.location ? ` · ${l.location}` : ''}{l.kmFrom != null ? ` · km ${l.kmFrom}${l.kmTo != null ? `–${l.kmTo}` : ''}` : ''}</span></> : l.detail.actionKey ? <><b>{String(l.detail.actionTitle ?? l.detail.actionKey)}</b><span className="sub">اقدام کارگاهی{l.location ? ` · ${l.location}` : ''}{l.kmFrom != null ? ` · km ${l.kmFrom}${l.kmTo != null ? `–${l.kmTo}` : ''}` : ''}{Object.entries(l.detail).filter(([k, v]) => !k.startsWith('action') && String(v ?? '').trim()).map(([k, v]) => ` · ${fieldLabel(String(l.detail.actionKey), k)}: ${v}`).join('')}</span></> : <span>{detailText(l) || '—'}</span>}{l.note && <small className="sub">{l.note}</small>}</td>
                   <td className="num">{form ? '' : <b>{fa(l.qty, 3)} {a?.unit ?? String(l.detail.actionUnit ?? '')}</b>}</td>
                   {!form && <td><div className="ex-cum"><span>{fa(prev, 2)} {a?.unit}</span>{base > 0 && <span>مبنا: {fa(base, 2)} · باقی: {fa(Math.max(0, base - prev), 2)}</span>}</div></td>}
                   <td><LineStatusChip status={l.status} />{l.status === 'approved' && l.approvedQty != null && l.approvedQty !== l.qty && <small className="ex-warn" style={{ display: 'block' }}>تأییدشده: {fa(l.approvedQty, 3)}</small>}{l.reviewNote && <small className="sub">{l.reviewNote}</small>}</td>
@@ -174,7 +182,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
                         {d && <button className="im-btn im-btn-sm" onClick={() => setDec((x) => { const y = { ...x }; delete y[l.id]; return y })}>لغو</button>}
                       </span>
                       {d?.decision === 'approved' && !form && <span style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 12 }}>مقدار تأییدی: <DecInput value={d.qty} onValue={(n) => set(l.id, { qty: Math.min(n, l.qty) }, l.qty)} label="مقدار تأییدی" className="fn-cell-input" /> از {fa(l.qty, 3)}</span>}
-                      {d && d.decision !== 'approved' && <input placeholder="علت (الزامی)" value={d.note} onChange={(e) => set(l.id, { note: e.target.value }, l.qty)} dir="auto" aria-label="علت" />}
+                      {d && (d.decision !== 'approved' || cut(l.id, d)) && <input placeholder={d.decision === 'approved' ? 'علت کاهش مقدار (الزامی)' : 'علت (الزامی)'} value={d.note} onChange={(e) => set(l.id, { note: e.target.value }, l.qty)} dir="auto" aria-label="علت" />}
                     </div>) : <span className="sub">—</span>}</td>}
                 </tr>) })}</tbody>
           </table>
@@ -186,7 +194,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="im-btn im-btn-sm" onClick={approveAll} disabled={!pending.length}>تأیید همهٔ ردیف‌های تصمیم‌نگرفته</button>
             <button className="im-btn im-btn-primary" disabled={busy || decided.length === 0 || needNote} onClick={() => void submit()}>ثبت نتیجهٔ بررسی ({fa(decided.length)} ردیف)</button>
-            {needNote && <span className="ex-bad" style={{ alignSelf: 'center' }}>برای رد یا بازگرداندن، علت را بنویسید.</span>}
+            {needNote && <span className="ex-bad" style={{ alignSelf: 'center' }}>برای رد، بازگرداندن یا تأیید با مقدار کمتر، علت را بنویسید.</span>}
             {!needNote && decided.length > 0 && decided.length < pending.length && <span className="ex-warn" style={{ alignSelf: 'center' }}>{fa(pending.length - decided.length)} ردیف بدون تصمیم می‌ماند؛ گزارش «تأیید جزئی» می‌شود.</span>}
           </div>
         </div>

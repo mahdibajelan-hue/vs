@@ -153,12 +153,18 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     const okB = okH && await ex.saveBody(reportId, { lines, resources: res, stoppages: stops.map((s) => ({ category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, responsibility: s.responsibility, critical: s.critical, noticeDate: s.noticeDate, noticeRef: s.noticeRef, assessNote: s.assessNote })) })
     const okC = !okB || !crewDirty || !epcAvailable || await useEpcStore.getState().saveCrewLogs(reportId, crews.map((c) => ({ activityId: c.activityId, crewName: c.crewName, composition: c.composition, usefulHours: c.usefulHours, idleHours: c.idleHours, outputQty: c.outputQty, conditions: c.conditions, note: c.note })))
     setBusy(false)
+    if (okB) void useEpcStore.getState().loadSignatures(reportId) // a real change clears the signatures in the database; show that at once
     if (okB && okC) { setDirty(false); setCrewDirty(false); if (form) void (async () => { await useEpcStore.getState().syncWelds(reportId); if (centralOn) await useEpcStore.getState().weldAbsorb(reportId) })() } // keeps the weld registry (an index over the forms) in step; never blocks saving
     return !!okB && okC
   }
   const send = async () => {
     if (missing.length) return
-    if (!(await save())) return
+    // only unsaved edits are written before sending: re-saving an unchanged, signed report must not touch its rows
+    if (dirty || crewDirty) {
+      if (!(await save())) return
+      // saving changed rows clears the signatures given on the previous version: they have to be given again on what is sent
+      if (reportSigs.length) { window.alert('تغییرات ذخیره شد و امضاهای قبلی (مربوط به نسخهٔ پیش از تغییر) پاک شد؛ دوباره امضا کنید و سپس ارسال کنید.'); return }
+    }
     // the report remembers which approved sheet version it was printed on
     const tpl = form ? useEpcStore.getState().templates.find((t) => t.formKey === form.key && t.status === 'approved') : undefined
     if (tpl) await useEpcStore.getState().stampTemplate(reportId, tpl.id)

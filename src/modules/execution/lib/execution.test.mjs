@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { cumulative, effectiveBase, physicalProgress, plannedFraction, plannedOverall, weightSums, lineValue } from './progress.ts'
+import { cumulative, effectiveBase, physicalProgress, plannedFraction, plannedOverall, weightSums, lineValue, deviationDrivers } from './progress.ts'
 import { weekOf, monthOf, periodsBetween, workingDays, weekdayOf } from './periods.ts'
 import { computeMetrics, cumulativeMetrics, missingForReport } from './forms.ts'
 import { FORM_BY_KEY, FORMS } from './formCatalog.ts'
@@ -89,4 +89,7 @@ assert.deepEqual(kinds('missing_report')[0].existing, { date: '2026-10-11', fron
 // ── period report rows come from the daily lines
 const rows = activityRows({ activities: [act('a')], reports: [rep('r1', '2026-01-02'), rep('r2', '2026-01-09', 'submitted')], lines: [line('x1', 'r1', 'a', 30), line('x2', 'r2', 'a', 20, 'pending')], resources: [], stoppages: [] }, { kind: 'week', key: 'k', label: '', from: '2026-01-08', to: '2026-01-14' }, (a) => a.baseQty)
 assert.equal(rows[0].prevApproved, 30); assert.equal(rows[0].pending, 20); assert.equal(rows[0].cumApproved, 30); assert.equal(rows[0].cumRegistered, 50)
+// deviation drivers: planned minus approved, weighted like the overall figure; the biggest contributor first
+const dv = deviationDrivers({ activities: [act('a', { weight: 60 }), act('b', { weight: 40 })], baselines: [], blines: [], reports: [rep('r1', '2026-01-02')], lines: [line('l1', 'r1', 'a', 50), line('l2', 'r1', 'b', 10)], asOf: '2026-01-11' })
+assert.equal(dv[0].activity.id, 'b'); assert.ok(Math.abs(dv[0].points - 0.4 * 0.9) < 1e-9); assert.ok(Math.abs(dv[1].points - 0.6 * 0.5) < 1e-9)
 console.log('execution libs ok')

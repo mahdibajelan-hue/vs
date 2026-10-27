@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { AlertTriangle, ArrowLeft } from 'lucide-react'
-import { useExecutionStore } from '../store/useExecutionStore'
 import { useExecutionModel } from '../lib/useExecutionModel'
 import { Chip, KpiCard } from '../../finance/components/fn'
 import { Tile } from '../../finance/components/charts'
@@ -8,25 +7,22 @@ import { ProgressCurve } from '../components/ProgressCurve'
 import { Empty, ReportStatusChip, fa, pct } from '../components/common'
 import { fmtD } from '../../finance/components/fn'
 import { FORM_BY_KEY } from '../lib/formCatalog'
-import { GAP_KIND_LABEL_FA } from '../types'
 import { buildStatement } from '../lib/statement'
 import type { ExTab } from '../ExecutionApp'
 import { ExecutionPulse } from '../components/epc/ExecutionPulse'
 import { AlertsPanel } from '../components/epc/AlertsPanel'
 import { useEpcModel } from '../lib/useEpcModel'
+import { RoleDesk } from '../components/RoleDesk'
+import { DriversTable } from '../components/DriversTable'
 
 export function DashboardPage({ projectId, onGo }: { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }) {
   const m = useExecutionModel(projectId)
   const epc = useEpcModel(projectId)
   const [pulseKind, setPulseKind] = useState<'pipeline' | 'station' | 'all'>('all')
-  const ex = useExecutionStore()
   const waiting = m.reports.filter((r) => r.status === 'submitted' || r.status === 'partially_approved')
-  const returned = m.reports.filter((r) => r.status === 'returned' || r.status === 'incomplete')
-  const todayReports = m.reports.filter((r) => r.reportDate === m.today && r.formKey === 'work')
   const gaps = m.detected.filter((g) => g.kind !== 'form_missing')
   const dev = m.planned.overall == null ? null : m.approved.overall - m.planned.overall
   const recent = useMemo(() => m.reports.slice().sort((a, b) => b.reportDate.localeCompare(a.reportDate) || b.createdAt.localeCompare(a.createdAt)).slice(0, 8), [m.reports])
-  const mine = ex.myRoles(projectId)
   // contract value of the work done: approved quantities × contract unit price, against the value of the contract quantities; waiting quantities shown apart
   const money = useMemo(() => { const st = buildStatement({ activities: m.activities, reports: m.reports, lines: m.lines }, { from: '0000-01-01', to: m.today }, (a, d) => m.baseOf(a, d), () => ''); const contract = m.activities.filter((a) => a.active && a.approval === 'approved').reduce((t, a) => t + m.baseOf(a, m.today) * a.unitPrice, 0); return { done: st.grand.cumAmt, pending: st.grand.pendingAmt, contract } }, [m])
   if (!m.activities.length && !m.reports.length) return (
@@ -38,6 +34,7 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; sub: str
   )
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+      <RoleDesk m={m} onGo={onGo} />
       <div className="fn-kpis">
         <KpiCard i={0} label="پیشرفت فیزیکی (تأییدشده)" value={pct(m.approved.overall)} tone="good" sub={m.planned.overall != null ? `برنامه ${pct(m.planned.overall)}` : undefined} />
         <KpiCard i={1} label="انحراف از برنامه" value={dev == null ? '—' : `${dev > 0 ? '+' : ''}${(dev * 100).toLocaleString('fa-IR', { maximumFractionDigits: 1 })}٪`} tone={dev == null ? 'neutral' : dev < -0.05 ? 'bad' : dev < 0 ? 'warn' : 'good'} onClick={() => onGo('progress')} />
@@ -58,13 +55,7 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; sub: str
       <AlertsPanel alerts={epc.alerts} onGo={onGo} />
       <div className="mt-two" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: 12 }}>
         <Tile title="منحنی پیشرفت" hint="برنامه، ثبت‌شده و تأییدشده"><ProgressCurve data={m.curve} h={230} /></Tile>
-        <Tile title="کارهای شما" hint={mine.length ? undefined : 'نقشی در این پروژه ندارید (مدیر سامانه همه‌چیز را می‌بیند)'}>
-          <div style={{ display: 'grid', gap: 8 }}>
-            <button className="ex-form-tile" onClick={() => onGo('daily', 'work')}><b>گزارش امروز: {todayReports.length ? `${fa(todayReports.length)} گزارش ثبت شده` : 'هنوز ثبت نشده'}</b><small>{returned.length ? `${fa(returned.length)} گزارش برگشت‌خورده یا نیازمند تکمیل` : 'گزارش برگشت‌خورده‌ای نیست'}</small></button>
-            <button className="ex-form-tile" onClick={() => onGo('review')}><b>کارتابل بررسی: {fa(waiting.length)} گزارش</b><small>{waiting.length ? `قدیمی‌ترین: ${fmtD((waiting.slice().sort((a, b) => (a.submittedAt ?? '').localeCompare(b.submittedAt ?? ''))[0]?.submittedAt ?? '').slice(0, 10))}` : 'همه بررسی شده'}</small></button>
-            <button className="ex-form-tile" onClick={() => onGo('gaps')}><b>کسری‌های باز: {fa(gaps.length)}</b><small>{gaps.slice(0, 2).map((g) => GAP_KIND_LABEL_FA[g.kind]).join('، ') || 'کسری شناسایی نشده'}</small></button>
-          </div>
-        </Tile>
+        <Tile title="عوامل اصلی عقب‌افتادگی" hint="سهم هر فعالیت از فاصلهٔ برنامه و واقعی"><DriversTable m={m} limit={6} compact /></Tile>
       </div>
       {gaps.length > 0 && (
         <div className="im-card" style={{ padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', borderInlineStart: '3px solid var(--im-amber)' }}>

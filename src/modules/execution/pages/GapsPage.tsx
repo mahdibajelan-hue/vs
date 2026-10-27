@@ -56,6 +56,18 @@ export function GapsPage({ projectId, onGo }: { projectId: string; sub: string; 
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId))
   const orgOf = projectParties(project, orgs).contractor?.id ?? ex.roles.find((r) => r.projectId === projectId && r.active && r.organizationId)?.organizationId ?? orgs[0]?.id ?? null
 
+  // the person who has to fix a gap follows from its kind: a missing / incomplete report is the site's (site head, else
+  // contractor), an unreviewed one the supervision's — one click instead of a hundred rows edited one by one
+  const unownedStored = all.filter((g) => isOpen(g) && !g.responsible && !g.id.startsWith('virt:'))
+  const firstOf = (...roles: string[]) => { for (const r of roles) { const x = ex.roles.find((y) => y.projectId === projectId && y.active && y.role === r); if (x) return x.userId } return null }
+  const autoAssign = async () => {
+    const site = firstOf('site_head', 'contractor'), sup = firstOf('supervision', 'consultant')
+    const by = new Map<string, string[]>()
+    for (const g of unownedStored) { const who = g.kind === 'unreviewed' ? sup : site; if (who) by.set(who, [...(by.get(who) ?? []), g.id]) }
+    if (!by.size) { window.alert('در «تنظیمات ← افراد و نقش‌ها» برای این پروژه سرپرست کارگاه / پیمانکار یا دستگاه نظارت تعریف نشده است.'); return }
+    setBusy(true); await ex.assignGaps([...by].map(([responsible, ids]) => ({ responsible, ids }))); setBusy(false)
+  }
+
   const generate = async (g: Gap) => {
     setBusy(true)
     let id: string | null = null
@@ -107,6 +119,7 @@ export function GapsPage({ projectId, onGo }: { projectId: string; sub: string; 
         <span style={{ marginInlineStart: 'auto', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
           <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12 }}><input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} style={{ width: 'auto' }} /> نمایش بسته‌شده‌ها</label>
           {can && <button className="im-btn im-btn-sm" onClick={() => { synced.current = ''; void ex.syncGaps(projectId, live) }}><RefreshCw size={13} /> همگام‌سازی</button>}
+          {can && unownedStored.length > 0 && <button className="im-btn im-btn-sm im-btn-primary" disabled={busy} title="کسری گزارش‌ها به سرپرست کارگاه (یا پیمانکار) و «بررسی‌نشده» به دستگاه نظارت سپرده می‌شود" onClick={() => void autoAssign()}>تعیین مسئول برای {fa(unownedStored.length)} کسری</button>}
           <button className="im-btn im-btn-sm" onClick={() => void toXlsx()}><Download size={13} /> فهرست روزانه (اکسل)</button>
         </span>
       </div>

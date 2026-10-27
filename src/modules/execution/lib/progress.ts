@@ -115,3 +115,23 @@ export function weightSums(activities: Pick<Activity, 'weight' | 'weightGroup' |
   return [...m].map(([group, sum]) => ({ group, sum, ok: Math.abs(sum - 100) < 0.01 }))
 }
 export { addDays }
+
+export interface DeviationDriver { activity: Activity; planned: number; actual: number; /** share of the overall planned-minus-actual gap, in fractions of the whole project (0.012 = 1.2 points) */ points: number; remaining: number }
+/**
+ * Where the schedule gap comes from: each activity's planned fraction minus its approved fraction, weighted the way the
+ * overall figure is (activity weight inside its basis, then the basis weight) — the list a planner or project manager
+ * works down to recover the most progress per action. Activities ahead of plan come out negative.
+ */
+export function deviationDrivers(a: { activities: Activity[]; baselines: Baseline[]; blines: BaselineLine[]; reports: Report[]; lines: ReportLine[]; asOf: string; groupWeights?: Record<string, number>; employer?: EmployerMode }): DeviationDriver[] {
+  const prog = physicalProgress({ ...a, mode: 'approved' })
+  const ws = new Map(prog.groups.map((g) => [g.group, g.weightSum]))
+  const gw = (g: string) => a.groupWeights?.[g] ?? 1
+  const tw = prog.groups.reduce((s, g) => s + gw(g.group), 0)
+  const out: DeviationDriver[] = []
+  for (const r of prog.rows) {
+    const p = plannedFraction(r.activity, a.asOf); if (p == null || tw <= 0) continue
+    const w = ws.get(r.activity.weightGroup) ?? 0; if (w <= 0) continue
+    out.push({ activity: r.activity, planned: p, actual: r.pct, points: (gw(r.activity.weightGroup) / tw) * (r.base.weight / w) * (p - r.pct), remaining: r.remaining })
+  }
+  return out.sort((x, y) => y.points - x.points)
+}
