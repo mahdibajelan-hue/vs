@@ -9,12 +9,12 @@ export function printStatement(s: Statement, c: Contract, lines: Line[], cfg: Cf
   const w = window.open('', '_blank', 'width=1100,height=1200')
   if (!w) return
   const p = periodOf(s.periodKey), m = PART_META[s.part]
+  // the cumulative lines against the contract list; the previous statement enters the summary above as one number
   const body = groupLines(lines).map((g) => {
-    const sum = (k: 'baseAmount' | 'cumAmount' | 'prevAmount') => g.lines.reduce((a, l) => a + l[k], 0)
-    return `<tr class="g"><td colspan="5">${esc(g.label)}</td><td>${rial(sum('baseAmount'))}</td><td>${rial(sum('cumAmount'))}</td><td>${rial(sum('prevAmount'))}</td><td>${rial(sum('cumAmount') - sum('prevAmount'))}</td></tr>` +
-      g.lines.map((l, i) => `<tr><td>${fa(i + 1)}</td><td dir="ltr">${esc(l.code)}</td><td class="t">${esc(l.title)}${l.edited ? ' *' : ''}</td><td>${esc(l.unit)}</td><td>${s.part === 'E' ? `${fa(l.sysCumQty)}٪` : fa(l.sysCumQty, 2)}</td><td>${rial(l.baseAmount)}</td><td>${rial(l.cumAmount)}</td><td>${rial(l.prevAmount)}</td><td><b>${rial(l.cumAmount - l.prevAmount)}</b></td></tr>`).join('')
+    const sum = (k: 'baseAmount' | 'cumAmount') => g.lines.reduce((a, l) => a + l[k], 0)
+    return `<tr class="g"><td colspan="6">${esc(g.label)}</td><td>${rial(sum('baseAmount'))}</td><td></td><td>${rial(sum('cumAmount'))}</td></tr>` +
+      g.lines.map((l, i) => `<tr><td>${fa(i + 1)}</td><td dir="ltr">${esc(l.code)}</td><td class="t">${esc(l.title)}${l.edited ? ' *' : ''}</td><td>${esc(l.unit)}</td><td>${fa(l.baseQty, 2)}</td><td>${s.part === 'E' ? '—' : rial(l.unitPrice)}</td><td>${rial(l.baseAmount)}</td><td>${s.part === 'E' ? `${fa(l.sysCumQty)}٪` : fa(l.sysCumQty, 2)}</td><td><b>${rial(l.cumAmount)}</b></td></tr>`).join('')
   }).join('')
-  const removed = s.prevAmount - lines.reduce((a, l) => a + l.prevAmount, 0)
   const d = s.deductions
   w.document.write(`<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>صورت‌وضعیت ${s.part}-${s.no} ${esc(c.no)}</title>
   <style>body{font-family:Vazirmatn,Tahoma,sans-serif;margin:22px;color:#0f172a;font-size:11.5px}h1{font-size:16px;text-align:center;margin:0 0 4px}h2{font-size:12px;text-align:center;margin:0 0 12px;color:#475569;font-weight:600}
@@ -28,14 +28,14 @@ export function printStatement(s: Statement, c: Contract, lines: Line[], cfg: Cf
   <tr><td><b>مبنای محاسبه:</b> ${esc(m.source)}</td><td><b>سقف این بخش:</b> ${s.cap != null ? rial(s.cap) + ' ریال' : '—'}</td></tr></table>
   <table class="sum"><tr><th>شرح</th><th>نرخ</th><th>مبلغ (ریال)</th></tr>
   <tr><td class="t">تجمعی تا پایان ماه</td><td></td><td>${rial(s.cumAmount)}</td></tr>
-  <tr><td class="t">تأییدشدهٔ صورت‌وضعیت قبل</td><td></td><td>− ${rial(s.prevAmount)}</td></tr>
+  <tr><td class="t">مبلغ صورت‌وضعیت قبل (تجمعی تأییدشده)</td><td></td><td>− ${rial(s.prevAmount)}</td></tr>
   <tr><td class="t"><b>صورت‌وضعیت این ماه (ناخالص) = تجمعی − قبلی</b></td><td></td><td><b>${rial(s.thisAmount)}</b></td></tr>
   <tr><td class="t">کسر استهلاک پیش‌پرداخت</td><td>${fa(cfg.advRecoveryPct, 2)}٪</td><td>${rial(d.advance)}</td></tr>
   <tr><td class="t">کسر حسن انجام کار</td><td>${fa(cfg.retPct, 2)}٪</td><td>${rial(d.retention)}</td></tr>
   <tr><td class="t">کسر مالیات</td><td>${fa(cfg.taxPct, 2)}٪</td><td>${rial(d.tax)}</td></tr>
   <tr><td class="t">کسر بیمه</td><td>${fa(cfg.insPct, 2)}٪</td><td>${rial(d.insurance)}</td></tr>
   <tr><td class="t"><b>خالص قابل پرداخت</b></td><td></td><td><b>${rial(s.payable)}</b></td></tr></table>
-  <table><tr><th>ردیف</th><th>کد</th><th>شرح</th><th>واحد</th><th>${s.part === 'E' ? 'پیشرفت' : 'مقدار تجمعی'}</th><th>مبلغ پیمان</th><th>تجمعی تا پایان ماه</th><th>تأییدشدهٔ قبل</th><th>این ماه</th></tr>${body}${Math.abs(removed) > 0.5 ? `<tr class="g"><td colspan="7">ردیف‌های صورت‌وضعیت قبل که دیگر منبع ندارند (در این صورت‌وضعیت نمی‌آیند)</td><td>${rial(removed)}</td><td>${rial(-removed)}</td></tr>` : ''}</table>
+  <table><tr><th>ردیف</th><th>کد</th><th>شرح</th><th>واحد</th><th>مقدار پیمان</th><th>بهای واحد</th><th>مبلغ پیمان</th><th>${s.part === 'E' ? 'پیشرفت تجمعی' : 'مقدار تجمعی'}</th><th>مبلغ تجمعی تا پایان ماه</th></tr>${body}</table>
   <small>* ردیف‌های ستاره‌دار در بررسی اصلاح شده‌اند.</small>
   <div class="sig"><div>تهیه‌کننده (پیمانکار)</div><div>بررسی‌کننده (مشاور)</div><div>تأییدکننده (کارفرما)</div><div>امور مالی</div></div>
   <script>window.onload=()=>window.print()</script></body></html>`)

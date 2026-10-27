@@ -6,7 +6,7 @@ import { executionCore } from '../../execution/lib/executionCore'
 import { effectiveBase } from '../../execution/lib/progress'
 import { buildStatement } from '../../execution/lib/statement'
 import {
-  buildC, buildE, buildP, DEFAULT_ENG_SPLIT, DEFAULT_PAY_STEPS, totals, withPrevious,
+  buildC, buildE, buildP, DEFAULT_ENG_SPLIT, DEFAULT_PAY_STEPS, totals,
   type Built, type EngStep, type GenLine, type MatItem, type MatStage, type Part, type PaySeq, type PayStep, type Period, type Rates, type StStatus, type Totals,
 } from '../lib/stmtCore'
 
@@ -187,8 +187,7 @@ export const usePstStore = create<State>()((set, get) => {
         // the previous APPROVED statement of this contract part (approved or posted, the latest before the month): its accepted
         // cumulative amounts are the «previous»; the month = cumulative to the end of the selected month − those
         const prev = get().statements.filter((s) => s.contractId === contractId && s.part === part && s.to < period.from && (s.status === 'approved' || s.status === 'posted')).sort((a, b) => b.to.localeCompare(a.to))[0] ?? null
-        const prevLines = prev ? (get().lines.get(prev.id) ?? (await get().loadLines(prev))) : []
-        const lines = withPrevious(built.lines, prevLines)
+        const lines = built.lines
         const rates: Rates = { advRecoveryPct: cfg.advRecoveryPct, retPct: cfg.retPct, taxPct: cfg.taxPct, insPct: cfg.insPct }
         const cap = (part === 'E' ? cfg.capE : part === 'P' ? cfg.capP : cfg.capC) ?? c.cap
         const pendingAdv = get().statements.filter((s) => s.contractId === contractId && !s.finCertificateId).reduce((a, s) => a + s.deductions.advance, 0)
