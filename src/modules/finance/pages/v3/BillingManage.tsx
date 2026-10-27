@@ -13,12 +13,13 @@ const num = (x: unknown) => Number(x) || 0
 const payableOf = (v: Vals) => num(v.grossAmount) + num(v.adjustments) - num(v.taxDeduction) - num(v.insuranceDeduction) - num(v.otherDeduction) - num(v.retentionAmount) - num(v.advanceRecoveryAmount)
 
 /** Certificates and payments of one project: record, certify, approve and pay in one place. A certificate's paid fields always follow its payments. */
-export function BillingManage({ masterProjectId, view }: { masterProjectId: string; view: 'certificates' | 'payments' }) {
+/** `approverHost`: hosted by the statements module, where statement approvers (not only the system admin) give final approval — the database decides */
+export function BillingManage({ masterProjectId, view, approverHost }: { masterProjectId: string; view: 'certificates' | 'payments'; approverHost?: boolean }) {
   const contracts = useFinanceStore((s) => s.contracts).filter((c) => c.masterProjectId === masterProjectId)
   const allCerts = useFinanceStore((s) => s.certificates)
   const allPays = useFinanceStore((s) => s.payments)
   const budget = useFinanceStore((s) => s.budgets.find((b) => b.masterProjectId === masterProjectId))
-  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
+  const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false) || !!approverHost
   const { createCertificate, updateCertificate, deleteCertificate, certifyCertificate, approveCertificate, createPayment, updatePayment, deletePayment } = useFinanceStore()
   const ids = useMemo(() => new Set(contracts.map((c) => c.id)), [contracts])
   const certs = useMemo(() => allCerts.filter((c) => ids.has(c.contractId)).sort((a, b) => (a.certificateDate < b.certificateDate ? 1 : -1)), [allCerts, ids])

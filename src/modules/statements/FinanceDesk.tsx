@@ -37,7 +37,7 @@ export function PaymentDesk({ projectId }: { projectId: string }) {
         <span className="sp" /><small style={{ color: 'var(--text-muted)' }}>{VIEWS.find((v) => v[0] === view)![2]}</small>
       </div>
       <div className="im-root fn-root pst-fin">
-        {!ready ? <Wait /> : <Suspense fallback={<Wait />}>{view === 'pipeline' ? <PipelinePage masterProjectId={projectId} /> : <BillingManage masterProjectId={projectId} view={view} />}</Suspense>}
+        {!ready ? <Wait /> : <Suspense fallback={<Wait />}>{view === 'pipeline' ? <PipelinePage masterProjectId={projectId} /> : <BillingManage masterProjectId={projectId} view={view} approverHost />}</Suspense>}
       </div>
     </div>
   )
