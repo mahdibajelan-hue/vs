@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   BadgeDollarSign, CalendarClock, Droplets, LayoutDashboard, ShieldCheck, ClipboardList, Cpu, GitPullRequestArrow, HardHat, PackageCheck,
-  PencilRuler, Radar, Route, ShieldAlert, Sparkles, Sprout,
+  PencilRuler, Radar, ReceiptText, Route, ShieldAlert, Sparkles, Sprout,
 } from 'lucide-react'
 import { PROJECT_SCOPED_MODULES, type ModuleKey } from '../../../store/useModuleStore'
 import type { MasterProject } from '../../../modules/masterdata/types'
@@ -37,6 +37,7 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
   ] },
   { id: 'money', label: 'قرارداد و هزینه', items: [
     { id: 'finance', module: 'finance', label: 'قراردادها و مالی', icon: BadgeDollarSign, accent: '#10b981' },
+    { id: 'statements', module: 'statements', label: 'تولید صورت‌وضعیت (E·P·C)', icon: ReceiptText, accent: '#14b8a6' },
     { id: 'change', module: 'change', label: 'مدیریت تغییرات', icon: GitPullRequestArrow, accent: '#eab308' },
   ] },
   { id: 'risk', label: 'ریسک و مسائل', items: [

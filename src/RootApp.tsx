@@ -38,6 +38,7 @@ const moduleLoaders = {
   StageGateApp: () => import('./modules/stagegate/StageGateApp').then((m) => ({ default: m.StageGateApp })),
   PssrApp: () => import('./modules/pssr/PssrApp').then((m) => ({ default: m.PssrApp })),
   TestingApp: () => import('./modules/testing/TestingApp').then((m) => ({ default: m.TestingApp })),
+  StatementsApp: () => import('./modules/statements/StatementsApp').then((m) => ({ default: m.StatementsApp })),
   ProjectDashboardApp: () => import('./modules/projectMetrics/ProjectDashboardApp').then((m) => ({ default: m.ProjectDashboardApp })),
   SupervisionApp: () => import('./modules/supervision/SupervisionApp').then((m) => ({ default: m.SupervisionApp })),
   AdminApp: () => import('./pages/AdminApp').then((m) => ({ default: m.AdminApp })),
@@ -63,6 +64,7 @@ const StageGateApp = lazy(moduleLoaders.StageGateApp)
 const ProjectDashboardApp = lazy(moduleLoaders.ProjectDashboardApp)
 const PssrApp = lazy(moduleLoaders.PssrApp)
 const TestingApp = lazy(moduleLoaders.TestingApp)
+const StatementsApp = lazy(moduleLoaders.StatementsApp)
 const SupervisionApp = lazy(moduleLoaders.SupervisionApp)
 const AdminApp = lazy(moduleLoaders.AdminApp)
 /** warm the module chunks one by one while the hub is idle, so a click finds its code already downloaded */
@@ -216,6 +218,8 @@ export function RootApp() {
     <IssuesApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'supervision' ? (
     <SupervisionApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'statements' ? (
+    <StatementsApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'testing' ? (
     <TestingApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'pssr' ? (

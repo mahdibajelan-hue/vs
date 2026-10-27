@@ -1,10 +1,10 @@
 import { create } from 'zustand'
 import { useProjectContextStore } from './useProjectContextStore'
 
-export type ModuleKey = 'pipepulse' | 'risk' | 'change' | 'issues' | 'admin' | 'reporting' | 'executive' | 'finance' | 'material' | 'execution' | 'engineering' | 'scheduling' | 'pipelinedigitaltwin' | 'competency' | 'estimator' | 'lifecycle' | 'missions' | 'landacq' | 'stagegate' | 'taskissue' | 'supervision' | 'projectdashboard' | 'pssr' | 'testing'
+export type ModuleKey = 'pipepulse' | 'risk' | 'change' | 'issues' | 'admin' | 'reporting' | 'executive' | 'finance' | 'material' | 'execution' | 'engineering' | 'scheduling' | 'pipelinedigitaltwin' | 'competency' | 'estimator' | 'lifecycle' | 'missions' | 'landacq' | 'stagegate' | 'taskissue' | 'supervision' | 'projectdashboard' | 'pssr' | 'testing' | 'statements'
 
 /** Modules that belong to one project — reached through the radar (see radar/projectNav.ts for their menu). */
-export const PROJECT_SCOPED_MODULES = new Set<ModuleKey>(['projectdashboard', 'pssr', 'testing', 'lifecycle', 'stagegate', 'scheduling', 'engineering', 'material', 'execution', 'finance', 'change', 'risk', 'taskissue', 'issues', 'landacq', 'pipepulse', 'pipelinedigitaltwin'])
+export const PROJECT_SCOPED_MODULES = new Set<ModuleKey>(['projectdashboard', 'pssr', 'testing', 'statements', 'lifecycle', 'stagegate', 'scheduling', 'engineering', 'material', 'execution', 'finance', 'change', 'risk', 'taskissue', 'issues', 'landacq', 'pipepulse', 'pipelinedigitaltwin'])
 
 /**
  * How a project module was opened: `project` = from the radar, inside the project's command room (sidebar, project fixed);

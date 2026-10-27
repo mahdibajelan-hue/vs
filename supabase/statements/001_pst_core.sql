@@ -3,6 +3,7 @@
 -- and the supervision-approved executed quantities (ex_activities / execution reports). An approved statement is posted
 -- to the finance register as a payment certificate (fin_payment_certificates), so the money side is typed once.
 -- Rollback: rollback/001_pst_core.sql
+-- No function here deletes rows: regenerating a draft bumps a line generation and an unwanted statement is voided (002).
 
 insert into rasta_modules (key, label_fa) values ('statements', 'تولید صورت‌وضعیت') on conflict (key) do nothing;
 
@@ -117,7 +118,6 @@ begin
     select * into s from pst_statements where id = sid;
     if s.id is null then raise exception 'not_found'; end if;
     if s.status not in ('draft','rejected') then raise exception 'locked'; end if;
-    delete from pst_lines where statement_id = sid;
   end if;
   insert into pst_lines (statement_id, source_kind, source_id, code, title, unit, group_label, unit_price, base_qty, base_amount, sys_cum_qty, sys_cum_amount, cum_amount, prev_amount, edited, note, detail)
   select sid, e->>'source_kind', (e->>'source_id')::uuid, coalesce(e->>'code',''), coalesce(e->>'title',''), coalesce(e->>'unit',''), coalesce(e->>'group_label',''),
@@ -170,18 +170,6 @@ begin
   end if;
 end $f$;
 
--- delete only an unposted statement that is the last one of its contract part
-create or replace function pst_delete(p_stmt uuid) returns void language plpgsql security definer set search_path to 'public' as $f$
-declare s pst_statements%rowtype;
-begin
-  select * into s from pst_statements where id = p_stmt;
-  if s.id is null then return; end if;
-  if not pst_can_write(s.master_project_id) then raise exception 'not_allowed' using errcode = '42501'; end if;
-  if s.status in ('approved','posted') then raise exception 'locked'; end if;
-  if exists (select 1 from pst_statements where contract_id = s.contract_id and part = s.part and no > s.no) then raise exception 'not_last'; end if;
-  delete from pst_statements where id = p_stmt;
-end $f$;
-
 -- ── post an approved statement to the finance register as a payment certificate (submitted, for finance to certify/pay) ──
 create or replace function pst_post(p_stmt uuid) returns uuid language plpgsql security definer set search_path to 'public' as $f$
 declare s pst_statements%rowtype; c fin_contracts%rowtype; cid uuid; d jsonb; tax numeric; ins numeric;
@@ -203,4 +191,3 @@ begin
   return cid;
 end $f$;
 
-grant execute on function pst_save(jsonb, jsonb), pst_set_line(uuid, numeric, text, jsonb), pst_set_status(uuid, text, text), pst_delete(uuid), pst_post(uuid) to authenticated;
