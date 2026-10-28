@@ -79,6 +79,7 @@ export interface EarlyWarning {
   source: string
   date: string
   explanation: string
+  /** empty: generic advice is not given; the evidence report recommends against named records */
   recommendedAction: string
 }
 
@@ -101,7 +102,7 @@ export function computeEarlyWarnings(bundle: ProjectIntelligenceBundle, today = 
         source: 'PipePulse',
         date: today,
         explanation: `پیشرفت واقعی ${last.actualPercent}% در برابر برنامه ${last.plannedPercent}% — فاصله ${Math.round(last.plannedPercent - last.actualPercent)} درصد.`,
-        recommendedAction: 'بررسی علل تاخیر در خطوط دارای کمترین پیشرفت و تسریع منابع اجرایی.',
+        recommendedAction: '',
       })
     }
   }
@@ -117,7 +118,7 @@ export function computeEarlyWarnings(bundle: ProjectIntelligenceBundle, today = 
         source: 'مدیریت ریسک',
         date: today,
         explanation: critical.map((c) => c.risk.title).slice(0, 3).join('، '),
-        recommendedAction: 'بازنگری فوری استراتژی پاسخ و تخصیص مالک اقدام برای هر ریسک بحرانی.',
+        recommendedAction: '',
       })
     }
     const overdueActions = bundle.risk.actions.filter((a) => isActionOverdue(a, riskTodayIso()))
@@ -129,7 +130,7 @@ export function computeEarlyWarnings(bundle: ProjectIntelligenceBundle, today = 
         source: 'مدیریت ریسک',
         date: today,
         explanation: 'اقدامات پاسخ به ریسک از مهلت تعیین‌شده گذشته‌اند.',
-        recommendedAction: 'پیگیری مالکان اقدام و به‌روزرسانی مهلت یا وضعیت.',
+        recommendedAction: '',
       })
     }
   }
@@ -144,7 +145,7 @@ export function computeEarlyWarnings(bundle: ProjectIntelligenceBundle, today = 
         source: 'مدیریت مسائل',
         date: today,
         explanation: `نرخ بستن مسائل نسبت به هفته قبل ${metrics.trendClosedPct}% کاهش داشته است.`,
-        recommendedAction: 'بررسی موانع پیگیری مسائل و تخصیص منابع بیشتر برای بستن مسائل باز.',
+        recommendedAction: '',
       })
     }
     const criticalOverdue = bundle.issues.issues.filter((i) => i.priority === 'critical' && isIssueOverdue(i))
@@ -156,7 +157,7 @@ export function computeEarlyWarnings(bundle: ProjectIntelligenceBundle, today = 
         source: 'مدیریت مسائل',
         date: today,
         explanation: criticalOverdue.map((i) => i.title).slice(0, 3).join('، '),
-        recommendedAction: 'پیگیری فوری مسائل بحرانی معوق با مسئول پیگیری.',
+        recommendedAction: '',
       })
     }
   }
@@ -243,7 +244,8 @@ export function computeExecutiveInsight(bundle: ProjectIntelligenceBundle): Insi
     statements.push({
       id: 'insight-progress',
       text: `پیشرفت کلی پروژه ${kpis.overallPercent}% است؛ از ${kpis.lineCount} خط، ${kpis.completedLines} خط تکمیل و ${kpis.inProgressLines} خط در حال اجراست.`,
-      tone: kpis.overallPercent >= 70 ? 'good' : kpis.overallPercent >= 40 ? 'attention' : 'critical',
+      // absolute progress says nothing about performance without the plan it is measured against
+      tone: 'neutral',
       sourceLabel: 'پیشرفت پروژه (PipePulse)',
     })
   }

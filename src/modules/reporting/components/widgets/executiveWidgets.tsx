@@ -45,7 +45,7 @@ export const execOverviewWidget: WidgetDefinition<ExecOverviewData> = {
         label="پیشرفت کلی پروژه"
         value={data.progressPercent === null ? '—' : `${data.progressPercent}%`}
         sublabel={data.lineCount === null ? undefined : `${data.completedLines} از ${data.lineCount} خط تکمیل`}
-        tone={data.progressPercent === null ? 'neutral' : data.progressPercent >= 70 ? 'good' : data.progressPercent >= 40 ? 'attention' : 'critical'}
+        tone="neutral"
       />
       <KpiCard
         label="اکسپوژر ریسک فعلی"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, ClipboardList, LayoutDashboard, Loader2, Network, Wand2 } from 'lucide-react'
+import { BarChart3, ClipboardList, FileSearch, LayoutDashboard, Loader2, Network, Wand2 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useDeepLinkStore } from '../../store/useDeepLinkStore'
 import { useReportingStore } from './store/useReportingStore'
@@ -10,11 +10,13 @@ import { ReportBuilderPage } from './pages/ReportBuilderPage'
 import { ReportCenterPage } from './pages/ReportCenterPage'
 import { DecisionCenterPage } from './pages/DecisionCenterPage'
 import { PortfolioReportPage } from './pages/PortfolioReportPage'
+import { EvidenceReportPage } from './pages/EvidenceReportPage'
 
-type Tab = 'dashboard' | 'builder' | 'center' | 'decisions' | 'portfolio'
+type Tab = 'evidence' | 'dashboard' | 'builder' | 'center' | 'decisions' | 'portfolio'
 
 const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'dashboard', label: 'داشبورد هوشمند', icon: LayoutDashboard },
+  { id: 'evidence', label: 'گزارش مدیریتی', icon: FileSearch },
+  { id: 'dashboard', label: 'ویجت‌ها', icon: LayoutDashboard },
   { id: 'builder', label: 'ساخت گزارش', icon: Wand2 },
   { id: 'center', label: 'مرکز گزارش‌ها', icon: BarChart3 },
   { id: 'decisions', label: 'مرکز تصمیم', icon: ClipboardList },
@@ -35,7 +37,7 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
     const p = useDeepLinkStore.getState().pending
     return p?.module === 'reporting' ? p.masterProjectId ?? null : null
   })
-  const [tab, setTab] = useState<Tab>(() => (useDeepLinkStore.getState().pending?.module === 'reporting' ? 'decisions' : 'dashboard'))
+  const [tab, setTab] = useState<Tab>(() => (useDeepLinkStore.getState().pending?.module === 'reporting' ? 'decisions' : 'evidence'))
 
   useEffect(() => {
     if (!masterDataLoaded) fetchMasterData()
@@ -114,6 +116,8 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           <div className="flex h-full items-center justify-center text-sm text-muted">
             {projects.length === 0 ? 'ابتدا از بخش داده پایه یک پروژه تعریف کنید' : 'یک پروژه را از بالا انتخاب کنید'}
           </div>
+        ) : tab === 'evidence' ? (
+          <EvidenceReportPage key={projectId} masterProjectId={projectId} onOpenCenter={() => setTab('center')} />
         ) : tab === 'dashboard' ? (
           <DashboardPage masterProjectId={projectId} />
         ) : tab === 'builder' ? (

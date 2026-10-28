@@ -6,7 +6,7 @@ export const whatChangedWidget: WidgetDefinition<ChangeItem[]> = {
   id: 'intel-what-changed',
   label: 'چه چیزی تغییر کرده؟',
   category: 'intelligence',
-  description: 'مقایسه خودکار وضعیت فعلی با آخرین بار',
+  description: 'مقایسه با آخرین بارگذاری همین صفحه در همین مرورگر — برای مقایسه با گزارش قبلی از «گزارش مدیریتی» استفاده کنید',
   defaultReportTypes: ['daily', 'weekly', 'monthly', 'management'],
   compute: ({ bundle, previousBundle }) => computeWhatChanged(bundle, previousBundle),
   Render: ({ data }) => {
@@ -48,7 +48,7 @@ export const earlyWarningWidget: WidgetDefinition<EarlyWarning[]> = {
               <ToneBadge tone={w.severity} />
             </div>
             <p className="mt-1 text-[10px] text-muted">{w.explanation}</p>
-            <p className="mt-1 text-[10px] text-secondary">اقدام پیشنهادی: {w.recommendedAction}</p>
+            {w.recommendedAction && <p className="mt-1 text-[10px] text-secondary">اقدام پیشنهادی: {w.recommendedAction}</p>}
             <p className="mt-1 text-[9px] text-muted">منبع: {w.source}</p>
           </div>
         ))}

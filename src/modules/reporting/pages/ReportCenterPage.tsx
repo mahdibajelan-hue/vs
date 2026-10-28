@@ -3,6 +3,9 @@ import { CheckCircle2, Download, FileSpreadsheet, FileText, Loader2, Search } fr
 import { REPORT_STATUSES, REPORT_STATUS_LABEL_FA, REPORT_TYPES, REPORT_TYPE_LABEL_FA, type ReportStatus, type ReportType } from '../types'
 import { EMPTY_ARRAY, useReportingStore } from '../store/useReportingStore'
 import { WidgetGrid } from '../components/WidgetGrid'
+import { EvidenceReportView } from '../components/EvidenceReportView'
+import { EVIDENCE_WIDGET } from '../lib/evidenceLoader'
+import type { EvidenceReport } from '../lib/evidenceReport'
 import { exportReportToExcel } from '../lib/reportExport'
 import { exportElementToPdf } from '../../../lib/export'
 import { formatJalali } from '../../../lib/jalali'
@@ -149,11 +152,13 @@ export function ReportCenterPage({ masterProjectId }: { masterProjectId: string 
             <div ref={viewerRef} className="rounded-2xl p-2" style={{ background: 'var(--bg-panel-solid)' }}>
               <div className="mb-3 flex items-center justify-between px-2">
                 <p className="text-xs font-bold" dir="ltr">
-                  RASTA — {selected.reportNumber}
+                  فرین — {selected.reportNumber}
                 </p>
                 <Download size={13} className="text-muted" />
               </div>
-              <WidgetGrid widgetIds={selected.widgetIds} mode="snapshot" payload={selected.payload} />
+              {selected.widgetIds.includes(EVIDENCE_WIDGET) && selected.payload[EVIDENCE_WIDGET]
+                ? <EvidenceReportView report={selected.payload[EVIDENCE_WIDGET] as EvidenceReport} />
+                : <WidgetGrid widgetIds={selected.widgetIds} mode="snapshot" payload={selected.payload} />}
             </div>
           </div>
         )}
