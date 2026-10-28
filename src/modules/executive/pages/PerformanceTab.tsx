@@ -68,7 +68,7 @@ export function PerformanceTab({ views, currency }: { views: PfProjectView[]; cu
                     <td><b>{v.input.name}</b>{v.health === 'black' && s?.blockers?.length ? <small className="pf-muted block">{s.blockers[0]}</small> : s?.drivenBy ? <small className="pf-muted block">عامل: {s.drivenBy}</small> : null}</td>
                     <td><HealthChip health={v.health} /></td>
                     <td>{s ? <ProgressPair actual={s.actual} planned={s.planned} /> : <span className="pf-muted">—</span>}</td>
-                    <td className={s?.spi != null && s.spi < 0.95 ? 'pf-bad' : ''} dir="ltr">{fmtIdx(s?.spi)}</td>
+                    <td className={s?.spi != null && s.cpi != null && s.spi < 0.95 ? 'pf-bad' : ''} dir="ltr" title={s?.spi != null && s.cpi == null ? 'هزینهٔ تأییدشده‌ای ثبت نشده؛ EVM کامل نیست' : undefined}>{fmtIdx(s?.spi)}{s?.spi != null && s.cpi == null && <small className="pf-muted block" dir="rtl">ناقص</small>}</td>
                     <td className={s?.cpi != null && s.cpi < 0.95 ? 'pf-bad' : ''} dir="ltr">{fmtIdx(s?.cpi)}</td>
                     <td className="pf-nowrap">{fmtMoney(v.bac, '')}</td>
                     <td className="pf-nowrap">{fmtMoney(v.eac, '')}{v.eacSource && <small className="pf-muted block">{v.eacSource === 'evm' ? 'EVM' : 'دستی'}</small>}</td>

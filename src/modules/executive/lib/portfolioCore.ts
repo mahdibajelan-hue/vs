@@ -8,7 +8,7 @@
  *    are re-normalised — no default 50s. Every project's per-criterion contribution is returned so the ranking is
  *    explainable. Mandatory projects (legal / committed) are listed apart, not ranked against the rest.
  *  - The decision queue lists what needs a portfolio decision: red/black health, poor SPI/CPI, no portfolio decision
- *    yet, or a decision whose review date has passed.
+ *    yet, a decision whose review date has passed, or a critical milestone / action running late.
  */
 
 export type PfHealth = 'green' | 'yellow' | 'red' | 'black' | 'unknown'
@@ -94,7 +94,11 @@ export interface PfProjectInput {
   riskLevel: PfRiskLevel
   score: PfScore | null
   decisions: PfDecision[]
+  /** milestones and actions from the lifecycle control tower (merged in from its former portfolio page) */
+  delivery?: PfDelivery | null
 }
+
+export interface PfDelivery { milestonesDelayed: number; criticalMilestonesDelayed: number; overdueActions: number; criticalOverdueActions: number }
 
 export interface PfContribution { criterion: PfCriterion; value: number | null; weight: number; points: number }
 
@@ -171,10 +175,11 @@ export function buildViews(projects: PfProjectInput[], weights: PfWeights): PfPr
   return views
 }
 
-export type QueueReason = 'health' | 'performance' | 'no_decision' | 'review_due' | 'on_hold'
+export type QueueReason = 'health' | 'performance' | 'delivery' | 'no_decision' | 'review_due' | 'on_hold'
 export const QUEUE_REASON_FA: Record<QueueReason, string> = {
   health: 'سلامت بحرانی یا گیت مسدود',
   performance: 'انحراف عملکرد (SPI یا CPI پایین)',
+  delivery: 'Milestone بحرانی تأخیرکرده یا اقدام بحرانی معوق',
   no_decision: 'هنوز تصمیم سبد ندارد',
   review_due: 'موعد بازبینی تصمیم گذشته',
   on_hold: 'در توقف موقت',
@@ -182,13 +187,17 @@ export const QUEUE_REASON_FA: Record<QueueReason, string> = {
 
 /** what needs a portfolio decision, most severe first */
 export function decisionQueue(views: PfProjectView[], today: string) {
-  const SEV: Record<QueueReason, number> = { health: 5, review_due: 4, performance: 3, on_hold: 2, no_decision: 1 }
+  const SEV: Record<QueueReason, number> = { health: 5, review_due: 4, performance: 3, delivery: 3, on_hold: 2, no_decision: 1 }
   return views
     .map((v) => {
       const reasons: QueueReason[] = []
       if (v.health === 'red' || v.health === 'black') reasons.push('health')
       const s = v.input.snapshot
-      if (s && s.bacEvm > 0 && ((s.spi != null && s.spi < 0.9) || (s.cpi != null && s.cpi < 0.9))) reasons.push('performance')
+      // only a full EVM reading counts (progress and certified cost) — the same rule as the portfolio's «دادهٔ EVM» count;
+      // an SPI of 0 with no cost recorded usually means EPC progress was never entered, not a measured collapse
+      if (s && s.bacEvm > 0 && s.spi != null && s.cpi != null && (s.spi < 0.9 || s.cpi < 0.9)) reasons.push('performance')
+      const dl = v.input.delivery
+      if (dl && (dl.criticalMilestonesDelayed > 0 || dl.criticalOverdueActions > 0)) reasons.push('delivery')
       const d = v.lastDecision
       if (!d) reasons.push('no_decision')
       else if (d.reviewBy && d.reviewBy < today) reasons.push('review_due')

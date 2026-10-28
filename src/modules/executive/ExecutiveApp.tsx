@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Activity, Briefcase, Gavel, LayoutDashboard, ListTree, Loader2, ShieldAlert, Star } from 'lucide-react'
+import { Activity, Briefcase, FlaskConical, Gavel, HardHat, LayoutDashboard, ListTree, Loader2, ShieldAlert, Star } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -12,6 +12,8 @@ import { PriorityTab } from './pages/PriorityTab'
 import { PerformanceTab } from './pages/PerformanceTab'
 import { RiskTab } from './pages/RiskTab'
 import { DecisionsTab } from './pages/DecisionsTab'
+import { ScenarioTab } from './pages/ScenarioTab'
+import { ResourceTab } from './pages/ResourceTab'
 import { DecisionDialog } from './components/DecisionDialog'
 import { faNum } from './components/pfUi'
 import './mpv.css'
@@ -19,11 +21,13 @@ import './portfolio.css'
 
 const MODULE_ACCENT = '#6366f1'
 
-type Tab = 'overview' | 'priority' | 'performance' | 'risk' | 'decisions' | 'pipeline'
+type Tab = 'overview' | 'priority' | 'performance' | 'scenario' | 'resources' | 'risk' | 'decisions' | 'pipeline'
 const TABS: { key: Tab; label: string; icon: ReactNode }[] = [
   { key: 'overview', label: 'نمای کلی', icon: <LayoutDashboard size={15} /> },
   { key: 'priority', label: 'اولویت‌بندی', icon: <Star size={15} /> },
   { key: 'performance', label: 'عملکرد و پیش‌بینی', icon: <Activity size={15} /> },
+  { key: 'scenario', label: 'سناریو و بودجه', icon: <FlaskConical size={15} /> },
+  { key: 'resources', label: 'ظرفیت منابع', icon: <HardHat size={15} /> },
   { key: 'risk', label: 'ریسک و وابستگی', icon: <ShieldAlert size={15} /> },
   { key: 'decisions', label: 'تصمیم‌های سبد', icon: <Gavel size={15} /> },
   { key: 'pipeline', label: 'مراحل چرخهٔ عمر', icon: <ListTree size={15} /> },
@@ -108,6 +112,8 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
             : tab === 'overview' ? <OverviewTab views={pv.views} currency={pv.currency} canGovern={canGovern} onDecide={(id) => setDeciding({ id })} onOpenPipeline={() => setTab('pipeline')} onOpenTab={setTab} />
             : tab === 'priority' ? <PriorityTab views={pv.views} currency={pv.currency} />
             : tab === 'performance' ? <PerformanceTab views={pv.views} currency={pv.currency} />
+            : tab === 'scenario' ? <ScenarioTab views={pv.views} projects={pv.inScope} currency={pv.currency} />
+            : tab === 'resources' ? <ResourceTab views={pv.views} />
             : tab === 'risk' ? <RiskTab views={pv.views} risks={pv.scopedRisks} assessments={pv.scopedAssessments} summaries={pv.summaries} />
             : <DecisionsTab views={pv.views} onDecide={(id) => setDeciding({ id })} />}
         </div>

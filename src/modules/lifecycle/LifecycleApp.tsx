@@ -6,7 +6,7 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useLifecycleStore } from './store/useLifecycleStore'
-import { PortfolioDashboardPage } from './pages/PortfolioDashboardPage'
+import { ProjectPickerPage } from './pages/ProjectPickerPage'
 import { ControlTowerPage } from './pages/ControlTowerPage'
 import { StageGatePage } from './pages/StageGatePage'
 import { MilestonesPage } from './pages/MilestonesPage'
@@ -101,7 +101,7 @@ export function LifecycleApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
               active={view.kind === 'portfolio'}
               onClick={() => { selectProject(null); setView({ kind: 'portfolio' }) }}
               icon={<LayoutDashboard size={13} />}
-              label="سبد پروژه‌ها"
+              label="انتخاب پروژه"
             />
           )}
           {activeProject && (
@@ -157,7 +157,7 @@ export function LifecycleApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
 
       <main className="plc-canvas min-h-0 flex-1 overflow-y-auto">
         {view.kind === 'portfolio' ? (
-          <PortfolioDashboardPage onOpenProject={openProject} />
+          <ProjectPickerPage onOpenProject={openProject} />
         ) : view.kind === 'templates' ? (
           <TemplatesPage />
         ) : !activeProject ? (

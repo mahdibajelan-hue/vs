@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Gauge, Gavel, Layers, Scale, Wallet } from 'lucide-react'
+import { AlertTriangle, Flag, Gauge, Gavel, Layers, Scale, Wallet } from 'lucide-react'
 import { balanceByPhase, decisionQueue, DECISION_FA, HEALTH_FA, QUEUE_REASON_FA, rollup, type PfHealth, type PfProjectView } from '../lib/portfolioCore'
 import { Empty, faNum, fmtIdx, fmtMoney, HealthBar, HealthChip, Kpi, Panel } from '../components/pfUi'
 import { MultiProjectViews } from '../MultiProjectViews'
@@ -79,6 +79,8 @@ export function OverviewTab({ views, currency, canGovern, onDecide, onOpenPipeli
         </Panel>
       </div>
 
+      <DeliveryPanel views={views} />
+
       <Panel title="توازن سبد در چرخهٔ عمر" icon={<Scale size={15} />} hint="بودجه و تعداد پروژه در هر مرحلهٔ جاری — تمرکز بیش از حد سبد در یک مرحله، فشار هم‌زمان بر منابع و نقدینگی است." right={<button type="button" className="pf-btn" onClick={onOpenPipeline}>جزئیات مراحل</button>}>
         <div className="pf-balance">
           {balance.map((b) => (
@@ -101,5 +103,37 @@ export function OverviewTab({ views, currency, canGovern, onDecide, onOpenPipeli
       <MultiProjectViews onOpenPipeline={onOpenPipeline} />
       <p className="pf-foot">سلامت، پیشرفت، SPI، CPI و EAC هر پروژه از همان موتور داشبورد پروژه خوانده می‌شود؛ رنگ‌ها: {Object.values(HEALTH_FA).map((h) => h.label).join('، ')}.</p>
     </div>
+  )
+}
+
+/** milestones and actions running late, per project — from the lifecycle control tower */
+function DeliveryPanel({ views }: { views: PfProjectView[] }) {
+  const rows = views.filter((v) => v.input.delivery && (v.input.delivery.milestonesDelayed || v.input.delivery.overdueActions))
+    .sort((a, b) => {
+      const x = a.input.delivery!, y = b.input.delivery!
+      return (y.criticalMilestonesDelayed + y.criticalOverdueActions) - (x.criticalMilestonesDelayed + x.criticalOverdueActions) || (y.milestonesDelayed + y.overdueActions) - (x.milestonesDelayed + x.overdueActions)
+    })
+  const known = views.filter((v) => v.input.delivery).length
+  const t = rows.reduce((a, v) => { const d = v.input.delivery!; a.ms += d.milestonesDelayed; a.cms += d.criticalMilestonesDelayed; a.ac += d.overdueActions; a.cac += d.criticalOverdueActions; return a }, { ms: 0, cms: 0, ac: 0, cac: 0 })
+  return (
+    <Panel title="Milestoneها و اقدام‌های عقب‌افتاده" icon={<Flag size={15} />} hint="از برج کنترل چرخهٔ عمر هر پروژه؛ مواردِ بحرانی پروژه را به صف تصمیم می‌برند.">
+      {!known ? <Empty>دادهٔ برج کنترل چرخهٔ عمر در حال بارگذاری است یا ثبت نشده.</Empty> : !rows.length ? <Empty>هیچ Milestone یا اقدامی عقب نیفتاده است.</Empty> : (
+        <>
+          <div className="pf-delivery-sum">
+            <span><b>{faNum(t.ms)}</b> Milestone تأخیرکرده <small>({faNum(t.cms)} بحرانی)</small></span>
+            <span><b>{faNum(t.ac)}</b> اقدام معوق <small>({faNum(t.cac)} بحرانی)</small></span>
+          </div>
+          <div className="pf-table-wrap">
+            <table className="pf-table">
+              <thead><tr><th>پروژه</th><th>Milestone تأخیرکرده</th><th>بحرانی</th><th>اقدام معوق</th><th>بحرانی</th></tr></thead>
+              <tbody>{rows.slice(0, 8).map((v) => { const d = v.input.delivery!; return (
+                <tr key={v.input.id}><td><b>{v.input.name}</b></td><td className="pf-num">{faNum(d.milestonesDelayed)}</td><td className={`pf-num ${d.criticalMilestonesDelayed ? 'pf-bad' : ''}`}>{faNum(d.criticalMilestonesDelayed)}</td><td className="pf-num">{faNum(d.overdueActions)}</td><td className={`pf-num ${d.criticalOverdueActions ? 'pf-bad' : ''}`}>{faNum(d.criticalOverdueActions)}</td></tr>
+              ) })}</tbody>
+            </table>
+          </div>
+          {rows.length > 8 && <p className="pf-note">و {faNum(rows.length - 8)} پروژهٔ دیگر.</p>}
+        </>
+      )}
+    </Panel>
   )
 }

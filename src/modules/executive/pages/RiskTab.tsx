@@ -4,7 +4,7 @@ import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { RiskHeatMap } from '../../risk/components/RiskHeatMap'
 import type { RmRisk, RmRiskAssessment } from '../../risk/types'
 import type { ProjectDashboardSummary } from '../../reporting/lib/portfolioDashboard'
-import { DependencyWidget, RiskExposureTrendWidget } from '../../reporting/pages/PortfolioDashboardPage'
+import { DependencyWidget, RiskExposureTrendWidget } from '../components/PortfolioWidgets'
 import type { PfProjectView } from '../lib/portfolioCore'
 import { Empty, faNum, HealthChip, Panel } from '../components/pfUi'
 

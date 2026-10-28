@@ -20603,3 +20603,46 @@ create policy "pf_decisions_insert" on pf_decisions for insert to authenticated 
 drop policy if exists "pf_decisions_void" on pf_decisions;
 create policy "pf_decisions_void" on pf_decisions for update to authenticated using (pf_can_govern()) with check (pf_can_govern());
 create index if not exists idx_pf_decisions_project on pf_decisions (master_project_id, decided_at desc);
+
+-- ============================================================================
+-- Portfolio round 2 (council deferred items): scenarios + real resource usage
+-- ============================================================================
+create table if not exists pf_scenarios (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (length(trim(name)) > 0),
+  note text not null default '',
+  caps jsonb not null default '{}'::jsonb,
+  choices jsonb not null default '{}'::jsonb,
+  termination_pct numeric not null default 0 check (termination_pct >= 0 and termination_pct <= 100),
+  archived boolean not null default false,
+  created_by uuid references auth.users(id) default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table pf_scenarios enable row level security;
+drop policy if exists "pf_scenarios_read" on pf_scenarios;
+create policy "pf_scenarios_read" on pf_scenarios for select to authenticated using (pf_can_score());
+drop policy if exists "pf_scenarios_insert" on pf_scenarios;
+create policy "pf_scenarios_insert" on pf_scenarios for insert to authenticated with check (pf_can_govern() and created_by = auth.uid());
+drop policy if exists "pf_scenarios_update" on pf_scenarios;
+create policy "pf_scenarios_update" on pf_scenarios for update to authenticated using (pf_can_govern()) with check (pf_can_govern());
+
+-- deployed manpower / equipment per project-month from approved daily reports (RLS of ex_reports applies)
+create or replace function pf_resource_usage(p_from date)
+returns table (project_id uuid, ym text, kind text, name text, days bigint,
+  avg_total numeric, avg_active numeric, avg_idle numeric, avg_unavailable numeric, peak_total numeric, last_date date)
+language sql stable security invoker set search_path = public as $$
+  select r.project_id, to_char(r.report_date, 'YYYY-MM') as ym, rr.kind, rr.name,
+         count(distinct r.report_date) as days,
+         round(avg(coalesce(rr.total_qty, rr.active_qty + rr.idle_qty)), 2),
+         round(avg(rr.active_qty), 2),
+         round(avg(rr.idle_qty), 2),
+         round(avg(coalesce(rr.repair_qty,0) + coalesce(rr.stopped_qty,0) + coalesce(rr.leave_qty,0)), 2),
+         max(coalesce(rr.total_qty, rr.active_qty + rr.idle_qty)),
+         max(r.report_date)
+  from ex_report_resources rr
+  join ex_reports r on r.id = rr.report_id
+  where r.status = 'approved' and r.report_date >= p_from
+  group by 1, 2, 3, 4
+$$;
+grant execute on function pf_resource_usage(date) to authenticated;

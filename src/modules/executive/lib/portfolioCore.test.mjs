@@ -44,6 +44,15 @@ assert.equal(q2.length, 1); assert.deepEqual(q2[0].reasons, ['review_due'])
 const v3 = buildViews([proj('a', { decisions: [dec('continue', null, { voided: true })] })], DEFAULT_WEIGHTS)
 assert.equal(v3[0].lastDecision, null)
 
+// a critical milestone or action running late puts the project in the queue even with a valid decision
+const v4 = buildViews([proj('a', { decisions: [dec('continue')], delivery: { milestonesDelayed: 2, criticalMilestonesDelayed: 1, overdueActions: 0, criticalOverdueActions: 0 } }), proj('z', { decisions: [dec('continue')], delivery: { milestonesDelayed: 3, criticalMilestonesDelayed: 0, overdueActions: 4, criticalOverdueActions: 0 } })], DEFAULT_WEIGHTS)
+const q4 = decisionQueue(v4, '2026-10-28')
+assert.equal(q4.length, 1); assert.deepEqual(q4[0].reasons, ['delivery'])
+
+// half an EVM reading (SPI without CPI) is not a performance alarm
+const v5 = buildViews([proj('h', { decisions: [dec('continue')], snapshot: snap({ spi: 0, cpi: null }) })], DEFAULT_WEIGHTS)
+assert.equal(decisionQueue(v5, '2026-10-28').length, 0)
+
 // SPI × CPI quadrants with the 0.95 band
 assert.equal(quadrantOf(0.97, 1.02), 'on_track')
 assert.equal(quadrantOf(0.8, 1.1), 'late_under')
