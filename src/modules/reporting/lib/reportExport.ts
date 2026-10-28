@@ -39,3 +39,31 @@ export async function exportReportToExcel(reportNumber: string, widgetIds: strin
   XLSX.utils.book_append_sheet(wb, sheet, `گزارش ${reportNumber}`.slice(0, 31))
   XLSX.writeFile(wb, filename)
 }
+
+/** Excel export of a composed report: a cover sheet (title, scope, period, caveats) then one sheet per section with its blocks stacked. */
+export async function exportComposedReport(r: import('./composerCore').ComposedReport, filename: string) {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.utils.book_new()
+  const cover = [[r.title], ['محدوده', r.scopeLabel], ['دوره', r.periodLabel], ['تعداد پروژه', r.projects], ['تاریخ تهیه', r.generatedAt], [], ['ملاحظات'], ...r.caveats.map((c) => [c])]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cover), 'مشخصات')
+  const used = new Set<string>()
+  for (const s of r.sections) {
+    const aoa: (string | number)[][] = [[s.title]]
+    if (s.empty) aoa.push([s.empty])
+    for (const b of s.blocks) {
+      aoa.push([], [b.title])
+      if (b.kind === 'kpis') for (const k of b.items) aoa.push([k.label, k.value])
+      else if (b.kind === 'table') { aoa.push(b.head); for (const row of b.rows) aoa.push(row) }
+      else for (const it of b.items) aoa.push([it.text, it.tag ?? '', it.sub ?? ''])
+      if (b.note) aoa.push([b.note])
+    }
+    // sheet names: max 31 chars, unique
+    let name = s.title.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31)
+    for (let i = 2; used.has(name); i++) name = `${s.title.slice(0, 27)} ${i}`
+    used.add(name)
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    ws['!cols'] = [{ wch: 40 }, { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 22 }, { wch: 30 }]
+    XLSX.utils.book_append_sheet(wb, ws, name)
+  }
+  XLSX.writeFile(wb, filename)
+}

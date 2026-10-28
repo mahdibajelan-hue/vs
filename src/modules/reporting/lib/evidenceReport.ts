@@ -69,7 +69,7 @@ export const DEFAULT_THRESHOLDS: Thresholds = { gapWatch: 3, gapMaterial: 8, idx
 export interface RiskIn { id: string; title: string; status: string; score: number; level: 'critical' | 'high' | 'medium' | 'low'; owner: string | null; identifiedDate: string; assessments: { date: string; score: number; postAction?: boolean; actionIds?: string[] }[] }
 export interface RiskActionIn { id: string; riskId: string; title: string; status: string; dueDate: string | null; completedAt: string | null; owner: string | null; effectStatus?: string | null; createdAt: string }
 export interface IssueIn { id: string; title: string; status: string; priority: string; deadline: string | null; createdAt: string; closedAt: string | null; owner: string | null }
-export interface ActionIn { id: string; title: string; status: string; priority: string; dueDate: string | null; owner: string | null; relatedRiskId: string | null; relatedIssueId: string | null; createdAt: string; updatedAt: string }
+export interface ActionIn { id: string; title: string; status: string; priority: string; dueDate: string | null; owner: string | null; relatedRiskId: string | null; relatedIssueId: string | null; createdAt: string; updatedAt: string; /** the decision this action carries out, when it came from one */ sourceDecisionId?: string | null }
 export interface DecisionIn { id: string; title: string; status: string; requiredBy: string | null; owner: string | null; createdAt: string }
 
 export interface EvidenceInput {

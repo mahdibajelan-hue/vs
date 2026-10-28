@@ -20710,3 +20710,68 @@ create policy "rp_finding_reviews_read" on rp_finding_reviews for select to auth
   exists (select 1 from rasta_report_snapshots s where s.id = snapshot_id and (is_admin_user() or rasta_user_can_access_master_project(s.master_project_id))));
 drop policy if exists "rp_finding_reviews_write" on rp_finding_reviews;
 create policy "rp_finding_reviews_write" on rp_finding_reviews for all to authenticated using (rp_can_review()) with check (rp_can_review() and reviewed_by = auth.uid());
+
+-- ═══ Reporting phase 4: analysis center, report composer, assistant ═══════════════════════════════════════════════
+-- saved report composer settings (private unless shared; archived instead of deleted)
+create table if not exists rp_report_configs (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (length(trim(name)) > 0),
+  config jsonb not null default '{}'::jsonb,
+  shared boolean not null default false,
+  archived boolean not null default false,
+  created_by uuid not null default auth.uid() references auth.users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table rp_report_configs enable row level security;
+drop policy if exists rp_report_configs_read on rp_report_configs;
+create policy rp_report_configs_read on rp_report_configs for select to authenticated using (created_by = auth.uid() or shared);
+drop policy if exists rp_report_configs_insert on rp_report_configs;
+create policy rp_report_configs_insert on rp_report_configs for insert to authenticated with check (created_by = auth.uid());
+drop policy if exists rp_report_configs_update on rp_report_configs;
+create policy rp_report_configs_update on rp_report_configs for update to authenticated using (created_by = auth.uid()) with check (created_by = auth.uid());
+
+-- reviewer verdict on a root-cause candidate of the live analysis (one per project + cause key)
+create table if not exists rp_cause_reviews (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects(id),
+  cause_key text not null,
+  cause_text text not null default '',
+  verdict text not null check (verdict in ('confirmed','rejected','needs_data')),
+  note text not null default '',
+  reviewed_by uuid not null default auth.uid() references auth.users(id),
+  reviewed_at timestamptz not null default now(),
+  unique (master_project_id, cause_key)
+);
+alter table rp_cause_reviews enable row level security;
+drop policy if exists rp_cause_reviews_read on rp_cause_reviews;
+create policy rp_cause_reviews_read on rp_cause_reviews for select to authenticated using (is_admin_user() or rasta_user_can_access_master_project(master_project_id));
+drop policy if exists rp_cause_reviews_insert on rp_cause_reviews;
+create policy rp_cause_reviews_insert on rp_cause_reviews for insert to authenticated with check (rp_can_review() and reviewed_by = auth.uid() and rasta_user_can_access_master_project(master_project_id));
+drop policy if exists rp_cause_reviews_update on rp_cause_reviews;
+create policy rp_cause_reviews_update on rp_cause_reviews for update to authenticated using (rp_can_review() and rasta_user_can_access_master_project(master_project_id)) with check (rp_can_review() and reviewed_by = auth.uid());
+
+-- which system suggestion became which management action, accepted by whom — a proposal is never mistaken for a decision
+create table if not exists rp_suggestion_log (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects(id),
+  suggestion_key text not null,
+  origin text not null check (origin in ('rule','statistical','ai')),
+  payload jsonb not null default '{}'::jsonb,
+  action_id uuid references rasta_actions(id),
+  accepted_by uuid not null default auth.uid() references auth.users(id),
+  accepted_at timestamptz not null default now()
+);
+alter table rp_suggestion_log enable row level security;
+drop policy if exists rp_suggestion_log_read on rp_suggestion_log;
+create policy rp_suggestion_log_read on rp_suggestion_log for select to authenticated using (is_admin_user() or rasta_user_can_access_master_project(master_project_id));
+drop policy if exists rp_suggestion_log_insert on rp_suggestion_log;
+create policy rp_suggestion_log_insert on rp_suggestion_log for insert to authenticated with check (accepted_by = auth.uid() and rasta_user_can_access_master_project(master_project_id));
+create index if not exists rp_suggestion_log_project on rp_suggestion_log (master_project_id, suggestion_key);
+
+-- the projects the caller may open; the analysis center loads only these
+create or replace function rp_accessible_projects() returns setof uuid
+language sql stable security invoker set search_path = public as $$
+  select p.id from master_projects p where is_admin_user() or rasta_user_can_access_master_project(p.id)
+$$;
+grant execute on function rp_accessible_projects() to authenticated;
