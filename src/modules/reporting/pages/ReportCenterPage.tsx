@@ -1,9 +1,11 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Download, FileSpreadsheet, FileText, Loader2, Search } from 'lucide-react'
 import { REPORT_STATUSES, REPORT_STATUS_LABEL_FA, REPORT_TYPES, REPORT_TYPE_LABEL_FA, type ReportStatus, type ReportType } from '../types'
 import { EMPTY_ARRAY, useReportingStore } from '../store/useReportingStore'
 import { WidgetGrid } from '../components/WidgetGrid'
-import { EvidenceReportView } from '../components/EvidenceReportView'
+import { EvidenceReportView, type Verdict } from '../components/EvidenceReportView'
+import type { NarrativeSentence } from '../lib/narrativeGuard'
+import { supabase } from '../../../lib/supabaseClient'
 import { EVIDENCE_WIDGET } from '../lib/evidenceLoader'
 import type { EvidenceReport } from '../lib/evidenceReport'
 import { exportReportToExcel } from '../lib/reportExport'
@@ -157,12 +159,34 @@ export function ReportCenterPage({ masterProjectId }: { masterProjectId: string 
                 <Download size={13} className="text-muted" />
               </div>
               {selected.widgetIds.includes(EVIDENCE_WIDGET) && selected.payload[EVIDENCE_WIDGET]
-                ? <EvidenceReportView report={selected.payload[EVIDENCE_WIDGET] as EvidenceReport} />
+                ? <EvidenceSnapshot snapshotId={selected.id} reviewable={selected.status === 'approved' || selected.status === 'issued'} report={selected.payload[EVIDENCE_WIDGET] as EvidenceReport} narrative={selected.payload['evidence-narrative'] as NarrativeSentence[] | undefined} />
                 : <WidgetGrid widgetIds={selected.widgetIds} mode="snapshot" payload={selected.payload} />}
             </div>
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+/** An issued evidence report: frozen as it was, with each finding open to a controller's confirm / reject. */
+function EvidenceSnapshot({ snapshotId, report, narrative, reviewable }: { snapshotId: string; report: EvidenceReport; narrative?: NarrativeSentence[]; reviewable: boolean }) {
+  const [verdicts, setVerdicts] = useState<Map<string, Verdict>>(new Map())
+  const [canReview, setCanReview] = useState(false)
+  useEffect(() => {
+    void supabase.rpc('rp_can_review').then(({ data }) => setCanReview(data === true))
+    void supabase.from('rp_finding_reviews').select('finding_id, verdict').eq('snapshot_id', snapshotId).then(({ data }) => setVerdicts(new Map(((data ?? []) as { finding_id: string; verdict: Verdict }[]).map((r) => [r.finding_id, r.verdict]))))
+  }, [snapshotId])
+  const onReview = async (findingId: string, v: Verdict) => {
+    const { data: u } = await supabase.auth.getUser()
+    const { error } = await supabase.from('rp_finding_reviews').upsert({ snapshot_id: snapshotId, finding_id: findingId, verdict: v, reviewed_by: u.user?.id, reviewed_at: new Date().toISOString() }, { onConflict: 'snapshot_id,finding_id' })
+    if (!error) setVerdicts((m) => new Map(m).set(findingId, v))
+  }
+  return (
+    <EvidenceReportView
+      report={report}
+      narrative={narrative?.length ? <div className="ev-ai"><header><span>جمله‌بندی ماشینی ثبت‌شده با این نسخه (کنترل‌شده)</span></header><ul>{narrative.map((s, i) => <li key={i}>{s.text}<span className="ev-refs">[{s.refs.join(', ')}]</span></li>)}</ul></div> : undefined}
+      review={reviewable ? { verdicts, canReview, onReview: (id, v) => void onReview(id, v) } : undefined}
+    />
   )
 }

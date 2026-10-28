@@ -236,10 +236,18 @@ export interface InsightStatement {
  * already-computed number so it stays traceable to its source (spec: "never allow unsupported
  * AI-generated claims"); this is the seam a future real AI summary would plug into.
  */
-export function computeExecutiveInsight(bundle: ProjectIntelligenceBundle): InsightStatement[] {
+export function computeExecutiveInsight(bundle: ProjectIntelligenceBundle, metrics?: { asOf: string; lifecycle: { actual: number; planned: number } } | null): InsightStatement[] {
   const statements: InsightStatement[] = []
 
-  if (bundle.pipepulse) {
+  if (metrics) {
+    const gap = Math.round((metrics.lifecycle.planned - metrics.lifecycle.actual) * 10) / 10
+    statements.push({
+      id: 'insight-progress',
+      text: `پیشرفت چرخهٔ عمر ${Math.round(metrics.lifecycle.actual * 10) / 10}% در برابر برنامهٔ ${Math.round(metrics.lifecycle.planned * 10) / 10}% است${gap > 0 ? `؛ ${gap} واحد درصد عقب` : ''}.`,
+      tone: gap >= 8 ? 'critical' : gap >= 3 ? 'attention' : 'good',
+      sourceLabel: 'داشبورد پروژه (موتور شاخص‌ها)',
+    })
+  } else if (bundle.pipepulse) {
     const kpis = computeProjectKpis(bundle.pipepulse.project)
     statements.push({
       id: 'insight-progress',

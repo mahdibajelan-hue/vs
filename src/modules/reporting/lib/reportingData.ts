@@ -127,6 +127,7 @@ export function decisionFromRow(r: DecisionRow): Decision {
     status: r.status as DecisionStatus,
     finalDecision: r.final_decision,
     decidedAt: r.decided_at,
+    cancelReason: (r as DecisionRow & { cancel_reason?: string }).cancel_reason ?? '',
     relatedRiskId: r.related_risk_id,
     relatedIssueId: r.related_issue_id,
     relatedMilestoneLabel: r.related_milestone_label,

@@ -67,15 +67,31 @@ function Spark({ points, worse }: { points: { date: string; value: number }[]; w
   )
 }
 
+export type Verdict = 'confirmed' | 'rejected' | 'unclear'
+const VERDICT_FA: Record<Verdict, { label: string; c: string }> = { confirmed: { label: 'تأیید', c: '#22c55e' }, rejected: { label: 'رد', c: '#ef4444' }, unclear: { label: 'نامشخص', c: '#94a3b8' } }
+export interface ReviewProps { verdicts: Map<string, Verdict>; canReview: boolean; onReview: (findingId: string, v: Verdict) => void }
+
+function ReviewBar({ id, review }: { id: string; review: ReviewProps }) {
+  const cur = review.verdicts.get(id)
+  return (
+    <div className="ev-review" role="group" aria-label="بازبینی یافته">
+      <span>بازبینی کنترل پروژه:</span>
+      {(Object.keys(VERDICT_FA) as Verdict[]).map((v) => (
+        <button key={v} type="button" disabled={!review.canReview} aria-pressed={cur === v} className={cur === v ? 'is-on' : ''} style={{ '--c': VERDICT_FA[v].c } as CSSProperties} onClick={() => review.onReview(id, v)}>{VERDICT_FA[v].label}</button>
+      ))}
+    </div>
+  )
+}
+
 /** One evidence report — the live page and an issued snapshot render through this same component. */
-export function EvidenceReportView({ report: r }: { report: EvidenceReport }) {
+export function EvidenceReportView({ report: r, narrative, review }: { report: EvidenceReport; narrative?: ReactNode; review?: ReviewProps }) {
   const material = r.findings.filter((f) => f.materiality === 'material')
   const rest = r.findings.filter((f) => f.materiality !== 'material')
   return (
     <div className="ev" dir="rtl">
       <div className="ev-head">
         <div>
-          <p className="ev-kicker">گزارش مدیریتی مبتنی بر شواهد · {jd(r.asOf)}</p>
+          <p className="ev-kicker">گزارش مدیریتی مبتنی بر شواهد · {jd(r.asOf)}{r.period ? ` · دورهٔ ${jd(r.period.from)} تا ${jd(r.period.to)}` : ''} · آستانه‌ها: {r.thresholdsVersion ?? 'پیش‌فرض'}</p>
           <h2>{r.project}</h2>
         </div>
         <Tag c={CONF[r.confidence].c}>{CONF[r.confidence].label}</Tag>
@@ -85,6 +101,7 @@ export function EvidenceReportView({ report: r }: { report: EvidenceReport }) {
         <b>در یک نگاه</b>
         <ul>{r.headline.map((h, i) => <li key={i}>{h}</li>)}</ul>
       </div>
+      {narrative}
 
       <Q n={1} title="چه اتفاقی افتاده است؟" empty="هیچ منبع داده‌ای برای این پروژه در دسترس نیست.">
         {r.statusLines.length > 0 && (
@@ -115,6 +132,7 @@ export function EvidenceReportView({ report: r }: { report: EvidenceReport }) {
                 <div className="ev-frow"><b>{f.title}</b><Tag c={MAT[f.materiality].c}>{MAT[f.materiality].label}</Tag></div>
                 <p>{f.statement}</p>
                 <Sources list={f.evidence} />
+                {review && f.materiality !== 'ok' && <ReviewBar id={f.id} review={review} />}
               </li>
             ))}
           </ol>

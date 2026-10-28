@@ -20646,3 +20646,67 @@ language sql stable security invoker set search_path = public as $$
   group by 1, 2, 3, 4
 $$;
 grant execute on function pf_resource_usage(date) to authenticated;
+
+-- ============================================================================
+-- Reporting council phase 2/3: thresholds, decision cancel + register, finding reviews
+-- ============================================================================
+create or replace function rp_can_configure() returns boolean language sql stable security definer set search_path = public as $$
+  select is_admin_user() or rasta_has_permission(auth.uid(), 'reporting', 'configure') $$;
+create or replace function rp_can_review() returns boolean language sql stable security definer set search_path = public as $$
+  select is_admin_user() or rasta_has_permission(auth.uid(), 'reporting', 'review') or rasta_has_permission(auth.uid(), 'reporting', 'approve') $$;
+grant execute on function rp_can_configure() to authenticated;
+grant execute on function rp_can_review() to authenticated;
+
+create table if not exists rp_thresholds (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid references master_projects(id) on delete cascade,
+  thresholds jsonb not null,
+  version integer not null default 1,
+  updated_by uuid references auth.users(id) default auth.uid(),
+  updated_at timestamptz not null default now()
+);
+create unique index if not exists rp_thresholds_scope on rp_thresholds (coalesce(master_project_id, '00000000-0000-0000-0000-000000000000'::uuid));
+alter table rp_thresholds enable row level security;
+drop policy if exists "rp_thresholds_read" on rp_thresholds;
+create policy "rp_thresholds_read" on rp_thresholds for select to authenticated using (true);
+drop policy if exists "rp_thresholds_write" on rp_thresholds;
+create policy "rp_thresholds_write" on rp_thresholds for all to authenticated using (rp_can_configure()) with check (rp_can_configure());
+
+alter table rasta_decisions drop constraint if exists rasta_decisions_status_check;
+alter table rasta_decisions add constraint rasta_decisions_status_check check (status = any (array['pending','in_review','approved','rejected','deferred','cancelled']));
+alter table rasta_decisions add column if not exists cancel_reason text not null default '';
+alter table rasta_decisions add column if not exists cancelled_by uuid references profiles(id);
+alter table rasta_decisions add column if not exists cancelled_at timestamptz;
+
+create or replace view v_decision_register with (security_invoker = true) as
+  select d.id::text as id, 'project'::text as level, d.master_project_id, d.title, d.status, coalesce(d.final_decision, '') as outcome,
+         coalesce(d.reason, '') as rationale, d.required_by as due_by, d.decision_owner_id::text as owner, coalesce(d.decided_at, d.created_at) as at,
+         d.status = 'cancelled' as voided
+  from rasta_decisions d
+  union all
+  select 'pf-' || p.id::text, 'portfolio', p.master_project_id, p.decision, case when p.voided then 'cancelled' else 'approved' end, p.decision,
+         p.rationale, p.review_by, p.decided_by::text, p.decided_at, p.voided
+  from pf_decisions p
+  union all
+  select 'sg-' || g.id::text, 'gate', s.master_project_id, 'گیت ' || g.phase_code, 'approved', g.decision,
+         coalesce(g.reason, ''), g.condition_due_date, g.decided_by, g.decided_at, false
+  from sg_lifecycle_gate_decisions g join sg_projects s on s.name = g.project_name
+  where s.master_project_id is not null;
+grant select on v_decision_register to authenticated;
+
+create table if not exists rp_finding_reviews (
+  id uuid primary key default gen_random_uuid(),
+  snapshot_id uuid not null references rasta_report_snapshots(id) on delete cascade,
+  finding_id text not null,
+  verdict text not null check (verdict in ('confirmed','rejected','unclear')),
+  note text not null default '',
+  reviewed_by uuid references auth.users(id) default auth.uid(),
+  reviewed_at timestamptz not null default now(),
+  unique (snapshot_id, finding_id)
+);
+alter table rp_finding_reviews enable row level security;
+drop policy if exists "rp_finding_reviews_read" on rp_finding_reviews;
+create policy "rp_finding_reviews_read" on rp_finding_reviews for select to authenticated using (
+  exists (select 1 from rasta_report_snapshots s where s.id = snapshot_id and (is_admin_user() or rasta_user_can_access_master_project(s.master_project_id))));
+drop policy if exists "rp_finding_reviews_write" on rp_finding_reviews;
+create policy "rp_finding_reviews_write" on rp_finding_reviews for all to authenticated using (rp_can_review()) with check (rp_can_review() and reviewed_by = auth.uid());

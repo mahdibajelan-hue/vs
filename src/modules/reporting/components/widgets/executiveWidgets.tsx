@@ -7,6 +7,9 @@ import { EmptyWidgetState, KpiCard } from '../ui'
 
 interface ExecOverviewData {
   progressPercent: number | null
+  /** where the progress came from: the project dashboard engine, or the legacy PipePulse lines */
+  progressSource?: 'metrics' | 'pipepulse' | null
+  plannedPercent?: number | null
   completedLines: number | null
   lineCount: number | null
   riskExposureCurrent: number | null
@@ -23,12 +26,14 @@ export const execOverviewWidget: WidgetDefinition<ExecOverviewData> = {
   category: 'executive',
   description: 'خلاصه پیشرفت، ریسک و مسائل در چهار کارت وضعیت',
   defaultReportTypes: ['daily', 'weekly', 'monthly', 'management'],
-  compute: ({ bundle }) => {
-    const kpis = bundle.pipepulse ? computeProjectKpis(bundle.pipepulse.project) : null
+  compute: ({ bundle, metrics }) => {
+    const kpis = !metrics && bundle.pipepulse ? computeProjectKpis(bundle.pipepulse.project) : null
     const exposure = bundle.risk ? computeExposureKpi(bundle.risk.risks, bundle.risk.assessments) : null
     const issueMetrics = bundle.issues ? computeIssueMetrics(bundle.issues.issues) : null
     return {
-      progressPercent: kpis?.overallPercent ?? null,
+      progressPercent: metrics ? Math.round(metrics.lifecycle.actual * 10) / 10 : kpis?.overallPercent ?? null,
+      progressSource: metrics ? 'metrics' : kpis ? 'pipepulse' : null,
+      plannedPercent: metrics ? Math.round(metrics.lifecycle.planned * 10) / 10 : null,
       completedLines: kpis?.completedLines ?? null,
       lineCount: kpis?.lineCount ?? null,
       riskExposureCurrent: exposure?.current ?? null,
@@ -42,10 +47,11 @@ export const execOverviewWidget: WidgetDefinition<ExecOverviewData> = {
   Render: ({ data }) => (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <KpiCard
-        label="پیشرفت کلی پروژه"
+        label={data.progressSource === 'pipepulse' ? 'پیشرفت خطوط (PipePulse)' : 'پیشرفت چرخهٔ عمر'}
         value={data.progressPercent === null ? '—' : `${data.progressPercent}%`}
-        sublabel={data.lineCount === null ? undefined : `${data.completedLines} از ${data.lineCount} خط تکمیل`}
-        tone="neutral"
+        sublabel={data.plannedPercent != null ? `برنامه ${data.plannedPercent}% · ${data.plannedPercent - data.progressPercent! > 0 ? `${Math.round((data.plannedPercent - data.progressPercent!) * 10) / 10} واحد عقب` : 'هم‌پای برنامه'}` : data.lineCount === null ? undefined : `${data.completedLines} از ${data.lineCount} خط تکمیل`}
+        // tone only against the plan (council thresholds: ≥ 8 behind material, ≥ 3 watch) — never from the absolute percentage
+        tone={data.plannedPercent == null || data.progressPercent == null ? 'neutral' : data.plannedPercent - data.progressPercent >= 8 ? 'critical' : data.plannedPercent - data.progressPercent >= 3 ? 'attention' : 'good'}
       />
       <KpiCard
         label="اکسپوژر ریسک فعلی"

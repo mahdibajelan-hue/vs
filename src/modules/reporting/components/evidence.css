@@ -54,3 +54,12 @@
 .ev-quality tr.is-bad td:last-child { color: #ef4444; }
 
 @media print { .ev-q { break-inside: avoid; } }
+
+.ev-review { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-top: .45rem; font-size: 10.5px; color: var(--text-muted); }
+.ev-review button { padding: .1rem .55rem; border-radius: 99px; border: 1px solid var(--border-soft); color: var(--text-secondary); }
+.ev-review button.is-on { color: var(--c); border-color: var(--c); background: color-mix(in srgb, var(--c) 13%, transparent); font-weight: 700; }
+.ev-review button:disabled { opacity: .55; cursor: default; }
+.ev-ai { padding: .8rem 1rem; border-radius: .9rem; border: 1px dashed color-mix(in srgb, #a78bfa 55%, var(--border-soft)); background: color-mix(in srgb, #a78bfa 6%, var(--bg-panel-solid)); }
+.ev-ai header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; font-size: 12px; font-weight: 700; color: #a78bfa; }
+.ev-ai ul { margin: .4rem 0 0; display: grid; gap: .3rem; font-size: 13px; line-height: 1.8; list-style: none; padding: 0; }
+.ev-ai .ev-refs { font-size: 10px; color: var(--text-muted); margin-inline-start: .35rem; direction: ltr; unicode-bidi: isolate; }

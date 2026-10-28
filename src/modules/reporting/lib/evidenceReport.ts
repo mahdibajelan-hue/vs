@@ -97,7 +97,13 @@ export interface EvidenceInput {
   sourceDates: { source: string; date: string | null; available: boolean }[]
   previous: { reportNumber: string; issuedAt: string; facts: Facts } | null
   thresholds?: Thresholds
+  /** which threshold set was applied (global / project version), recorded on the report */
+  thresholdsVersion?: string
+  /** stoppages recorded inside the report period (since the previous report, else the last 30 days), dated */
+  periodDelays?: { from: string; to: string; items: { date: string; label: string; hours: number; responsibility: string; critical: boolean }[] } | null
 }
+
+export const RESPONSIBILITY_FA: Record<string, string> = { contractor: 'پیمانکار', employer: 'کارفرما', force_majeure: 'قوهٔ قاهره', third_party: 'شخص ثالث', shared: 'مشترک', '': 'تعیین‌نشده' }
 
 /** the frozen numbers a report keeps so the next one can say what changed */
 export interface Facts {
@@ -124,6 +130,8 @@ export interface EvidenceReport {
   changes: Change[] | null
   previousRef: string | null
   thresholds: Thresholds
+  thresholdsVersion: string
+  period: { from: string; to: string } | null
 }
 
 /* ── helpers ───────────────────────────────────────────────────────── */
@@ -230,8 +238,24 @@ export function buildEvidenceReport(inp: EvidenceInput): EvidenceReport {
     for (const d of (m.health?.dims ?? []).filter((x) => x.assessed && (x.status === 'red' || x.status === 'black') && !(x.key && covered.has(x.key)))) {
       findings.push({ id: `f-dim-${d.label}`, kind: 'health', title: `سلامت ${d.label}`, materiality: 'material', statement: d.explanation, evidence: [pm(m.asOf, `بُعد ${d.label}`)] })
     }
-    const delayH = m.delays.reduce((a, d) => a + d.value, 0)
-    if (delayH > 0) findings.push({ id: 'f-delay', kind: 'delay', title: 'توقف‌های ثبت‌شدهٔ اجرا', materiality: 'watch', actual: delayH, statement: `${fa(delayH)} ساعت توقف در گزارش‌های اجرا ثبت شده است؛ بیشترین: ${[...m.delays].sort((a, b) => b.value - a.value).slice(0, 2).map((d) => `${d.label} (${fa(d.value)} ساعت)`).join('، ')}.`, evidence: m.delays.map((d) => ({ source: 'ثبت توقفات ماژول اجرا', asOf: m.asOf, ref: d.label, value: `${fa(d.value)} ساعت` })) })
+    const pd = inp.periodDelays
+    if (pd && pd.items.length) {
+      const byCat = new Map<string, { hours: number; critical: boolean; resp: Map<string, number> }>()
+      for (const it of pd.items) {
+        const c = byCat.get(it.label) ?? { hours: 0, critical: false, resp: new Map() }
+        c.hours += it.hours; c.critical ||= it.critical; c.resp.set(it.responsibility, (c.resp.get(it.responsibility) ?? 0) + it.hours)
+        byCat.set(it.label, c)
+      }
+      const total = pd.items.reduce((a, it) => a + it.hours, 0)
+      const top = [...byCat].sort((a, b) => b[1].hours - a[1].hours)
+      const anyCritical = pd.items.some((it) => it.critical)
+      findings.push({ id: 'f-delay', kind: 'delay', title: 'توقف‌های اجرا در دورهٔ گزارش', materiality: anyCritical ? 'material' : 'watch', actual: total,
+        statement: `از ${jd(pd.from)} تا ${jd(pd.to)} ${fa(total)} ساعت توقف ثبت شده است؛ بیشترین: ${top.slice(0, 2).map(([l, c]) => `${l} (${fa(c.hours)} ساعت)`).join('، ')}${anyCritical ? '؛ بخشی روی مسیر بحرانی' : ''}.`,
+        evidence: pd.items.slice(0, 8).map((it) => ({ source: 'ثبت توقفات ماژول اجرا', asOf: it.date, ref: it.label, value: `${fa(it.hours)} ساعت · مسئولیت: ${RESPONSIBILITY_FA[it.responsibility] ?? it.responsibility}${it.critical ? ' · مسیر بحرانی' : ''}` })) })
+    } else {
+      const delayH = m.delays.reduce((a, d) => a + d.value, 0)
+      if (delayH > 0) findings.push({ id: 'f-delay', kind: 'delay', title: 'توقف‌های ثبت‌شدهٔ اجرا (کل دوره)', materiality: 'watch', actual: delayH, statement: `${fa(delayH)} ساعت توقف از ابتدای پروژه ثبت شده است و در دورهٔ این گزارش توقف تازه‌ای ثبت نشده؛ بیشترین: ${[...m.delays].sort((a, b) => b.value - a.value).slice(0, 2).map((d) => `${d.label} (${fa(d.value)} ساعت)`).join('، ')}.`, evidence: m.delays.map((d) => ({ source: 'ثبت توقفات ماژول اجرا', asOf: m.asOf, ref: d.label, value: `${fa(d.value)} ساعت` })) })
+    }
   }
 
   const critRisks = activeRisks.filter((r) => r.level === 'critical')
@@ -282,7 +306,16 @@ export function buildEvidenceReport(inp: EvidenceInput): EvidenceReport {
     // one list of evidence for all time / cost deviations — the same stoppage explains SPI and the progress gap alike
     const ids = perf.map((f) => f.id)
     if (m?.health?.status === 'black' && m.health.blockers.length) causes.push({ findingIds: ids, strength: 'direct', text: `گیت مسدود است و کار مرحلهٔ بعد شروع نمی‌شود: ${m.health.blockers[0]}`, evidence: [pm(m.asOf, m.health.blockers[0])] })
-    for (const d of (m ? [...m.delays].sort((a, b) => b.value - a.value).filter((x) => x.value > 0).slice(0, 2) : [])) causes.push({ findingIds: ids, strength: 'associated', text: `توقف اجرا با علت «${d.label}» (${fa(d.value)} ساعت) ثبت شده است`, evidence: [{ source: 'ثبت توقفات ماژول اجرا', ref: d.label, asOf: m?.asOf ?? null }] })
+    const pd = inp.periodDelays
+    if (pd && pd.items.length) {
+      // stoppages inside the report period only — an old stoppage does not explain this period's deviation
+      const by = new Map<string, { hours: number; items: typeof pd.items }>()
+      for (const it of pd.items) { const c = by.get(it.label) ?? { hours: 0, items: [] }; c.hours += it.hours; c.items.push(it); by.set(it.label, c) }
+      for (const [label, c] of [...by].sort((a, b) => b[1].hours - a[1].hours).slice(0, 2)) {
+        const resp = [...new Set(c.items.map((x) => RESPONSIBILITY_FA[x.responsibility] ?? x.responsibility))].join('، ')
+        causes.push({ findingIds: ids, strength: c.items.some((x) => x.critical) ? 'direct' : 'associated', text: `در دورهٔ گزارش ${fa(c.hours)} ساعت توقف با علت «${label}» ثبت شده (مسئولیت: ${resp})${c.items.some((x) => x.critical) ? ' و روی مسیر بحرانی علامت خورده است' : ''}`, evidence: c.items.slice(0, 4).map((x) => ({ source: 'ثبت توقفات ماژول اجرا', ref: label, asOf: x.date, value: `${fa(x.hours)} ساعت` })) })
+      }
+    }
     for (const d of (m?.health?.dims ?? []).filter((x) => x.assessed && (x.status === 'red' || x.status === 'black') && x.key !== 'schedule' && x.key !== 'cost').slice(0, 2)) causes.push({ findingIds: ids, strength: 'associated', text: `${d.label}: ${d.explanation}`, evidence: [pm(m?.asOf ?? null, `بُعد ${d.label}`)] })
     if (overdueIssues.length) causes.push({ findingIds: ids, strength: 'associated', text: `${fa(overdueIssues.length)} مسئلهٔ مهمِ معوق باز است`, evidence: overdueIssues.slice(0, 3).map((i) => ({ source: 'مدیریت مسائل', ref: i.title, asOf: i.deadline })) })
     if (!causes.length && perf.some((f) => f.materiality === 'material')) recs.push({ id: 'r-cause', findingIds: ids, text: `ثبت علت انحراف «${perf.find((f) => f.materiality === 'material')!.title}» — در داده‌های سامانه شاهدی برای علت آن نیست`, owner: null, urgency: 'soon' })
@@ -379,6 +412,7 @@ export function buildEvidenceReport(inp: EvidenceInput): EvidenceReport {
   return {
     asOf: today, project: inp.project, confidence, headline, facts, statusLines, findings, causes, trends, projections,
     recommendations: dedupe(recs), decisions, effects, quality, changes, previousRef: inp.previous ? inp.previous.reportNumber : null, thresholds: th,
+    thresholdsVersion: inp.thresholdsVersion ?? 'پیش‌فرض', period: inp.periodDelays ? { from: inp.periodDelays.from, to: inp.periodDelays.to } : null,
   }
 }
 

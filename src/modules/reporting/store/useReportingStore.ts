@@ -59,7 +59,8 @@ interface ReportingState {
   createDecision: (masterProjectId: string, data: Partial<Decision>) => Promise<void>
   updateDecision: (id: string, masterProjectId: string, data: Partial<Decision>) => Promise<void>
   setDecisionStatus: (id: string, masterProjectId: string, status: DecisionStatus, finalDecision?: string) => Promise<void>
-  deleteDecision: (id: string, masterProjectId: string) => Promise<void>
+  /** decisions are cancelled with a reason, never deleted */
+  cancelDecision: (id: string, masterProjectId: string, reason: string) => Promise<void>
 
   createAction: (masterProjectId: string, data: Partial<RastaAction>) => Promise<void>
   updateAction: (id: string, masterProjectId: string, data: Partial<RastaAction>) => Promise<void>
@@ -175,10 +176,11 @@ export const useReportingStore = create<ReportingState>()((set, get) => ({
     if (reportError('ثبت نتیجه تصمیم', error)) return
     await get().fetchProjectData(masterProjectId)
   },
-  deleteDecision: async (id, masterProjectId) => {
-    const { error } = await supabase.from('rasta_decisions').delete().eq('id', id)
-    if (reportError('حذف تصمیم', error)) return
-    set((s) => ({ decisionsByProject: { ...s.decisionsByProject, [masterProjectId]: (s.decisionsByProject[masterProjectId] ?? []).filter((d) => d.id !== id) } }))
+  cancelDecision: async (id, masterProjectId, reason) => {
+    const userId = useAuthStore.getState().profile?.id ?? null
+    const { error } = await supabase.from('rasta_decisions').update({ status: 'cancelled', cancel_reason: reason.trim(), cancelled_by: userId, cancelled_at: new Date().toISOString() }).eq('id', id)
+    if (reportError('لغو تصمیم', error)) return
+    await get().fetchProjectData(masterProjectId)
   },
 
   createAction: async (masterProjectId, data) => {

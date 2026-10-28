@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, ClipboardList, FileSearch, LayoutDashboard, Loader2, Network, Wand2 } from 'lucide-react'
+import { BarChart3, ClipboardList, FileSearch, LayoutDashboard, Loader2, Network, Settings2, Wand2 } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useDeepLinkStore } from '../../store/useDeepLinkStore'
 import { useReportingStore } from './store/useReportingStore'
@@ -11,8 +11,10 @@ import { ReportCenterPage } from './pages/ReportCenterPage'
 import { DecisionCenterPage } from './pages/DecisionCenterPage'
 import { PortfolioReportPage } from './pages/PortfolioReportPage'
 import { EvidenceReportPage } from './pages/EvidenceReportPage'
+import { PortfolioEvidencePage } from './pages/PortfolioEvidencePage'
+import { ReportSettingsPage } from './pages/ReportSettingsPage'
 
-type Tab = 'evidence' | 'dashboard' | 'builder' | 'center' | 'decisions' | 'portfolio'
+type Tab = 'evidence' | 'dashboard' | 'builder' | 'center' | 'decisions' | 'portfolio' | 'settings'
 
 const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'evidence', label: 'گزارش مدیریتی', icon: FileSearch },
@@ -21,6 +23,7 @@ const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'center', label: 'مرکز گزارش‌ها', icon: BarChart3 },
   { id: 'decisions', label: 'مرکز تصمیم', icon: ClipboardList },
   { id: 'portfolio', label: 'گزارش پورتفولیو/طرح', icon: Network },
+  { id: 'settings', label: 'آستانه‌ها و کیفیت', icon: Settings2 },
 ]
 
 export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
@@ -111,7 +114,9 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
 
       <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-16 sm:p-4 lg:pb-4">
         {tab === 'portfolio' ? (
-          <PortfolioReportPage />
+          <PortfolioTabs />
+        ) : tab === 'settings' ? (
+          <ReportSettingsPage masterProjectId={projectId} projectName={projects.find((p) => p.id === projectId)?.officialName ?? ''} />
         ) : !projectId ? (
           <div className="flex h-full items-center justify-center text-sm text-muted">
             {projects.length === 0 ? 'ابتدا از بخش داده پایه یک پروژه تعریف کنید' : 'یک پروژه را از بالا انتخاب کنید'}
@@ -141,6 +146,20 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           </button>
         ))}
       </nav>
+    </div>
+  )
+}
+
+/** portfolio level: the evidence roll-up first; the older widget report stays available beside it */
+function PortfolioTabs() {
+  const [mode, setMode] = useState<'evidence' | 'widgets'>('evidence')
+  return (
+    <div className="space-y-3">
+      <div className="mx-auto flex w-fit items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1">
+        <button onClick={() => setMode('evidence')} className={`rounded-full px-3 py-1.5 text-xs ${mode === 'evidence' ? 'bg-teal-500/20 text-teal-300' : 'text-secondary'}`}>گزارش مبتنی بر شواهد</button>
+        <button onClick={() => setMode('widgets')} className={`rounded-full px-3 py-1.5 text-xs ${mode === 'widgets' ? 'bg-teal-500/20 text-teal-300' : 'text-secondary'}`}>گزارش ویجتی (قبلی)</button>
+      </div>
+      {mode === 'evidence' ? <PortfolioEvidencePage /> : <PortfolioReportPage />}
     </div>
   )
 }

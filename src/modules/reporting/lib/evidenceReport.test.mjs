@@ -35,6 +35,12 @@ const base = {
   portfolio: null,
   sourceDates: [{ source: 'شاخص‌ها', date: '2026-10-27', available: true }, { source: 'ریسک', date: '2026-10-01', available: true }, { source: 'مسائل', date: '2026-10-20', available: true }],
   previous: null,
+  thresholdsVersion: 'سراسری v2',
+  periodDelays: { from: '2026-09-28', to: today, items: [
+    { date: '2026-10-05', label: 'کمبود مصالح', hours: 60, responsibility: 'contractor', critical: true },
+    { date: '2026-10-12', label: 'کمبود مصالح', hours: 30, responsibility: 'contractor', critical: false },
+    { date: '2026-10-20', label: 'آب‌وهوا', hours: 40, responsibility: 'force_majeure', critical: false },
+  ] },
 }
 
 const rep = buildEvidenceReport(base)
@@ -54,7 +60,7 @@ assert.ok(rep.findings.some((f) => f.id === 'f-dim-زمان'))
 
 // causes: the blocked gate is direct, the rest associated; every cause cites evidence
 assert.ok(rep.causes.some((c) => c.strength === 'direct'))
-assert.ok(rep.causes.filter((c) => c.strength === 'associated').some((c) => c.text.includes('کمبود مصالح')))
+assert.ok(rep.causes.filter((c) => c.strength === 'associated').some((c) => c.text.includes('آب‌وهوا')))
 assert.ok(rep.causes.every((c) => c.evidence.length > 0))
 
 // causes are listed once for all time / cost deviations, not repeated per finding
@@ -63,6 +69,18 @@ assert.ok(rep.causes[0].findingIds.length > 1)
 // a cost health dimension is not repeated when the CPI finding already states it
 const dup = buildEvidenceReport({ ...base, metrics: { ...base.metrics, health: { ...base.metrics.health, dims: [{ key: 'cost', label: 'هزینه', status: 'red', explanation: 'CPI = 0.85', assessed: true }] } } })
 assert.ok(!dup.findings.some((f) => f.id === 'f-dim-هزینه'))
+
+// period stoppages: finding and causes use the report period, responsibility is named, critical-path flag is direct
+const fd = rep.findings.find((f) => f.id === 'f-delay')
+assert.equal(fd.materiality, 'material')
+assert.ok(fd.statement.includes('۱۳۰'))
+assert.ok(rep.causes.some((c) => c.text.includes('کمبود مصالح') && c.text.includes('پیمانکار') && c.strength === 'direct'))
+assert.equal(rep.thresholdsVersion, 'سراسری v2')
+assert.deepEqual(rep.period, { from: '2026-09-28', to: today })
+// without stoppages in the period, the old totals are not offered as a cause
+const quiet = buildEvidenceReport({ ...base, periodDelays: { from: '2026-10-20', to: today, items: [] } })
+assert.ok(!quiet.causes.some((c) => c.text.includes('کمبود مصالح')))
+assert.ok(quiet.findings.find((f) => f.id === 'f-delay').title.includes('کل دوره'))
 
 // trends: gap widening → worsening; risk exposure computed from dated assessments
 const gapT = rep.trends.find((t) => t.id === 't-gap')
@@ -104,7 +122,7 @@ assert.ok(bare.headline[0].includes('در دسترس نیست'))
 assert.equal(bare.findings.length, 0)
 
 // a material deviation with no recorded cause asks for the cause instead of guessing
-const noCause = buildEvidenceReport({ ...base, metrics: { ...base.metrics, health: { status: 'yellow', drivenBy: null, blockers: [], dims: [] }, delays: [] }, issues: [] })
+const noCause = buildEvidenceReport({ ...base, periodDelays: null, metrics: { ...base.metrics, health: { status: 'yellow', drivenBy: null, blockers: [], dims: [] }, delays: [] }, issues: [] })
 assert.ok(noCause.recommendations.some((r) => r.text.startsWith('ثبت علت')))
 assert.equal(noCause.causes.length, 0)
 

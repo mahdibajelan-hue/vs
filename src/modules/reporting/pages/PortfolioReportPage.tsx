@@ -32,6 +32,7 @@ const DECISION_STATUS_COLOR: Record<DecisionStatus, string> = {
   approved: '#2ecc71',
   rejected: '#e74c3c',
   deferred: '#8b5cf6',
+  cancelled: '#64748b',
 }
 
 const ACTION_STATUS_COLOR: Record<RastaActionStatus, string> = {
@@ -280,7 +281,7 @@ function DecisionActionChartsSection({ decisions, actions }: { decisions: Decisi
   const { activeKey: activeActionStatus, setActiveKey: setActiveActionStatus, clear: clearActionStatus } = useDrillKey()
 
   const decisionCounts = useMemo(() => {
-    const counts: Record<DecisionStatus, number> = { pending: 0, in_review: 0, approved: 0, rejected: 0, deferred: 0 }
+    const counts: Record<DecisionStatus, number> = { pending: 0, in_review: 0, approved: 0, rejected: 0, deferred: 0, cancelled: 0 }
     for (const d of decisions) counts[d.status]++
     return counts
   }, [decisions])

@@ -8,6 +8,8 @@ export interface WidgetComputeContext {
   previousBundle: ProjectIntelligenceBundle | null
   decisions: Decision[]
   actions: RastaAction[]
+  /** the project dashboard's own progress (lifecycle, planned vs actual) — replaces PipePulse line progress when present */
+  metrics?: { asOf: string; lifecycle: { actual: number; planned: number } } | null
 }
 
 export interface WidgetDefinition<TData = unknown> {

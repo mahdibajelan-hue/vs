@@ -88,7 +88,7 @@ export const executiveInsightWidget: WidgetDefinition<InsightStatement[]> = {
   category: 'intelligence',
   description: 'روایت خودکار مبتنی بر داده — هر جمله مستقیماً از یک شاخص محاسبه‌شده استخراج شده و قابل ردیابی به منبع است',
   defaultReportTypes: ['management'],
-  compute: ({ bundle }) => computeExecutiveInsight(bundle),
+  compute: ({ bundle, metrics }) => computeExecutiveInsight(bundle, metrics),
   Render: ({ data }) => (
     <div className="space-y-2">
       {data.map((s) => (

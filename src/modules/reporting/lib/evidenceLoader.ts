@@ -4,7 +4,22 @@ import { HEALTH_DIMENSION_LABEL_FA } from '../../lifecycle/types'
 import { currentState, riskLevel } from '../../risk/lib/riskScore'
 import { fetchProjectIntelligence } from './dataAdapter'
 import { decisionFromRow, rastaActionFromRow, type DecisionRow, type RastaActionRow } from './reportingData'
-import { buildEvidenceReport, type EvidenceInput, type EvidenceReport, type Facts } from './evidenceReport'
+import { buildEvidenceReport, DEFAULT_THRESHOLDS, type EvidenceInput, type EvidenceReport, type Facts, type Thresholds } from './evidenceReport'
+import { useExecutionStore } from '../../execution/store/useExecutionStore'
+import { STOPPAGE_CATEGORY_FA } from '../../execution/lib/formCatalog'
+
+/** The materiality thresholds in force for a project: the global row, overridden field by field by the project's row. */
+export async function loadThresholds(masterProjectId: string | null): Promise<{ thresholds: Thresholds; version: string; global: { id: string; thresholds: Thresholds; version: number } | null; project: { id: string; thresholds: Partial<Thresholds>; version: number } | null }> {
+  const { data } = await supabase.from('rp_thresholds').select('id, master_project_id, thresholds, version')
+  const rows = (data ?? []) as Row[]
+  const g = rows.find((r) => r.master_project_id == null)
+  const p = masterProjectId ? rows.find((r) => r.master_project_id === masterProjectId) : undefined
+  const global = g ? { id: String(g.id), thresholds: { ...DEFAULT_THRESHOLDS, ...(g.thresholds as Partial<Thresholds>) }, version: Number(g.version) } : null
+  const project = p ? { id: String(p.id), thresholds: p.thresholds as Partial<Thresholds>, version: Number(p.version) } : null
+  const thresholds = { ...DEFAULT_THRESHOLDS, ...(global?.thresholds ?? {}), ...(project?.thresholds ?? {}) }
+  const version = [global ? `سراسری نسخهٔ ${global.version}` : 'پیش‌فرض', project ? `پروژه نسخهٔ ${project.version}` : ''].filter(Boolean).join(' + ')
+  return { thresholds, version, global, project }
+}
 
 /** widget id under which an evidence report is frozen in rasta_report_snapshots */
 export const EVIDENCE_WIDGET = 'evidence-report'
@@ -27,6 +42,7 @@ export async function loadEvidenceReport(masterProjectId: string, projectName: s
     supabase.from('rasta_report_snapshots').select('report_number, issued_at, approved_at, created_at, payload, status, widget_ids').eq('master_project_id', masterProjectId).in('status', ['approved', 'issued']).contains('widget_ids', [EVIDENCE_WIDGET]).order('created_at', { ascending: false }).limit(1),
     supabase.from('profiles').select('id, full_name, email'),
   ])
+  const th = await loadThresholds(masterProjectId)
   const names = new Map(((people.data ?? []) as Row[]).map((r) => [String(r.id), String(r.full_name || r.email || '')]))
   const who = (id: string | null | undefined) => (id ? names.get(id) ?? null : null)
 
@@ -68,7 +84,21 @@ export async function loadEvidenceReport(masterProjectId: string, projectName: s
       { source: 'مدیریت مسائل', available: !!issues?.length, date: maxDate((bundle?.issues?.issues ?? []).map((i) => i.updatedAt)) },
       { source: 'اقدامات و تصمیم‌ها', available: actions.length + decisions.length > 0, date: maxDate([...actions.map((a) => a.updatedAt), ...decisions.map((d) => d.createdAt)]) },
     ],
+    thresholds: th.thresholds,
+    thresholdsVersion: th.version,
+    periodDelays: periodDelays(masterProjectId, prevRow ? String(prevRow.issued_at ?? prevRow.approved_at ?? prevRow.created_at ?? '').slice(0, 10) : null),
     previous: prevPayload?.facts ? { reportNumber: String(prevRow.report_number ?? ''), issuedAt: String(prevRow.issued_at ?? prevRow.approved_at ?? prevRow.created_at ?? ''), facts: prevPayload.facts as Facts } : null,
   }
   return { report: buildEvidenceReport(input), input }
+}
+
+/** stoppages of the project's daily reports dated inside the report period: since the previous report, else 30 days */
+function periodDelays(masterProjectId: string, since: string | null): EvidenceInput['periodDelays'] {
+  const ex = useExecutionStore.getState()
+  if (!ex.reports.length) return null
+  const to = new Date().toISOString().slice(0, 10)
+  const from = since && since < to ? since : new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+  const reps = new Map(ex.reports.filter((r) => r.projectId === masterProjectId && r.status !== 'draft' && r.reportDate >= from && r.reportDate <= to).map((r) => [r.id, r.reportDate]))
+  const items = ex.stoppages.filter((s) => reps.has(s.reportId) && s.hours > 0).map((s) => ({ date: reps.get(s.reportId) as string, label: STOPPAGE_CATEGORY_FA[s.category] ?? s.category, hours: s.hours, responsibility: s.responsibility, critical: s.critical }))
+  return { from, to, items }
 }

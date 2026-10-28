@@ -58,9 +58,9 @@ export interface ReportSnapshot {
   issuedAt: string | null
 }
 
-export type DecisionStatus = 'pending' | 'in_review' | 'approved' | 'rejected' | 'deferred'
+export type DecisionStatus = 'pending' | 'in_review' | 'approved' | 'rejected' | 'deferred' | 'cancelled'
 
-export const DECISION_STATUSES: DecisionStatus[] = ['pending', 'in_review', 'approved', 'rejected', 'deferred']
+export const DECISION_STATUSES: DecisionStatus[] = ['pending', 'in_review', 'approved', 'rejected', 'deferred', 'cancelled']
 
 export const DECISION_STATUS_LABEL_FA: Record<DecisionStatus, string> = {
   pending: 'در انتظار',
@@ -68,6 +68,7 @@ export const DECISION_STATUS_LABEL_FA: Record<DecisionStatus, string> = {
   approved: 'تاییدشده',
   rejected: 'ردشده',
   deferred: 'به‌تعویق‌افتاده',
+  cancelled: 'لغوشده',
 }
 
 export interface Decision {
@@ -83,6 +84,8 @@ export interface Decision {
   status: DecisionStatus
   finalDecision: string
   decidedAt: string | null
+  /** a decision is never deleted — it is cancelled with a reason */
+  cancelReason?: string
   relatedRiskId: string | null
   relatedIssueId: string | null
   relatedMilestoneLabel: string

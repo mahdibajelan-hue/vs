@@ -5,6 +5,8 @@ import { useReportingStore } from '../store/useReportingStore'
 import { EVIDENCE_WIDGET, loadEvidenceReport } from '../lib/evidenceLoader'
 import type { EvidenceReport } from '../lib/evidenceReport'
 import { EvidenceReportView } from '../components/EvidenceReportView'
+import { NarrativePanel } from '../components/NarrativePanel'
+import type { NarrativeSentence } from '../lib/narrativeGuard'
 
 /**
  * The management report built from evidence: computed live from the modules' own records, and frozen into a numbered
@@ -18,6 +20,7 @@ export function EvidenceReportPage({ masterProjectId, onOpenCenter }: { masterPr
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState<string | null>(null)
+  const [narrative, setNarrative] = useState<NarrativeSentence[] | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null); setSaved(null)
@@ -31,7 +34,7 @@ export function EvidenceReportPage({ masterProjectId, onOpenCenter }: { masterPr
   const record = async () => {
     if (!report) return
     setSaving(true)
-    const id = await createSnapshot({ masterProjectId, reportType: 'management', profileId: null, periodStart: null, periodEnd: report.asOf, payload: { [EVIDENCE_WIDGET]: report }, widgetIds: [EVIDENCE_WIDGET] })
+    const id = await createSnapshot({ masterProjectId, reportType: 'management', profileId: null, periodStart: null, periodEnd: report.asOf, payload: { [EVIDENCE_WIDGET]: report, ...(narrative?.length ? { 'evidence-narrative': narrative } : {}) }, widgetIds: [EVIDENCE_WIDGET] })
     setSaving(false)
     if (id) setSaved(useReportingStore.getState().snapshotsByProject[masterProjectId]?.find((s) => s.id === id)?.reportNumber ?? 'ثبت شد')
   }
@@ -56,7 +59,7 @@ export function EvidenceReportPage({ masterProjectId, onOpenCenter }: { masterPr
       )}
       {error ? <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-3 text-[12px] text-red-300">{error}</div>
         : loading || !report ? <div className="flex h-60 items-center justify-center gap-2 text-xs text-muted"><Loader2 size={18} className="animate-spin" /> گردآوری داده از ماژول‌ها…</div>
-        : <EvidenceReportView report={report} />}
+        : <EvidenceReportView report={report} narrative={<NarrativePanel report={report} onAccepted={setNarrative} />} />}
     </div>
   )
 }

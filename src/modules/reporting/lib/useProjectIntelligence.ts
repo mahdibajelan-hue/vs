@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchScopedDecisionsActions, fetchScopedIntelligence, type IntelligenceScope, type ProjectIntelligenceBundle } from './dataAdapter'
 import type { Decision, RastaAction } from '../types'
+import { loadProjectMetrics } from '../../projectMetrics/projectMetricsLoader'
 
 // Session-scoped: the "previous" state What-Changed/Early-Warning widgets compare against is
 // simply the last time this browser tab loaded that scope's live data — not a persisted history
@@ -74,4 +75,16 @@ export function useScopedDecisionsActions(scope: IntelligenceScope | null) {
   }, [scope?.type, scope?.id])
 
   return { decisions, actions, loading }
+}
+
+/** The single-source progress reading (lifecycle actual vs planned) for the legacy widgets; null until loaded or when unavailable. */
+export function useProjectMetricsLite(masterProjectId: string | null) {
+  const [m, setM] = useState<{ asOf: string; lifecycle: { actual: number; planned: number } } | null>(null)
+  useEffect(() => {
+    let live = true
+    setM(null)
+    if (masterProjectId) void loadProjectMetrics(masterProjectId).then((x) => { if (live && x) setM({ asOf: x.asOf, lifecycle: x.lifecycle }) }).catch(() => undefined)
+    return () => { live = false }
+  }, [masterProjectId])
+  return m
 }

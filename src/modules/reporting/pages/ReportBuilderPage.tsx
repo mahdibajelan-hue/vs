@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, FileOutput, Loader2, Save } from 'lucide-react'
 import { REPORT_TYPES, REPORT_TYPE_LABEL_FA, WIDGET_CATEGORY_LABEL_FA, type ReportType, type WidgetCategory } from '../types'
 import { EMPTY_ARRAY, useReportingStore } from '../store/useReportingStore'
-import { useProjectIntelligence } from '../lib/useProjectIntelligence'
+import { useProjectIntelligence, useProjectMetricsLite } from '../lib/useProjectIntelligence'
 import { DEFAULT_PROFILE_WIDGETS, WIDGET_REGISTRY, computeReportPayload, widgetsByCategory } from '../lib/widgetRegistry'
 import { WidgetGrid } from '../components/WidgetGrid'
 import type { WidgetComputeContext } from '../lib/widgetTypes'
@@ -21,6 +21,7 @@ export function ReportBuilderPage({ masterProjectId }: { masterProjectId: string
   const [generatedNumber, setGeneratedNumber] = useState<string | null>(null)
 
   const { bundle, previousBundle, loading } = useProjectIntelligence(masterProjectId)
+  const metrics = useProjectMetricsLite(masterProjectId)
   const decisions = useReportingStore((s) => s.decisionsByProject[masterProjectId] ?? EMPTY_ARRAY)
   const actions = useReportingStore((s) => s.actionsByProject[masterProjectId] ?? EMPTY_ARRAY)
   const profiles = useReportingStore((s) => s.profiles)
@@ -74,7 +75,7 @@ export function ReportBuilderPage({ masterProjectId }: { masterProjectId: string
   const handleGenerate = async () => {
     if (!bundle || widgetIds.length === 0) return
     setGenerating(true)
-    const ctx: WidgetComputeContext = { bundle, previousBundle, decisions, actions }
+    const ctx: WidgetComputeContext = { bundle, previousBundle, decisions, actions, metrics }
     const payload = computeReportPayload(widgetIds, ctx)
     const id = await createSnapshot({
       masterProjectId,

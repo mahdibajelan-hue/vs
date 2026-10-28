@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { REPORT_TYPES, REPORT_TYPE_LABEL_FA, type ReportType } from '../types'
 import { EMPTY_ARRAY, useReportingStore } from '../store/useReportingStore'
-import { useProjectIntelligence } from '../lib/useProjectIntelligence'
+import { useProjectIntelligence, useProjectMetricsLite } from '../lib/useProjectIntelligence'
 import { DEFAULT_PROFILE_WIDGETS } from '../lib/widgetRegistry'
 import { WidgetGrid } from '../components/WidgetGrid'
 import type { WidgetComputeContext } from '../lib/widgetTypes'
@@ -10,6 +10,7 @@ import type { WidgetComputeContext } from '../lib/widgetTypes'
 export function DashboardPage({ masterProjectId }: { masterProjectId: string }) {
   const [reportType, setReportType] = useState<ReportType>('management')
   const { bundle, previousBundle, loading } = useProjectIntelligence(masterProjectId)
+  const metrics = useProjectMetricsLite(masterProjectId)
   const decisions = useReportingStore((s) => s.decisionsByProject[masterProjectId] ?? EMPTY_ARRAY)
   const actions = useReportingStore((s) => s.actionsByProject[masterProjectId] ?? EMPTY_ARRAY)
 
@@ -21,7 +22,7 @@ export function DashboardPage({ masterProjectId }: { masterProjectId: string }) 
     )
   }
 
-  const ctx: WidgetComputeContext = { bundle, previousBundle, decisions, actions }
+  const ctx: WidgetComputeContext = { bundle, previousBundle, decisions, actions, metrics }
 
   return (
     <div className="space-y-4">
