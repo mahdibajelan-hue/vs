@@ -1,3 +1,4 @@
+import { batchedRows, shared, sortBy } from '../../lib/batchedQuery'
 import { supabase } from '../../lib/supabaseClient'
 
 type Row = Record<string, unknown>
@@ -23,7 +24,7 @@ export interface LifecycleInputs {
  * yet gets one on first use, named after the project, so the lifecycle, the radar and the dashboard always have one.
  */
 export async function ensureLifecycleProject(masterProjectId: string): Promise<string | null> {
-  const { data } = await supabase.from('sg_projects').select('name').eq('master_project_id', masterProjectId).maybeSingle()
+  const [data] = await batchedRows({ table: 'sg_projects', column: 'master_project_id', select: 'name, master_project_id' }, masterProjectId)
   if (data) return s((data as Row).name)
   const { data: mp } = await supabase.from('master_projects').select('official_name, status').eq('id', masterProjectId).maybeSingle()
   if (!mp) return null
@@ -38,13 +39,16 @@ export async function ensureLifecycleProject(masterProjectId: string): Promise<s
 export async function loadLifecycleInputs(masterProjectId: string): Promise<LifecycleInputs | null> {
   const project = await ensureLifecycleProject(masterProjectId)
   if (!project) return null
-  const [ph, pr, sc, hi, rep] = await Promise.all([
-    supabase.from('sg_lifecycle_phases').select('code, sort_order, title, gate_name, progress_engine').eq('is_active', true).order('sort_order'),
-    supabase.from('sg_project_lifecycle_phases').select('phase_code, weight_pct, planned_start, planned_finish, actual_start, actual_finish, manual_actual_pct, gate_status').eq('project_name', project),
-    supabase.from('sg_lifecycle_schedule_items').select('id, phase_code, parent_id, weight_pct, manual_actual_pct, planned_start, planned_finish').eq('project_name', project),
-    supabase.from('sg_lifecycle_progress_history').select('phase_code, new_pct, recorded_at').eq('project_name', project).order('recorded_at'),
-    supabase.from('sg_client_reports').select('*').eq('project_name', project).order('created_at', { ascending: false }).limit(1),
+  // batched: every project loading at the same time shares one query per table (see lib/batchedQuery)
+  const by = (table: string) => batchedRows({ table, column: 'project_name' }, project)
+  const [ph, prRows, scRows, hiRows, repRows] = await Promise.all([
+    shared('sg_lifecycle_phases:active', () => supabase.from('sg_lifecycle_phases').select('*').eq('is_active', true).order('sort_order')),
+    by('sg_project_lifecycle_phases'),
+    by('sg_lifecycle_schedule_items'),
+    by('sg_lifecycle_progress_history').then((r) => sortBy(r, 'recorded_at')),
+    by('sg_client_reports').then((r) => sortBy(r, 'created_at', true).slice(0, 1)),
   ])
+  const pr = { data: prRows }, sc = { data: scRows }, hi = { data: hiRows }, rep = { data: repRows }
   if (ph.error || !ph.data?.length) return null
   return {
     project,

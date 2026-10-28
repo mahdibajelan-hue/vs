@@ -1,5 +1,6 @@
 import { loadEpcProgress } from '../../epc/epcProgressLoader'
 import { supabase } from '../../../lib/supabaseClient'
+import { batchedRows, shared, sortBy } from '../../../lib/batchedQuery'
 import type { ProjectLifecycleBundle } from '../store/useLifecycleStore'
 import { buildStageGateBundle, type SgItemDef } from './stageGateBundle'
 import {
@@ -13,32 +14,34 @@ const sn = (v: unknown) => (v == null || v === '' ? null : String(v))
 
 /** The control-tower bundle of a master project, built from its linked Stage-Gate project (null when it has none). */
 export async function loadStageGateBundle(masterProjectId: string): Promise<ProjectLifecycleBundle | null> {
-  const { data: proj } = await supabase.from('sg_projects').select('name').eq('master_project_id', masterProjectId).maybeSingle()
-  const project = sn((proj as Row | null)?.name)
+  // batched: every project loading at the same time shares one query per table (see lib/batchedQuery)
+  const [proj] = await batchedRows({ table: 'sg_projects', column: 'master_project_id', select: 'name, master_project_id' }, masterProjectId)
+  const project = sn((proj as Row | undefined)?.name)
   if (!project) return null
-  const [ph, du, ob, out, cr, it, dc, pr, sc, hi, ms, hl, wn, ac, lc, rep] = await Promise.all([
-    supabase.from('sg_lifecycle_phases').select('*').eq('is_active', true),
-    supabase.from('sg_lifecycle_phase_durations').select('phase_code, duration_days'),
-    supabase.from('sg_lifecycle_objectives').select('id, phase_code, seq, title, description').eq('is_active', true),
-    supabase.from('sg_lifecycle_outputs').select('id, phase_code, seq, title, description').eq('is_active', true),
-    supabase.from('sg_lifecycle_criteria').select('id, phase_code, seq, title, description, is_mandatory').eq('is_active', true),
-    supabase.from('sg_project_phase_items').select('*').eq('project_name', project),
-    supabase.from('sg_lifecycle_gate_decisions').select('*').eq('project_name', project),
-    supabase.from('sg_project_lifecycle_phases').select('*').eq('project_name', project),
-    supabase.from('sg_lifecycle_schedule_items').select('*').eq('project_name', project),
-    supabase.from('sg_lifecycle_progress_history').select('*').eq('project_name', project),
-    supabase.from('plc_milestones').select('*').eq('project_id', masterProjectId),
-    supabase.from('plc_health_scores').select('*').eq('project_id', masterProjectId),
-    supabase.from('plc_early_warnings').select('*').eq('project_id', masterProjectId).eq('status', 'open'),
-    supabase.from('rasta_actions').select('*').eq('master_project_id', masterProjectId),
-    supabase.from('plc_project_lifecycle').select('health_override, health_override_reason, health_override_by, health_override_at').eq('project_id', masterProjectId).maybeSingle(),
-    supabase.from('sg_client_reports').select('*').eq('project_name', project).order('created_at', { ascending: false }).limit(1),
+  const byName = (table: string) => batchedRows({ table, column: 'project_name' }, project).then((data) => ({ data }))
+  const byId = (table: string, column = 'project_id', eq?: Record<string, string>) => batchedRows({ table, column, eq }, masterProjectId).then((data) => ({ data }))
+  const [ph, du, ob, out, cr, it, dc, pr, sc, hi, ms, hl, wn, ac, lcRows, rep] = await Promise.all([
+    shared('sg_lifecycle_phases:active', () => supabase.from('sg_lifecycle_phases').select('*').eq('is_active', true).order('sort_order')),
+    shared('sg_lifecycle_phase_durations', () => supabase.from('sg_lifecycle_phase_durations').select('phase_code, duration_days')),
+    shared('sg_lifecycle_objectives', () => supabase.from('sg_lifecycle_objectives').select('id, phase_code, seq, title, description').eq('is_active', true)),
+    shared('sg_lifecycle_outputs', () => supabase.from('sg_lifecycle_outputs').select('id, phase_code, seq, title, description').eq('is_active', true)),
+    shared('sg_lifecycle_criteria', () => supabase.from('sg_lifecycle_criteria').select('id, phase_code, seq, title, description, is_mandatory').eq('is_active', true)),
+    byName('sg_project_phase_items'),
+    byName('sg_lifecycle_gate_decisions'),
+    byName('sg_project_lifecycle_phases'),
+    byName('sg_lifecycle_schedule_items'),
+    byName('sg_lifecycle_progress_history'),
+    byId('plc_milestones'),
+    byId('plc_health_scores'),
+    byId('plc_early_warnings', 'project_id', { status: 'open' }),
+    byId('rasta_actions', 'master_project_id'),
+    byId('plc_project_lifecycle'),
+    byName('sg_client_reports').then((r) => ({ data: sortBy(r.data, 'created_at', true).slice(0, 1) })),
   ])
+  const lc = { data: (lcRows.data[0] ?? null) as Row | null }
   if (ph.error) return null
   const milestones = ((ms.data ?? []) as PlcMilestoneRow[]).map(milestoneFromRow)
-  const fh = milestones.length
-    ? await supabase.from('plc_milestone_forecast_history').select('*').in('milestone_id', milestones.map((m) => m.id)).order('recorded_at')
-    : { data: [] }
+  const fh = { data: sortBy(milestones.length ? await batchedRows({ table: 'plc_milestone_forecast_history', column: 'milestone_id' }, milestones.map((m) => m.id)) : [], 'recorded_at') }
   const days = new Map(((du.data ?? []) as Row[]).map((r) => [s(r.phase_code), Number(r.duration_days)]))
   const def = (kind: SgItemDef['kind']) => (r: Row): SgItemDef => ({ id: Number(r.id), phase: s(r.phase_code), kind, seq: Number(r.seq), title: s(r.title).replace(/\s*\[NEEDS REVIEW\]/i, ''), description: s(r.description), mandatory: kind === 'criterion' ? r.is_mandatory !== false : false })
   const lcRow = lc.data as Row | null

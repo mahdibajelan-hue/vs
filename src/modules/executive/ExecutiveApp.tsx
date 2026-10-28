@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Activity, Briefcase, FlaskConical, Gavel, HardHat, LayoutDashboard, ListTree, Loader2, ShieldAlert, Star } from 'lucide-react'
+import { Activity, Briefcase, CircleHelp, ClipboardList, FlaskConical, Gavel, HardHat, LayoutDashboard, ListTree, Loader2, ShieldAlert, Star } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -14,6 +14,8 @@ import { RiskTab } from './pages/RiskTab'
 import { DecisionsTab } from './pages/DecisionsTab'
 import { ScenarioTab } from './pages/ScenarioTab'
 import { ResourceTab } from './pages/ResourceTab'
+import { IssuesTab } from './pages/IssuesTab'
+import { GuideTab } from './pages/GuideTab'
 import { DecisionDialog } from './components/DecisionDialog'
 import { faNum } from './components/pfUi'
 import './mpv.css'
@@ -21,16 +23,18 @@ import './portfolio.css'
 
 const MODULE_ACCENT = '#6366f1'
 
-type Tab = 'overview' | 'priority' | 'performance' | 'scenario' | 'resources' | 'risk' | 'decisions' | 'pipeline'
+type Tab = 'overview' | 'priority' | 'performance' | 'scenario' | 'resources' | 'issues' | 'risk' | 'decisions' | 'pipeline' | 'guide'
 const TABS: { key: Tab; label: string; icon: ReactNode }[] = [
   { key: 'overview', label: 'نمای کلی', icon: <LayoutDashboard size={15} /> },
   { key: 'priority', label: 'اولویت‌بندی', icon: <Star size={15} /> },
   { key: 'performance', label: 'عملکرد و پیش‌بینی', icon: <Activity size={15} /> },
   { key: 'scenario', label: 'سناریو و بودجه', icon: <FlaskConical size={15} /> },
   { key: 'resources', label: 'ظرفیت منابع', icon: <HardHat size={15} /> },
+  { key: 'issues', label: 'موانع و مسائل', icon: <ClipboardList size={15} /> },
   { key: 'risk', label: 'ریسک و وابستگی', icon: <ShieldAlert size={15} /> },
   { key: 'decisions', label: 'تصمیم‌های سبد', icon: <Gavel size={15} /> },
   { key: 'pipeline', label: 'مراحل چرخهٔ عمر', icon: <ListTree size={15} /> },
+  { key: 'guide', label: 'راهنما', icon: <CircleHelp size={15} /> },
 ]
 
 /**
@@ -43,7 +47,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
   const portfolios = useMasterDataStore((s) => s.portfolios)
   const programs = useMasterDataStore((s) => s.programs)
-  const [tab, setTab] = useState<Tab>(() => (useModuleStore.getState().takeEntryTab() === 'pipeline' ? 'pipeline' : 'overview'))
+  const [tab, setTab] = useState<Tab>(() => { const e = useModuleStore.getState().takeEntryTab(); return e === 'pipeline' || e === 'issues' || e === 'guide' ? e : 'overview' })
   const [scope, setScope] = useState<PortfolioScope>({ portfolioId: null, programId: null })
   const [deciding, setDeciding] = useState<{ id: string | null } | null>(null)
   const canGovern = usePortfolioStore((s) => s.canGovern)
@@ -88,7 +92,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
             <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'is-on' : ''} onClick={() => setTab(t.key)}>{t.icon}{t.label}</button>
           ))}
         </nav>
-        {tab !== 'pipeline' && (
+        {tab !== 'pipeline' && tab !== 'guide' && (
           <div className="pf-scope">
             <select aria-label="پورتفولیو" value={scope.portfolioId ?? ''} onChange={(e) => setScope({ portfolioId: e.target.value || null, programId: null })}>
               <option value="">همهٔ پورتفولیوها</option>
@@ -99,7 +103,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
               {scopedPrograms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             {!pv.snapshotsReady && pv.progress.total > 0 && (
-              <span className="pf-loading" role="status"><Loader2 size={13} className="animate-spin" /> شاخص پروژه‌ها {faNum(pv.progress.done)} از {faNum(pv.progress.total)}</span>
+              <span className="pf-loading" role="status"><Loader2 size={13} className="animate-spin" /> {pv.cachedAt ? `نمایش دادهٔ ${faNum(Math.max(1, Math.round((Date.now() - pv.cachedAt) / 60000)))} دقیقه پیش · در حال به‌روزرسانی` : `شاخص پروژه‌ها ${faNum(pv.progress.done)} از ${faNum(pv.progress.total)}`}</span>
             )}
           </div>
         )}
@@ -108,12 +112,14 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4" dir="rtl">
         <div key={tab} className="pf-page">
           {tab === 'pipeline' ? <LifecyclePipelinePage onBack={() => setTab('overview')} />
+            : tab === 'guide' ? <GuideTab onOpenTab={(t) => setTab(t as Tab)} />
             : !pv.rawLoaded ? <div className="pf-skel-grid">{[0, 1, 2, 3].map((i) => <div key={i} className="pf-skel" />)}</div>
             : tab === 'overview' ? <OverviewTab views={pv.views} currency={pv.currency} canGovern={canGovern} onDecide={(id) => setDeciding({ id })} onOpenPipeline={() => setTab('pipeline')} onOpenTab={setTab} />
             : tab === 'priority' ? <PriorityTab views={pv.views} currency={pv.currency} />
             : tab === 'performance' ? <PerformanceTab views={pv.views} currency={pv.currency} />
             : tab === 'scenario' ? <ScenarioTab views={pv.views} projects={pv.inScope} currency={pv.currency} />
             : tab === 'resources' ? <ResourceTab views={pv.views} />
+            : tab === 'issues' ? <IssuesTab projects={pv.inScope} issuesByMaster={pv.issuesByMaster} />
             : tab === 'risk' ? <RiskTab views={pv.views} risks={pv.scopedRisks} assessments={pv.scopedAssessments} summaries={pv.summaries} />
             : <DecisionsTab views={pv.views} onDecide={(id) => setDeciding({ id })} />}
         </div>

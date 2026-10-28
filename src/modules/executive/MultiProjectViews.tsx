@@ -7,7 +7,6 @@ import { openPortfolioView } from '../../components/common/PortfolioViewButton'
 
 const VIEWS: { module: ModuleKey; tab?: string; title: string; text: string; icon: LucideIcon; color: string }[] = [
   { module: 'risk', tab: 'portfolio', title: 'ریسک در سطح سبد', text: 'ریسک‌های مشترک، علل تکرارشونده و پروژه‌های نیازمند مداخله', icon: ShieldAlert, color: '#f43f5e' },
-  { module: 'issues', tab: 'portfolio', title: 'موانع و مسائل سه‌سطحی', text: 'پروژه ← طرح ← سبد: تجمیع موانع و تأخیرها', icon: ClipboardList, color: '#f97316' },
   { module: 'finance', tab: 'cash:portfolio', title: 'نقدینگی سبد پروژه‌ها', text: 'جریان نقدی پیش‌بینی‌شدهٔ همهٔ پروژه‌ها کنار هم', icon: BadgeDollarSign, color: '#10b981' },
   { module: 'change', tab: 'dashboard', title: 'تغییرات همهٔ پروژه‌ها', text: 'درخواست‌های تغییر، اثر هزینه و زمان در کل سبد', icon: GitPullRequestArrow, color: '#eab308' },
 ]
@@ -16,7 +15,7 @@ const VIEWS: { module: ModuleKey; tab?: string; title: string; text: string; ico
  * نماهای چندپروژه‌ای — the same project modules, opened for every project of the portfolio at once.
  * Inside a project (from the radar) these modules show one project only; here they show them all.
  */
-export function MultiProjectViews({ onOpenPipeline }: { onOpenPipeline: () => void }) {
+export function MultiProjectViews({ onOpenPipeline, onOpenIssues }: { onOpenPipeline: () => void; onOpenIssues?: () => void }) {
   const access = useModuleAccessStore((s) => s.accessibleModules)
   const list = VIEWS.filter((v) => hasModuleAccess(access, v.module))
   return (
@@ -32,6 +31,14 @@ export function MultiProjectViews({ onOpenPipeline }: { onOpenPipeline: () => vo
           <span className="mpv-text">چند پروژه در هر مرحلهٔ G1 تا G9، گام جاری و آخرین اقدام هر کدام</span>
           <ArrowLeft size={14} className="mpv-go" aria-hidden />
         </button>
+        {onOpenIssues && (
+          <button type="button" className="mpv-card" style={{ '--c': '#f97316' } as CSSProperties} onClick={onOpenIssues}>
+            <span className="mpv-ico"><ClipboardList size={17} aria-hidden /></span>
+            <span className="mpv-title">موانع و مسائل سه‌سطحی</span>
+            <span className="mpv-text">سبد ← طرح ← پروژه: معوق، سن، زمان رفع، نسبت رفع به ورود و دسته‌های مشترک</span>
+            <ArrowLeft size={14} className="mpv-go" aria-hidden />
+          </button>
+        )}
         {list.map((v) => (
           <button key={v.module} type="button" className="mpv-card" style={{ '--c': v.color } as CSSProperties} onClick={() => openPortfolioView(v.module, v.tab)}>
             <span className="mpv-ico"><v.icon size={17} aria-hidden /></span>

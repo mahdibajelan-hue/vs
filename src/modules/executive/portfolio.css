@@ -221,3 +221,24 @@ button.pf-dec-count:active { transform: scale(.97); }
 .pf-delivery-sum { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-bottom: .6rem; font-size: 12.5px; }
 .pf-delivery-sum b { font-size: 1.15rem; margin-inline-end: .2rem; }
 @media (max-width: 640px) { .pf-sc-head { grid-template-columns: 1fr; } }
+
+/* ── issues tree + guide ─────────────────────────────────────────────── */
+.pf-tree-group td { background: color-mix(in srgb, var(--text-muted) 6%, transparent); }
+.pf-tree-btn { display: inline-flex; align-items: center; gap: .3rem; text-align: right; }
+.pf-guide-start { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); list-style: none; margin: .4rem 0 0; padding: 0; }
+.pf-guide-start li { display: flex; gap: .55rem; padding: .6rem .7rem; border-radius: .75rem; border: 1px solid var(--border-soft); background: var(--bg-app); }
+.pf-guide-start span { flex: none; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: .45rem; font-size: 12px; font-weight: 800; color: #6366f1; background: color-mix(in srgb, #6366f1 14%, transparent); }
+.pf-guide-start b { font-size: 12.5px; }
+.pf-guide-start p { font-size: 11.5px; color: var(--text-secondary); line-height: 1.75; margin-top: .1rem; }
+.pf-guide-sec { padding: 0; }
+.pf-guide-head { width: 100%; display: flex; align-items: center; gap: .5rem; padding: .8rem 1rem; text-align: right; }
+.pf-guide-head span { display: grid; gap: .1rem; }
+.pf-guide-head b { font-size: 13px; }
+.pf-guide-head small { font-size: 11.5px; color: var(--text-secondary); }
+.pf-guide-body { padding: 0 1rem 1rem; display: grid; gap: .6rem; justify-items: start; }
+.pf-guide-body ul { list-style: disc; padding-inline-start: 1.2rem; display: grid; gap: .3rem; font-size: 12.5px; line-height: 1.85; }
+.pf-guide-body dl { display: grid; gap: .3rem; width: 100%; }
+.pf-guide-body dl div { display: grid; grid-template-columns: 9rem 1fr; gap: .5rem; padding: .35rem .5rem; border-radius: .5rem; background: var(--bg-app); font-size: 12px; }
+.pf-guide-body dt { font-weight: 700; }
+.pf-guide-body dd { color: var(--text-secondary); line-height: 1.7; }
+@media (max-width: 640px) { .pf-guide-body dl div { grid-template-columns: 1fr; } }

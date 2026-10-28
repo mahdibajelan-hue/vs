@@ -1,7 +1,7 @@
 import { useModuleStore } from '../../store/useModuleStore'
 import { PortfolioViewButton } from '../../components/common/PortfolioViewButton'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BarChart3, BookOpen, Building2, Plus, Telescope, Bell, CalendarDays, CircleHelp, ClipboardCheck, Gauge, Home, ListChecks, Loader2, Network, OctagonAlert, PieChart, Scale, Settings2, Workflow } from 'lucide-react'
+import { BarChart3, BookOpen, Building2, Plus, Telescope, Bell, CalendarDays, CircleHelp, ClipboardCheck, Gauge, Home, ListChecks, Loader2, OctagonAlert, PieChart, Scale, Settings2, Workflow } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useDeepLinkStore } from '../../store/useDeepLinkStore'
@@ -22,7 +22,6 @@ import { CalendarPage } from './pages/CalendarPage'
 import { MyWorkPage } from './pages/MyWorkPage'
 import { KpiReportPage } from './pages/KpiReportPage'
 import { ReportPage } from './pages/ReportPage'
-import { PortfolioRollupPage } from './pages/PortfolioRollupPage'
 import { PortfolioInsightsPage } from './pages/PortfolioInsightsPage'
 import { DecisionsPage } from './pages/DecisionsPage'
 import { KnowledgePage } from './pages/KnowledgePage'
@@ -54,7 +53,6 @@ const NAV: { id: Tab; label: string; icon: LucideIcon; color: string; help: Help
   { id: 'knowledge', label: 'دانش', icon: BookOpen, color: '#ec4899', help: 'knowledge' },
   { id: 'projects', label: 'پروژه‌ها', icon: Building2, color: '#0891b2', help: 'projects' },
   { id: 'report', label: 'گزارش تأخیر', icon: BarChart3, color: '#fb923c', help: 'lateReport' },
-  { id: 'portfolio', label: 'تحلیل سه‌سطحی', icon: Network, color: '#a78bfa', help: 'rollup' },
   { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#94a3b8', help: 'settings' },
   { id: 'help', label: 'راهنما', icon: CircleHelp, color: '#64748b', help: 'hub' },
 ]
@@ -180,7 +178,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
             {tab === 'knowledge' && <KnowledgePage onOpenIssue={openIssue} />}
             {tab === 'projects' && <ProjectsPage onOpenProject={(id) => { setScope(id); setTab('tracking') }} />}
             {tab === 'report' && <div className="im-page"><ReportPage onSelectIssue={openIssue} /></div>}
-            {tab === 'portfolio' && <div className="im-page"><PortfolioRollupPage onSelectIssue={openIssue} /></div>}
+            {tab === 'portfolio' && <div className="im-page"><MovedToPortfolio /></div>}
             {tab === 'settings' && <SettingsPage />}
             {tab === 'help' && <HelpPage />}
           </div>
@@ -193,6 +191,17 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
         <NewIssueModal defaultProjectId={newIssueProjectId === 'pick' ? null : newIssueProjectId} onClose={() => setNewIssueProjectId(null)} onCreated={(id) => openIssue(id)} />
       )}
       {selectedIssueId && <IssueDrawer key={selectedIssueId + drawerTab} issueId={selectedIssueId} initialTab={drawerTab} onClose={() => setSelectedIssueId(null)} />}
+    </div>
+  )
+}
+
+/** the three-level analysis now lives in Portfolio Management (with more indicators); old links land here */
+function MovedToPortfolio() {
+  return (
+    <div style={{ maxWidth: 560, margin: '3rem auto', textAlign: 'center', display: 'grid', gap: '.8rem' }}>
+      <p style={{ fontWeight: 800 }}>تحلیل سه‌سطحی موانع و مسائل به «مدیریت سبد پروژه‌ها» منتقل شد</p>
+      <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.9 }}>آن‌جا همان تجمیع سبد ← طرح ← پروژه با شاخص‌های بیشتر آمده است: نرخ معوق، سن مسائل باز، زمان رفع، نسبت رفع به ورود، تکرار پس از بستن و دسته‌های مشترک بین پروژه‌ها.</p>
+      <button type="button" onClick={() => useModuleStore.getState().enterModule('executive', undefined, 'issues')} style={{ justifySelf: 'center', padding: '.55rem 1.1rem', borderRadius: 12, border: '1px solid #a78bfa66', background: '#a78bfa22', color: '#c4b5fd', fontWeight: 700, fontSize: 12 }}>باز کردن در مدیریت سبد</button>
     </div>
   )
 }

@@ -26,7 +26,17 @@ const decisionFromRow = (r: Row): PfDecision => ({
   voided: !!r.voided, voidReason: String(r.void_reason ?? ''), decidedBy: (r.decided_by as string) ?? null, decidedAt: String(r.decided_at),
 })
 
-const CONCURRENCY = 3
+// all projects start together so the batched loaders (lib/batchedQuery) send one query per table for the whole
+// portfolio instead of one per project
+const CONCURRENCY = 24
+const CACHE_KEY = 'farin.pf.snapshots.v1'
+const CACHE_MAX_AGE = 12 * 3600 * 1000
+function readCache(): { at: number; data: Record<string, PfSnapshot | null> } | null {
+  try { const c = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null'); return c && Date.now() - c.at < CACHE_MAX_AGE ? c : null } catch { return null }
+}
+function writeCache(m: Map<string, PfSnapshot | null>) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), data: Object.fromEntries(m) })) } catch { /* storage full or blocked: the page still works */ }
+}
 
 interface PortfolioState {
   loaded: boolean
@@ -38,6 +48,8 @@ interface PortfolioState {
   canScore: boolean
   snapshots: Map<string, PfSnapshot | null>
   snapshotProgress: { done: number; total: number }
+  /** when the shown snapshots came from this browser's last visit (shown at once, refreshed in the background) */
+  cachedAt: number | null
   loadGovernance: () => Promise<void>
   loadSnapshots: (projectIds: string[]) => Promise<void>
   saveWeights: (w: PfWeights) => Promise<boolean>
@@ -58,6 +70,7 @@ export const usePortfolioStore = create<PortfolioState>()((set, get) => ({
   canScore: false,
   snapshots: new Map(),
   snapshotProgress: { done: 0, total: 0 },
+  cachedAt: null,
 
   loadGovernance: async () => {
     const [st, sc, dc, gov, sco, pf] = await Promise.all([
@@ -86,7 +99,15 @@ export const usePortfolioStore = create<PortfolioState>()((set, get) => ({
 
   loadSnapshots: async (ids) => {
     const run = ++snapshotRun
-    const todo = ids.filter((id) => !get().snapshots.has(id))
+    // stale-while-revalidate: show the last visit's figures at once, then recompute everything in the background
+    let todo = ids.filter((id) => !get().snapshots.has(id))
+    if (get().snapshots.size === 0) {
+      const c = readCache()
+      if (c) {
+        set({ snapshots: new Map(Object.entries(c.data)), cachedAt: c.at })
+        todo = ids
+      }
+    }
     set({ snapshotProgress: { done: ids.length - todo.length, total: ids.length } })
     let i = 0
     const worker = async () => {
@@ -116,6 +137,7 @@ export const usePortfolioStore = create<PortfolioState>()((set, get) => ({
       }
     }
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, todo.length) }, worker))
+    if (run === snapshotRun) { writeCache(get().snapshots); set({ cachedAt: null }) }
   },
 
   saveWeights: async (w) => {

@@ -62,5 +62,6 @@ export function usePortfolioViews(scope: PortfolioScope) {
   const currency = inScope.find((p) => p.currency)?.currency ?? 'ریال'
   const snapshotsReady = st.snapshotProgress.total > 0 && st.snapshotProgress.done >= st.snapshotProgress.total
 
-  return { views, summaries, scopedRisks, scopedAssessments, currency, rawLoaded: !!raw, snapshotsReady, progress: st.snapshotProgress, inScope }
+  const issuesByMaster = raw?.issuesByMaster ?? null
+  return { views, summaries, scopedRisks, scopedAssessments, currency, rawLoaded: !!raw, snapshotsReady, progress: st.snapshotProgress, inScope, issuesByMaster, cachedAt: st.cachedAt }
 }

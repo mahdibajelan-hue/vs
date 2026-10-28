@@ -10,7 +10,7 @@ const todayIso = () => new Date().toISOString().slice(0, 10)
 /** The three questions first: how is the portfolio, what needs my decision, where is the money at risk. */
 export function OverviewTab({ views, currency, canGovern, onDecide, onOpenPipeline, onOpenTab }: {
   views: PfProjectView[]; currency: string; canGovern: boolean
-  onDecide: (projectId: string) => void; onOpenPipeline: () => void; onOpenTab: (t: 'priority' | 'performance') => void
+  onDecide: (projectId: string) => void; onOpenPipeline: () => void; onOpenTab: (t: 'priority' | 'performance' | 'issues') => void
 }) {
   const r = useMemo(() => rollup(views), [views])
   const queue = useMemo(() => decisionQueue(views, todayIso()), [views])
@@ -100,7 +100,7 @@ export function OverviewTab({ views, currency, canGovern, onDecide, onOpenPipeli
         </ol>
       </Panel>
 
-      <MultiProjectViews onOpenPipeline={onOpenPipeline} />
+      <MultiProjectViews onOpenPipeline={onOpenPipeline} onOpenIssues={() => onOpenTab('issues')} />
       <p className="pf-foot">سلامت، پیشرفت، SPI، CPI و EAC هر پروژه از همان موتور داشبورد پروژه خوانده می‌شود؛ رنگ‌ها: {Object.values(HEALTH_FA).map((h) => h.label).join('، ')}.</p>
     </div>
   )

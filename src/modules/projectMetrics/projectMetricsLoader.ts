@@ -18,9 +18,13 @@ import type { DerivedHealth, OverallHealth } from '../lifecycle/lib/health'
 const ACTIVE_RISK = new Set(['open', 'monitoring', 'escalated'])
 const LEVELS: [string, string][] = [['critical', 'بحرانی'], ['high', 'بالا'], ['medium', 'متوسط'], ['low', 'کم']]
 
-async function ensureFinance() {
+// one in-flight load for every caller: a portfolio page asks for all its projects at once
+let financeLoading: Promise<void> | null = null
+function ensureFinance(): Promise<void> {
   const f = useFinanceStore.getState(), c = useFinanceControlStore.getState()
-  await Promise.all([f.loaded ? null : f.fetchAll(), c.loaded ? null : c.fetchAll()]).catch(() => undefined)
+  if (f.loaded && c.loaded) return Promise.resolve()
+  financeLoading ??= Promise.all([f.loaded ? null : f.fetchAll(), c.loaded ? null : c.fetchAll()]).then(() => undefined, () => undefined).finally(() => { financeLoading = null })
+  return financeLoading
 }
 
 const OPEN_ISSUE = new Set(['open', 'in_progress', 'pending_approval'])

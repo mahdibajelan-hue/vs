@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabaseClient'
+import { batchedRows, sortBy } from '../../../lib/batchedQuery'
 import { projectFromRow } from '../../../lib/supabaseData'
 import type { Project } from '../../../types'
 import { rmActionFromRow, rmAssessmentFromRow, rmRiskFromRow, type RmRiskActionRow, type RmRiskAssessmentRow, type RmRiskRow } from '../../risk/lib/riskData'
@@ -29,25 +30,21 @@ interface MappingRow {
 
 async function resolveConfirmedMappings(masterProjectIds: string[]): Promise<MappingRow[]> {
   if (masterProjectIds.length === 0) return []
-  const { data } = await supabase
-    .from('rasta_project_mappings')
-    .select('master_project_id, source_module, source_project_id')
-    .in('master_project_id', masterProjectIds)
-    .eq('status', 'confirmed')
-  return (data ?? []) as MappingRow[]
+  // batched: projects loading together share one query (lib/batchedQuery)
+  return (await batchedRows({ table: 'rasta_project_mappings', column: 'master_project_id', select: 'master_project_id, source_module, source_project_id', eq: { status: 'confirmed' } }, masterProjectIds)) as unknown as MappingRow[]
 }
 
 /** Aggregates risk data across one or more rm_projects — a single id behaves exactly like the old per-project fetch. */
 async function fetchRiskBundle(sourceProjectIds: string[]): Promise<ProjectIntelligenceBundle['risk']> {
   if (sourceProjectIds.length === 0) return null
-  const { data: risks } = await supabase.from('rm_risks').select('*').in('project_id', sourceProjectIds)
+  const risks = await batchedRows({ table: 'rm_risks', column: 'project_id' }, sourceProjectIds)
   const riskIds = ((risks ?? []) as RmRiskRow[]).map((r) => r.id)
   if (riskIds.length === 0) {
     return { risks: [], assessments: [], actions: [] }
   }
-  const [{ data: assessments }, { data: actions }] = await Promise.all([
-    supabase.from('rm_risk_assessments').select('*').in('risk_id', riskIds),
-    supabase.from('rm_risk_actions').select('*').in('risk_id', riskIds),
+  const [assessments, actions] = await Promise.all([
+    batchedRows({ table: 'rm_risk_assessments', column: 'risk_id' }, riskIds),
+    batchedRows({ table: 'rm_risk_actions', column: 'risk_id' }, riskIds),
   ])
   return {
     risks: ((risks ?? []) as RmRiskRow[]).map(rmRiskFromRow),
@@ -59,8 +56,8 @@ async function fetchRiskBundle(sourceProjectIds: string[]): Promise<ProjectIntel
 /** Aggregates issue data across one or more im_projects — a single id behaves exactly like the old per-project fetch. */
 async function fetchIssueBundle(sourceProjectIds: string[]): Promise<ProjectIntelligenceBundle['issues']> {
   if (sourceProjectIds.length === 0) return null
-  const { data } = await supabase.from('im_issues').select('*').in('project_id', sourceProjectIds)
-  return { issues: ((data ?? []) as ImIssueRow[]).map(imIssueFromRow) }
+  const data = await batchedRows({ table: 'im_issues', column: 'project_id' }, sourceProjectIds)
+  return { issues: (data as unknown as ImIssueRow[]).map(imIssueFromRow) }
 }
 
 /**
@@ -70,10 +67,10 @@ async function fetchIssueBundle(sourceProjectIds: string[]): Promise<ProjectInte
  * widgets already render their own "no data" state for that (same as an unmapped project today).
  */
 async function fetchPipePulseBundle(sourceProjectId: string): Promise<ProjectIntelligenceBundle['pipepulse']> {
-  const [{ data: projectRow }, { data: lineRows }, { data: logRows }] = await Promise.all([
-    supabase.from('projects').select('*').eq('id', sourceProjectId).single(),
-    supabase.from('lines').select('*').eq('project_id', sourceProjectId).order('created_at'),
-    supabase.from('daily_logs').select('*').eq('project_id', sourceProjectId).order('date', { ascending: false }),
+  const [[projectRow], lineRows, logRows] = await Promise.all([
+    batchedRows({ table: 'projects', column: 'id' }, sourceProjectId),
+    batchedRows({ table: 'lines', column: 'project_id' }, sourceProjectId).then((r) => sortBy(r, 'created_at')),
+    batchedRows({ table: 'daily_logs', column: 'project_id' }, sourceProjectId).then((r) => sortBy(r, 'date', true)),
   ])
   if (!projectRow) return null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
