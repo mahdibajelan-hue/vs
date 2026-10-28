@@ -1,33 +1,55 @@
-import { useEffect, useState } from 'react'
-import { Briefcase, Loader2 } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Activity, Briefcase, Gavel, LayoutDashboard, ListTree, Loader2, ShieldAlert, Star } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
-import { ScheduleStatusCard } from './ScheduleStatusCard'
-import { PortfolioDashboardPage } from '../reporting/pages/PortfolioDashboardPage'
-import { MultiProjectViews } from './MultiProjectViews'
 import { LifecyclePipelinePage } from './LifecyclePipelinePage'
 import { useModuleStore } from '../../store/useModuleStore'
+import { usePortfolioStore } from './store/usePortfolioStore'
+import { usePortfolioViews, type PortfolioScope } from './lib/usePortfolioViews'
+import { OverviewTab } from './pages/OverviewTab'
+import { PriorityTab } from './pages/PriorityTab'
+import { PerformanceTab } from './pages/PerformanceTab'
+import { RiskTab } from './pages/RiskTab'
+import { DecisionsTab } from './pages/DecisionsTab'
+import { DecisionDialog } from './components/DecisionDialog'
+import { faNum } from './components/pfUi'
 import './mpv.css'
+import './portfolio.css'
 
 const MODULE_ACCENT = '#6366f1'
 
+type Tab = 'overview' | 'priority' | 'performance' | 'risk' | 'decisions' | 'pipeline'
+const TABS: { key: Tab; label: string; icon: ReactNode }[] = [
+  { key: 'overview', label: 'نمای کلی', icon: <LayoutDashboard size={15} /> },
+  { key: 'priority', label: 'اولویت‌بندی', icon: <Star size={15} /> },
+  { key: 'performance', label: 'عملکرد و پیش‌بینی', icon: <Activity size={15} /> },
+  { key: 'risk', label: 'ریسک و وابستگی', icon: <ShieldAlert size={15} /> },
+  { key: 'decisions', label: 'تصمیم‌های سبد', icon: <Gavel size={15} /> },
+  { key: 'pipeline', label: 'مراحل چرخهٔ عمر', icon: <ListTree size={15} /> },
+]
+
 /**
- * Standalone hub module for Portfolio Management — deliberately its own top-level app (not a tab
- * inside Reporting) so it reads as a distinct executive tool for senior management, reachable in
- * one click from the hub rather than buried inside another module's nav.
+ * Portfolio Management — its own top-level app for senior management (council review 1405/08): one scope picker
+ * (portfolio → program), and tabs by the job the manager is doing rather than one long page of widgets.
  */
 export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const masterDataLoaded = useMasterDataStore((s) => s.loaded)
   const masterDataLoading = useMasterDataStore((s) => s.loading)
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
-  // 'pipeline' = the lifecycle-stage report (also re-opened when coming back from Stage-Gate)
-  const [view, setView] = useState<'dashboard' | 'pipeline'>(() => (useModuleStore.getState().takeEntryTab() === 'pipeline' ? 'pipeline' : 'dashboard'))
+  const portfolios = useMasterDataStore((s) => s.portfolios)
+  const programs = useMasterDataStore((s) => s.programs)
+  const [tab, setTab] = useState<Tab>(() => (useModuleStore.getState().takeEntryTab() === 'pipeline' ? 'pipeline' : 'overview'))
+  const [scope, setScope] = useState<PortfolioScope>({ portfolioId: null, programId: null })
+  const [deciding, setDeciding] = useState<{ id: string | null } | null>(null)
+  const canGovern = usePortfolioStore((s) => s.canGovern)
 
   useEffect(() => {
     if (!masterDataLoaded) fetchMasterData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const pv = usePortfolioViews(scope)
 
   if (masterDataLoading && !masterDataLoaded) {
     return (
@@ -36,6 +58,8 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       </div>
     )
   }
+
+  const scopedPrograms = programs.filter((p) => !scope.portfolioId || p.portfolioId === scope.portfolioId)
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden" style={{ background: 'var(--bg-app)' }}>
@@ -46,26 +70,50 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           </div>
           <div className="leading-tight">
             <p className="text-sm font-extrabold">مدیریت سبد پروژه‌ها</p>
-            <p className="text-[10px] text-muted" dir="ltr">
-              Portfolio Management
-            </p>
+            <p className="text-[10px] text-muted">اولویت، عملکرد و تصمیم در سطح سبد</p>
           </div>
         </div>
-
         <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
       </header>
 
       <StorageErrorBanner />
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4">
-        {view === 'pipeline' ? <LifecyclePipelinePage onBack={() => setView('dashboard')} /> : (
-          <>
-            <MultiProjectViews onOpenPipeline={() => setView('pipeline')} />
-            <ScheduleStatusCard />
-            <PortfolioDashboardPage />
-          </>
+      <div className="pf-bar no-print" dir="rtl">
+        <nav className="pf-tabs" role="tablist" aria-label="بخش‌های پرتفولیو">
+          {TABS.map((t) => (
+            <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'is-on' : ''} onClick={() => setTab(t.key)}>{t.icon}{t.label}</button>
+          ))}
+        </nav>
+        {tab !== 'pipeline' && (
+          <div className="pf-scope">
+            <select aria-label="پورتفولیو" value={scope.portfolioId ?? ''} onChange={(e) => setScope({ portfolioId: e.target.value || null, programId: null })}>
+              <option value="">همهٔ پورتفولیوها</option>
+              {portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <select aria-label="طرح" value={scope.programId ?? ''} onChange={(e) => setScope((s) => ({ ...s, programId: e.target.value || null }))}>
+              <option value="">همهٔ طرح‌ها</option>
+              {scopedPrograms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            {!pv.snapshotsReady && pv.progress.total > 0 && (
+              <span className="pf-loading" role="status"><Loader2 size={13} className="animate-spin" /> شاخص پروژه‌ها {faNum(pv.progress.done)} از {faNum(pv.progress.total)}</span>
+            )}
+          </div>
         )}
       </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4" dir="rtl">
+        <div key={tab} className="pf-page">
+          {tab === 'pipeline' ? <LifecyclePipelinePage onBack={() => setTab('overview')} />
+            : !pv.rawLoaded ? <div className="pf-skel-grid">{[0, 1, 2, 3].map((i) => <div key={i} className="pf-skel" />)}</div>
+            : tab === 'overview' ? <OverviewTab views={pv.views} currency={pv.currency} canGovern={canGovern} onDecide={(id) => setDeciding({ id })} onOpenPipeline={() => setTab('pipeline')} onOpenTab={setTab} />
+            : tab === 'priority' ? <PriorityTab views={pv.views} currency={pv.currency} />
+            : tab === 'performance' ? <PerformanceTab views={pv.views} currency={pv.currency} />
+            : tab === 'risk' ? <RiskTab views={pv.views} risks={pv.scopedRisks} assessments={pv.scopedAssessments} summaries={pv.summaries} />
+            : <DecisionsTab views={pv.views} onDecide={(id) => setDeciding({ id })} />}
+        </div>
+      </div>
+
+      {deciding && <DecisionDialog views={pv.views} initialId={deciding.id} onClose={() => setDeciding(null)} />}
     </div>
   )
 }

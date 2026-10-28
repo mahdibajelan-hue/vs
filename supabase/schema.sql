@@ -20537,3 +20537,69 @@ $f$;
 --     links to the real risk / issue records (mtl_links, mtl_raise), audit (mtl_audit). All decisions go through security-definer RPCs.
 --     Existing rows in §20 were produced by the demo generator and are flagged is_demo.
 -- ============================================================================
+
+-- ============================================================================
+-- Portfolio governance (module «مدیریت پرتفولیو», key executive) — council review 1405/08:
+-- prioritisation weights, the two scores a portfolio owner records per project, and portfolio
+-- decisions (never deleted; voided with a reason). Writes follow the executive module's own
+-- permissions: edit → scores, approve/configure → decisions and weights.
+-- ============================================================================
+create or replace function pf_can_govern()
+returns boolean language sql stable security definer set search_path = public as $$
+  select is_admin_user() or rasta_has_permission(auth.uid(), 'executive', 'approve') or rasta_has_permission(auth.uid(), 'executive', 'configure');
+$$;
+create or replace function pf_can_score()
+returns boolean language sql stable security definer set search_path = public as $$
+  select pf_can_govern() or rasta_has_permission(auth.uid(), 'executive', 'edit');
+$$;
+
+create table if not exists pf_settings (
+  id boolean primary key default true check (id),
+  weights jsonb not null default '{"strategic":30,"value":20,"benefit":15,"risk":15,"performance":20}'::jsonb,
+  updated_by uuid default auth.uid(),
+  updated_at timestamptz not null default now()
+);
+alter table pf_settings enable row level security;
+drop policy if exists "pf_settings_read" on pf_settings;
+create policy "pf_settings_read" on pf_settings for select to authenticated using (true);
+drop policy if exists "pf_settings_write" on pf_settings;
+create policy "pf_settings_write" on pf_settings for all to authenticated using (pf_can_govern()) with check (pf_can_govern());
+insert into pf_settings (id) values (true) on conflict (id) do nothing;
+
+create table if not exists pf_project_scores (
+  master_project_id uuid primary key references master_projects (id) on delete cascade,
+  strategic smallint check (strategic between 1 and 5),
+  benefit smallint check (benefit between 1 and 5),
+  mandatory boolean not null default false,
+  note text not null default '',
+  updated_by uuid default auth.uid(),
+  updated_at timestamptz not null default now()
+);
+alter table pf_project_scores enable row level security;
+drop policy if exists "pf_scores_read" on pf_project_scores;
+create policy "pf_scores_read" on pf_project_scores for select to authenticated using (is_admin_user() or rasta_user_can_access_master_project(master_project_id));
+drop policy if exists "pf_scores_write" on pf_project_scores;
+create policy "pf_scores_write" on pf_project_scores for all to authenticated using (pf_can_score()) with check (pf_can_score());
+
+create table if not exists pf_decisions (
+  id uuid primary key default gen_random_uuid(),
+  master_project_id uuid not null references master_projects (id) on delete cascade,
+  decision text not null check (decision in ('continue', 'accelerate', 'replan', 'hold', 'terminate', 'escalate')),
+  rationale text not null check (length(trim(rationale)) > 0),
+  conditions text not null default '',
+  review_by date,
+  health_at_decision text,
+  priority_at_decision numeric,
+  voided boolean not null default false,
+  void_reason text not null default '',
+  decided_by uuid default auth.uid(),
+  decided_at timestamptz not null default now()
+);
+alter table pf_decisions enable row level security;
+drop policy if exists "pf_decisions_read" on pf_decisions;
+create policy "pf_decisions_read" on pf_decisions for select to authenticated using (is_admin_user() or rasta_user_can_access_master_project(master_project_id));
+drop policy if exists "pf_decisions_insert" on pf_decisions;
+create policy "pf_decisions_insert" on pf_decisions for insert to authenticated with check (pf_can_govern() and decided_by = auth.uid());
+drop policy if exists "pf_decisions_void" on pf_decisions;
+create policy "pf_decisions_void" on pf_decisions for update to authenticated using (pf_can_govern()) with check (pf_can_govern());
+create index if not exists idx_pf_decisions_project on pf_decisions (master_project_id, decided_at desc);

@@ -855,7 +855,7 @@ function ImportanceHealthMatrixWidget({ summaries, onDrillProject }: { summaries
 // risk identification/review dates (riskAnalytics.computeExposureTimeline) — never fabricated.
 // ---------------------------------------------------------------------------
 
-function RiskExposureTrendWidget({ risks, assessments }: { risks: RmRisk[]; assessments: RmRiskAssessment[] }) {
+export function RiskExposureTrendWidget({ risks, assessments }: { risks: RmRisk[]; assessments: RmRiskAssessment[] }) {
   const gradientId = useId()
   const points = useMemo(() => computeExposureTimeline(risks, assessments), [risks, assessments])
 
@@ -1174,7 +1174,7 @@ function ExecutiveDecisionsWidget({
   )
 }
 
-function DependencyWidget({
+export function DependencyWidget({
   dependencies,
   summaries,
   allProjects,
