@@ -2064,6 +2064,9 @@ select option {
 @media (max-width: 639px) {
   .tb-guide-btn { flex-direction: column; justify-content: center; gap: 1px; height: auto; min-width: 42px; margin-inline-start: 7px; padding: 4px 6px 3px; border-radius: 13px; font-size: 9.5px; }
   .tb-guide-btn::before { inset-inline-start: -4px; }
+  /* when the shortcut row sits on its own line, the guide goes to the opposite (left) end of it */
+  .tb-bar:has(.tb-guide-btn) { flex-grow: 1; }
+  .tb-bar .tb-guide-btn { margin-inline-start: auto; }
 }
 
 /* the shared module guide: a panel from the guide button's side */
