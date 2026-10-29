@@ -139,9 +139,9 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
               </select>
             )}
             {locked && <PortfolioViewButton module="issues" tab="portfolio" />}
-            {tab !== 'help' && <HelpButton topic={cur.help} />}
+            {tab !== 'help' && <HelpButton topic={cur.help} label="راهنمای این بخش" />}
             <button className="im-btn im-btn-primary im-btn-lg im-head-new" onClick={() => openNew()}><Plus size={18} strokeWidth={2.6} /> مسئلهٔ جدید</button>
-            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
+            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setTab(tab === 'help' ? 'home' : 'help')} guideActive={tab === 'help'} />
           </div>
         </div>
         <nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت موانع و اقدامات">

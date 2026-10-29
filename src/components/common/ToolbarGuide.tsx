@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { create } from 'zustand'
-import { Home, Inbox, LayoutDashboard, Radar, Search, Sun, UserCircle2, X, CircleHelp } from 'lucide-react'
+import { Home, Inbox, LayoutDashboard, Radar, Search, Sun, UserCircle2, X, BookOpenText } from 'lucide-react'
 
 const KEY = 'farin.toolbarGuide.v1'
 const seen = () => { try { return localStorage.getItem(KEY) === '1' } catch { return true } }
@@ -21,9 +21,9 @@ const ROWS = [
   { icon: Search, c: TOOLBAR_ACCENTS.search, t: 'جستجو', d: 'پیدا کردن ماژول، پروژه یا کار؛ میانبر Ctrl+K.' },
   { icon: Sun, c: TOOLBAR_ACCENTS.theme, t: 'تم', d: 'جابه‌جایی بین حالت روشن و تیره.' },
   { icon: LayoutDashboard, c: TOOLBAR_ACCENTS.module, t: 'صفحهٔ اول', d: 'بازگشت به صفحهٔ اول همین ماژول.', moduleOnly: true },
-  { icon: CircleHelp, c: TOOLBAR_ACCENTS.guide, t: 'راهنما', d: 'در ماژول‌هایی که راهنما دارند: توضیح بخش‌ها، شاخص‌ها و روش محاسبه.', moduleOnly: true },
-  { icon: Radar, c: TOOLBAR_ACCENTS.radar, t: 'رادار', d: 'در ماژول‌های یک پروژه: بازگشت به رادار همان پروژه.', moduleOnly: true },
+    { icon: Radar, c: TOOLBAR_ACCENTS.radar, t: 'رادار', d: 'در ماژول‌های یک پروژه: بازگشت به رادار همان پروژه.', moduleOnly: true },
   { icon: Home, c: TOOLBAR_ACCENTS.home, t: 'خانه', d: 'بازگشت به صفحهٔ اصلی سامانه و فهرست همهٔ ماژول‌ها.', moduleOnly: true },
+  { icon: BookOpenText, c: TOOLBAR_ACCENTS.guide, t: 'راهنما', d: 'دکمهٔ رنگی انتهای نوار: توضیح بخش‌های ماژول، روش کار و روش محاسبهٔ شاخص‌ها.', moduleOnly: true },
 ]
 
 /** «میانبرهای بالای صفحه» — a small card under the bar that names each shortcut once. */

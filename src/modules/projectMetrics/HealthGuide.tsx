@@ -13,14 +13,14 @@ const fa = (v: number) => v.toLocaleString('fa-IR')
 export const healthColor = (h: ProjectHealth | null | undefined): string => (h ? (h.status === 'black' ? '#6b7280' : HEALTH_COLOR[h.status]) : 'var(--text-muted)')
 
 /**
- * «سلامت پروژه چطور حساب می‌شود؟» — the rules, the colours and this project's ten dimensions with the reason behind each.
+ * «روش محاسبهٔ سلامت پروژه» — the rules, the colours and this project's ten dimensions with the reason behind each.
  * Opens as a dialog from a small (?) button next to any health figure.
  */
 export function HealthGuideButton({ health, className = '' }: { health: ProjectHealth | null | undefined; className?: string }) {
   const [open, setOpen] = useState(false)
   return (
     <>
-      <button type="button" className={`hg-btn ${className}`} onClick={() => setOpen(true)} aria-label="راهنمای محاسبهٔ سلامت پروژه" title="سلامت پروژه چطور حساب می‌شود؟">
+      <button type="button" className={`hg-btn ${className}`} onClick={() => setOpen(true)} aria-label="راهنمای محاسبهٔ سلامت پروژه" title="روش محاسبهٔ سلامت پروژه">
         <HelpCircle size={14} aria-hidden />
       </button>
       {open && <HealthGuideDialog health={health} onClose={() => setOpen(false)} />}
@@ -42,7 +42,7 @@ function HealthGuideDialog({ health, onClose }: { health: ProjectHealth | null |
     <div className="hg-backdrop" onClick={onClose}>
       <div className="hg-dialog" dir="rtl" role="dialog" aria-modal="true" aria-labelledby="hg-title" tabIndex={-1} ref={ref} onClick={(e) => e.stopPropagation()}>
         <header className="hg-head">
-          <b id="hg-title">سلامت پروژه چطور حساب می‌شود؟</b>
+          <b id="hg-title">روش محاسبهٔ سلامت پروژه</b>
           <button type="button" className="hg-x" onClick={onClose} aria-label="بستن"><X size={16} /></button>
         </header>
 
@@ -55,21 +55,21 @@ function HealthGuideDialog({ health, onClose }: { health: ProjectHealth | null |
               <small>
                 {health.isOverridden ? `وضعیت به‌صورت دستی تعیین شده: ${health.overrideReason || '—'}`
                   : health.status === 'black' ? `گیت مسدود است${health.blockers.length ? `: ${health.blockers.join('، ')}` : '.'}`
-                  : health.drivenBy ? `رنگ را بُعد «${HEALTH_DIMENSION_LABEL_FA[health.drivenBy]}» تعیین کرده است.` : 'همهٔ ابعاد سبزند.'}
+                  : health.drivenBy ? `رنگ وضعیت را شاخص «${HEALTH_DIMENSION_LABEL_FA[health.drivenBy]}» تعیین کرده است.` : 'همهٔ ابعاد سبزند.'}
               </small>
             </span>
           </div>
         )}
 
         <ol className="hg-rules">
-          <li><b>عدد (۰ تا ۱۰۰):</b> میانگین امتیاز ابعادی که واقعاً ارزیابی شده‌اند ({fa(counted.length)} از {fa(dims.length || 10)} بعد). بعدی که داده ندارد در میانگین شمرده نمی‌شود.</li>
-          <li><b>رنگ:</b> رنگِ <u>بدترین</u> بعد است، نه رنگِ میانگین. پروژه‌ای که نُه بعد سبز و یک بعد قرمز دارد «سالم» نیست؛ برای همین ممکن است عدد بالا باشد ولی رنگ قرمز. عامل رنگ همیشه نام برده می‌شود.</li>
-          <li><b>آستانه‌ها:</b> امتیاز ۸۰ و بالاتر سبز، ۶۰ تا ۸۰ زرد، زیر ۶۰ قرمز.</li>
-          <li><b>سیاه (گیت مسدود):</b> وقتی در فاز جاری مسئلهٔ بحرانی باز هست یا Milestone بحرانی‌ای که تاریخش گذشته محقق نشده؛ در این حالت رنگ سیاه است و عدد همچنان میانگین ابعاد.</li>
-          <li><b>مهندسی، تدارکات، اجرا:</b> از شاخص عملکرد زمانی (SPI = پیشرفت واقعی ÷ برنامه‌ای) هر ماژول. SPI ≥ ۰٫۹۵ سبز، ۰٫۹۰ تا ۰٫۹۵ زرد، زیر ۰٫۹۰ قرمز (هر ۰٫۰۱ کمتر از ۱ = ۴ امتیاز).</li>
-          <li><b>زمان‌بندی:</b> SPI کل چرخهٔ عمر (همان عدد رادار). <b>هزینه:</b> CPI پیمان EPC. با همان مقیاس.</li>
-          <li><b>ریسک:</b> ۱۰۰ منهای ۲۰ امتیاز برای هر ریسک بحرانی باز.</li>
-          <li><b>کیفیت، HSE، قرارداد، جریان نقدی:</b> از امتیاز ثبت‌شدهٔ دستی؛ تا ثبت نشده «ارزیابی نشده» است.</li>
+          <li><b>عدد (۰ تا ۱۰۰):</b> میانگین امتیاز شاخص‌هایی که ارزیابی شده‌اند ({fa(counted.length)} از {fa(dims.length || 10)} شاخص). شاخصی که داده ندارد در میانگین وارد نمی‌شود.</li>
+          <li><b>رنگ:</b> رنگ وضعیت از <u>ضعیف‌ترین</u> شاخص تعیین می‌شود، نه از میانگین. پروژه‌ای که نُه شاخص سبز و یک شاخص قرمز دارد سالم به شمار نمی‌آید؛ به همین دلیل ممکن است امتیاز بالا باشد اما رنگ قرمز نمایش داده شود. شاخص تعیین‌کنندهٔ رنگ همیشه ذکر می‌شود.</li>
+          <li><b>آستانه‌ها:</b> امتیاز ۸۰ و بالاتر سبز، ۶۰ تا ۸۰ زرد و کمتر از ۶۰ قرمز است.</li>
+          <li><b>سیاه (گیت مسدود):</b> اگر در فاز جاری مسئلهٔ بحرانی باز وجود داشته باشد یا یک Milestone بحرانی پس از گذشت موعد محقق نشده باشد، رنگ وضعیت سیاه می‌شود و امتیاز همچنان میانگین شاخص‌هاست.</li>
+          <li><b>مهندسی، تدارکات، اجرا:</b> بر پایهٔ شاخص عملکرد زمانی هر ماژول (SPI، نسبت پیشرفت واقعی به برنامه‌ای). SPI برابر یا بیشتر از ۰٫۹۵ سبز، بین ۰٫۹۰ و ۰٫۹۵ زرد و کمتر از ۰٫۹۰ قرمز است. هر ۰٫۰۱ کاهش نسبت به ۱، چهار امتیاز کم می‌کند.</li>
+          <li><b>زمان‌بندی:</b> SPI کل چرخهٔ عمر، که همان عدد نمایش‌داده‌شده در رادار است. <b>هزینه:</b> CPI پیمان EPC با همان مقیاس.</li>
+          <li><b>ریسک:</b> از ۱۰۰ امتیاز، به ازای هر ریسک بحرانی باز ۲۰ امتیاز کم می‌شود.</li>
+          <li><b>کیفیت، HSE، قرارداد، جریان نقدی:</b> بر پایهٔ امتیازی که به‌صورت دستی ثبت می‌شود. تا زمانی که امتیازی ثبت نشده باشد، وضعیت «ارزیابی نشده» نمایش داده می‌شود.</li>
         </ol>
 
         {dims.length > 0 && (

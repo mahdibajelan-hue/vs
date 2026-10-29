@@ -1,6 +1,6 @@
 import { NavScroller } from './components/NavScroller'
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, BookOpen, Bot, Flame, CalendarRange, ClipboardList, Cpu, FileBarChart2, Gauge, HardHat, Inbox, Loader2, Settings2, ShieldCheck, TrendingUp } from 'lucide-react'
+import { AlertTriangle, Bot, Flame, CalendarRange, ClipboardList, Cpu, FileBarChart2, Gauge, HardHat, Inbox, Loader2, Settings2, ShieldCheck, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -121,8 +121,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
             {projects.length > 0 && (locked
               ? <span className="im-select-pill" style={{ pointerEvents: 'none' }}>{projects.find((p) => p.id === projectId)?.officialName}</span>
               : <select className="im-select-pill" value={projectId ?? ''} onChange={(e) => setProjectId(e.target.value || null)} aria-label="پروژه">{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select>)}
-            <button type="button" className="im-btn im-btn-primary im-btn-sm" onClick={() => setGuide(true)}><BookOpen size={14} /> راهنما</button>
-            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
+            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setGuide((g) => !g)} guideActive={guide} />
           </div>
         </div>
         <NavScroller label="بخش‌های مدیریت اجرا"><nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت اجرا">

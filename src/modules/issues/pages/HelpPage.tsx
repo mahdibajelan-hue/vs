@@ -15,7 +15,7 @@ export function HelpPage() {
   return (
     <div className="im-page">
       <div className="im-topbar">
-        <div><div className="im-page-title"><CircleHelp size={22} style={{ color: 'var(--im-muted-2)' }} />راهنمای کامل</div><div className="im-page-sub">آموزش هر بخش؛ در هر صفحه هم دکمهٔ «راهنما» همین متن را باز می‌کند</div></div>
+        <div><div className="im-page-title"><CircleHelp size={22} style={{ color: 'var(--im-muted-2)' }} />راهنمای کامل</div><div className="im-page-sub">توضیح همهٔ بخش‌ها. در هر صفحه، دکمهٔ «راهنمای این بخش» توضیح همان صفحه را باز می‌کند</div></div>
         <div style={{ position: 'relative', width: 'min(340px, 100%)' }}><Search size={14} style={{ position: 'absolute', insetInlineStart: 11, top: 12, color: 'var(--im-muted)' }} /><input style={{ paddingInlineStart: 32 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="جستجو در راهنما…" aria-label="جستجو" /></div>
       </div>
       <div className="im-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>

@@ -81,9 +81,9 @@ export function ChangeApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
               </select>
             )}
             {locked && <PortfolioViewButton module="change" tab="dashboard" />}
-            {tab !== 'help' && <HelpButton content={CM_HELP[cur.help]} />}
+            {tab !== 'help' && <HelpButton content={CM_HELP[cur.help]} label="راهنمای این بخش" />}
             {canNew && <button className="im-btn im-btn-primary im-btn-lg" onClick={() => setNewOpen(true)}><Plus size={18} strokeWidth={2.6} /> درخواست جدید</button>}
-            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
+            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setTab(tab === 'help' ? 'dashboard' : 'help')} guideActive={tab === 'help'} />
           </div>
         </div>
         <nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت تغییرات">

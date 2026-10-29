@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import { BookOpen, Boxes, Briefcase, CalendarDays, Gauge, HardHat, Loader2, Route as RouteIcon, Settings } from 'lucide-react'
+import { Boxes, Briefcase, CalendarDays, Gauge, HardHat, Loader2, Route as RouteIcon, Settings } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { useModuleStore } from '../../store/useModuleStore'
@@ -66,9 +66,8 @@ export function PipelineDigitalTwinApp({ onExitToHub, onBackToRadar }: { onExitT
           {st.phase && <span className="tw-chip hidden lg:inline-flex">فاز چرخهٔ عمر: <b>{st.phase}</b></span>}
           {hasRoute && <span className={`tw-chip hidden md:inline-flex ${st.routeOrigin === 'twin' && st.route.source === 'demo' ? 'is-warn' : ''}`} title={st.routeOrigin === 'land' ? 'همان مسیری که ماژول تحصیل اراضی رسم می‌کند' : ''}>{st.routeOrigin === 'land' ? 'مسیر مشترک پروژه' : st.route.source === 'demo' ? 'مسیر نمونه (فرضی)' : 'مسیر این ماژول'} · <b>{(st.route.lengthMeters / 1000).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} km</b></span>}
           <span className="tw-chip hidden sm:inline-flex"><CalendarDays size={12} /> <b className="num">{formatJalali(new Date().toISOString().slice(0, 10))}</b></span>
-          <button type="button" className="tw-btn" onClick={() => setGuide(true)}><BookOpen size={14} /> راهنما</button>
           {projectId && <button type="button" className="tw-btn" onClick={() => setSettings(true)} title="مشخصات لوله و مسیر"><Settings size={14} /> تنظیمات</button>}
-          <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
+          <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setGuide((g) => !g)} guideActive={guide} />
         </div>
       </header>
 

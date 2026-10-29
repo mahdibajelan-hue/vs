@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { Activity, AlertTriangle, Camera, Download, Map as MapIcon, Pencil, Tablet, Trash2, BookOpen, CheckCircle2, ClipboardCheck, FileSignature, Flame, Gauge, ListChecks, Loader2, Paperclip, Plus, Printer, Settings2, ShieldCheck, Stamp, Users, X } from 'lucide-react'
+import { Activity, AlertTriangle, Camera, Download, Map as MapIcon, Pencil, Tablet, Trash2, CheckCircle2, ClipboardCheck, FileSignature, Flame, Gauge, ListChecks, Loader2, Paperclip, Plus, Printer, Settings2, ShieldCheck, Stamp, Users, X } from 'lucide-react'
 import { ShamsiDate, ShamsiDateTime } from '../../components/common/ShamsiField'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -59,8 +59,7 @@ export function PssrApp({ onExitToHub }: { onExitToHub: () => void; onBackToRada
         </div>
         <div className="ps-top-end">
           <button type="button" className={`ps-btn ${tablet ? 'is-on' : ''}`} aria-pressed={tablet} onClick={switchTablet} title="دکمه‌های بزرگ برای کار در کارگاه با تبلت: ثبت یک‌ضربه‌ای وضعیت، عکس با دوربین، ثبت سریع رویداد تزریق گاز"><Tablet size={15} /> حالت تبلت</button>
-          <button type="button" className="ps-btn is-primary" onClick={() => setGuide(true)}><BookOpen size={15} /> راهنما</button>
-          <ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome />
+          <ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome onGuide={() => setGuide((g) => !g)} guideActive={guide} />
         </div>
       </header>
       <nav className="ps-tabs" aria-label="بخش‌ها">

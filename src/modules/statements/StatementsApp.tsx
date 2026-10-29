@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { BadgeCheck, BarChart3, BookOpen, FilePlus2, LayoutDashboard, ListChecks, Loader2, ReceiptText, Settings2 } from 'lucide-react'
+import { BadgeCheck, BarChart3, FilePlus2, LayoutDashboard, ListChecks, Loader2, ReceiptText, Settings2 } from 'lucide-react'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
@@ -47,8 +47,7 @@ export function StatementsApp({ onExitToHub }: { onExitToHub: () => void; onBack
           <span><b>تولید صورت‌وضعیت — E · P · C</b><small>{project?.officialName ?? '—'}</small></span>
         </div>
         <div className="ps-top-end">
-          <button type="button" className="ps-btn is-primary" onClick={() => setGuide(true)}><BookOpen size={15} /> راهنما</button>
-          <ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome />
+          <ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome onGuide={() => setGuide((g) => !g)} guideActive={guide} />
         </div>
       </header>
       <nav className="ps-tabs" aria-label="بخش‌ها">

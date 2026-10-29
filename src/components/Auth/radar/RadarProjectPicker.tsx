@@ -51,7 +51,7 @@ export function RadarProjectPicker({ onPick, onBack }: { onPick: (id: string) =>
       {/* the same shortcut bar as every module (inbox, search, theme, home) */}
       <header className="rpk-top">
         <span className="rpk-brand"><span className="rpk-brand-ico"><RadarIcon size={18} /></span><span><b>رادار پروژه‌ها</b><small>انتخاب پروژه</small></span></span>
-        <ModuleHeaderActions onExitToHub={onBack} hideModuleHome />
+        <ModuleHeaderActions onExitToHub={onBack} hideModuleHome guideKey="radar" />
       </header>
 
       <section className="rpk-hero">

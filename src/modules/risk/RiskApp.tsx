@@ -123,9 +123,9 @@ export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => voi
               </select>
             )}
             {locked && <PortfolioViewButton module="risk" tab="portfolio" />}
-            {tab !== 'help' && <HelpButton content={RK_HELP[cur.help]} />}
+            {tab !== 'help' && <HelpButton content={RK_HELP[cur.help]} label="راهنمای این بخش" />}
             {role.canEdit && <button className="im-btn im-btn-primary im-btn-lg" onClick={() => setNewOpen(true)}><Plus size={18} strokeWidth={2.6} /> ریسک جدید</button>}
-            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
+            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setTab(tab === 'help' ? 'home' : 'help')} guideActive={tab === 'help'} />
           </div>
         </div>
         <nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت ریسک">

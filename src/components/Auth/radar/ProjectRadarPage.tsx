@@ -244,7 +244,7 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
           </div>
 
           {/* the system-wide shortcut bar (inbox, search, theme, home, my profile / sign out) */}
-          <div dir="rtl"><ModuleHeaderActions onExitToHub={onBack} hideModuleHome /></div>
+          <div dir="rtl"><ModuleHeaderActions onExitToHub={onBack} hideModuleHome guideKey="radar" /></div>
         </div>
       </header>
 

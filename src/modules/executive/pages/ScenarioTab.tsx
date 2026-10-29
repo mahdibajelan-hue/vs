@@ -104,7 +104,7 @@ export function ScenarioTab({ views, projects, currency }: { views: PfProjectVie
           {canGovern ? <>
             <button type="button" className="pf-btn" onClick={() => void save()}><Save size={14} /> {savedFlash ? 'ذخیره شد' : draft.id ? 'ذخیرهٔ تغییرات' : 'ذخیرهٔ سناریو'}</button>
             {draft.id && <button type="button" className="pf-btn" onClick={async () => { if (draft.id && await pl.archiveScenario(draft.id)) load(null) }}><Archive size={14} /> بایگانی</button>}
-          </> : <span className="pf-muted"><Lock size={12} /> ذخیره فقط برای حاکم سبد</span>}
+          </> : <span className="pf-muted"><Lock size={12} /> ذخیره فقط در اختیار مدیر سبد</span>}
         </div>
         <p className="pf-note">برازش خودکار پروژه‌ها را به ترتیب اولویت (اول پروژه‌های الزامی) تأمین می‌کند و هر پروژه را که در سقف نمی‌گنجد، در گام‌های سه‌ماهه تا ۳۶ ماه به تعویق می‌اندازد. هیچ پروژه‌ای را خودکار متوقف نمی‌کند؛ توقف تصمیم شماست.</p>
         {unfunded.length > 0 && <p className="pf-note pf-bad">حتی با ۳۶ ماه تعویق در سقف نمی‌گنجند: {unfunded.map((id) => sc.find((p) => p.id === id)?.name).join('، ')}. سقف را بازنگری کنید یا دربارهٔ توقف تصمیم بگیرید.</p>}

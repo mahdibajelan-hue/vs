@@ -118,7 +118,6 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
             )
           })}
           <span className="ms-auto flex items-center gap-1.5">
-            <HelpButton topic="method" label="توضیح روش" />
             <HelpButton topic={tab as HelpKey} label="راهنمای این بخش" />
           </span>
         </div>

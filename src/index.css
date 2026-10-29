@@ -2050,6 +2050,48 @@ select option {
 }
 @media (max-width: 380px) { .tb-act { min-width: 44px; padding-inline: 3px; } .tb-cap { font-size: 9.5px; } .tb-ico { width: 30px; } }
 
+/* «راهنما» — set apart at the far end of the shortcut row and filled, so it reads as a different kind of button */
+.tb-guide-btn { position: relative; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; height: 38px; margin-inline-start: 12px; padding: 0 13px 0 12px; border: 0; border-radius: 999px; color: #ffffff; font: inherit; font-size: 12.5px; font-weight: 800; white-space: nowrap; cursor: pointer;
+  background: linear-gradient(135deg, #ec4899 0%, #be185d 100%); box-shadow: 0 6px 16px -6px rgb(190 24 93 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.22); transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.2s, filter 0.2s; }
+.tb-guide-btn::before { content: ''; position: absolute; inset-inline-start: -7px; top: 7px; bottom: 7px; width: 1px; background: var(--border-soft, rgb(148 163 184 / 0.3)); }
+.tb-guide-btn::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.35) 50%, transparent 70%); background-size: 250% 100%; background-position: 130% 0; animation: tb-guide-shine 2.4s cubic-bezier(0.45, 0, 0.25, 1) 1.2s 2; }
+@keyframes tb-guide-shine { to { background-position: -130% 0; } }
+.tb-guide-btn:active { transform: scale(0.96); }
+.tb-guide-btn:focus-visible { outline: 2px solid #f472b6; outline-offset: 3px; }
+.tb-guide-btn.is-on { background: linear-gradient(135deg, #be185d 0%, #9d174d 100%); box-shadow: inset 0 2px 6px rgb(0 0 0 / 0.25); }
+@media (hover: hover) and (pointer: fine) { .tb-guide-btn:hover { filter: brightness(1.08); box-shadow: 0 8px 20px -6px rgb(190 24 93 / 0.65), inset 0 1px 0 rgb(255 255 255 / 0.22); } }
+@media (prefers-reduced-motion: reduce) { .tb-guide-btn::after { animation: none; } }
+@media (max-width: 639px) {
+  .tb-guide-btn { flex-direction: column; justify-content: center; gap: 1px; height: auto; min-width: 42px; margin-inline-start: 7px; padding: 4px 6px 3px; border-radius: 13px; font-size: 9.5px; }
+  .tb-guide-btn::before { inset-inline-start: -4px; }
+}
+
+/* the shared module guide: a panel from the guide button's side */
+.mg-root { position: fixed; inset: 0; z-index: 120; }
+.mg-scrim { position: absolute; inset: 0; background: rgb(2 6 23 / 0.45); backdrop-filter: blur(2px); animation: mg-fade 0.2s ease-out both; }
+.mg-panel { position: absolute; top: 0; bottom: 0; left: 0; width: min(440px, 100vw); display: flex; flex-direction: column; background: var(--bg-panel-solid, #0f172a); color: var(--text-primary); border-inline-end: 0; border-right: 1px solid var(--border-soft); box-shadow: 24px 0 60px -20px rgb(2 6 23 / 0.5); animation: mg-in 0.32s cubic-bezier(0.32, 0.72, 0, 1) both; }
+.mg-head { display: flex; align-items: center; gap: 11px; padding: 16px 18px 14px; border-bottom: 1px solid var(--border-soft); }
+.mg-head small { display: block; font-size: 11px; font-weight: 700; color: #ec4899; }
+.mg-head h2 { margin: 1px 0 0; font-size: 15.5px; font-weight: 800; line-height: 1.5; }
+.mg-badge { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 38px; height: 38px; border-radius: 12px; color: #fff; background: linear-gradient(135deg, #ec4899, #be185d); }
+.mg-x { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 34px; height: 34px; border: 1px solid var(--border-soft); border-radius: 10px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.mg-x:focus-visible { outline: 2px solid #f472b6; outline-offset: 2px; }
+.mg-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 18px 28px; font-size: 13px; line-height: 2; }
+.mg-sum { margin: 0 0 6px; padding: 11px 13px; border-radius: 12px; font-weight: 600; background: color-mix(in srgb, #ec4899 8%, transparent); border: 1px solid color-mix(in srgb, #ec4899 22%, transparent); }
+.mg-wait { color: var(--text-secondary); }
+.mg-sec { margin-top: 16px; }
+.mg-sec h3 { margin: 0 0 4px; font-size: 13.5px; font-weight: 800; }
+.mg-sec p { margin: 0; color: var(--text-secondary); }
+.mg-sec ul, .mg-sec ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; color: var(--text-secondary); }
+.mg-sec ul li { position: relative; padding-inline-start: 16px; }
+.mg-sec ul li::before { content: ''; position: absolute; inset-inline-start: 2px; top: 0.85em; width: 6px; height: 6px; border-radius: 50%; background: #ec4899; opacity: 0.7; }
+.mg-sec ol { counter-reset: mg; }
+.mg-sec ol li { position: relative; counter-increment: mg; padding-inline-start: 32px; }
+.mg-sec ol li::before { content: counter(mg, persian); position: absolute; inset-inline-start: 0; top: 0.3em; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 11.5px; font-weight: 800; line-height: 1; color: #be185d; background: color-mix(in srgb, #ec4899 14%, transparent); }
+@keyframes mg-in { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes mg-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .mg-panel, .mg-scrim { animation: none; } }
+
 /* «میانبرهای بالای صفحه» — shown once, reopened from the account menu */
 .tb-guide { width: min(340px, calc(100vw - 24px)); padding: 12px; inset-inline-end: 0; }
 .tb-guide-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-size: 13.5px; }

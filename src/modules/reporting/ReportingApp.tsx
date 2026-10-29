@@ -112,7 +112,7 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
             </button>
           ))}
         </nav>
-        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setSection(section === 'guide' ? 'home' : 'guide')} guideActive={section === 'guide'} />
       </header>
 
       <StorageErrorBanner />

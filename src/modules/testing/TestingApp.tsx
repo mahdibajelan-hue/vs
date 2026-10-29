@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { AlertTriangle, BookOpen, Calculator, CheckCircle2, ClipboardCheck, Droplets, Factory, FileUp, Loader2, Plus, Settings2, ShieldCheck, Waves, X } from 'lucide-react'
+import { AlertTriangle, Calculator, CheckCircle2, ClipboardCheck, Droplets, Factory, FileUp, Loader2, Plus, Settings2, ShieldCheck, Waves, X } from 'lucide-react'
 import { ShamsiDate } from '../../components/common/ShamsiField'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -49,8 +49,7 @@ export function TestingApp({ onExitToHub }: { onExitToHub: () => void; onBackToR
           <span><b>آزمایش‌ها — هیدروتست و پوشش</b><small>{project?.officialName ?? '—'}</small></span>
         </div>
         <div className="ps-top-end">
-          <button type="button" className="ps-btn is-primary" onClick={() => setGuide(true)}><BookOpen size={15} /> راهنما</button>
-          <ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome />
+          <ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome onGuide={() => setGuide((g) => !g)} guideActive={guide} />
         </div>
       </header>
       <nav className="ps-tabs" aria-label="بخش‌ها">

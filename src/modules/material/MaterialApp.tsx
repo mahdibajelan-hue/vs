@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { Compass, ListChecks, Scale, Gauge, GitCompareArrows, Loader2, Package, PackageCheck, Settings2, ShieldAlert, ShoppingCart, Warehouse, Flame, FileBarChart2, TrendingUp } from 'lucide-react'
+import { ListChecks, Scale, Gauge, GitCompareArrows, Loader2, Package, PackageCheck, Settings2, ShieldAlert, ShoppingCart, Warehouse, Flame, FileBarChart2, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -127,8 +127,7 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
             {projects.length > 0 && (locked
               ? <span className="im-select-pill" style={{ pointerEvents: 'none' }}>{projects.find((p) => p.id === projectId)?.officialName}</span>
               : <select className="im-select-pill" value={projectId ?? ''} onChange={(e) => setProjectId(e.target.value || null)} aria-label="پروژه">{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select>)}
-            {projectId && <button className="im-btn im-btn-sm mt-guide-btn" onClick={() => setGuide(true)} aria-label="راهنمای گام‌به‌گام"><Compass size={14} /> <span>راهنمای مراحل</span></button>}
-            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
+            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={projectId ? () => setGuide((g) => !g) : undefined} guideActive={guide} />
           </div>
         </div>
         <nav className="im-nav" role="tablist" aria-label="بخش‌های کنترل و پایش متریال">

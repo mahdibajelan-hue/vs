@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, Link2, Loader2, Orbit } from 'lucide-react'
+import { Link2, Loader2, Orbit } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuthStore } from '../../store/useAuthStore'
 import { useModuleStore } from '../../store/useModuleStore'
@@ -96,10 +96,7 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => setGuide({ phase: null })} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-extrabold text-[#ffffff]" style={{ background: 'linear-gradient(135deg, #2563eb, #0ea5e9)' }}>
-            <BookOpen size={15} aria-hidden /> راهنما
-          </button>
-        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setGuide((g) => (g ? null : { phase: null }))} guideActive={!!guide} />
         </div>
       </header>
       {guide && <SgGuideDialog phase={guide.phase} onClose={() => setGuide(null)} />}
