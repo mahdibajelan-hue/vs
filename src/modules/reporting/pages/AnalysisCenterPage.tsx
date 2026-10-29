@@ -51,7 +51,7 @@ function Deviations({ list }: { list: ProjectFacts[] }) {
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border-soft)" vertical={false} />
             <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} interval={0} angle={-25} textAnchor="end" height={60} />
             <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-            <Tooltip contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', fontSize: 12, direction: 'rtl' }} formatter={(v, k) => [fa(Number(v ?? 0)), k === 'material' ? 'مهم' : k === 'watch' ? 'زیر نظر' : 'داده ندارد']} />
+            <Tooltip isAnimationActive={false} contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', fontSize: 12, direction: 'rtl' }} formatter={(v, k) => [fa(Number(v ?? 0)), k === 'material' ? 'مهم' : k === 'watch' ? 'زیر نظر' : 'داده ندارد']} />
             <Bar dataKey="material" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} />
             <Bar dataKey="watch" stackId="a" fill="#f59e0b" />
             <Bar dataKey="none" stackId="a" fill="#94a3b855" radius={[4, 4, 0, 0]} />
@@ -181,7 +181,7 @@ function Compare({ list }: { list: ProjectFacts[] }) {
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border-soft)" horizontal={false} />
             <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
             <YAxis type="category" dataKey="name" width={170} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} orientation="right" />
-            <Tooltip contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', fontSize: 12, direction: 'rtl' }} formatter={(v) => [`${fa(Number(v ?? 0), 1)} واحد درصد`, 'فاصله']} />
+            <Tooltip isAnimationActive={false} contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', fontSize: 12, direction: 'rtl' }} formatter={(v) => [`${fa(Number(v ?? 0), 1)} واحد درصد`, 'فاصله']} />
             <Bar dataKey="gap" radius={4}>{chart.map((c, i) => <Cell key={i} fill={COLORS[c.g % COLORS.length]} />)}</Bar>
           </BarChart></ResponsiveContainer>
         </div>

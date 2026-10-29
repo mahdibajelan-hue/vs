@@ -3,6 +3,7 @@ import { Activity, Briefcase, Gauge, Layers3, ClipboardList, FlaskConical, Gavel
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
+import { useTabIndicator } from '../../components/common/useTabIndicator'
 import { LifecyclePipelinePage } from './LifecyclePipelinePage'
 import { useModuleStore } from '../../store/useModuleStore'
 import { usePortfolioStore } from './store/usePortfolioStore'
@@ -51,6 +52,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const programs = useMasterDataStore((s) => s.programs)
   const allProjects = useMasterDataStore((s) => s.projects)
   const [tab, setTab] = useState<Tab>(() => { const e = useModuleStore.getState().takeEntryTab(); return e === 'pipeline' || e === 'issues' || e === 'guide' || e === 'overview' ? e : 'dashboard' })
+  const tabInd = useTabIndicator<HTMLElement>(tab)
   const [scope, setScope] = useState<PortfolioScope>({ portfolioId: null, programId: null })
   const [deciding, setDeciding] = useState<{ id: string | null } | null>(null)
   const canGovern = usePortfolioStore((s) => s.canGovern)
@@ -90,7 +92,8 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       <StorageErrorBanner />
 
       <div className="pf-bar no-print" dir="rtl">
-        <nav className="pf-tabs" role="tablist" aria-label="بخش‌های پرتفولیو">
+        <nav ref={tabInd.list} className="pf-tabs" role="tablist" aria-label="بخش‌های پرتفولیو">
+          <span ref={tabInd.indicator} className="tab-ind pf-tab-ind" aria-hidden />
           {TABS.map((t) => (
             <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'is-on' : ''} onClick={() => setTab(t.key)}>{t.icon}{t.label}</button>
           ))}

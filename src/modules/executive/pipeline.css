@@ -4,10 +4,10 @@
 .lpp-head h1 { margin-top: 0.4rem; font-size: 1.3rem; font-weight: 900; }
 .lpp-head p { margin-top: 0.2rem; max-width: 46rem; font-size: 12px; line-height: 1.9; color: var(--text-secondary); }
 .lpp-back { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2.2rem; padding: 0 0.7rem; border-radius: 0.7rem; border: 1px solid var(--line); font-size: 11.5px; font-weight: 700; color: var(--text-secondary); }
-.lpp-back:hover { color: var(--text-primary); }
+@media (hover: hover) and (pointer: fine) { .lpp-back:hover { color: var(--text-primary); } }
 .lpp-tools { display: flex; gap: 0.4rem; }
 .lpp-btn { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 2.3rem; padding: 0 0.8rem; border-radius: 0.7rem; border: 1px solid var(--line); background: var(--bg-panel-solid); font-size: 12px; font-weight: 700; color: var(--text-primary); transition: transform 120ms ease, border-color 150ms ease; }
-.lpp-btn:hover { border-color: #6366f1; }
+@media (hover: hover) and (pointer: fine) { .lpp-btn:hover { border-color: #6366f1; } }
 .lpp-btn:active, .lpp-stage:active, .lpp-chip:active { transform: scale(0.97); }
 
 .lpp-funnel { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.4rem, 1fr)); gap: 0.45rem; }
@@ -19,7 +19,7 @@
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
 .lpp-stage::before { content: ''; position: absolute; top: 0; right: 0.7rem; left: 0.7rem; height: 3px; border-radius: 0 0 3px 3px; background: var(--c); }
-.lpp-stage:hover { border-color: var(--c); }
+@media (hover: hover) and (pointer: fine) { .lpp-stage:hover { border-color: var(--c); } }
 .lpp-stage.is-on { border-color: var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 45%, transparent), 0 12px 24px -16px var(--c); }
 .lpp-stage.is-zero { opacity: 0.55; }
 .lpp-stage-code { font-family: ui-monospace, monospace; font-size: 11px; font-weight: 800; color: var(--c); }
@@ -40,7 +40,8 @@
 .lpp-table th { position: sticky; top: 0; padding: 0.6rem 0.75rem; text-align: right; font-size: 11px; font-weight: 800; color: var(--text-muted); background: color-mix(in srgb, var(--text-muted) 8%, var(--bg-panel-solid)); border-bottom: 1px solid var(--line); }
 .lpp-table td { padding: 0.65rem 0.75rem; vertical-align: top; border-bottom: 1px solid var(--line); }
 .lpp-row { cursor: pointer; transition: background-color 120ms ease; }
-.lpp-row:hover, .lpp-row.is-open { background: color-mix(in srgb, #6366f1 6%, transparent); }
+.lpp-row.is-open { background: color-mix(in srgb, #6366f1 6%, transparent); }
+@media (hover: hover) and (pointer: fine) { .lpp-row:hover { background: color-mix(in srgb, #6366f1 6%, transparent); } }
 .lpp-name { font-weight: 800; line-height: 1.7; max-width: 18rem; }
 .lpp-phase { --c: #64748b; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 11.5px; font-weight: 700; color: var(--text-secondary); }
 .lpp-phase b { font-family: ui-monospace, monospace; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; color: #fff; background: var(--c); }

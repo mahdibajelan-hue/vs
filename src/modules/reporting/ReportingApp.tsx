@@ -5,6 +5,7 @@ import { useDeepLinkStore } from '../../store/useDeepLinkStore'
 import { useReportingStore } from './store/useReportingStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
+import { useTabIndicator } from '../../components/common/useTabIndicator'
 import { DashboardPage } from './pages/DashboardPage'
 import { ReportBuilderPage } from './pages/ReportBuilderPage'
 import { ReportCenterPage } from './pages/ReportCenterPage'
@@ -54,6 +55,8 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const [projectId, setProjectId] = useState<string | null>(linked)
   const [section, setSection] = useState<Section>(linked ? 'analysis' : 'home')
   const [builderSub, setBuilderSub] = useState<BuilderSub>('composer')
+  const navInd = useTabIndicator<HTMLElement>(section)
+  const subInd = useTabIndicator<HTMLElement>(`${section}:${builderSub}`)
   const [analysisSub, setAnalysisSub] = useState<AnalysisSub>(linked ? 'decisions' : 'deviations')
   const [scope, setScope] = useState<Scope>(linked ? { level: 'project', id: linked } : { level: 'all', id: null })
 
@@ -104,10 +107,11 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
             </>
           )}
         </div>
-        <nav className="order-3 hidden w-full items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1 lg:order-none lg:flex lg:w-auto" aria-label="بخش‌های ماژول">
+        <nav ref={navInd.list} className="rp-nav relative order-3 hidden w-full items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1 lg:order-none lg:flex lg:w-auto" aria-label="بخش‌های ماژول">
+          <span ref={navInd.indicator} className="tab-ind rp-nav-ind" aria-hidden />
           {NAV.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setSection(id)} aria-current={section === id ? 'page' : undefined}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${section === id ? 'bg-teal-500/20 text-teal-300' : 'text-secondary hover:bg-white/5'}`}>
+              className={`tab-press relative z-[1] flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${section === id ? 'text-teal-300' : 'text-secondary rp-nav-idle'}`}>
               <Icon size={13} />{label}
             </button>
           ))}
@@ -125,7 +129,8 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           : section === 'settings' ? <ReportSettingsPage masterProjectId={projectId} projectName={projects.find((p) => p.id === projectId)?.officialName ?? ''} />
           : (
             <div className="space-y-3">
-              <nav className="rpx-subnav no-print" role="tablist" aria-label="گزارش‌ساز" style={{ display: 'flex', gap: '.3rem', overflowX: 'auto' }}>
+              <nav ref={subInd.list} className="rpx-subnav no-print" role="tablist" aria-label="گزارش‌ساز" style={{ display: 'flex', gap: '.3rem', overflowX: 'auto' }}>
+                <span ref={subInd.indicator} className="tab-ind rpx-subnav-ind" aria-hidden />
                 {BUILDER_SUBS.map((b) => <button key={b.id} role="tab" aria-selected={builderSub === b.id} onClick={() => setBuilderSub(b.id)}>{b.label}</button>)}
               </nav>
               {builderSub === 'composer' ? <ComposerPage projectId={scope.level === 'project' ? scope.id : null} />

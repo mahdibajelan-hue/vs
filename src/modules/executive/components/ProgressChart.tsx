@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTabIndicator } from '../../../components/common/useTabIndicator'
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { isoToJalali, JALALI_MONTHS } from '../../../lib/jalali'
 import type { PfProjectView } from '../lib/portfolioCore'
@@ -18,6 +19,7 @@ const tip = { background: 'var(--bg-panel-solid)', border: '1px solid var(--bord
  */
 export function ProgressChart({ views }: { views: PfProjectView[] }) {
   const [mode, setMode] = useState<Mode>('projects')
+  const segInd = useTabIndicator<HTMLDivElement>(mode)
   const rows = useMemo(() => views.filter((v) => v.input.snapshot).map((v) => ({ name: short(v.input.name), full: v.input.name, planned: Number(v.input.snapshot!.planned.toFixed(1)), actual: Number(v.input.snapshot!.actual.toFixed(1)), gap: gapOf(v) ?? 0 }))
     .sort((a, b) => a.gap - b.gap), [views])
   const trend = useMemo(() => portfolioTrend(views).map((p) => ({ label: monthFa(p.date), planned: Number(p.planned.toFixed(1)), earned: p.earned == null ? null : Number(p.earned.toFixed(1)), n: p.n })), [views])
@@ -26,7 +28,8 @@ export function ProgressChart({ views }: { views: PfProjectView[] }) {
   return (
     <div className="pc">
       <div className="pc-head">
-        <div className="pc-seg" role="tablist" aria-label="نمای پیشرفت">
+        <div ref={segInd.list} className="pc-seg" role="tablist" aria-label="نمای پیشرفت">
+          <span ref={segInd.indicator} className="tab-ind pc-seg-ind" aria-hidden />
           <button type="button" role="tab" aria-selected={mode === 'projects'} onClick={() => setMode('projects')}>برنامه در برابر واقعی</button>
           <button type="button" role="tab" aria-selected={mode === 'trend'} onClick={() => setMode('trend')}>روند ماهانه</button>
         </div>
@@ -46,7 +49,7 @@ export function ProgressChart({ views }: { views: PfProjectView[] }) {
                 {/* a second, hidden category axis lays the actual bar exactly over the centre of the plan bar */}
                 <XAxis xAxisId="over" dataKey="name" hide />
                 <YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickFormatter={(v) => `${faNum(v)}٪`} tick={{ fontSize: 10.5, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={40} />
-                <Tooltip cursor={{ fill: 'color-mix(in srgb, var(--text-muted) 8%, transparent)' }} contentStyle={tip} labelFormatter={(_, p) => (p?.[0]?.payload as { full?: string })?.full ?? ''}
+                <Tooltip isAnimationActive={false} cursor={{ fill: 'color-mix(in srgb, var(--text-muted) 8%, transparent)' }} contentStyle={tip} labelFormatter={(_, p) => (p?.[0]?.payload as { full?: string })?.full ?? ''}
                   formatter={(v, k, item) => (k === 'planned' ? [`${faNum(Number(v), 1)}٪`, 'برنامه'] : [`${faNum(Number(v), 1)}٪ (${faNum((item.payload as { gap: number }).gap, 1)} واحد)`, 'واقعی'])} />
                 <Bar dataKey="planned" barSize={18} radius={[5, 5, 0, 0]} fill="var(--pc-plan)" isAnimationActive />
                 <Bar xAxisId="over" dataKey="actual" barSize={9} radius={[4, 4, 0, 0]} isAnimationActive animationBegin={150}>
@@ -68,7 +71,7 @@ export function ProgressChart({ views }: { views: PfProjectView[] }) {
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={{ stroke: 'var(--border-soft)' }} tickLine={false} interval="preserveStartEnd" />
                 <YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tickFormatter={(v) => `${faNum(v)}٪`} tick={{ fontSize: 10.5, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={40} />
                 <ReferenceLine y={100} stroke="var(--border-soft)" />
-                <Tooltip contentStyle={tip} formatter={(v, k) => [v == null ? '—' : `${faNum(Number(v), 1)}٪`, k === 'planned' ? 'برنامه' : 'واقعی']} labelFormatter={(l, p) => `${l} · ${faNum((p?.[0]?.payload as { n?: number })?.n ?? 0)} پروژه`} />
+                <Tooltip isAnimationActive={false} contentStyle={tip} formatter={(v, k) => [v == null ? '—' : `${faNum(Number(v), 1)}٪`, k === 'planned' ? 'برنامه' : 'واقعی']} labelFormatter={(l, p) => `${l} · ${faNum((p?.[0]?.payload as { n?: number })?.n ?? 0)} پروژه`} />
                 <Area type="monotone" dataKey="earned" stroke="#16a34a" strokeWidth={2.4} fill="url(#pcEarned)" connectNulls dot={false} activeDot={{ r: 4 }} />
                 <Line type="monotone" dataKey="planned" stroke="#2563eb" strokeWidth={2} strokeDasharray="6 4" dot={false} activeDot={{ r: 4 }} />
               </ComposedChart>

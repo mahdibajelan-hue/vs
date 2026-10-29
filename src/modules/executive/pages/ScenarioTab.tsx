@@ -125,7 +125,7 @@ export function ScenarioTab({ views, projects, currency }: { views: PfProjectVie
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-soft)" vertical={false} />
               <XAxis dataKey="jy" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
               <YAxis tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} width={56} tickFormatter={(v) => faNum(Number(v))} />
-              <Tooltip contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 12, direction: 'rtl' }}
+              <Tooltip isAnimationActive={false} contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 12, direction: 'rtl' }}
                 formatter={(v, n) => [`${faNum(Number(v))} میلیارد`, n === 'scenario' ? 'این سناریو' : n === 'base' ? 'برنامهٔ پایه' : 'سقف']} />
               <Legend formatter={(n) => (n === 'scenario' ? 'این سناریو' : n === 'base' ? 'برنامهٔ پایه' : 'سقف')} wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="scenario" radius={[6, 6, 0, 0]} maxBarSize={46}>

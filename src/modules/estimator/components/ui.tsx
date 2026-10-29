@@ -178,13 +178,13 @@ export const EST_GLOBAL_STYLE = `
   .est-font { font-family: 'Vazirmatn', Tahoma, Arial, sans-serif; color: ${INK}; --ease: cubic-bezier(0.23, 1, 0.32, 1); }
   .est-mono { font-family: 'Fira Code', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
   .est-input { outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
-  .est-input:hover { border-color: #2a3c52 !important; }
+  @media (hover: hover) and (pointer: fine) { .est-input:hover { border-color: #2a3c52 !important; } }
   .est-input:focus { box-shadow: 0 0 0 3px rgba(242,183,5,.18); border-color: ${SAFETY} !important; }
   .est-input::placeholder { color: ${MUTED_FG}; }
   .est-font :focus-visible { outline: 2px solid ${SAFETY}; outline-offset: 2px; }
 
-  @keyframes est-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-  .est-fade-in { animation: est-fade-up .55s var(--ease) both; }
+  @keyframes est-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .est-fade-in { animation: est-fade-up .36s var(--ease) both; }
   .est-card { transition: border-color .2s ease, box-shadow .2s ease; }
   .est-card:hover { border-color: ${BORDER_SOFT}; box-shadow: 0 16px 34px -22px rgba(0,0,0,.7); }
 
@@ -192,9 +192,9 @@ export const EST_GLOBAL_STYLE = `
   .est-btn:active:not(:disabled) { transform: scale(.97); }
   .est-btn:disabled { opacity: .55; cursor: not-allowed; }
   .est-btn.is-primary { background: ${SAFETY}; color: #1A1400; box-shadow: 0 6px 18px -8px rgba(242,183,5,.6); }
-  .est-btn.is-primary:hover:not(:disabled) { background: #ffc62b; }
+  @media (hover: hover) and (pointer: fine) { .est-btn.is-primary:hover:not(:disabled) { background: #ffc62b; } }
   .est-btn.is-ghost { background: ${SURFACE_2}; color: ${INK}; border-color: ${BORDER}; }
-  .est-btn.is-ghost:hover:not(:disabled) { border-color: #2f4560; }
+  @media (hover: hover) and (pointer: fine) { .est-btn.is-ghost:hover:not(:disabled) { border-color: #2f4560; } }
   .est-btn.is-quiet { background: transparent; color: ${MUTED_FG}; }
   .est-btn.is-quiet:hover:not(:disabled) { color: ${INK}; background: rgba(255,255,255,.04); }
   .est-btn.is-danger { background: transparent; color: #e66767; border-color: rgba(230,103,103,.35); }

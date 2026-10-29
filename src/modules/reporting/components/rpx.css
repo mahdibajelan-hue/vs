@@ -12,21 +12,24 @@
 .rpx-sec { color: var(--text-secondary); }
 
 /* sub navigation inside a section */
-.rpx-subnav { display: flex; gap: .3rem; overflow-x: auto; scrollbar-width: none; padding-bottom: .1rem; }
+.rpx-subnav { --acc: #14b8a6; position: relative; display: flex; gap: .3rem; overflow-x: auto; scrollbar-width: none; padding-bottom: .1rem; }
 .rpx-subnav button { flex: none; display: inline-flex; align-items: center; gap: .35rem; font-size: 12px; font-weight: 600; padding: .45rem .8rem; border-radius: .7rem; color: var(--text-secondary); border: 1px solid transparent; transition: background-color 160ms ease, color 160ms ease; }
-.rpx-subnav button:hover { background: color-mix(in srgb, var(--text-muted) 9%, transparent); }
-.rpx-subnav button[aria-selected='true'] { color: var(--acc); background: color-mix(in srgb, var(--acc) 12%, transparent); border-color: color-mix(in srgb, var(--acc) 30%, transparent); }
+@media (hover: hover) and (pointer: fine) { .rpx-subnav button:not([aria-selected='true']):hover { background: color-mix(in srgb, var(--text-muted) 9%, transparent); } }
+.rpx-subnav button { position: relative; z-index: 1; }
+.rpx-subnav button:active { transform: scale(.97); }
+.rpx-subnav button[aria-selected='true'] { color: var(--acc); }
+.rpx-subnav-ind { border-radius: .7rem; background: color-mix(in srgb, var(--acc) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc) 30%, transparent); }
 
 /* scope bar */
 .rpx-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
 .rpx-select, .rpx-input { border-radius: .6rem; border: 1px solid var(--border-soft); background: var(--bg-app); color: var(--text-primary); font-size: 12px; padding: .42rem .6rem; min-width: 0; max-width: 100%; }
 .rpx-input:focus-visible, .rpx-select:focus-visible, .rpx-btn:focus-visible, .rpx-chip:focus-visible, .rpx-help-btn:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
 .rpx-btn { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; font-size: 12px; font-weight: 700; padding: .45rem .8rem; border-radius: .65rem; border: 1px solid var(--border-soft); color: var(--text-secondary); background: var(--bg-app); transition: transform 140ms ease-out, background-color 160ms ease; white-space: nowrap; }
-.rpx-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--text-muted) 10%, var(--bg-app)); }
+@media (hover: hover) and (pointer: fine) { .rpx-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--text-muted) 10%, var(--bg-app)); } }
 .rpx-btn:active:not(:disabled) { transform: scale(.97); }
 .rpx-btn:disabled { opacity: .45; cursor: not-allowed; }
 .rpx-btn.is-primary { color: #fff; background: var(--acc); border-color: var(--acc); }
-.rpx-btn.is-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--acc) 85%, #fff); }
+@media (hover: hover) and (pointer: fine) { .rpx-btn.is-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--acc) 85%, #fff); } }
 .rpx-chip { font-size: 11.5px; font-weight: 600; padding: .3rem .65rem; border-radius: 99px; border: 1px solid var(--border-soft); color: var(--text-secondary); }
 .rpx-chip[aria-pressed='true'] { color: var(--acc); border-color: color-mix(in srgb, var(--acc) 45%, transparent); background: color-mix(in srgb, var(--acc) 12%, transparent); }
 
@@ -70,7 +73,7 @@
 
 /* loading */
 .rpx-progress { height: 4px; border-radius: 4px; background: var(--border-soft); overflow: hidden; }
-.rpx-progress > i { display: block; height: 100%; background: var(--acc); transition: width 240ms ease-out; }
+.rpx-progress > i { display: block; height: 100%; background: var(--acc); transform-origin: right; transition: transform 240ms cubic-bezier(.23, 1, .32, 1); }
 
 /* ? help */
 .rpx-help { position: relative; display: inline-flex; }
@@ -82,7 +85,7 @@
 /* home: section doors */
 .rpx-doors { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
 .rpx-door { text-align: right; display: grid; gap: .25rem; padding: .85rem .95rem; border-radius: .9rem; border: 1px solid var(--border-soft); background: var(--bg-app); transition: border-color 160ms ease, transform 140ms ease-out; }
-.rpx-door:hover { border-color: color-mix(in srgb, var(--acc) 50%, var(--border-soft)); }
+@media (hover: hover) and (pointer: fine) { .rpx-door:hover { border-color: color-mix(in srgb, var(--acc) 50%, var(--border-soft)); } }
 .rpx-door:active { transform: scale(.985); }
 .rpx-door b { display: flex; align-items: center; gap: .4rem; font-size: 13px; }
 .rpx-door span { font-size: 11.5px; color: var(--text-muted); line-height: 1.75; }
@@ -94,7 +97,7 @@
 .rpx-field > span { font-size: 11px; font-weight: 700; color: var(--text-muted); }
 .rpx-checks { display: grid; gap: .15rem; }
 .rpx-checks label { display: flex; align-items: center; gap: .45rem; font-size: 12px; padding: .2rem .3rem; border-radius: .4rem; cursor: pointer; }
-.rpx-checks label:hover { background: color-mix(in srgb, var(--text-muted) 8%, transparent); }
+@media (hover: hover) and (pointer: fine) { .rpx-checks label:hover { background: color-mix(in srgb, var(--text-muted) 8%, transparent); } }
 .rpx-report { display: grid; gap: .8rem; }
 .rpx-report-head { padding-bottom: .6rem; border-bottom: 2px solid var(--acc); display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; align-items: flex-end; }
 .rpx-report-head h2 { font-size: 1.15rem; font-weight: 800; }

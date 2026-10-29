@@ -1,7 +1,7 @@
 /* Scope pickers: caption + value pill, project counts in the list; the picked one keeps its colour. */
 .sp { position: relative; display: inline-flex; align-items: center; }
 .sp-btn { display: inline-flex; align-items: center; gap: .55rem; min-height: 44px; padding: .3rem .7rem .3rem .55rem; padding-inline-end: 2rem; border-radius: .9rem; border: 1px solid var(--border-soft); background: var(--bg-panel-solid); color: var(--text-primary); text-align: right; min-width: 11.5rem; max-width: 17rem; transition: border-color 160ms ease, box-shadow 160ms ease, transform 120ms ease-out; }
-.sp-btn:hover { border-color: color-mix(in srgb, var(--c) 45%, var(--border-soft)); }
+@media (hover: hover) and (pointer: fine) { .sp-btn:hover { border-color: color-mix(in srgb, var(--c) 45%, var(--border-soft)); } }
 .sp-btn:active { transform: scale(.985); }
 .sp-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 35%, transparent); border-color: var(--c); }
 .sp.is-open .sp-btn { border-color: var(--c); box-shadow: 0 10px 26px -16px color-mix(in srgb, var(--c) 70%, transparent); }
@@ -13,7 +13,7 @@
 .sp-chev { position: absolute; inset-inline-end: .65rem; color: var(--text-muted); transition: transform 200ms cubic-bezier(.23, 1, .32, 1); pointer-events: none; }
 .sp.is-open .sp-chev { transform: rotate(180deg); color: var(--c); }
 .sp-clear { position: absolute; inset-inline-end: 1.9rem; display: grid; place-items: center; width: 1.25rem; height: 1.25rem; border-radius: 99px; color: var(--text-muted); background: var(--bg-app); }
-.sp-clear:hover { color: #ef4444; }
+@media (hover: hover) and (pointer: fine) { .sp-clear:hover { color: #ef4444; } }
 .sp-list { position: absolute; z-index: 40; top: calc(100% + .4rem); inset-inline-start: 0; min-width: 100%; width: max-content; max-width: min(22rem, 90vw); max-height: 18rem; overflow: auto; padding: .3rem; border-radius: .9rem; border: 1px solid var(--border-soft); background: var(--bg-panel-solid); box-shadow: 0 22px 44px -20px rgb(15 23 42 / .45); transform-origin: top right; }
 @media (prefers-reduced-motion: no-preference) { .sp-list { animation: sp-in 170ms cubic-bezier(.23, 1, .32, 1); } }
 @keyframes sp-in { from { opacity: 0; transform: translateY(-4px) scale(.97); } }

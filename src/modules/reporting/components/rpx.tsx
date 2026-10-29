@@ -52,7 +52,7 @@ export function FactsGate({ children }: { children: (facts: ProjectFacts[]) => R
     return (
       <div className="rpx-panel" role="status" aria-live="polite">
         <p className="rpx-muted" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Loader2 size={13} className="animate-spin" /> خواندن دادهٔ پروژه‌ها از ماژول‌ها — {fa(progress.done)} از {fa(progress.total || 0)}</p>
-        <div className="rpx-progress" style={{ marginTop: 8 }}><i style={{ width: `${pct}%` }} /></div>
+        <div className="rpx-progress" style={{ marginTop: 8 }}><i style={{ transform: `scaleX(${Math.max(0, Math.min(100, pct)) / 100})` }} /></div>
       </div>
     )
   }

@@ -84,7 +84,7 @@ export function LibraryPage({ nowYear }: { nowYear: number }) {
                       <XAxis type="number" dataKey="d" name="قطر" unit='"' tick={{ fontSize: 11, fill: MUTED_FG }} domain={['dataMin - 4', 'dataMax + 4']} />
                       <YAxis type="number" dataKey="k" name="€/km" tickFormatter={(v) => fmtEURm(v)} tick={{ fontSize: 11, fill: MUTED_FG }} width={52} />
                       <ZAxis type="number" dataKey="l" range={[50, 420]} />
-                      <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={TOOLTIP_STYLE}
+                      <Tooltip isAnimationActive={false} cursor={{ strokeDasharray: '3 3' }} contentStyle={TOOLTIP_STYLE}
                         content={({ payload }) => {
                           const p = payload?.[0]?.payload as { n: string; d: number; k: number; l: number } | undefined
                           return p ? <div style={TOOLTIP_STYLE} dir="rtl"><b>{p.n}</b><div className="est-mono text-xs mt-1">{p.d}″ · {Math.round(p.l)} km · {fmtEURm(p.k)}/km</div></div> : null
@@ -275,10 +275,10 @@ const LIB_STYLE = `
   .est-box-iqr { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; opacity: .85; transform-origin: left; animation: est-grow .7s var(--ease) both; }
   .est-box-med { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: #fff; }
   .est-bm { position: relative; padding: 1rem 1.05rem; border-radius: 16px; background: ${SURFACE}; border: 1px solid ${BORDER}; border-top: 3px solid var(--sc); transition: border-color .18s ease, transform .2s var(--ease); }
-  .est-bm:hover { transform: translateY(-2px); }
+  @media (hover: hover) and (pointer: fine) { .est-bm:hover { transform: translateY(-2px); } }
   .est-bm.is-out { opacity: .72; border-top-style: dashed; }
   .est-bm-notes { font-size: 10.5px; line-height: 1.8; color: ${MUTED_FG}; margin: 0 0 .6rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  .est-bm-notes:hover { -webkit-line-clamp: unset; }
+  @media (hover: hover) and (pointer: fine) { .est-bm-notes:hover { -webkit-line-clamp: unset; } }
   .est-bm-actions { position: absolute; left: .55rem; bottom: .55rem; display: flex; gap: .1rem; }
   @media (hover: hover) { .est-bm-actions { opacity: 0; transition: opacity .15s ease; } .est-bm:hover .est-bm-actions, .est-bm-actions:focus-within { opacity: 1; } }
   .est-kind { display: inline-flex; align-items: center; gap: .25rem; font-size: 10.5px; font-weight: 700; padding: .15rem .5rem; border-radius: 99px; color: ${INK_SOFT}; background: rgba(255,255,255,.05); border: 1px solid ${BORDER}; white-space: nowrap; }
@@ -286,7 +286,7 @@ const LIB_STYLE = `
   .est-pill { font-size: 10.5px; font-weight: 600; padding: .12rem .5rem; border-radius: 99px; background: ${SURFACE_2}; border: 1px solid ${BORDER}; color: ${INK_SOFT}; }
   .est-icon-btn { padding: .45rem; border-radius: 9px; color: ${MUTED_FG}; transition: color .15s ease, background .15s ease; }
   .est-icon-btn:hover { color: ${INK}; background: rgba(255,255,255,.06); }
-  .est-icon-btn.is-danger:hover { color: #e66767; }
+  @media (hover: hover) and (pointer: fine) { .est-icon-btn.is-danger:hover { color: #e66767; } }
   .est-drawer-back { position: fixed; inset: 0; z-index: 80; background: rgba(3,7,13,.62); backdrop-filter: blur(3px); display: flex; justify-content: flex-start; animation: est-fade .2s ease both; }
   @keyframes est-fade { from { opacity: 0; } }
   .est-drawer { width: min(100%, 460px); height: 100%; overflow-y: auto; padding: 1.3rem; background: ${SURFACE}; border-inline-end: 1px solid ${BORDER}; box-shadow: 0 0 60px rgba(0,0,0,.6); animation: est-drawer-in .32s var(--ease) both; }

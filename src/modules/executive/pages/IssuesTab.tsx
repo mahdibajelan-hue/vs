@@ -103,7 +103,7 @@ export function IssuesTab({ projects, issuesByMaster }: { projects: MasterProjec
             <ResponsiveContainer width="100%" height={170}>
               <AreaChart data={k.trend.map((x) => ({ ...x, label: formatJalali(x.date).slice(2, 7) }))} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text-secondary)' }} />
-                <Tooltip contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 12 }} formatter={(v) => [faNum(Number(v)), 'باز']} />
+                <Tooltip isAnimationActive={false} contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 12 }} formatter={(v) => [faNum(Number(v)), 'باز']} />
                 <Area dataKey="open" stroke="#f97316" fill="#f97316" fillOpacity={0.15} strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>

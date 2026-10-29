@@ -283,14 +283,14 @@ const PAGE_STYLE = `
   .est-empty svg { max-width: 320px; }
 
   .est-pcard { position: relative; border-radius: 18px; background: ${SURFACE}; border: 1px solid ${BORDER}; overflow: hidden; transition: border-color .2s ease, box-shadow .25s ease, transform .25s var(--ease); }
-  .est-pcard:hover { border-color: #2c4058; box-shadow: 0 22px 40px -28px rgba(0,0,0,.9); transform: translateY(-2px); }
+  @media (hover: hover) and (pointer: fine) { .est-pcard:hover { border-color: #2c4058; box-shadow: 0 22px 40px -28px rgba(0,0,0,.9); transform: translateY(-2px); } }
   .est-pcard-main { display: block; width: 100%; text-align: right; }
   .est-pcard-art { background: linear-gradient(180deg, rgba(57,135,229,.07), transparent); border-bottom: 1px solid ${BORDER}; padding: .2rem .4rem 0; }
   .est-pcard:not(:hover) .est-route * { animation-play-state: paused !important; }
   .est-pcard .est-arrow { transition: transform .25s var(--ease); }
-  .est-pcard:hover .est-arrow { transform: translateX(-4px); }
+  @media (hover: hover) and (pointer: fine) { .est-pcard:hover .est-arrow { transform: translateX(-4px); } }
   .est-pcard-del { position: absolute; left: .6rem; top: .6rem; padding: .45rem; border-radius: 9px; color: ${MUTED_FG}; background: rgba(10,18,28,.7); transition: opacity .15s ease, color .15s ease; }
-  .est-pcard-del:hover { color: #e66767; }
+  @media (hover: hover) and (pointer: fine) { .est-pcard-del:hover { color: #e66767; } }
   @media (hover: hover) { .est-pcard-del { opacity: 0; } .est-pcard:hover .est-pcard-del, .est-pcard-del:focus-visible { opacity: 1; } }
 
   .est-create { padding: 1.4rem; border-radius: 20px; background: ${SURFACE}; border: 1px solid rgba(242,183,5,.35); box-shadow: 0 0 0 4px rgba(242,183,5,.05); }

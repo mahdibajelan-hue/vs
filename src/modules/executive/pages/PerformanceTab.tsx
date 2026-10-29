@@ -30,7 +30,7 @@ export function PerformanceTab({ views, currency }: { views: PfProjectView[]; cu
                     <ZAxis type="number" dataKey="bac" range={[60, 600]} />
                     <ReferenceLine x={1} stroke="var(--text-muted)" strokeDasharray="4 4" />
                     <ReferenceLine y={1} stroke="var(--text-muted)" strokeDasharray="4 4" />
-                    <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ payload }) => {
+                    <Tooltip isAnimationActive={false} cursor={{ strokeDasharray: '3 3' }} content={({ payload }) => {
                       const p = payload?.[0]?.payload as (typeof points)[number] | undefined
                       return p ? <div className="pf-tip" dir="rtl"><b>{p.name}</b><div dir="ltr">SPI {p.spi.toFixed(2)} · CPI {p.cpi.toFixed(2)}</div><div>{QUADRANT_FA[p.q].label}</div></div> : null
                     }} />

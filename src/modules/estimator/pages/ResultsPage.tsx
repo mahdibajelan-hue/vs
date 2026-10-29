@@ -224,7 +224,7 @@ export function ResultsPage({
                 <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={90} paddingAngle={2} strokeWidth={0}>
                   {donutData.map((d) => (<Cell key={d.key} fill={SECTION_COLOR[d.key]} />))}
                 </Pie>
-                <Tooltip formatter={(v) => fmtEUR(Number(v) * eurRate)} contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
+                <Tooltip isAnimationActive={false} formatter={(v) => fmtEUR(Number(v) * eurRate)} contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} />
                 <Legend wrapperStyle={{ fontSize: 11, color: INK_SOFT }} formatter={(v) => <span style={{ color: INK_SOFT }}>{v}</span>} />
               </PieChart>
             </ResponsiveContainer>
@@ -238,7 +238,7 @@ export function ResultsPage({
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={GRID} />
                   <XAxis type="number" tickFormatter={(v) => fmtEURm(v * eurRate)} tick={{ fontSize: 11, fill: MUTED_FG }} />
                   <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11, fill: INK_SOFT }} />
-                  <Tooltip formatter={(v) => fmtEUR(Number(v) * eurRate)} contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                  <Tooltip isAnimationActive={false} formatter={(v) => fmtEUR(Number(v) * eurRate)} contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
                   <Bar dataKey="value" radius={[0, 4, 4, 0]} animationDuration={700} animationEasing="ease-out">
                     {barData.map((d) => (<Cell key={d.key} fill={SECTION_COLOR[d.key]} />))}
                     <LabelList dataKey="value" position="right" formatter={(v) => fmtEURm(Number(v) * eurRate)} style={{ fontSize: 11, fill: INK_SOFT }} />
@@ -276,7 +276,7 @@ export function ResultsPage({
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID} />
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: MUTED_FG }} tickFormatter={(v) => toFa(v)} interval={Math.ceil(cashFlow.length / 12)} />
               <YAxis tickFormatter={(v) => fmtEURm(v * eurRate)} tick={{ fontSize: 10, fill: MUTED_FG }} width={44} />
-              <Tooltip
+              <Tooltip isAnimationActive={false}
                 formatter={(v) => fmtEUR(Number(v) * eurRate)}
                 labelFormatter={(m) => `ماه ${toFa(Number(m))}`}
                 contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }}
@@ -299,7 +299,7 @@ export function ResultsPage({
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={GRID} />
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: MUTED_FG }} tickFormatter={(v) => toFa(v)} interval={Math.ceil(cashFlow.length / 12)} />
               <YAxis tickFormatter={(v) => fmtEURm(v * eurRate)} tick={{ fontSize: 10, fill: MUTED_FG }} width={44} />
-              <Tooltip
+              <Tooltip isAnimationActive={false}
                 formatter={(v) => fmtEUR(Number(v) * eurRate)}
                 labelFormatter={(m) => `ماه ${toFa(Number(m))}`}
                 contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE}
@@ -451,7 +451,7 @@ export function ResultsPage({
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={GRID} />
                 <XAxis type="number" tickFormatter={(v) => fmtEURm(v)} tick={{ fontSize: 11, fill: MUTED_FG }} domain={['dataMin', 'dataMax']} />
                 <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11, fill: INK_SOFT }} />
-                <Tooltip
+                <Tooltip isAnimationActive={false}
                   formatter={(v, key) => (key === 'range' ? fmtEUR(Number(v)) + ' نوسان' : null)}
                   contentStyle={TOOLTIP_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} labelStyle={TOOLTIP_LABEL_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }}
                 />

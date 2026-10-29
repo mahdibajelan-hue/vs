@@ -61,7 +61,7 @@ export function ResourceTab({ views }: { views: PfProjectView[] }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-soft)" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
                 <YAxis tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} width={36} />
-                <Tooltip contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 12, direction: 'rtl' }}
+                <Tooltip isAnimationActive={false} contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 12, direction: 'rtl' }}
                   formatter={(v, n) => [faNum(Number(v), 1), n === 'man' ? 'نفرات' : n === 'manWorking' ? 'نفرات فعال' : n === 'equip' ? 'ماشین‌آلات' : 'ماشین فعال']} />
                 <Legend formatter={(n) => (n === 'man' ? 'نفرات' : n === 'manWorking' ? 'نفرات فعال' : n === 'equip' ? 'ماشین‌آلات' : 'ماشین فعال')} wrapperStyle={{ fontSize: 11 }} />
                 <Area dataKey="man" stroke="#0ea5e9" fill="#0ea5e9" fillOpacity={0.12} strokeWidth={2} />

@@ -197,7 +197,7 @@ export function SettingsPage() {
         <button
           onClick={handleSave}
           disabled={savingAssumptions}
-          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold disabled:opacity-60 transition-transform hover:scale-[1.01]"
+          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold disabled:opacity-60 transition-transform active:scale-[0.98]"
           style={{ background: SAFETY, color: '#1A1400' }}
         >
           {saved ? <Check size={16} /> : <Save size={16} />} {savingAssumptions ? 'در حال ذخیره...' : saved ? 'ذخیره شد' : 'ذخیره مبانی محاسبات برای همه کاربران'}

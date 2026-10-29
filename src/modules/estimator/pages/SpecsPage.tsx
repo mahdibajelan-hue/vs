@@ -268,7 +268,7 @@ const SPECS_STYLE = `
   .est-startbar b { color: ${INK}; }
   .est-startbar i { width: 8px; height: 8px; border-radius: 3px; display: inline-block; }
   .est-startbar button { margin-inline-start: auto; display: inline-flex; align-items: center; gap: .3rem; font-size: 12px; font-weight: 700; color: ${SAFETY}; padding: .35rem .7rem; border-radius: 10px; min-height: 36px; }
-  .est-startbar button:hover { background: rgba(242,183,5,.08); }
+  @media (hover: hover) and (pointer: fine) { .est-startbar button:hover { background: rgba(242,183,5,.08); } }
   .est-bases { display: flex; gap: .65rem; align-items: flex-start; padding: .85rem 1rem; border-radius: 14px; background: rgba(242,183,5,.05); border: 1px dashed rgba(242,183,5,.3); }
   .est-bases p { font-size: 11.5px; line-height: 1.95; color: ${INK_SOFT}; }
 `

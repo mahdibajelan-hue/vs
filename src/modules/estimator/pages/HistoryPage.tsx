@@ -159,7 +159,7 @@ const HISTORY_STYLE = `
   .est-timeline { position: relative; display: grid; gap: .6rem; padding-inline-start: 1.1rem; }
   .est-timeline::before { content: ''; position: absolute; inset-inline-start: .3rem; top: .6rem; bottom: .6rem; width: 2px; background: linear-gradient(${SAFETY}, ${BORDER}); border-radius: 2px; }
   .est-ver { position: relative; display: flex; align-items: center; gap: .75rem; padding: .85rem 1rem; border-radius: 16px; background: ${SURFACE}; border: 1px solid ${BORDER}; transition: border-color .15s ease; }
-  .est-ver:hover { border-color: #2c4058; }
+  @media (hover: hover) and (pointer: fine) { .est-ver:hover { border-color: #2c4058; } }
   .est-ver.is-on { border-color: ${SAFETY}; box-shadow: 0 0 0 3px rgba(242,183,5,.08); }
   .est-ver-dot { position: absolute; inset-inline-start: -1.05rem; top: 50%; width: 11px; height: 11px; margin-top: -5.5px; border-radius: 99px; background: ${SURFACE}; border: 2px solid ${SAFETY}; }
   .est-ver-pick input { width: 16px; height: 16px; accent-color: ${SAFETY}; cursor: pointer; }
@@ -167,7 +167,7 @@ const HISTORY_STYLE = `
   .est-tag.is-soft { color: ${INK_SOFT}; background: rgba(255,255,255,.05); border: 1px solid ${BORDER}; }
   .est-icon-btn { padding: .45rem; border-radius: 9px; color: ${MUTED_FG}; transition: color .15s ease, background .15s ease; }
   .est-icon-btn:hover { color: ${INK}; background: rgba(255,255,255,.05); }
-  .est-icon-btn.is-danger:hover { color: #e66767; }
+  @media (hover: hover) and (pointer: fine) { .est-icon-btn.is-danger:hover { color: #e66767; } }
   .est-skel { height: 64px; border-radius: 16px; background: linear-gradient(90deg, ${SURFACE} 0%, ${SURFACE_2} 50%, ${SURFACE} 100%); background-size: 200% 100%; animation: est-skel 1.3s ease-in-out infinite; }
   @keyframes est-skel { to { background-position: -200% 0; } }
   .est-diverge { position: relative; height: 10px; border-radius: 99px; background: ${SURFACE_2}; }
