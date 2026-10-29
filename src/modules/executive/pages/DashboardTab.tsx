@@ -1,21 +1,21 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AlertTriangle, ArrowLeft, Award, BarChart3, Building2, CalendarClock, ClipboardCheck, Gauge, Gavel, Layers, MapPin, Network, ShieldAlert, Sparkles, TrendingUp, Wallet } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import type { MasterProject } from '../../masterdata/types'
 import type { RmRisk, RmRiskAssessment } from '../../risk/types'
 import type { ImIssue } from '../../issues/types'
 import { currentState, riskLevel, riskScore, RISK_LEVEL_COLOR, RISK_LEVEL_LABEL_FA } from '../../risk/lib/riskScore'
-import { isoToJalali, JALALI_MONTHS, formatJalali } from '../../../lib/jalali'
+import { formatJalali } from '../../../lib/jalali'
 import { decisionQueue, DECISION_FA, QUEUE_REASON_FA, type PfProjectView } from '../lib/portfolioCore'
-import { achievements, budget, byGroup, earnedScheduleDelay, gapOf, IRAN_OUTLINE, mapHeight, PROVINCES, portfolioTrend, project, projectPlace, statusOf, STATUS_FA, vacPct, warnings, weightedProgress, whyCritical, type Status } from '../lib/dashboardCore'
+import { achievements, budget, byGroup, earnedScheduleDelay, gapOf, statusOf, STATUS_FA, vacPct, warnings, weightedProgress, whyCritical, type Status } from '../lib/dashboardCore'
 import { sharedCategories } from '../lib/issueKpiCore'
 import { faNum, fmtMoney } from '../components/pfUi'
+import { PortfolioMap } from '../components/PortfolioMap'
+import { ProgressChart } from '../components/ProgressChart'
 import './dashboard.css'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const jd = (iso: string | null | undefined) => (iso ? formatJalali(iso.slice(0, 10)).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]) : '—')
-const monthFa = (iso: string) => { const j = isoToJalali(iso); return j ? `${JALALI_MONTHS[j.jm - 1]} ${faNum(j.jy % 100)}` : iso }
 const pct = (n: number | null | undefined, d = 0) => (n == null ? '—' : `${faNum(n, d)}٪`)
 
 type TabKey = 'performance' | 'risk' | 'decisions' | 'issues' | 'priority'
@@ -210,80 +210,17 @@ function RiskMatrix({ risks, assessments, names, onOpen }: { risks: RmRisk[]; as
 }
 
 function TrendCard({ views, onOpen }: { views: PfProjectView[]; onOpen: () => void }) {
-  const data = useMemo(() => portfolioTrend(views).map((p) => ({ label: monthFa(p.date), planned: Number(p.planned.toFixed(1)), earned: p.earned == null ? null : Number(p.earned.toFixed(1)), gap: p.earned == null ? null : Number(Math.max(0, p.planned - p.earned).toFixed(1)), n: p.n })), [views])
   return (
-    <Box title="روند پیشرفت پروژه‌ها در پرتفولیو" icon={<BarChart3 size={15} />} tone="#2563eb" foot={<Foot onClick={onOpen}>عملکرد و پیش‌بینی</Foot>}>
-      {!data.length ? <p className="pd-empty">هنوز منحنی پیشرفت EPC برای پروژه‌های این محدوده ثبت نشده است (پس از به‌روزرسانی شاخص‌ها ظاهر می‌شود).</p> : (
-        <div className="pd-chart" dir="ltr">
-          <ResponsiveContainer>
-            <ComposedChart data={data} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
-              <CartesianGrid stroke="var(--border-soft)" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} reversed />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} unit="٪" orientation="right" />
-              <Tooltip contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 12, direction: 'rtl' }} formatter={(v, k) => [v == null ? '—' : `${faNum(Number(v), 1)}٪`, k === 'planned' ? 'برنامه' : k === 'earned' ? 'واقعی' : 'انحراف']} />
-              <Legend formatter={(k) => (k === 'planned' ? 'پیشرفت برنامه' : k === 'earned' ? 'پیشرفت واقعی' : 'انحراف')} wrapperStyle={{ fontSize: 11, direction: 'rtl' }} />
-              <Bar dataKey="gap" fill="#fb7185" barSize={12} radius={[3, 3, 0, 0]} />
-              <Line type="monotone" dataKey="planned" stroke="#2563eb" strokeWidth={2} dot={{ r: 2.5 }} />
-              <Line type="monotone" dataKey="earned" stroke="#16a34a" strokeWidth={2} dot={{ r: 2.5 }} connectNulls />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-      <p className="pd-note">میانگین وزنی با بودجهٔ EPC هر پروژه؛ پیشرفت دامنهٔ EPC (مهندسی، تأمین، اجرا).</p>
+    <Box title="پیشرفت پروژه‌های پرتفولیو" icon={<BarChart3 size={15} />} tone="#2563eb" foot={<Foot onClick={onOpen}>عملکرد و پیش‌بینی</Foot>}>
+      <ProgressChart views={views} />
     </Box>
   )
 }
 
 function MapCard({ views, byId }: { views: PfProjectView[]; byId: Map<string, MasterProject> }) {
-  const W = 400, H = mapHeight(W)
-  const updateProject = useMasterDataStore((s) => s.updateProject)
-  const [sel, setSel] = useState<string | null>(null)
-  const [saving, setSaving] = useState<string | null>(null)
-  const placed = views.map((v) => { const p = byId.get(v.input.id); return { v, at: projectPlace({ location: p?.location, name: v.input.name }) } })
-  const located = placed.filter((x) => x.at)
-  const missing = placed.filter((x) => !x.at)
-  // projects in the same place fan out around it so every dot stays clickable
-  const seen = new Map<string, number>()
-  const dots = located.map(({ v, at }) => {
-    const key = at!.place.name, i = seen.get(key) ?? 0; seen.set(key, i + 1)
-    const [x, y] = project(at!.place.lng, at!.place.lat, W)
-    const a = i * 2.4
-    return { v, at: at!, x: x + (i ? Math.cos(a) * 7 : 0), y: y + (i ? Math.sin(a) * 7 : 0) }
-  })
-  const outline = IRAN_OUTLINE.map(([lng, lat], i) => { const [x, y] = project(lng, lat, W); return `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}` }).join(' ') + 'Z'
-  const [cx, cy] = project(51.2, 38.4, W), [gx, gy] = project(51.6, 27.2, W)
-  const picked = dots.find((d) => d.v.input.id === sel)
-  const counts = (['good', 'attention', 'critical', 'unknown'] as Status[]).map((s) => ({ s, n: dots.filter((d) => statusOf(d.v) === s).length }))
   return (
-    <Box title="وضعیت جغرافیایی پروژه‌ها" icon={<MapPin size={15} />} tone="#0d9488">
-      <div className="pd-map">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="نقشهٔ شماتیک ایران با محل پروژه‌ها">
-          <path d={outline} className="pd-map-land" />
-          <text x={cx} y={cy} className="pd-map-sea">دریای خزر</text>
-          <text x={gx} y={gy} className="pd-map-sea">خلیج فارس</text>
-          {dots.map((d) => (
-            <g key={d.v.input.id} className="pd-dot" tabIndex={0} role="button" aria-label={`${d.v.input.name} — ${d.at.place.name}`} onClick={() => setSel(d.v.input.id)} onKeyDown={(e) => { if (e.key === 'Enter') setSel(d.v.input.id) }}>
-              <circle cx={d.x} cy={d.y} r={sel === d.v.input.id ? 7.5 : 5.5} fill={STATUS_FA[statusOf(d.v)].tone} />
-              <title>{`${d.v.input.name} — ${d.at.place.name}`}</title>
-            </g>
-          ))}
-        </svg>
-        <ul className="pd-map-legend">{counts.map(({ s, n }) => <li key={s}><i style={{ background: STATUS_FA[s].tone }} />{STATUS_FA[s].label}<b>{faNum(n)}</b></li>)}</ul>
-      </div>
-      {picked && <p className="pd-pick"><b>{picked.v.input.name}</b> · {picked.at.place.name} ({picked.at.place.province}) · پیشرفت {pct(picked.v.input.snapshot?.actual)} · {STATUS_FA[statusOf(picked.v)].label}{picked.at.from === 'name' ? ' · محل از نام پروژه' : ''}</p>}
-      {missing.length > 0 && (
-        <details className="pd-missing">
-          <summary>{faNum(missing.length)} پروژه موقعیت ثبت‌شده ندارند — ثبت استان</summary>
-          <ul>{missing.map(({ v }) => (
-            <li key={v.input.id}><span>{v.input.name}</span>
-              <select aria-label={`استان ${v.input.name}`} disabled={saving === v.input.id} defaultValue="" onChange={async (e) => { if (!e.target.value) return; setSaving(v.input.id); await updateProject(v.input.id, { location: `استان ${e.target.value}` }); setSaving(null) }}>
-                <option value="">انتخاب استان</option>{PROVINCES.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
-              </select></li>
-          ))}</ul>
-          <p className="pd-note">استان در فیلد «موقعیت» داده پایهٔ پروژه ذخیره می‌شود (نیازمند دسترسی ویرایش داده پایه).</p>
-        </details>
-      )}
-      <p className="pd-note">نقشهٔ شماتیک؛ محل هر پروژه از «موقعیت» ثبت‌شده و در نبود آن از شهر یا میدانِ نام‌برده در عنوان پروژه.</p>
+    <Box title="وضعیت جغرافیایی پروژه‌ها" icon={<MapPin size={15} />} tone="#0d9488" className="pd-mapbox">
+      <PortfolioMap views={views} byId={byId} />
     </Box>
   )
 }

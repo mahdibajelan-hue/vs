@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { achievements, budget, earnedScheduleDelay, locate, mapHeight, portfolioTrend, project, projectPlace, statusOf, warnings, weightedProgress, byGroup } from './dashboardCore.ts'
+import { facilityOf, isLinear, achievements, budget, earnedScheduleDelay, locate, mapHeight, portfolioTrend, project, projectPlace, statusOf, warnings, weightedProgress, byGroup } from './dashboardCore.ts'
 
 /* geography */
 assert.equal(locate('پروژهٔ فرضی: خط انتقال گاز ۴۸ اینچ کوهدشت–سرخس').name, 'کوهدشت') // first named place
@@ -44,4 +44,15 @@ assert.equal(ac.filter((x) => x.kind === 'achievement').length, 1); assert.equal
 
 const g = byGroup([v('a', { prog: 'x' }), v('b', { prog: 'x', h: 'red' }), v('c')], (x) => x.input.programId, (k) => `طرح ${k}`)
 assert.equal(g.length, 1); assert.equal(g[0].count, 2); assert.equal(g[0].critical, 1)
+/* facilities from titles */
+assert.equal(facilityOf('ایستگاه تقویت فشار شماره ۳'), 'compressor')
+assert.equal(facilityOf('واحد شیرین‌سازی گاز ترش - واحد ۱'), 'gas_plant')
+assert.equal(facilityOf('واحد بازیافت گوگرد'), 'gas_plant')
+assert.equal(facilityOf('تاسیسات جانبی و مخازن ذخیره‌سازی'), 'storage')
+assert.equal(facilityOf('پایش هوشمند خط لوله ۵۶ اینچ (SCADA)'), 'control') // a control system on a line is not the line
+assert.equal(facilityOf('احداث خط لوله ۴۲ اینچ جنوب - قطعه جنوبی'), 'pipeline')
+assert.equal(facilityOf('توسعه شبکه توزیع منطقه غرب - فاز ۱'), 'network')
+assert.equal(facilityOf('پالایشگاه ستاره خلیج فارس'), 'refinery')
+assert.equal(facilityOf('ساختمان اداری'), 'other')
+assert.ok(isLinear('pipeline') && !isLinear('compressor'))
 console.log('dashboardCore ok')

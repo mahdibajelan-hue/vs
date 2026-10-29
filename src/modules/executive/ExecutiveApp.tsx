@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Activity, Briefcase, Gauge, CircleHelp, ClipboardList, FlaskConical, Gavel, HardHat, LayoutDashboard, ListTree, Loader2, ShieldAlert, Star } from 'lucide-react'
+import { Activity, Briefcase, Gauge, Layers3, CircleHelp, ClipboardList, FlaskConical, Gavel, HardHat, LayoutDashboard, ListTree, Loader2, ShieldAlert, Star } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -18,6 +18,7 @@ import { ResourceTab } from './pages/ResourceTab'
 import { IssuesTab } from './pages/IssuesTab'
 import { GuideTab } from './pages/GuideTab'
 import { DecisionDialog } from './components/DecisionDialog'
+import { ScopePicker } from './components/ScopePicker'
 import { faNum } from './components/pfUi'
 import './mpv.css'
 import './portfolio.css'
@@ -49,6 +50,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
   const portfolios = useMasterDataStore((s) => s.portfolios)
   const programs = useMasterDataStore((s) => s.programs)
+  const allProjects = useMasterDataStore((s) => s.projects)
   const [tab, setTab] = useState<Tab>(() => { const e = useModuleStore.getState().takeEntryTab(); return e === 'pipeline' || e === 'issues' || e === 'guide' || e === 'overview' ? e : 'dashboard' })
   const [scope, setScope] = useState<PortfolioScope>({ portfolioId: null, programId: null })
   const [deciding, setDeciding] = useState<{ id: string | null } | null>(null)
@@ -96,14 +98,12 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
         </nav>
         {tab !== 'pipeline' && tab !== 'guide' && (
           <div className="pf-scope">
-            <select aria-label="پورتفولیو" value={scope.portfolioId ?? ''} onChange={(e) => setScope({ portfolioId: e.target.value || null, programId: null })}>
-              <option value="">همهٔ پورتفولیوها</option>
-              {portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <select aria-label="طرح" value={scope.programId ?? ''} onChange={(e) => setScope((s) => ({ ...s, programId: e.target.value || null }))}>
-              <option value="">همهٔ طرح‌ها</option>
-              {scopedPrograms.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <ScopePicker icon={Briefcase} caption="پورتفولیو" allLabel="همهٔ پورتفولیوها" tone="#4f46e5" value={scope.portfolioId}
+              options={portfolios.map((p) => ({ id: p.id, label: p.name, count: allProjects.filter((x) => x.portfolioId === p.id).length }))}
+              onChange={(id) => setScope({ portfolioId: id, programId: null })} />
+            <ScopePicker icon={Layers3} caption="طرح" allLabel="همهٔ طرح‌ها" tone="#0d9488" value={scope.programId}
+              options={scopedPrograms.map((p) => ({ id: p.id, label: p.name, count: allProjects.filter((x) => x.programId === p.id).length }))}
+              onChange={(id) => setScope((s) => ({ ...s, programId: id }))} />
             {!pv.snapshotsReady && pv.progress.total > 0 && (
               <span className="pf-loading" role="status"><Loader2 size={13} className="animate-spin" /> {pv.cachedAt ? `نمایش دادهٔ ${faNum(Math.max(1, Math.round((Date.now() - pv.cachedAt) / 60000)))} دقیقه پیش · در حال به‌روزرسانی` : `شاخص پروژه‌ها ${faNum(pv.progress.done)} از ${faNum(pv.progress.total)}`}</span>
             )}

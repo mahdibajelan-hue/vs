@@ -20775,3 +20775,27 @@ language sql stable security invoker set search_path = public as $$
   select p.id from master_projects p where is_admin_user() or rasta_user_can_access_master_project(p.id)
 $$;
 grant execute on function rp_accessible_projects() to authenticated;
+
+-- portfolio dashboard: each project's land-acquisition route (KMZ), thinned to ~150 points for the country map.
+-- plpgsql so the (possibly large) geometry is detoasted once per route, not once per element.
+create or replace function pf_route_lines() returns table (master_project_id uuid, total_km numeric, is_demo boolean, points jsonb)
+language plpgsql stable security invoker set search_path = public as $$
+declare r record; g jsonb; n int; step int; acc jsonb; i int;
+begin
+  for r in select l.master_project_id as mp, l.total_km as km, l.is_demo as demo, l.geometry as geom from la_routes l where jsonb_typeof(l.geometry) = 'array' loop
+    g := r.geom;
+    n := jsonb_array_length(g);
+    continue when n < 2;
+    step := greatest(1, n / 150);
+    acc := '[]'::jsonb;
+    i := 0;
+    while i < n loop
+      acc := acc || jsonb_build_array(g -> i);
+      i := i + step;
+    end loop;
+    if (n - 1) % step <> 0 then acc := acc || jsonb_build_array(g -> (n - 1)); end if;
+    master_project_id := r.mp; total_km := r.km; is_demo := r.demo; points := acc;
+    return next;
+  end loop;
+end $$;
+grant execute on function pf_route_lines() to authenticated;

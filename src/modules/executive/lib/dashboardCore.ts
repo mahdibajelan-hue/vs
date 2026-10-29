@@ -49,18 +49,30 @@ export function projectPlace(p: { location?: string | null; name: string }): { p
   return b ? { place: b, from: 'name' } : null
 }
 
-/** schematic outline of Iran (longitude, latitude), coarse — for orientation, not survey use */
-export const IRAN_OUTLINE: [number, number][] = [
-  [44.03, 39.38], [44.8, 39.71], [45.45, 38.88], [46.52, 38.87], [47.68, 39.5], [48.36, 39.37], [48.0, 38.8], [48.88, 38.43],
-  [48.87, 37.95], [49.47, 37.47], [50.15, 37.25], [50.66, 36.92], [51.6, 36.65], [52.65, 36.7], [53.9, 36.92], [53.95, 37.3],
-  [55.4, 37.95], [56.6, 38.1], [57.3, 38.05], [58.4, 37.6], [59.4, 37.35], [60.4, 36.65], [61.15, 36.6], [61.2, 35.6],
-  [60.55, 34.3], [60.9, 33.55], [60.6, 32.95], [60.85, 31.5], [61.7, 31.4], [61.8, 30.85], [60.9, 29.85], [61.9, 28.6],
-  [62.75, 28.25], [62.8, 27.25], [63.25, 27.1], [62.8, 26.3], [61.6, 25.2], [60.6, 25.3], [59.6, 25.4], [58.5, 25.55],
-  [57.8, 25.65], [57.3, 26.4], [57.1, 27.05], [56.3, 27.18], [55.6, 26.9], [54.7, 26.5], [53.7, 26.75], [52.6, 27.35],
-  [52.0, 27.82], [51.4, 28.0], [50.85, 28.85], [50.3, 29.6], [49.6, 30.0], [48.9, 30.4], [48.55, 29.95], [48.0, 30.45],
-  [47.7, 31.0], [47.85, 31.75], [47.4, 32.4], [46.1, 33.0], [45.45, 33.9], [45.75, 34.6], [45.45, 35.95], [46.15, 35.75],
-  [45.1, 36.95], [44.8, 37.2], [44.22, 37.95], [44.45, 38.35],
+/* ── facilities ────────────────────────────────────────────────────── */
+
+export type Facility = 'pipeline' | 'network' | 'compressor' | 'refinery' | 'gas_plant' | 'petrochem' | 'storage' | 'control' | 'other'
+export const FACILITY_FA: Record<Facility, string> = {
+  pipeline: 'خط لوله', network: 'شبکهٔ توزیع', compressor: 'ایستگاه تقویت فشار', refinery: 'پالایشگاه', gas_plant: 'واحد فرآورش گاز',
+  petrochem: 'پتروشیمی', storage: 'مخازن و ذخیره‌سازی', control: 'سامانهٔ پایش و کنترل', other: 'سایر',
+}
+const FACILITY_WORDS: [Facility, RegExp][] = [
+  ['compressor', /تقویت فشار|کمپرسور|تراکم/],
+  ['refinery', /پالایشگاه|پالایش نفت/],
+  ['petrochem', /پتروشیمی|متانول|اوره|آمونیاک/],
+  ['gas_plant', /شیرین[‌ ]?سازی|فرآورش|بازیافت گوگرد|NGL|پالایش گاز|نم[‌ ]?زدایی/i],
+  ['storage', /مخزن|مخازن|ذخیره[‌ ]?سازی|انبار نفت/],
+  ['control', /SCADA|اسکادا|پایش|سامانه|نشت|مخابرات|تله[‌ ]?متری|بازرسی هوشمند/i],
+  ['network', /شبکه[‌ ]?(ی )?توزیع|گازرسانی/],
+  ['pipeline', /خط لوله|خطوط لوله|خط انتقال|لوله[‌ ]?کشی|pipeline/i],
 ]
+/** what a project builds, from its title (then its type) — decides the map symbol */
+export function facilityOf(name: string, projectType = ''): Facility {
+  const t = norm(`${name} ${projectType}`)
+  return FACILITY_WORDS.find(([, re]) => re.test(t))?.[0] ?? 'other'
+}
+export const isLinear = (f: Facility) => f === 'pipeline' || f === 'network'
+
 export const MAP_BOUNDS = { minLng: 43.8, maxLng: 63.5, minLat: 24.9, maxLat: 39.9 }
 /** equirectangular with the width shrunk by cos(32°) so Iran keeps its shape */
 export function project(lng: number, lat: number, width: number): [number, number] {
