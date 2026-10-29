@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Activity, Briefcase, Gauge, Layers3, CircleHelp, ClipboardList, FlaskConical, Gavel, HardHat, LayoutDashboard, ListTree, Loader2, ShieldAlert, Star } from 'lucide-react'
+import { Activity, Briefcase, Gauge, Layers3, ClipboardList, FlaskConical, Gavel, HardHat, LayoutDashboard, ListTree, Loader2, ShieldAlert, Star } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -37,7 +37,6 @@ const TABS: { key: Tab; label: string; icon: ReactNode }[] = [
   { key: 'risk', label: 'ریسک و وابستگی', icon: <ShieldAlert size={15} /> },
   { key: 'decisions', label: 'تصمیم‌های سبد', icon: <Gavel size={15} /> },
   { key: 'pipeline', label: 'مراحل چرخهٔ عمر', icon: <ListTree size={15} /> },
-  { key: 'guide', label: 'راهنما', icon: <CircleHelp size={15} /> },
 ]
 
 /**
@@ -85,7 +84,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
             <p className="text-[10px] text-muted">اولویت، عملکرد و تصمیم در سطح سبد</p>
           </div>
         </div>
-        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
+        <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setTab(tab === 'guide' ? 'dashboard' : 'guide')} guideActive={tab === 'guide'} />
       </header>
 
       <StorageErrorBanner />
