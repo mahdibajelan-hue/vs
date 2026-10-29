@@ -61,6 +61,10 @@ export interface PfSnapshot {
   planned: number
   /** current lifecycle phase, for the balance view */
   phase: { code: string; title: string } | null
+  /** certified cost of the EPC contracts (finance), when the project has an EPC budget */
+  ac?: number | null
+  /** EPC planned / earned % at month ends (last 12 months, up to today) — the trend and the earned-schedule delay */
+  trend?: { date: string; planned: number; earned: number | null }[]
 }
 
 export interface PfScore { strategic: number | null; benefit: number | null; mandatory: boolean; note: string; updatedAt: string | null; updatedBy: string | null }

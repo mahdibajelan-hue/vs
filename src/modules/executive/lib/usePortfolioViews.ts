@@ -58,10 +58,12 @@ export function usePortfolioViews(scope: PortfolioScope) {
   }, [inScope, st.snapshots, st.scores, st.decisions, st.weights, summaries, delivery])
 
   const scopedRisks = useMemo(() => (raw ? inScope.flatMap((p) => raw.risksByMaster.get(p.id) ?? []) : []), [raw, inScope])
+  // risk → its master project, for naming the project behind a risk on the dashboard
+  const riskMaster = useMemo(() => new Map(raw ? inScope.flatMap((p) => (raw.risksByMaster.get(p.id) ?? []).map((r) => [r.id, p.id] as [string, string])) : []), [raw, inScope])
   const scopedAssessments = useMemo(() => (raw ? scopedRisks.flatMap((r) => raw.assessmentsByRisk.get(r.id) ?? []) : []), [raw, scopedRisks])
   const currency = inScope.find((p) => p.currency)?.currency ?? 'ریال'
   const snapshotsReady = st.snapshotProgress.total > 0 && st.snapshotProgress.done >= st.snapshotProgress.total
 
   const issuesByMaster = raw?.issuesByMaster ?? null
-  return { views, summaries, scopedRisks, scopedAssessments, currency, rawLoaded: !!raw, snapshotsReady, progress: st.snapshotProgress, inScope, issuesByMaster, cachedAt: st.cachedAt }
+  return { views, summaries, riskMaster, scopedRisks, scopedAssessments, currency, rawLoaded: !!raw, snapshotsReady, progress: st.snapshotProgress, inScope, issuesByMaster, cachedAt: st.cachedAt }
 }

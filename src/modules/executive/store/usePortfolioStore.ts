@@ -29,7 +29,7 @@ const decisionFromRow = (r: Row): PfDecision => ({
 // all projects start together so the batched loaders (lib/batchedQuery) send one query per table for the whole
 // portfolio instead of one per project
 const CONCURRENCY = 24
-const CACHE_KEY = 'farin.pf.snapshots.v1'
+const CACHE_KEY = 'farin.pf.snapshots.v2'
 const CACHE_MAX_AGE = 12 * 3600 * 1000
 function readCache(): { at: number; data: Record<string, PfSnapshot | null> } | null {
   try { const c = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null'); return c && Date.now() - c.at < CACHE_MAX_AGE ? c : null } catch { return null }
@@ -59,6 +59,13 @@ interface PortfolioState {
 }
 
 let snapshotRun = 0
+
+/** the EPC curve reduced to month-end points of the last 12 months (plus today) — enough for the portfolio trend */
+function trendOf(curve: { date: string; planned: number; earned: number | null }[]) {
+  const today = new Date().toISOString().slice(0, 10)
+  const from = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10)
+  return curve.filter((p) => p.date >= from && p.date <= today).map((p) => ({ date: p.date, planned: Math.round(p.planned * 10) / 10, earned: p.earned == null ? null : Math.round(p.earned * 10) / 10 })).slice(-14)
+}
 
 export const usePortfolioStore = create<PortfolioState>()((set, get) => ({
   loaded: false,
@@ -126,6 +133,8 @@ export const usePortfolioStore = create<PortfolioState>()((set, get) => ({
               blockers: m.health?.blockers ?? [],
               actual: m.lifecycle.actual, planned: m.lifecycle.planned,
               phase: m.current ? { code: m.current.code, title: m.current.title } : null,
+              ac: m.evm.bac > 0 ? m.evm.ac : null,
+              trend: trendOf(m.curve),
             }
           }
         } catch { snap = null }

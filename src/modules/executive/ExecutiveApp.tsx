@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Activity, Briefcase, CircleHelp, ClipboardList, FlaskConical, Gavel, HardHat, LayoutDashboard, ListTree, Loader2, ShieldAlert, Star } from 'lucide-react'
+import { Activity, Briefcase, Gauge, CircleHelp, ClipboardList, FlaskConical, Gavel, HardHat, LayoutDashboard, ListTree, Loader2, ShieldAlert, Star } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -8,6 +8,7 @@ import { useModuleStore } from '../../store/useModuleStore'
 import { usePortfolioStore } from './store/usePortfolioStore'
 import { usePortfolioViews, type PortfolioScope } from './lib/usePortfolioViews'
 import { OverviewTab } from './pages/OverviewTab'
+import { DashboardTab } from './pages/DashboardTab'
 import { PriorityTab } from './pages/PriorityTab'
 import { PerformanceTab } from './pages/PerformanceTab'
 import { RiskTab } from './pages/RiskTab'
@@ -23,8 +24,9 @@ import './portfolio.css'
 
 const MODULE_ACCENT = '#6366f1'
 
-type Tab = 'overview' | 'priority' | 'performance' | 'scenario' | 'resources' | 'issues' | 'risk' | 'decisions' | 'pipeline' | 'guide'
+type Tab = 'dashboard' | 'overview' | 'priority' | 'performance' | 'scenario' | 'resources' | 'issues' | 'risk' | 'decisions' | 'pipeline' | 'guide'
 const TABS: { key: Tab; label: string; icon: ReactNode }[] = [
+  { key: 'dashboard', label: 'داشبورد', icon: <Gauge size={15} /> },
   { key: 'overview', label: 'نمای کلی', icon: <LayoutDashboard size={15} /> },
   { key: 'priority', label: 'اولویت‌بندی', icon: <Star size={15} /> },
   { key: 'performance', label: 'عملکرد و پیش‌بینی', icon: <Activity size={15} /> },
@@ -47,7 +49,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const fetchMasterData = useMasterDataStore((s) => s.fetchAll)
   const portfolios = useMasterDataStore((s) => s.portfolios)
   const programs = useMasterDataStore((s) => s.programs)
-  const [tab, setTab] = useState<Tab>(() => { const e = useModuleStore.getState().takeEntryTab(); return e === 'pipeline' || e === 'issues' || e === 'guide' ? e : 'overview' })
+  const [tab, setTab] = useState<Tab>(() => { const e = useModuleStore.getState().takeEntryTab(); return e === 'pipeline' || e === 'issues' || e === 'guide' || e === 'overview' ? e : 'dashboard' })
   const [scope, setScope] = useState<PortfolioScope>({ portfolioId: null, programId: null })
   const [deciding, setDeciding] = useState<{ id: string | null } | null>(null)
   const canGovern = usePortfolioStore((s) => s.canGovern)
@@ -114,6 +116,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           {tab === 'pipeline' ? <LifecyclePipelinePage onBack={() => setTab('overview')} />
             : tab === 'guide' ? <GuideTab onOpenTab={(t) => setTab(t as Tab)} />
             : !pv.rawLoaded ? <div className="pf-skel-grid">{[0, 1, 2, 3].map((i) => <div key={i} className="pf-skel" />)}</div>
+            : tab === 'dashboard' ? <DashboardTab views={pv.views} projects={pv.inScope} risks={pv.scopedRisks} riskMaster={pv.riskMaster} assessments={pv.scopedAssessments} issuesByMaster={pv.issuesByMaster} currency={pv.currency} canGovern={canGovern} onDecide={(id) => setDeciding({ id })} onOpenTab={setTab} />
             : tab === 'overview' ? <OverviewTab views={pv.views} currency={pv.currency} canGovern={canGovern} onDecide={(id) => setDeciding({ id })} onOpenPipeline={() => setTab('pipeline')} onOpenTab={setTab} />
             : tab === 'priority' ? <PriorityTab views={pv.views} currency={pv.currency} />
             : tab === 'performance' ? <PerformanceTab views={pv.views} currency={pv.currency} />
