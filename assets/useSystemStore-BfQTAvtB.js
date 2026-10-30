@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;import{i as e}from"./supabaseClient-Ds7bpGvD.js";var t=e(e=>({storageError:null,setStorageError:t=>e({storageError:t})}));export{t};

@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;function e(e){let t=[];return e.groupId||t.push(`گروه کالا`),e.unit||t.push(`واحد`),(e.contractQty??0)>0||(e.detailQty??0)>0||t.push(`مقدار`),e.unitPrice>0||t.push(`قیمت واحد`),e.facility||t.push(`ایستگاه`),e.pipelineNo||e.isometricNo||e.tagNumber||e.usageLocation||t.push(`محل مصرف`),e.needDate||t.push(`تاریخ نیاز`),t}export{e as t};
