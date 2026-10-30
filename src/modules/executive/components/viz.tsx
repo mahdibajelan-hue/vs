@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { faNum } from './pfUi'
 import './viz.css'
 
@@ -238,5 +239,37 @@ export function Seg<T extends string>({ value, options, onChange, label }: { val
     <div className="vz-seg" role="tablist" aria-label={label}>
       {options.map((o) => <button key={o.key} type="button" role="tab" aria-selected={value === o.key} onClick={() => onChange(o.key)}>{o.label}</button>)}
     </div>
+  )
+}
+
+/** a side sheet for detail behind a summary figure; closes on the scrim, the button or Escape */
+export function SideSheet({ open, title, sub, crumb, onBack, onClose, children, actions }: {
+  open: boolean; title: ReactNode; sub?: ReactNode; crumb?: ReactNode; onBack?: () => void; onClose: () => void; children: ReactNode; actions?: ReactNode
+}) {
+  const closeRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!open) return
+    closeRef.current?.focus()
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') (onBack ?? onClose)() }
+    document.addEventListener('keydown', k)
+    return () => document.removeEventListener('keydown', k)
+  }, [open, onBack, onClose])
+  if (!open) return null
+  return createPortal(
+    <div className="vz-sheet-root" dir="rtl">
+      <div className="vz-sheet-scrim" onClick={onClose} aria-hidden />
+      <aside className="vz-sheet vz-sheet-wide" role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}>
+        <header className="vz-sheet-head">
+          {onBack ? <button type="button" className="vz-sheet-back" onClick={onBack}>→ {crumb}</button> : <span className="vz-sheet-crumb">{crumb}</span>}
+          <span className="flex items-center gap-2">{actions}<button ref={closeRef} type="button" className="vz-sheet-x" onClick={onClose} aria-label="بستن">✕</button></span>
+        </header>
+        <div className="vz-sheet-body" key={typeof title === 'string' ? title : undefined}>
+          <h2>{title}</h2>
+          {sub && <p className="vz-sheet-sub">{sub}</p>}
+          {children}
+        </div>
+      </aside>
+    </div>,
+    document.body,
   )
 }

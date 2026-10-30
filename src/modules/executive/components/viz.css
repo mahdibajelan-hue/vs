@@ -174,3 +174,4 @@
   .vz-kpi-v { font-size: 1.25rem; }
   .vz-kpi-l { font-size: 11px; }
 }
+.vz-sheet-wide { width: min(46rem, 100vw); }

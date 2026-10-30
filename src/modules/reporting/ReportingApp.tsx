@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Bot, CircleHelp, FileText, LayoutDashboard, Loader2, Microscope, Settings2, type LucideIcon } from 'lucide-react'
+import { BarChart3, Bot, CalendarRange, CircleHelp, FileText, LayoutDashboard, Loader2, Microscope, Settings2, type LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useDeepLinkStore } from '../../store/useDeepLinkStore'
 import { useReportingStore } from './store/useReportingStore'
@@ -17,15 +17,17 @@ import { ComposerPage } from './pages/ComposerPage'
 import { AnalysisCenterPage, type AnalysisSub } from './pages/AnalysisCenterPage'
 import { AssistantPage } from './pages/AssistantPage'
 import { GuidePage } from './pages/GuidePage'
+import { PeriodReportsPage } from './pages/PeriodReportsPage'
 import type { Scope } from './components/rpx'
 import type { View } from './lib/assistantCore'
 
 /** The module is organised around three parts — report builder, analysis center, assistant — plus its front page, settings and guide. */
-export type Section = 'home' | 'builder' | 'analysis' | 'assistant' | 'settings' | 'guide'
+export type Section = 'home' | 'reports' | 'builder' | 'analysis' | 'assistant' | 'settings' | 'guide'
 type BuilderSub = 'composer' | 'official' | 'center' | 'widgets' | 'template' | 'portfolio'
 
 const NAV: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: 'home', label: 'نمای مدیریتی', icon: LayoutDashboard },
+  { id: 'reports', label: 'گزارش‌های دوره‌ای', icon: CalendarRange },
   { id: 'builder', label: 'گزارش‌ساز', icon: FileText },
   { id: 'analysis', label: 'مرکز تحلیل', icon: Microscope },
   { id: 'assistant', label: 'دستیار', icon: Bot },
@@ -57,6 +59,7 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const [builderSub, setBuilderSub] = useState<BuilderSub>('composer')
   const navInd = useTabIndicator<HTMLElement>(section)
   const subInd = useTabIndicator<HTMLElement>(`${section}:${builderSub}`)
+  const [reportKind, setReportKind] = useState<string>('daily')
   const [analysisSub, setAnalysisSub] = useState<AnalysisSub>(linked ? 'decisions' : 'deviations')
   const [scope, setScope] = useState<Scope>(linked ? { level: 'project', id: linked } : { level: 'all', id: null })
 
@@ -74,6 +77,7 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
     setSection(s)
     if (s === 'analysis' && sub) setAnalysisSub(sub as AnalysisSub)
     if (s === 'builder' && sub) setBuilderSub(sub as BuilderSub)
+    if (s === 'reports' && sub) setReportKind(sub)
     if (pid) setScope({ level: 'project', id: pid })
   }
   const openView = (v: View, pid: string | null) => {
@@ -95,7 +99,7 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-400/30 bg-teal-500/10"><BarChart3 size={18} className="text-teal-400" /></div>
           <div className="hidden leading-tight sm:block">
             <p className="text-sm font-extrabold">گزارش هوشمند و تحلیل</p>
-            <p className="text-[10px] text-muted">گزارش‌ساز · مرکز تحلیل · دستیار</p>
+            <p className="text-[10px] text-muted">گزارش‌های دوره‌ای · گزارش‌ساز · مرکز تحلیل · دستیار</p>
           </div>
           {projectLevel && (
             <>
@@ -123,6 +127,7 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
 
       <div className="rpx-scroll flex-1 min-h-0 overflow-y-auto p-3 pb-20 sm:p-4 lg:pb-4" dir="rtl">
         {section === 'home' ? <HomePage scope={scope} onScope={setScope} onOpen={open} />
+          : section === 'reports' ? <PeriodReportsPage key={reportKind} initialKind={reportKind} initialProject={scope.level === 'project' ? scope.id : projectId} />
           : section === 'analysis' ? <AnalysisCenterPage sub={analysisSub} onSub={setAnalysisSub} scope={scope} onScope={setScope} />
           : section === 'assistant' ? <AssistantPage onOpen={openView} />
           : section === 'guide' ? <GuidePage onOpen={(s) => setSection(s)} />
