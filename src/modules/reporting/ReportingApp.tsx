@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BarChart3, Bot, CalendarRange, CircleHelp, FileText, LayoutDashboard, Loader2, Microscope, Settings2, type LucideIcon } from 'lucide-react'
+import { BarChart3, Bot, CalendarRange, FileText, LayoutDashboard, Loader2, Microscope, Settings2, type LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useDeepLinkStore } from '../../store/useDeepLinkStore'
 import { useReportingStore } from './store/useReportingStore'
@@ -32,7 +32,6 @@ const NAV: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: 'analysis', label: 'مرکز تحلیل', icon: Microscope },
   { id: 'assistant', label: 'دستیار', icon: Bot },
   { id: 'settings', label: 'تنظیمات', icon: Settings2 },
-  { id: 'guide', label: 'راهنما', icon: CircleHelp },
 ]
 const BUILDER_SUBS: { id: BuilderSub; label: string; project: boolean }[] = [
   { id: 'composer', label: 'گزارش ترکیبی', project: false },
