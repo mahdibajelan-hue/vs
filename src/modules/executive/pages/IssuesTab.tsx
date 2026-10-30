@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts'
-import { ChevronDown, ChevronLeft, ClipboardList, Flame, Layers, Repeat } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ClipboardList, Flame, Gauge as GaugeIcon, Layers, PieChart, Repeat } from 'lucide-react'
 import type { MasterProject, Portfolio, Program } from '../../masterdata/types'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import type { ImIssue } from '../../issues/types'
@@ -9,6 +9,8 @@ import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { formatJalali } from '../../../lib/jalali'
 import { criticalOverdue, ISSUE_BANDS, issueKpi, pressureOrder, sharedCategories, signalOf, type IssueKpi, type Signal } from '../lib/issueKpiCore'
 import { Empty, faNum, Kpi, Panel } from '../components/pfUi'
+import { Donut, Gauge } from '../components/viz'
+import { useDrill } from '../components/DrillSheet'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const pct = (x: number | null) => (x == null ? '—' : `${faNum(Math.round(x * 100))}٪`)
@@ -56,6 +58,8 @@ export function IssuesTab({ projects, issuesByMaster }: { projects: MasterProjec
   const portfolios = useMasterDataStore((s) => s.portfolios)
   const programs = useMasterDataStore((s) => s.programs)
   const [open, setOpen] = useState<Set<string>>(new Set())
+  const drill = useDrill((s) => s.drill)
+  const openDetail = useDrill((s) => s.open)
   const d = today()
   const issuesOf = (id: string) => issuesByMaster?.get(id)
   const all = useMemo(() => projects.flatMap((p) => issuesOf(p.id) ?? []), [projects, issuesByMaster]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -89,12 +93,39 @@ export function IssuesTab({ projects, issuesByMaster }: { projects: MasterProjec
   return (
     <div className="pf-stack">
       <div className="pf-kpis">
-        <Kpi icon={<ClipboardList size={14} />} label="مسائل باز" value={faNum(k.backlog)} sub={`${faNum(k.critical)} بحرانی · ${faNum(k.high)} بالا · ${faNum(k.blocked)} متوقف`} tone="#f97316" />
+        <Kpi icon={<ClipboardList size={14} />} label="مسائل باز" value={k.backlog} sub={`${faNum(k.critical)} بحرانی · ${faNum(k.high)} بالا · ${faNum(k.blocked)} متوقف`} tone="#f97316" onClick={rows.length ? () => drill('پروژه‌های دارای مسئلهٔ باز', rows.map((r) => r.p.id), 'به ترتیب فشار') : undefined} />
         <Kpi label="نرخ معوق" value={pct(k.overdueRate)} sub={`${faNum(k.overdue)} مسئلهٔ باز از مهلت گذشته`} tone={SIG[signalOf('overdueRate', k.overdueRate)]} />
         <Kpi label="سن میانهٔ مسائل باز" value={k.medianAge == null ? '—' : `${faNum(k.medianAge)} روز`} sub={k.mttr == null ? 'زمان رفع: بدون مسئلهٔ بسته‌شده در ۹۰ روز' : `زمان میانهٔ رفع: ${faNum(k.mttr)} روز${k.badDates ? ` · ${faNum(k.badDates)} مسئله با تاریخ بستنِ پیش از شناسایی کنار گذاشته شد` : ''}`} tone="#0ea5e9" />
         <Kpi label="رفع به‌موقع (۹۰ روز)" value={pct(k.onTimeRate)} sub={`${faNum(k.closed90)} مسئلهٔ بسته‌شده`} tone={SIG[signalOf('onTimeRate', k.onTimeRate)]} />
         <Kpi label="نسبت رفع به ورود (۳۰ روز)" value={k.flowRatio == null ? '—' : faNum(k.flowRatio, 2)} sub={`${faNum(k.closed30)} بسته در برابر ${faNum(k.opened30)} تازه — زیر ۱ یعنی انباشت`} tone={SIG[signalOf('flowRatio', k.flowRatio)]} />
         <Kpi icon={<Repeat size={14} />} label="بازگشایی پس از بستن" value={pct(k.reopenRate)} sub={`علت ریشه‌ای تأییدشده: ${pct(k.rootCauseRate)} · تمدید مهلت: ${pct(k.extendedRate)}`} tone={SIG[signalOf('reopenRate', k.reopenRate)]} />
+      </div>
+
+      <div className="pf-grid-2">
+        <Panel title="شاخص‌های جریان رفع مسائل" icon={<GaugeIcon size={15} />} hint="رنگ هر عقربه با همان مرزهای جدول پایین تعیین می‌شود.">
+          <div className="vz-gauges">
+            <Gauge label="نرخ معوق" value={k.overdueRate == null ? null : k.overdueRate * 100} max={60} target={ISSUE_BANDS.overdueRate.watch * 100}
+              bands={[{ to: ISSUE_BANDS.overdueRate.watch * 100, color: '#22c55e' }, { to: ISSUE_BANDS.overdueRate.bad * 100, color: '#f59e0b' }, { to: 60, color: '#ef4444' }]} display={pct(k.overdueRate)} size={140} />
+            <Gauge label="رفع به‌موقع" value={k.onTimeRate == null ? null : k.onTimeRate * 100} target={80}
+              bands={[{ to: 60, color: '#ef4444' }, { to: 80, color: '#f59e0b' }, { to: 100, color: '#22c55e' }]} display={pct(k.onTimeRate)} sub="۹۰ روز اخیر" size={140} />
+            <Gauge label="رفع به ورود" value={k.flowRatio} min={0} max={2} target={1}
+              bands={[{ to: ISSUE_BANDS.flowRatio.bad, color: '#ef4444' }, { to: ISSUE_BANDS.flowRatio.watch, color: '#f59e0b' }, { to: 2, color: '#22c55e' }]} display={k.flowRatio == null ? '—' : faNum(k.flowRatio, 2)} sub="۳۰ روز اخیر" size={140} />
+            <Gauge label="بازگشایی" value={k.reopenRate == null ? null : k.reopenRate * 100} max={30} target={ISSUE_BANDS.reopenRate.watch * 100}
+              bands={[{ to: ISSUE_BANDS.reopenRate.watch * 100, color: '#22c55e' }, { to: ISSUE_BANDS.reopenRate.bad * 100, color: '#f59e0b' }, { to: 30, color: '#ef4444' }]} display={pct(k.reopenRate)} size={140} />
+          </div>
+        </Panel>
+        <Panel title="ترکیب مسائل باز" icon={<PieChart size={15} />} hint="بر اساس اهمیت و توقف؛ روی هر بخش بزنید تا پروژه‌های دارای آن نوع مسئله را ببینید.">
+          <Donut sub="مسئلهٔ باز" onPick={(key) => {
+            if (!key) return
+            const has = (r: (typeof rows)[number]) => key === 'critical' ? r.kpi.critical > 0 : key === 'high' ? r.kpi.high > 0 : key === 'blocked' ? r.kpi.blocked > 0 : r.kpi.backlog - r.kpi.critical - r.kpi.high > 0
+            drill(key === 'critical' ? 'پروژه‌های دارای مسئلهٔ بحرانی' : key === 'high' ? 'پروژه‌های دارای مسئلهٔ با اهمیت بالا' : key === 'blocked' ? 'پروژه‌های دارای مسئلهٔ متوقف' : 'پروژه‌های دارای مسئلهٔ عادی', rows.filter(has).map((r) => r.p.id))
+          }} parts={[
+            { key: 'critical', label: 'بحرانی', value: k.critical, color: '#ef4444' },
+            { key: 'high', label: 'بالا', value: k.high, color: '#f97316' },
+            { key: 'normal', label: 'متوسط و کم', value: Math.max(0, k.backlog - k.critical - k.high), color: '#0ea5e9' },
+          ]} />
+          {k.blocked > 0 && <p className="pf-note">{faNum(k.blocked)} مسئلهٔ باز در وضعیت «متوقف» است. <button type="button" className="vz-link" onClick={() => drill('پروژه‌های دارای مسئلهٔ متوقف', rows.filter((r) => r.kpi.blocked > 0).map((r) => r.p.id))}>نمایش پروژه‌ها</button></p>}
+        </Panel>
       </div>
 
       <div className="pf-grid-2">
@@ -113,7 +144,7 @@ export function IssuesTab({ projects, issuesByMaster }: { projects: MasterProjec
           {!rows.length ? <Empty>هیچ پروژه‌ای مسئلهٔ باز ندارد.</Empty> : (
             <ol className="pf-queue">{rows.slice(0, 7).map((r) => (
               <li key={r.p.id}>
-                <div className="min-w-0"><b>{r.p.officialName}</b>
+                <div className="min-w-0"><button type="button" className="vz-link" onClick={() => openDetail(r.p.id)}>{r.p.officialName}</button>
                   <div className="pf-reasons">
                     {r.criticalOverdue > 0 && <span className="pf-reason is-health">{faNum(r.criticalOverdue)} مسئلهٔ مهمِ معوق</span>}
                     <span className="pf-reason">{faNum(r.kpi.overdue)} معوق از {faNum(r.kpi.backlog)}</span>

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { Lock, Save, ShieldCheck, SlidersHorizontal, Star } from 'lucide-react'
+import { BarChart3, Gauge as GaugeIcon, Layers, Lock, PieChart, Save, ShieldCheck, SlidersHorizontal, Star } from 'lucide-react'
 import { usePortfolioStore } from '../store/usePortfolioStore'
 import { CRITERION_FA, DECISION_FA, normaliseWeights, type PfCriterion, type PfProjectView, type PfWeights } from '../lib/portfolioCore'
-import { Empty, faNum, fmtMoney, HealthChip, Panel } from '../components/pfUi'
+import { Empty, faNum, fmtMoney, HealthChip, Kpi, Panel } from '../components/pfUi'
+import { Columns, Donut } from '../components/viz'
+import { useDrill } from '../components/DrillSheet'
 
 export const CRITERION_COLOR: Record<PfCriterion, string> = { strategic: '#a78bfa', value: '#0ea5e9', benefit: '#22c55e', risk: '#f97316', performance: '#eab308' }
 const CRITERIA = Object.keys(CRITERION_FA) as PfCriterion[]
@@ -18,10 +20,36 @@ export function PriorityTab({ views, currency }: { views: PfProjectView[]; curre
 
   const ranked = useMemo(() => views.filter((v) => !v.input.score?.mandatory).sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9)), [views])
   const mandatory = views.filter((v) => v.input.score?.mandatory)
-  const unscored = views.filter((v) => !v.input.score || (v.input.score.strategic == null && v.input.score.benefit == null)).length
+  const unscoredList = views.filter((v) => !v.input.score || (v.input.score.strategic == null && v.input.score.benefit == null))
+  const unscored = unscoredList.length
+  const drill = useDrill((s) => s.drill)
+  const ids = (l: PfProjectView[]) => l.map((v) => v.input.id)
+  const scored = ranked.filter((v) => v.priority != null)
+  const avgCov = views.length ? views.reduce((n, v) => n + v.coverage, 0) / views.length : 0
+  const BUCKETS = [[0, 20], [20, 40], [40, 60], [60, 80], [80, 101]] as const
+  const BUCKET_COLOR = ['#f43f5e', '#f97316', '#f59e0b', '#14b8a6', '#22c55e']
+  const inBucket = (b: readonly [number, number]) => scored.filter((v) => (v.priority as number) >= b[0] && (v.priority as number) < b[1])
+  const bucketLabel = (b: readonly [number, number]) => `${faNum(b[0])}–${faNum(Math.min(100, b[1]))}`
 
   return (
     <div className="pf-stack">
+      <div className="pf-kpis">
+        <Kpi icon={<Layers size={14} />} label="پروژهٔ رتبه‌بندی‌شده" value={scored.length} sub={`از ${faNum(ranked.length)} پروژهٔ غیرالزامی`} onClick={() => drill('پروژه‌ها به ترتیب رتبهٔ اولویت', ids(scored))} />
+        <Kpi icon={<Star size={14} />} label="میانگین امتیاز" value={scored.length ? Math.round(scored.reduce((n, v) => n + (v.priority as number), 0) / scored.length) : '—'} sub="از ۱۰۰" tone="#22c55e" />
+        <Kpi icon={<GaugeIcon size={14} />} label="پوشش دادهٔ معیارها" value={`${faNum(Math.round(avgCov * 100))}٪`} sub="میانگین سهم وزن‌های دارای داده" tone={avgCov < 0.6 ? '#f59e0b' : '#0ea5e9'} />
+        <Kpi icon={<Star size={14} />} label="بدون امتیاز راهبردی و منافع" value={unscored} sub="امتیاز را در جدول زیر ثبت کنید" tone={unscored ? '#f97316' : '#22c55e'} onClick={unscored ? () => drill('بدون امتیاز راهبردی و منافع', ids(unscoredList)) : undefined} />
+        <Kpi icon={<ShieldCheck size={14} />} label="الزامی" value={mandatory.length} sub="خارج از رقابت اولویت" tone="#a78bfa" onClick={mandatory.length ? () => drill('پروژه‌های الزامی', ids(mandatory)) : undefined} />
+      </div>
+
+      <div className="pf-grid-2">
+        <Panel title="ترکیب وزن‌ها" icon={<PieChart size={15} />} hint="با جابه‌جا کردن لغزنده‌های پایین، این نمودار و رتبه‌ها هم‌زمان تغییر می‌کنند.">
+          <Donut parts={CRITERIA.map((k) => ({ key: k, label: CRITERION_FA[k].label, value: pct[k], color: CRITERION_COLOR[k] }))} center={`${faNum(CRITERIA.length)}`} sub="معیار" format={(n) => `${faNum(n)}٪`} />
+        </Panel>
+        <Panel title="توزیع امتیاز اولویت" icon={<BarChart3 size={15} />} hint="تعداد پروژه در هر بازهٔ امتیاز؛ روی هر ستون بزنید.">
+          <Columns height={180} onPick={(k) => { const b = BUCKETS[+k]; drill(`امتیاز اولویت ${bucketLabel(b)}`, ids(inBucket(b))) }}
+            items={BUCKETS.map((b, i) => ({ key: String(i), label: bucketLabel(b), value: inBucket(b).length, color: BUCKET_COLOR[i] }))} />
+        </Panel>
+      </div>
       <Panel title="وزن معیارهای اولویت" icon={<SlidersHorizontal size={15} />}
         hint="وزن‌ها نسبی‌اند و به درصد تبدیل می‌شوند. معیاری که برای پروژه‌ای داده ندارد از امتیاز آن پروژه کنار گذاشته می‌شود و بقیهٔ وزن‌ها دوباره نرمال می‌شوند؛ عدد پیش‌فرض ساختگی به کار نمی‌رود."
         right={st.canGovern ? <button type="button" className="pf-btn is-primary" disabled={!dirty} onClick={async () => { if (await st.saveWeights(draft)) { setSaved(true); setTimeout(() => setSaved(false), 1800) } }}><Save size={14} /> {saved ? 'ذخیره شد' : 'ذخیرهٔ وزن‌ها'}</button> : <span className="pf-muted"><Lock size={12} /> فقط حاکم سبد</span>}>
@@ -87,7 +115,7 @@ function ScoreRow({ v, currency, canScore }: { v: PfProjectView; currency: strin
     <tr>
       <td>{v.rank ? <span className="pf-rank">{faNum(v.rank)}</span> : <span className="pf-muted">—</span>}</td>
       <td>
-        <b>{v.input.name}</b>
+        <button type="button" className="vz-link" onClick={() => useDrill.getState().open(v.input.id)}>{v.input.name}</button>
         {sc?.updatedAt && <small className="pf-muted block">امتیاز: {names.get(sc.updatedBy ?? '') ?? '—'}</small>}
         {canScore && <button type="button" className="pf-link block" onClick={() => set({ mandatory: true })}>علامت «الزامی»</button>}
       </td>

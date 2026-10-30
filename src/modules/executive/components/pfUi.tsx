@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { HEALTH_FA, type PfHealth } from '../lib/portfolioCore'
+import { KpiTile, Num } from './viz'
 
 export const faNum = (n: number, digits = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: digits, minimumFractionDigits: 0 })
 
@@ -36,14 +37,9 @@ export function Panel({ title, icon, hint, right, children, className = '' }: { 
   )
 }
 
-export function Kpi({ label, value, sub, tone, icon }: { label: string; value: ReactNode; sub?: ReactNode; tone?: string; icon?: ReactNode }) {
-  return (
-    <div className="pf-kpi" style={{ '--c': tone ?? '#6366f1' } as CSSProperties}>
-      <span className="pf-kpi-label">{icon}{label}</span>
-      <b className="pf-kpi-value">{value}</b>
-      {sub && <span className="pf-kpi-sub">{sub}</span>}
-    </div>
-  )
+/** the module's KPI tile (see viz KpiTile): a plain number counts up; a click drills into the projects behind it */
+export function Kpi({ label, value, sub, tone, icon, onClick, active, spark }: { label: string; value: ReactNode; sub?: ReactNode; tone?: string; icon?: ReactNode; onClick?: () => void; active?: boolean; spark?: number[] }) {
+  return <KpiTile label={label} value={typeof value === 'number' ? <Num value={value} /> : value} sub={sub} tone={tone} icon={icon} onClick={onClick} active={active} spark={spark} />
 }
 
 /** green / yellow / red / black / unknown as one bar with counts — the portfolio's health at a glance */

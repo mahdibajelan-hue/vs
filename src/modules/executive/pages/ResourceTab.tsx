@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { HardHat, Truck, Users } from 'lucide-react'
 import { formatJalali, isoToJalali, JALALI_MONTHS } from '../../../lib/jalali'
@@ -6,7 +6,10 @@ import type { PfProjectView } from '../lib/portfolioCore'
 import { byProject, byResource, flagsOf, monthlyTrend, RES_FLAG_FA } from '../lib/resourceCore'
 import { usePortfolioPlanningStore } from '../store/usePortfolioPlanningStore'
 import { Empty, faNum, Kpi, Panel } from '../components/pfUi'
+import { BarList, Gauge, Seg } from '../components/viz'
+import { useDrill } from '../components/DrillSheet'
 
+const UTIL_BANDS = [{ to: 70, color: '#ef4444' }, { to: 85, color: '#f5b31b' }, { to: 100, color: '#22c55e' }]
 const pct = (x: number | null) => (x == null ? '—' : `${faNum(x * 100)}٪`)
 const ymLabel = (ym: string) => { const j = isoToJalali(`${ym}-15`); return j ? `${JALALI_MONTHS[j.jm - 1]} ${String(j.jy).slice(2)}` : ym }
 
@@ -22,6 +25,8 @@ function Util({ value }: { value: number | null }) {
  */
 export function ResourceTab({ views }: { views: PfProjectView[] }) {
   const pl = usePortfolioPlanningStore()
+  const [rankBy, setRankBy] = useState<'man' | 'equip'>('man')
+  const { drill, open } = useDrill()
   useEffect(() => { if (!usePortfolioPlanningStore.getState().resourcesLoaded) void usePortfolioPlanningStore.getState().loadResources() }, [])
 
   const ids = useMemo(() => new Set(views.map((v) => v.input.id)), [views])
@@ -43,10 +48,10 @@ export function ResourceTab({ views }: { views: PfProjectView[] }) {
   return (
     <div className="pf-stack">
       <div className="pf-kpis">
-        <Kpi icon={<Users size={14} />} label="نیروی انسانی در کارگاه" value={faNum(manD)} sub={`فعال ${pct(manD ? manW / manD : null)} — میانگین روزانهٔ آخرین ماه`} tone="#0ea5e9" />
-        <Kpi icon={<Truck size={14} />} label="ماشین‌آلات در کارگاه" value={faNum(eqD)} sub={`بهره‌وری ${pct(eqD ? eqW / eqD : null)}`} tone="#a78bfa" />
+        <Kpi icon={<Users size={14} />} label="نیروی انسانی در کارگاه" value={Math.round(manD)} sub={`فعال ${pct(manD ? manW / manD : null)} — میانگین روزانهٔ آخرین ماه`} tone="#0ea5e9" spark={trend.map((t) => t.man)} />
+        <Kpi icon={<Truck size={14} />} label="ماشین‌آلات در کارگاه" value={Math.round(eqD)} sub={`بهره‌وری ${pct(eqD ? eqW / eqD : null)}`} tone="#a78bfa" spark={trend.map((t) => t.equip)} />
         <Kpi icon={<Truck size={14} />} label="ماشین آماده ولی بیکار" value={faNum(eqIdle, 1)} sub={`خارج از کار (تعمیر/توقف): ${faNum(eqUn, 1)}`} tone={eqD && eqIdle / eqD > 0.15 ? '#ef4444' : '#f5b31b'} />
-        <Kpi icon={<HardHat size={14} />} label="پوشش گزارش منابع" value={`${faNum(projects.length)} از ${faNum(views.length)}`} sub="پروژه‌هایی که گزارش روزانهٔ تأییدشده با منابع دارند" tone={projects.length < views.length ? '#f97316' : '#22c55e'} />
+        <Kpi icon={<HardHat size={14} />} label="پوشش گزارش منابع" value={`${faNum(projects.length)} از ${faNum(views.length)}`} sub="پروژه‌هایی که گزارش روزانهٔ تأییدشده با منابع دارند" tone={projects.length < views.length ? '#f97316' : '#22c55e'} onClick={silent.length ? () => drill('بدون گزارش منابع در شش ماه گذشته', silent.map((v) => v.input.id)) : undefined} />
       </div>
 
       {!usage.length ? (
@@ -54,6 +59,25 @@ export function ResourceTab({ views }: { views: PfProjectView[] }) {
           <Empty>در شش ماه گذشته هیچ گزارش روزانهٔ تأییدشده‌ای با نفرات و ماشین‌آلات برای پروژه‌های این محدوده ثبت نشده است. ظرفیت از گزارش‌های روزانهٔ ماژول اجرا خوانده می‌شود، نه از فرض.</Empty>
         </Panel>
       ) : <>
+        <div className="pf-grid-2">
+          <Panel title="بهره‌وری منابع سبد" icon={<HardHat size={15} />} hint="سهم نفرات و ماشین‌آلات فعال از کل منابع در کارگاه؛ هدف ۸۵٪.">
+            <div className="vz-gauges">
+              <Gauge label="نفرات فعال" value={manD ? (manW / manD) * 100 : null} bands={UTIL_BANDS} target={85} display={pct(manD ? manW / manD : null)} size={150} />
+              <Gauge label="بهره‌وری ماشین‌آلات" value={eqD ? (eqW / eqD) * 100 : null} bands={UTIL_BANDS} target={85} display={pct(eqD ? eqW / eqD : null)} size={150} />
+              <Gauge label="پوشش گزارش" value={views.length ? (projects.length / views.length) * 100 : null} bands={UTIL_BANDS} target={85} display={`${faNum(views.length ? Math.round((projects.length / views.length) * 100) : 0)}٪`} sub={`${faNum(projects.length)} از ${faNum(views.length)} پروژه`} size={150}
+                onClick={silent.length ? () => drill('بدون گزارش منابع در شش ماه گذشته', silent.map((v) => v.input.id)) : undefined} />
+            </div>
+          </Panel>
+          <Panel title="پروژه‌ها بر حسب منابع" icon={<Users size={15} />} hint="آخرین ماه گزارش‌شده؛ رنگ میله بهره‌وری را نشان می‌دهد. روی هر پروژه بزنید."
+            right={<Seg label="منبع" value={rankBy} onChange={setRankBy} options={[{ key: 'man', label: 'نفرات' }, { key: 'equip', label: 'ماشین‌آلات' }]} />}>
+            <BarList onPick={open} items={[...projects].sort((a, b) => (rankBy === 'man' ? b.manDeployed - a.manDeployed : b.equipDeployed - a.equipDeployed)).slice(0, 8).map((p) => {
+              const u = rankBy === 'man' ? p.manUtil : p.equipUtil
+              return { key: p.projectId, label: name.get(p.projectId) ?? '—', value: rankBy === 'man' ? p.manDeployed : p.equipDeployed, display: faNum(rankBy === 'man' ? p.manDeployed : p.equipDeployed, 1),
+                color: u == null ? '#64748b' : u >= 0.85 ? '#22c55e' : u >= 0.7 ? '#f5b31b' : '#ef4444', note: `بهره‌وری ${pct(u)}` }
+            })} />
+          </Panel>
+        </div>
+
         <Panel title="روند نفرات و ماشین‌آلات سبد" icon={<Users size={15} />} hint="مجموع میانگین روزانهٔ هر ماه روی همهٔ پروژه‌ها؛ فقط گزارش‌های تأییدشده.">
           <div dir="ltr">
             <ResponsiveContainer width="100%" height={220}>
@@ -98,7 +122,7 @@ export function ResourceTab({ views }: { views: PfProjectView[] }) {
               <thead><tr><th>پروژه</th><th>نفرات</th><th>نفرات فعال</th><th>ماشین‌آلات</th><th>بهره‌وری ماشین</th><th>بیکار / خارج از کار</th><th>آخرین گزارش</th></tr></thead>
               <tbody>{projects.map((p) => (
                 <tr key={p.projectId}>
-                  <td><b>{name.get(p.projectId) ?? '—'}</b><small className="pf-muted block">{faNum(p.days)} روز گزارش در ماه</small></td>
+                  <td><button type="button" className="vz-link" onClick={() => open(p.projectId)}>{name.get(p.projectId) ?? '—'}</button><small className="pf-muted block">{faNum(p.days)} روز گزارش در ماه</small></td>
                   <td className="pf-num">{faNum(p.manDeployed, 1)}</td>
                   <td><Util value={p.manUtil} /></td>
                   <td className="pf-num">{faNum(p.equipDeployed, 1)}</td>

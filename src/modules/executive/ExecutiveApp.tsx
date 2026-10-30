@@ -19,6 +19,7 @@ import { ResourceTab } from './pages/ResourceTab'
 import { IssuesTab } from './pages/IssuesTab'
 import { GuideTab } from './pages/GuideTab'
 import { DecisionDialog } from './components/DecisionDialog'
+import { DrillSheet } from './components/DrillSheet'
 import { ScopePicker } from './components/ScopePicker'
 import { faNum } from './components/pfUi'
 import './mpv.css'
@@ -130,6 +131,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
         </div>
       </div>
 
+      <DrillSheet views={pv.views} canGovern={canGovern} onDecide={(id) => setDeciding({ id })} />
       {deciding && <DecisionDialog views={pv.views} initialId={deciding.id} onClose={() => setDeciding(null)} />}
     </div>
   )
