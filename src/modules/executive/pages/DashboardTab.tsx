@@ -61,9 +61,11 @@ export function DashboardTab({ views, projects, risks, riskMaster, assessments, 
         <TrendCard views={views} onOpen={() => onOpenTab('performance')} />
       </div>
 
-      {/* row 3 — geography, critical projects, programs */}
+      {/* geography gets the full width: the map is read province by province */}
+      <MapCard views={views} byId={byId} />
+
+      {/* row 3 — critical projects, programs */}
       <div className="pd-row3">
-        <MapCard views={views} byId={byId} />
         <Box title="پروژه‌های بحرانی و نیازمند مداخله" icon={<AlertTriangle size={15} />} tone="#ef4444" foot={<Foot onClick={() => onOpenTab('decisions')}>مشاهدهٔ صف تصمیم</Foot>}>
           {!critical.length ? <p className="pd-empty">پروژهٔ بحرانی نیست.</p> : (
             <div className="pd-table-wrap"><table className="pd-table"><thead><tr><th>پروژه / طرح</th><th>دلیل بحرانی بودن</th><th>تأخیر</th><th>پیشرفت</th></tr></thead><tbody>
