@@ -15,7 +15,6 @@ import {
   type DomainKey, type HealthResult, type HealthSettings, type OrganKey,
 } from './lib/healthCore'
 import { computeProjectHealth, loadHistory, loadLatestSnapshots, loadSettings, refreshAll, saveSettings, type Snapshot } from './lib/healthLoader'
-import { Engineer } from './components/Engineer'
 import { AnatomyHologram, OrganCards } from './components/AnatomyHologram'
 import { Ecg, HoloRing, LabTable, ORGAN_FA, ScoreRing, StatusChip, StatusIcon, Trend, VitalCard, fa, spark, valueText, type VitalView } from './components/parts'
 import './healthCenter.css'
@@ -208,9 +207,8 @@ function Body({ r, history, settings, tab, setTab, range, setRange, open }: {
             ))}
           </div>
         </div>
-        <div className="phc-stage" dir="ltr">
+        <div className="phc-stage">
           <div className="phc-stage-grid" aria-hidden />
-          <Engineer tone={color} />
           <div className="phc-stage-holo">
             <HoloRing value={r.index} color={color} label={INDEX_FA[r.status]} sub={r.caps.length ? `سقف ${fa(Math.min(...r.caps.map((c) => c.cap)))} · بدون سقف ${fa(r.rawIndex)}` : r.prevIndex != null ? `قبلی ${fa(r.prevIndex)}` : 'نخستین اندازه‌گیری'} />
             <span className="phc-pill" dir="rtl"><small>وضعیت کلی پروژه</small><b><StatusIcon status={r.status} size={17} />{INDEX_FA[r.status]}</b></span>
