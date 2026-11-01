@@ -16,6 +16,9 @@ import { useResourceStore, type CostSource } from '../store/useResourceStore'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import type { LiveModel } from '../store/useScheduleModel'
 import { Hint } from '../components/Hint'
+import { useEpcLive } from '../../epc/useEpcLive'
+import { EpcCurvesPanel } from '../../epc/EpcCurvesPanel'
+import { esForecast } from '../../epc/epcCurves'
 
 const d = (x: string | null) => (x ? jalaliText(x) : '—')
 const pct = (v: number | null, n = 1) => (v == null ? '—' : `${fa(v, n)}٪`)
@@ -24,6 +27,7 @@ const pct = (v: number | null, n = 1) => (v == null ? '—' : `${fa(v, n)}٪`)
 export function SchHealth({ projectId, m }: { projectId: string; m: LiveModel }) {
   const st = useSchedulingStore()
   const today = todayTehran()
+  const epc = useEpcLive(projectId)
   const [depth, setDepth] = useState(2)
   const checks = useMemo(() => qualityChecks(m.cur!.activities, m.cur!.relations, m.forecast, m.dataDate), [m.cur, m.forecast, m.dataDate])
   const score = qualityScore(checks)
@@ -34,6 +38,8 @@ export function SchHealth({ projectId, m }: { projectId: string; m: LiveModel })
   const [cDate, setCDate] = useState(''), [cAmt, setCAmt] = useState(0), [cNote, setCNote] = useState('')
   const costs = useMemo(() => (src === 'finance' ? rs.financeCosts : rs.costs.map((c) => ({ date: c.date, amount: c.amount }))), [src, rs.financeCosts, rs.costs])
   const ev = useMemo(() => sCurve({ baseline: baseActs, current: m.cur!.activities, forecast: m.forecast, dataDate: m.dataDate, costs }), [baseActs, m.cur, m.forecast, m.dataDate, costs])
+  // the file's curve run at its own measured pace (Earned Schedule), next to the CPM forecast that re-plans with the planned durations
+  const perfFc = useMemo(() => { if (!ev) return null; const f = esForecast(ev.points.map((p) => ({ date: p.date, planned: p.planned, actual: p.date <= m.dataDate ? p.actual : null })), m.dataDate); return 'reason' in f ? null : f }, [ev, m.dataDate])
   const roll = useMemo(() => wbsRollup({ baseline: baseActs, current: m.cur!.activities, forecast: m.forecast, rows: m.progress.rows, dataDate: m.dataDate, depth }), [baseActs, m.cur, m.forecast, m.progress.rows, m.dataDate, depth])
   const tone = (s: string) => (s === 'good' ? 'good' : s === 'warn' ? 'warn' : 'bad') as 'good' | 'warn' | 'bad'
   const money = (v: number | null) => (v == null ? '—' : fa(Math.round(v)))
@@ -51,6 +57,12 @@ export function SchHealth({ projectId, m }: { projectId: string; m: LiveModel })
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+      <Section title="منحنی S قرارداد EPC" hint="کل و به تفکیک مهندسی، تأمین کالا و اجرا — از همان منبع رادار، داشبورد پروژه، مرکز سلامت و گزارش‌ها">
+        {epc === 'loading' ? <div className="im-skeleton" style={{ height: 360 }} /> : !epc ? <p className="im-helper" style={{ margin: 0 }}>داده‌ای در دسترس نیست.</p> : <EpcCurvesPanel epc={epc} />}
+      </Section>
+
+      <h3 style={{ margin: '6px 2px 0', fontSize: 14, fontWeight: 900 }}>برنامهٔ زمان‌بندی واردشده (فایل P6 یا Excel)</h3>
+      <p className="im-helper" style={{ margin: '0 2px' }}>شاخص‌ها و منحنی زیر از فعالیت‌ها و درصد پیشرفت داخل فایل برنامه، در «تاریخ وضعیت» آن، محاسبه می‌شوند و برای کنترل منطق و کیفیت برنامه به کار می‌روند. عدد رسمی پیشرفت قرارداد، منحنی بالاست.</p>
       <div className="fn-kpis">
         <KpiCard i={0} label={<span>امتیاز کیفیت برنامه <Hint id="health" /></span>} value={`${fa(score)}٪`} tone={score >= 80 ? 'good' : score >= 55 ? 'warn' : 'bad'} sub={`${fa(checks.filter((c) => c.status === 'bad').length)} کنترل رد شده`} />
         <KpiCard i={1} label={<span>SPI زمانی (Earned Schedule) <Hint id="earned-schedule" /></span>} value={ev?.spiT == null ? '—' : fa(ev.spiT, 2)} sub={ev?.earnedScheduleDate ? `پیشرفت واقعی معادل برنامهٔ ${d(ev.earnedScheduleDate)}` : undefined} tone={ev?.spiT == null ? 'neutral' : ev.spiT >= 0.95 ? 'good' : ev.spiT >= 0.8 ? 'warn' : 'bad'} />
@@ -59,19 +71,21 @@ export function SchHealth({ projectId, m }: { projectId: string; m: LiveModel })
       </div>
 
       {ev && (
-        <Tile title={<span>منحنی S: برنامه‌ای، واقعی و پیش‌بینی <Hint id="scurve" /></span>} hint={`وزن بر پایهٔ ${ev.byBudget ? 'بودجه' : 'مدت'}`}>
+        <Tile title={<span>منحنی S فعالیت‌های فایل برنامه <Hint id="scurve" /></span>} hint={`وزن بر پایهٔ ${ev.byBudget ? 'بودجه' : 'مدت'}`}>
           <SCurveChart h={320}
-            rows={ev.points.map((p) => ({ date: p.date, planned: p.planned, actual: p.actual, forecast: p.forecast, cost: p.cost ?? null }))}
+            rows={ev.points.map((p) => ({ date: p.date, planned: p.planned, actual: p.actual, forecast: p.forecast, perf: perfFc ? perfFc.at(p.date) : null, cost: p.cost ?? null })).map((r) => ({ ...r, perf: r.date >= m.dataDate ? r.perf : null })).concat((perfFc?.points ?? []).filter((x) => x.date > ev.points[ev.points.length - 1].date).map((x) => ({ date: x.date, planned: null as unknown as number, actual: null, forecast: null, perf: x.value, cost: null })))}
             series={[
               { key: 'planned', label: 'برنامه‌ای (خط مبنا)', color: '#6366f1', kind: 'planned' },
               { key: 'actual', label: 'پیشرفت واقعی', color: '#14b8a6', kind: 'actual' },
-              { key: 'forecast', label: 'پیش‌بینی از تاریخ وضعیت', color: '#f59e0b', kind: 'forecast' },
+              { key: 'forecast', label: 'پیش‌بینی منطق برنامه (CPM، مدت‌های برنامه‌ای)', color: '#f59e0b', kind: 'forecast' },
+              ...(perfFc ? [{ key: 'perf', label: 'پیش‌بینی با عملکرد گذشته (SPI زمانی)', color: '#ef4444', kind: 'forecast' as const }] : []),
               ...(ev.points.some((p) => p.cost != null) ? [{ key: 'cost', label: 'هزینهٔ واقعی (٪ بودجه)', color: '#a855f7', kind: 'aux' as const }] : []),
             ]}
             markers={[
               { date: today, label: 'امروز', color: '#f43f5e', strong: true },
               ...(m.dataDate !== today ? [{ date: m.dataDate, label: 'تاریخ وضعیت برنامه', color: '#94a3b8' }] : []),
             ]} />
+          <p className="im-helper" style={{ margin: '6px 0 0', lineHeight: 1.9 }}><b>دو پیش‌بینی:</b> خط نارنجی، محاسبهٔ مسیر بحرانی از تاریخ وضعیت است: کار باقی‌ماندهٔ هر فعالیت با همان مدت برنامه‌ای و با رعایت روابط منطقی دوباره زمان‌بندی می‌شود. این روش عملکرد گذشته را در نظر نمی‌گیرد و فقط عقب‌افتادگیِ تا امروز را جابه‌جا می‌کند، برای همین به برنامه نزدیک است. خط قرمز، همان باقی‌مانده را با سرعت واقعی کار از شروع برنامه تا تاریخ وضعیت (SPI زمانی{perfFc?.spi != null ? ` = ${fa(perfFc.spi, 2)}` : ''}) ادامه می‌دهد{perfFc ? `؛ پایان آن ${d(perfFc.endDate)} است` : ''}.</p>
           {m.dataDate < today && <p className="im-helper" style={{ margin: '6px 0 0' }}>پیشرفت واقعی تا «تاریخ وضعیت» برنامه ({d(m.dataDate)}) ثبت شده است؛ یعنی تاریخی که آخرین به‌روزرسانی برنامه به آن رسیده، نه امروز. برای جلو بردن آن، برنامهٔ به‌روزشده را وارد کنید.</p>}
           <p className="im-helper" style={{ margin: '6px 0 0' }}>EV بر پایهٔ پیشرفت وزنی (بودجهٔ فعالیت‌ها) است. CPI = EV ÷ AC فقط با بودجهٔ همهٔ فعالیت‌ها و ثبت هزینهٔ واقعی محاسبه می‌شود.</p>
         </Tile>

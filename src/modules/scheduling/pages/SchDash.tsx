@@ -10,12 +10,16 @@ import { KIND_LABEL_FA, SOURCE_LABEL_FA } from '../lib/types'
 import type { LiveModel } from '../store/useScheduleModel'
 import { Hint } from '../components/Hint'
 import type { SchTab } from '../SchedulingApp'
+import { useEpcLive } from '../../epc/useEpcLive'
+import { EpcGauges } from '../../epc/EpcGauges'
+import { Stethoscope } from 'lucide-react'
 
 const d = (x: string | null) => (x ? jalaliText(x) : '—')
 const p1 = (x: number | null) => (x == null ? null : x / 100)
 
 /** Summary of the project's schedule: active version, data date, planned vs actual progress, critical and overdue work, blockers from the other modules and the changes since the baseline. */
-export function SchDash({ m, go }: { projectId: string; m: LiveModel; go: (t: SchTab) => void }) {
+export function SchDash({ projectId, m, go }: { projectId: string; m: LiveModel; go: (t: SchTab) => void }) {
+  const epc = useEpcLive(projectId)
   const v = m.currentV!, b = m.baselineV
   const slip = m.finish.slipDays
   const diff = useMemo(() => (b && b.id !== v.id && m.base && m.cur ? compareVersions({ activities: m.base.activities, relations: m.base.relations, calendar: pickCalendar(m.base.calendars) }, { activities: m.cur.activities, relations: m.cur.relations, calendar: m.calendar }) : null), [m.base, m.cur, b, v, m.calendar])
@@ -52,8 +56,21 @@ export function SchDash({ m, go }: { projectId: string; m: LiveModel; go: (t: Sc
         </div>
       )}
 
+      <Section title="پیشرفت قرارداد EPC" hint={`امروز ${d(m.today)} · همان عدد رادار، داشبورد پروژه، مرکز سلامت، گزارش‌ها و پورتفولیو`} action={<button className="im-btn im-btn-sm" onClick={() => go('health')}><Stethoscope size={13} /> منحنی‌های S</button>}>
+        {epc === 'loading' ? <div className="im-skeleton" style={{ height: 190 }} />
+          : !epc || !epc.now.overall ? <p className="im-helper" style={{ margin: 0 }}>هنوز در ماژول‌های مهندسی، تأمین کالا و اجرا داده‌ای برای این پروژه ثبت نشده است.</p>
+          : <>
+            <EpcGauges p={epc.now} />
+            <p className="im-helper" style={{ margin: '8px 2px 0', lineHeight: 1.9 }}>
+              مهندسی از گردش مدارک در ماژول پیشرفت مهندسی، تأمین کالا از مراحل اقلام در ماژول کنترل و تأمین کالا و اجرا از کارکرد تأییدشده در ماژول مدیریت اجرا محاسبه می‌شود.
+              وزن هر بخش {epc.now.weightSource === 'value' ? 'سهم ارزش ریالی آن در همان ماژول‌ها' : epc.now.weightSource === 'report' ? 'وزن E/P/C گزارش کارفرما' : 'مساوی (ارزش ریالی بخش‌ها کامل ثبت نشده)'} است. خط سفید روی هر کمان، پیشرفت برنامه‌ای امروز را نشان می‌دهد.
+              این پیشرفت مربوط به قرارداد EPC است، نه کل چرخهٔ عمر پروژه.
+            </p>
+          </>}
+      </Section>
+
       <div className="fn-kpis">
-        <KpiCard i={0} label={<span>پیشرفت واقعی <Hint id="pct-planned-actual" /></span>} value={m.progress.actual == null ? '—' : pct(p1(m.progress.actual), 1)} sub={`برنامه‌ای: ${m.progress.planned == null ? '—' : pct(p1(m.progress.planned), 1)}`} tone={tone(m.progress.spi, 0.97, 0.9)} />
+        <KpiCard i={0} label={<span>پیشرفت فعالیت‌های فایل برنامه (P6) <Hint id="pct-planned-actual" /></span>} value={m.progress.actual == null ? '—' : pct(p1(m.progress.actual), 1)} sub={`برنامه‌ای: ${m.progress.planned == null ? '—' : pct(p1(m.progress.planned), 1)}`} tone={tone(m.progress.spi, 0.97, 0.9)} />
         <KpiCard i={1} label={<span>شاخص عملکرد زمانی (SPI) <Hint id="spi" /></span>} value={m.progress.spi == null ? '—' : fa(m.progress.spi, 2)} sub={m.progress.reportedOverall != null && m.progress.actual != null && m.progress.reportedOverall > m.progress.actual + 0.5 ? `با پیشرفت گزارش‌شده (تأییدنشده): ${pct(p1(m.progress.reportedOverall), 1)}` : undefined} tone={tone(m.progress.spi, 0.97, 0.9)} />
         <KpiCard i={2} label={<span>پیش‌بینی تکمیل <Hint id="forecast" /></span>} value={d(m.forecast.projectFinish)} sub={slip == null ? 'خط مبنا ندارد' : slip > 0 ? `${fa(slip)} روز دیرتر از خط مبنا` : slip < 0 ? `${fa(-slip)} روز زودتر از خط مبنا` : 'مطابق خط مبنا'} tone={slip == null ? 'neutral' : slip > 14 ? 'bad' : slip > 0 ? 'warn' : 'good'} />
         <KpiCard i={3} label={<span>فعالیت بحرانی <Hint id="float-cp" /></span>} value={fa(critical)} sub={`${fa(near)} نزدیک به بحرانی`} tone={critical ? 'warn' : 'neutral'} />
@@ -62,7 +79,7 @@ export function SchDash({ m, go }: { projectId: string; m: LiveModel; go: (t: Sc
       </div>
 
       <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
-        <Tile title="پیشرفت در تاریخ وضعیت" hint="برنامه‌ای در برابر واقعی">
+        <Tile title="فعالیت‌های فایل برنامه در تاریخ وضعیت" hint={`از درصد پیشرفت فعالیت‌های برنامهٔ واردشده، در ${d(m.dataDate)} — برای کنترل منطق برنامه، نه عدد رسمی پیشرفت`}>
           <div style={{ display: 'flex', gap: 18, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Ring pct={m.progress.planned} color={PB.slate} label="برنامه‌ای" />
             <Ring pct={m.progress.actual} color={PB.teal} label="واقعی (قطعی)" />
