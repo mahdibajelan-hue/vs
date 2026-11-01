@@ -40,6 +40,7 @@ const moduleLoaders = {
   TestingApp: () => import('./modules/testing/TestingApp').then((m) => ({ default: m.TestingApp })),
   StatementsApp: () => import('./modules/statements/StatementsApp').then((m) => ({ default: m.StatementsApp })),
   ProjectDashboardApp: () => import('./modules/projectMetrics/ProjectDashboardApp').then((m) => ({ default: m.ProjectDashboardApp })),
+  HealthCenterApp: () => import('./modules/healthcenter/HealthCenterApp').then((m) => ({ default: m.HealthCenterApp })),
   SupervisionApp: () => import('./modules/supervision/SupervisionApp').then((m) => ({ default: m.SupervisionApp })),
   AdminApp: () => import('./pages/AdminApp').then((m) => ({ default: m.AdminApp })),
   App: () => import('./App').then((m) => ({ default: m.default })),
@@ -62,6 +63,7 @@ const MissionsApp = lazy(moduleLoaders.MissionsApp)
 const LandAcqApp = lazy(moduleLoaders.LandAcqApp)
 const StageGateApp = lazy(moduleLoaders.StageGateApp)
 const ProjectDashboardApp = lazy(moduleLoaders.ProjectDashboardApp)
+const HealthCenterApp = lazy(moduleLoaders.HealthCenterApp)
 const PssrApp = lazy(moduleLoaders.PssrApp)
 const TestingApp = lazy(moduleLoaders.TestingApp)
 const StatementsApp = lazy(moduleLoaders.StatementsApp)
@@ -226,6 +228,8 @@ export function RootApp() {
     <PssrApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'projectdashboard' ? (
     <ProjectDashboardApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'healthcenter' ? (
+    <HealthCenterApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'stagegate' ? (
     <StageGateApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'lifecycle' ? (

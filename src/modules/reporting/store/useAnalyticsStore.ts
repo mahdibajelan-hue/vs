@@ -35,7 +35,8 @@ interface AnalyticsState {
   saveConfig: (name: string, config: Record<string, unknown>, shared: boolean, id?: string) => Promise<string | null>
 }
 
-async function factsOf(p: MasterProject): Promise<ProjectFacts> {
+/** one project's facts — also used by the project health center */
+export async function factsOf(p: MasterProject): Promise<ProjectFacts> {
   const md = useMasterDataStore.getState()
   const [{ report, input, metrics, bundle, names }, chg] = await Promise.all([
     loadEvidenceReport(p.id, p.officialName),

@@ -12,7 +12,7 @@ import { ModuleGuideDrawer } from './ModuleGuideDrawer'
 import type { GuideKey } from '../../guides/moduleGuides'
 
 /** modules whose guide lives in the shared registry (the rest pass `onGuide` to open their own) */
-const REGISTRY: ReadonlySet<string> = new Set<GuideKey>(['pipepulse', 'engineering', 'finance', 'lifecycle', 'supervision', 'missions', 'competency', 'admin', 'projectdashboard', 'landacq', 'estimator', 'material', 'radar'])
+const REGISTRY: ReadonlySet<string> = new Set<GuideKey>(['pipepulse', 'engineering', 'finance', 'lifecycle', 'supervision', 'missions', 'competency', 'admin', 'projectdashboard', 'healthcenter', 'landacq', 'estimator', 'material', 'radar'])
 
 interface ModuleHeaderActionsProps {
   onExitToHub: () => void
