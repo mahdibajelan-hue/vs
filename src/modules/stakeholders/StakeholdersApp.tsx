@@ -18,6 +18,7 @@ import {
   type Attitude, type Category, type Concern, type ConcernCategory, type ConcernPriority, type ConcernStatus, type Engagement, type EngagementKind, type Quadrant, type Sentiment, type Stakeholder,
 } from './types'
 import { StakeholderOrbit } from './components/StakeholderOrbit'
+import { useRemembered } from '../../lib/navMemory'
 import './stakeholders.css'
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
@@ -38,7 +39,7 @@ export function StakeholdersApp({ onExitToHub }: { onExitToHub: () => void; onBa
   const projectId = useProjectContextStore((s) => s.projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const st = useStakeholderStore()
-  const [tab, setTab] = useState<Tab>('dash')
+  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string')
   const [open, setOpen] = useState<string | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
   useEffect(() => { if (!useMasterDataStore.getState().loaded) void useMasterDataStore.getState().fetchAll() }, [])

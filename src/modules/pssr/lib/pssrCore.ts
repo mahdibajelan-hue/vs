@@ -9,6 +9,7 @@
  *  - the gas-in permit can be approved only after RFSU and with every day-of-gas-in check confirmed.
  */
 import { GASIN_CHECKS, SUMMARY_ITEMS, type GasinPermit, type PssrCheck, type PssrMeeting, type PssrPunch, type PssrSigner, type PssrSignoff } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 export type PssrStage = 'mc' | 'pssr' | 'ready' | 'signing' | 'rfsu' | 'permit' | 'gasin' | 'live'
 export const STAGE_FA: Record<PssrStage, string> = { mc: 'تکمیل مکانیکی', pssr: 'در حال PSSR', ready: 'آمادهٔ امضای RFSU', signing: 'در حال امضای RFSU', rfsu: 'RFSU صادر شد', permit: 'مجوز تزریق گاز', gasin: 'تزریق گاز در جریان', live: 'تحت گاز' }
@@ -58,7 +59,7 @@ export function chainOf(signers: SignerRow[], signoffs: PssrSignoff[]): ChainSte
   })
 }
 
-export function systemStatus(input: { checks: PssrCheck[]; meetings: Pick<PssrMeeting, 'id'>[]; punches: PssrPunch[]; signers: SignerRow[]; signoffs: PssrSignoff[]; permit?: GasinPermit | null; summary?: Record<string, boolean> | null }, today = new Date().toISOString().slice(0, 10)): SystemStatus {
+export function systemStatus(input: { checks: PssrCheck[]; meetings: Pick<PssrMeeting, 'id'>[]; punches: PssrPunch[]; signers: SignerRow[]; signoffs: PssrSignoff[]; permit?: GasinPermit | null; summary?: Record<string, boolean> | null }, today = todayTehran()): SystemStatus {
   const { checks, meetings, punches } = input
   const mand = checks.filter((c) => c.mandatory)
   const blockers: Blocker[] = []

@@ -11,6 +11,7 @@ import {
 } from '../lib/strategy'
 import { EmptyState, STATUS_COLOR, fa, faNum } from '../components/ui'
 import { TowerTile } from '../components/TowerTile'
+import { todayTehran } from '../../../lib/today'
 
 const STRATEGIES: StrategyKey[] = ['sequential', 'overlapping', 'fast_track', 'emergency']
 const STRATEGY_COLOR: Record<StrategyKey, string> = { sequential: '#64748b', overlapping: '#3b82f6', fast_track: '#f59e0b', emergency: '#ef4444' }
@@ -25,7 +26,7 @@ export function StrategyPage({ projectId, onBack }: { projectId: string; onBack:
 
   const saved = plan.strategy
   const [strategy, setStrategy] = useState<StrategyKey>('sequential')
-  const [start, setStart] = useState(new Date().toISOString().slice(0, 10))
+  const [start, setStart] = useState(todayTehran())
   const [gov, setGov] = useState<GovStatus>('draft')
   const [note, setNote] = useState('')
   useEffect(() => {

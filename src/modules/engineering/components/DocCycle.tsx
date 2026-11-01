@@ -5,8 +5,9 @@ import { jalaliText } from '../../execution/lib/periods'
 import { useEpcStore } from '../../execution/store/useEpcStore'
 import { PURPOSE_FA, RESULT_COLOR, RESULT_FA, type EngCycleResult, type EngDocRow, type EngPurpose } from '../../execution/epcTypes'
 import type { EngLens } from '../lib/roles'
+import { todayTehran } from '../../../lib/today'
 
-const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+const today = () => todayTehran()
 /** the next revision letter after the last submission: A → B → C …, 0 → 1 → 2 … */
 export function nextRev(doc: Pick<EngDocRow, 'cycles' | 'rev'>): string {
   const last = [...doc.cycles].filter((c) => c.result !== 'withdrawn').sort((a, b) => b.seq - a.seq)[0]?.rev

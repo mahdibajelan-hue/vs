@@ -68,6 +68,15 @@ export function EngSettings({ m, projectId }: { m: EpcModel; projectId: string }
         {msg && <p className={msg.ok ? 'im-helper' : 'ex-bad'} style={{ margin: 0, color: msg.ok ? '#16a34a' : undefined }}>{msg.text}</p>}
       </div>
 
+      <div className="im-card" style={{ padding: 16, display: 'grid', gap: 10 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 900, margin: 0 }}>مهلت‌ها در گزارش‌های مهندسی</h2>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          <label className="ex-lab">مهلت بررسی مشاور (روز)<input type="number" min={0} disabled={!can} defaultValue={settings.engConsultantDays ?? 15} key={`c${settings.engConsultantDays ?? 15}`} style={{ width: 90 }} onBlur={(e) => { const v = Math.round(Number(e.target.value)); if (can && Number.isFinite(v) && v >= 0 && v !== (settings.engConsultantDays ?? 15)) void ex.saveSettings(projectId, { engConsultantDays: v }) }} /></label>
+          <label className="ex-lab">مهلت رفع کامنت پیمانکار (روز)<input type="number" min={0} disabled={!can} defaultValue={settings.engCommentDays ?? 15} key={`k${settings.engCommentDays ?? 15}`} style={{ width: 90 }} onBlur={(e) => { const v = Math.round(Number(e.target.value)); if (can && Number.isFinite(v) && v >= 0 && v !== (settings.engCommentDays ?? 15)) void ex.saveSettings(projectId, { engCommentDays: v }) }} /></label>
+        </div>
+        <p className="im-helper" style={{ margin: 0 }}>مدرکی که بیش از این مدت نزد مشاور بماند، یا پاسخ کامنت‌دار، ردشده یا تأیید با ملاحظاتِ آن بیش از این مدت بدون ارسال دوباره بماند، در گزارش‌های «معوق نزد مشاور» و «رفع کامنت معوق» می‌آید.</p>
+      </div>
+
       <div className="im-card" style={{ padding: 16, display: 'grid', gap: 8 }}>
         <h2 style={{ fontSize: 16, fontWeight: 900, margin: 0 }}>مبلغ کل مهندسی</h2>
         <label className="ex-lab">مبلغ کل (ریال)<NumInput className="" value={settings.engAmount ?? 0} label="مبلغ کل مهندسی" decimals={0} onCommit={(n) => can && void ex.saveSettings(projectId, { engAmount: n })} /></label>

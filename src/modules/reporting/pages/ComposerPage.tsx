@@ -6,9 +6,10 @@ import { exportComposedReport } from '../lib/reportExport'
 import { useAnalyticsStore } from '../store/useAnalyticsStore'
 import { BlockView, FactsGate, Freshness, Help, Panel, fa } from '../components/rpx'
 import { jd } from '../lib/analyticsCore'
+import { todayTehran } from '../../../lib/today'
 
 const ALL_SECTIONS = Object.keys(SECTION_FA) as SectionKey[]
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayTehran()
 
 const initial = (projectId: string | null): ComposerConfig => ({ audience: 'project', period: 'monthly', scope: projectId ? { level: 'project', id: projectId } : { level: 'all', id: null }, ...AUDIENCE_PRESETS.project })
 

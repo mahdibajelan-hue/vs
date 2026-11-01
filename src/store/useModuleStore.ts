@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { navStorage, setNavModule } from '../lib/navMemory'
 import { useProjectContextStore } from './useProjectContextStore'
 
 export type ModuleKey = 'pipepulse' | 'risk' | 'change' | 'issues' | 'admin' | 'reporting' | 'executive' | 'finance' | 'material' | 'execution' | 'engineering' | 'scheduling' | 'pipelinedigitaltwin' | 'competency' | 'estimator' | 'lifecycle' | 'missions' | 'landacq' | 'stagegate' | 'taskissue' | 'supervision' | 'projectdashboard' | 'healthcenter' | 'stakeholders' | 'pssr' | 'testing' | 'statements'
@@ -13,8 +15,8 @@ export const PROJECT_SCOPED_MODULES = new Set<ModuleKey>(['projectdashboard', 'h
 export type Workspace = 'project' | 'portfolio' | null
 
 interface ModuleState {
-  /** null = show the hub (the 6-card launchpad, or Project Radar if `radarOpen`). Session-only
-   * (not persisted) so every fresh visit starts at the hub. */
+  /** null = show the hub (the 6-card launchpad, or Project Radar if `radarOpen`). Kept in sessionStorage only, so a
+   * refresh returns to the same module while every fresh visit starts at the hub. */
   activeModule: ModuleKey | null
   /** Whether the hub should open straight into Project Radar instead of the plain launchpad —
    * lifted up here (rather than local state in ProjectControlCenter) so it survives the remount
@@ -40,24 +42,30 @@ interface ModuleState {
   closeRadar: () => void
 }
 
-export const useModuleStore = create<ModuleState>()((set, get) => ({
+export const useModuleStore = create<ModuleState>()(persist((set, get) => ({
   activeModule: null,
   radarOpen: false,
   moduleResetKey: 0,
   workspace: null,
   entryTab: null,
-  goModuleHome: () => set((s) => ({ moduleResetKey: s.moduleResetKey + 1, entryTab: null })),
-  enterModule: (key, workspace, tab) => set((s) => ({
+  goModuleHome: () => { const m = get().activeModule; if (m) navStorage.clearModule(m); set((s) => ({ moduleResetKey: s.moduleResetKey + 1, entryTab: null })) },
+  enterModule: (key, workspace, tab) => { navStorage.clearModule(key); setNavModule(key); set((s) => ({
     activeModule: key,
     // re-entering the same module (e.g. project → portfolio view) must remount it so it re-reads the context
     moduleResetKey: s.activeModule === key ? s.moduleResetKey + 1 : s.moduleResetKey,
     workspace: !PROJECT_SCOPED_MODULES.has(key) ? null : workspace !== undefined ? workspace : s.workspace,
     entryTab: tab ?? null,
-  })),
+  })) },
   takeEntryTab: () => get().entryTab,
   // the home page is organization-wide: leaving to it lets go of the project the radar had fixed
-  exitToHub: () => { useProjectContextStore.getState().clear(); set({ activeModule: null, radarOpen: false, workspace: null, entryTab: null }) },
-  backToRadar: () => set({ activeModule: null, radarOpen: true, workspace: null, entryTab: null }),
+  exitToHub: () => { setNavModule(null); useProjectContextStore.getState().clear(); set({ activeModule: null, radarOpen: false, workspace: null, entryTab: null }) },
+  backToRadar: () => { setNavModule(null); set({ activeModule: null, radarOpen: true, workspace: null, entryTab: null }) },
   openRadar: () => set({ radarOpen: true }),
   closeRadar: () => set({ radarOpen: false }),
+}), {
+  // the browser tab's session only: a refresh comes back to the same module, a new tab or visit starts at the home page
+  name: 'rasta.nav.module',
+  storage: createJSONStorage(() => sessionStorage),
+  partialize: (s) => ({ activeModule: s.activeModule, radarOpen: s.radarOpen, workspace: s.workspace }),
+  onRehydrateStorage: () => (s) => { setNavModule(s?.activeModule ?? null) },
 }))

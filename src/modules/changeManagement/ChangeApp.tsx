@@ -18,6 +18,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 import { useModuleStore } from '../../store/useModuleStore'
 import { PortfolioViewButton } from '../../components/common/PortfolioViewButton'
+import { useRemembered } from '../../lib/navMemory'
 
 const RequestsPage = lazy(() => import('./pages/RequestsPage').then((m) => ({ default: m.RequestsPage })))
 const RulesPage = lazy(() => import('./pages/RulesPage').then((m) => ({ default: m.RulesPage })))
@@ -43,7 +44,7 @@ export function ChangeApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   const setScope = useChangeStore((s) => s.setScope)
   const fetchAll = useChangeStore((s) => s.fetchAll)
   const ctx = useChangeCtx()
-  const [tab, setTab] = useState<ChangeTab>(() => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as ChangeTab) : 'dashboard' })
+  const [tab, setTab] = useRemembered<ChangeTab>('tab', () => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as ChangeTab) : 'dashboard' }, (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
   const [open, setOpen] = useState<{ id: string; tab: DrawerTab } | null>(null)
   const [newOpen, setNewOpen] = useState(false)
   useEffect(() => { fetchAll() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [])

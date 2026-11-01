@@ -14,6 +14,7 @@ import type { Activity } from '../types'
 import { STAGE_LABEL_FA } from '../types'
 import { EmptyState, STATUS_COLOR, STATUS_TEXT_COLOR, fa, faNum } from '../components/ui'
 import { TowerTile } from '../components/TowerTile'
+import { todayTehran } from '../../../lib/today'
 
 const toNode = (a: Activity): PlanNode => ({
   id: a.id, parentId: a.parentId, name: a.name, weight: a.weight, manualPct: a.manualPct,
@@ -56,7 +57,7 @@ export function PlanTreePage({ projectId, onBack }: { projectId: string; onBack:
   const [depForm, setDepForm] = useState({ from: '', to: '', type: 'FS' as DepType, lag: 0 })
   const [drag, setDrag] = useState<{ id: string; startX: number; width: number; delta: number } | null>(null)
   const [tplName, setTplName] = useState('')
-  const [tplStart, setTplStart] = useState(new Date().toISOString().slice(0, 10))
+  const [tplStart, setTplStart] = useState(todayTehran())
   const [msg, setMsg] = useState('')
 
   const scoped = useMemo(() => {
@@ -76,7 +77,7 @@ export function PlanTreePage({ projectId, onBack }: { projectId: string; onBack:
   const variance = baseline ? baselineVariance(nodes, { ...baseline }) : null
 
   const dated = nodes.filter((n) => n.start && n.finish)
-  const winStart = dated.reduce((m, n) => (n.start! < m ? n.start! : m), dated[0]?.start ?? new Date().toISOString().slice(0, 10))
+  const winStart = dated.reduce((m, n) => (n.start! < m ? n.start! : m), dated[0]?.start ?? todayTehran())
   const winEnd = dated.reduce((m, n) => (n.finish! > m ? n.finish! : m), dated[0]?.finish ?? winStart)
   const span = Math.max(1, diffDaysIso(winStart, winEnd))
   const pos = (iso: string) => Math.min(100, Math.max(0, (diffDaysIso(winStart, iso) / span) * 100))

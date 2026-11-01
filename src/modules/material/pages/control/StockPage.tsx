@@ -14,6 +14,7 @@ import { INSPECTION_STATUS_LABEL_FA, type Material, type WarehouseLine } from '.
 import { Term } from '../../components/control/Term'
 import { useLookupOptions } from '../../lib/control/lookups'
 import { ModalPortal } from '../../../../components/common/ModalPortal'
+import { todayTehran } from '../../../../lib/today'
 
 type Dim = 'item' | 'facility' | 'pipeline' | 'area' | 'front'
 const DIMS: [Dim, string][] = [['item', 'قلم'], ['facility', 'ایستگاه'], ['pipeline', 'خط'], ['area', 'بخش اجرایی'], ['front', 'جبهه کاری']]
@@ -125,7 +126,7 @@ function ReceiptForm({ model: m, projectId, onClose }: { model: MaterialModel; p
   const ms = useMaterialStore()
   const [lines, setLines] = useState<{ id: string; qty: number; cond: 'ok' | 'damaged' | 'shortage' }[]>([{ id: '', qty: 0, cond: 'ok' }])
   const [num, setNum] = useState(`R-${String(ms.warehouseReceipts.filter((r) => r.masterProjectId === projectId).length + 1).padStart(3, '0')}`)
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayTehran())
   const [loc, setLoc] = useState('')
   const whOpts = useLookupOptions(projectId, 'warehouse')
   const valid = lines.some((l) => l.id && l.qty > 0) && num.trim() && loc.trim()

@@ -6,6 +6,7 @@ import { DEFAULT_STAGE_ORDER, STAGE_LABEL_FA, type Activity, type StageKey } fro
 import { EmptyState, STATUS_COLOR, fa, faNum } from '../components/ui'
 import { StatSlicer } from '../components/StatSlicer'
 import { TowerTile } from '../components/TowerTile'
+import { todayTehran } from '../../../lib/today'
 
 type ActivityStatus = 'not_started' | 'in_progress' | 'completed' | 'on_hold'
 const ACTIVITY_STATUS_LABEL_FA: Record<ActivityStatus, string> = {
@@ -53,7 +54,7 @@ export function MasterPlanPage({ projectId, onBack }: { projectId: string; onBac
   const deleteActivity = useLifecycleStore((s) => s.deleteActivity)
   const lockActivityBaselines = useLifecycleStore((s) => s.lockActivityBaselines)
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const activities = useMemo(() => bundle.activities.slice().sort((a, b) => a.sequence - b.sequence), [bundle.activities])
 
   const [expanded, setExpanded] = useState<string | null>(null)

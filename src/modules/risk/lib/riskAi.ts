@@ -5,6 +5,7 @@ import { jaccard, riskText, tokenize } from './riskPortfolio'
 import { isActiveRisk, type RiskState } from './riskState'
 import { RISK_LEVEL_LABEL_FA } from './riskScore'
 import type { RmRiskAssessment } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 /**
  * Local, explainable assistant used when no AI provider is configured (and as a safety layer around provider output).
@@ -114,7 +115,7 @@ export function summarizeStatus(risks: RmRisk[], states: Map<string, RiskState>,
   if (out) lines.push(`${out} ریسک باقیمانده‌شان خارج از آستانهٔ تحمل است.`)
   const noGap = act.filter((r) => !st(r).hasOwner || !st(r).hasPlan).length
   if (noGap) lines.push(`${noGap} ریسک مالک یا برنامهٔ پاسخ کافی ندارد.`)
-  const od = actions.filter((a) => a.status !== 'completed' && a.status !== 'cancelled' && a.dueDate && a.dueDate < new Date().toISOString().slice(0, 10)).length
+  const od = actions.filter((a) => a.status !== 'completed' && a.status !== 'cancelled' && a.dueDate && a.dueDate < todayTehran()).length
   if (od) lines.push(`${od} اقدام کاهشی از سررسید گذشته است.`)
   const worse = act.filter((r) => st(r).trend === 'worsening').length
   if (worse) lines.push(`روند ${worse} ریسک رو به وخامت است.`)

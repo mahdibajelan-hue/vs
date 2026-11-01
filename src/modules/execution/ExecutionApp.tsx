@@ -15,6 +15,7 @@ import { useExecutionModel } from './lib/useExecutionModel'
 import { PortfolioStrip } from './components/epc/PortfolioStrip'
 import { ExecutionGuide } from './components/ExecutionGuide'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
+import { useRemembered } from '../../lib/navMemory'
 
 export const EXECUTION_ACCENT = '#f97316'
 export type ExTab = 'dashboard' | 'daily' | 'review' | 'welds' | 'progress' | 'productivity' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'settings'
@@ -59,9 +60,9 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const exLoaded = useExecutionStore((s) => s.loaded)
   const fetchEx = useExecutionStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
-  const [tab, setTab] = useState<ExTab>('dashboard')
-  const [subs, setSubs] = useState<Partial<Record<ExTab, string>>>({})
-  const [projectId, setProjectId] = useState<string | null>(null)
+  const [tab, setTab] = useRemembered<ExTab>('tab', 'dashboard', (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
+  const [subs, setSubs] = useRemembered<Partial<Record<ExTab, string>>>('subs', {}, (v) => !!v && typeof v === 'object')
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string')
   const [locked, setLocked] = useState(false)
   const [guide, setGuide] = useState(false)
 
@@ -72,8 +73,11 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => {
-    if (!projects.length || projectId) return
-    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { setProjectId(contextProjectId); setLocked(true) } else setProjectId(projects[0].id)
+    if (!projects.length) return
+    // inside a project (radar): that project, fixed; otherwise the remembered choice while it is still in the list
+    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { if (projectId !== contextProjectId) setProjectId(contextProjectId); setLocked(true); return }
+    if (projectId && projects.some((p) => p.id === projectId)) return
+    setProjectId(projects[0].id)
   }, [projects, projectId, contextProjectId])
   useEffect(() => { resetModuleScroll(); revealTab('.im-nav-tab[aria-selected="true"]') }, [tab, subs])
 

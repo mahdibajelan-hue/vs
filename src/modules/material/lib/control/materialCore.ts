@@ -2,6 +2,7 @@ import type { useMaterialStore } from '../../store/useMaterialStore'
 import type { useMaterialControlStore } from '../../store/useMaterialControlStore'
 import { buildPositions, type MatData } from './model'
 import { itemProgress, rollup } from './progress'
+import { todayTehran } from '../../../../lib/today'
 
 type MatState = Pick<ReturnType<typeof useMaterialStore.getState>, 'materials' | 'purchaseOrders' | 'poLines' | 'manufacturing' | 'shipmentLines' | 'warehouseLines' | 'warehouseReceipts' | 'allocations'>
 type CtlState = Pick<ReturnType<typeof useMaterialControlStore.getState>, 'packages' | 'items' | 'stages' | 'txns'>
@@ -10,7 +11,7 @@ type CtlState = Pick<ReturnType<typeof useMaterialControlStore.getState>, 'packa
  * One project's material positions and its value-weighted procurement progress — the single computation behind the
  * material module's own figures (useMaterialModel), the radar and the project list. Pure: stores in, numbers out.
  */
-export function materialCore(ms: MatState, cs: CtlState, projectId: string | null, today = new Date().toISOString().slice(0, 10)) {
+export function materialCore(ms: MatState, cs: CtlState, projectId: string | null, today = todayTehran()) {
   const materials = ms.materials.filter((m) => m.masterProjectId === projectId)
   const mIds = new Set(materials.map((m) => m.id))
   const pos = ms.purchaseOrders.filter((p) => p.masterProjectId === projectId)

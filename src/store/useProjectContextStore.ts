@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
 
 /**
  * Global Project Context (spec section 23-24): the hierarchy slice — portfolio → program →
@@ -26,7 +27,7 @@ interface ProjectContextState {
   clear: () => void
 }
 
-export const useProjectContextStore = create<ProjectContextState>()((set) => ({
+export const useProjectContextStore = create<ProjectContextState>()(persist((set) => ({
   portfolioId: null,
   programId: null,
   projectId: null,
@@ -39,4 +40,4 @@ export const useProjectContextStore = create<ProjectContextState>()((set) => ({
   setProject: (id) => set({ projectId: id, phaseId: null }),
   setPhase: (id) => set({ phaseId: id }),
   clear: () => set({ portfolioId: null, programId: null, projectId: null, phaseId: null }),
-}))
+}), { name: 'rasta.nav.project', storage: createJSONStorage(() => sessionStorage) }))

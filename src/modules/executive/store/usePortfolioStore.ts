@@ -5,6 +5,7 @@ import { useSystemStore } from '../../../store/useSystemStore'
 import { loadProjectMetrics } from '../../projectMetrics/projectMetricsLoader'
 import { HEALTH_DIMENSION_LABEL_FA } from '../../lifecycle/types'
 import { DEFAULT_WEIGHTS, type PfDecision, type PfDecisionKind, type PfScore, type PfSnapshot, type PfWeights } from '../lib/portfolioCore'
+import { todayTehran } from '../../../lib/today'
 
 /**
  * Portfolio module state: governance rows (weights, scores, decisions) and every project's snapshot from the project
@@ -62,7 +63,7 @@ let snapshotRun = 0
 
 /** the EPC curve reduced to month-end points of the last 12 months (plus today) — enough for the portfolio trend */
 function trendOf(curve: { date: string; planned: number; earned: number | null }[]) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const from = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10)
   return curve.filter((p) => p.date >= from && p.date <= today).map((p) => ({ date: p.date, planned: Math.round(p.planned * 10) / 10, earned: p.earned == null ? null : Math.round(p.earned * 10) / 10 })).slice(-14)
 }

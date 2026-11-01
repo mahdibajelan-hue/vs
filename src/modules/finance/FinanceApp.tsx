@@ -12,6 +12,7 @@ import { useFinanceControlStore } from './store/useFinanceControlStore'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 import { useModuleStore } from '../../store/useModuleStore'
 import { PortfolioViewButton } from '../../components/common/PortfolioViewButton'
+import { useRemembered } from '../../lib/navMemory'
 
 /** Accent used for fills inside the module (white text on it keeps ≥ 4:1 contrast). */
 export const FINANCE_ACCENT = '#059669'
@@ -61,9 +62,9 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
   const [entry] = useState(() => { const [t, sb] = (useModuleStore.getState().takeEntryTab() ?? '').split(':'); return NAV.some((n) => n.id === t) ? { tab: t as FinTab, sub: sb } : null })
   // opened inside one project (from the radar): portfolio-wide views are offered through «دیدن در سطح پرتفولیو» instead
   const [inProject] = useState(() => !!useProjectContextStore.getState().projectId)
-  const [tab, setTab] = useState<FinTab>(entry?.tab ?? 'dashboard')
-  const [subs, setSubs] = useState<Partial<Record<FinTab, string>>>(entry?.sub ? { [entry.tab]: entry.sub } : {})
-  const [projectId, setProjectId] = useState<string | null>(null)
+  const [tab, setTab] = useRemembered<FinTab>('tab', entry?.tab ?? 'dashboard', (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
+  const [subs, setSubs] = useRemembered<Partial<Record<FinTab, string>>>('subs', entry?.sub ? { [entry.tab]: entry.sub } : {}, (v) => !!v && typeof v === 'object')
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string')
 
   useEffect(() => {
     if (!mdLoaded) fetchMasterData()
@@ -72,7 +73,7 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => {
-    if (!projects.length || projectId) return
+    if (!projects.length || (projectId && projects.some((p) => p.id === projectId))) return
     setProjectId(contextProjectId && projects.some((p) => p.id === contextProjectId) ? contextProjectId : projects[0].id)
   }, [projects, projectId, contextProjectId])
   useEffect(() => { resetModuleScroll(); revealTab('.im-nav-tab[aria-selected="true"]') }, [tab, subs])

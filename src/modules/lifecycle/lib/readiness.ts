@@ -1,5 +1,6 @@
 import type { ChecklistItem, GateStatus, Milestone, ProjectGate } from '../types'
 import { isChecklistOverdue } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 /** Stage readiness engine.
  *
@@ -51,7 +52,7 @@ export function computeStageReadiness(
   stageKey: string,
   items: ChecklistItem[],
   ctx: ReadinessContext = {},
-  today = new Date().toISOString().slice(0, 10),
+  today = todayTehran(),
 ): StageReadiness {
   const stageItems = items.filter((i) => i.stageKey === stageKey)
   const mandatory = stageItems.filter((i) => i.isMandatory)

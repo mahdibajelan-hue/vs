@@ -15,6 +15,7 @@ import { Term } from './components/control/Term'
 import { useMyTasks } from './lib/control/useMyTasks'
 import { GuideWizard, HelpBox, shouldAutoGuide } from './components/control/GuideKit'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
+import { useRemembered } from '../../lib/navMemory'
 
 export const MATERIAL_ACCENT = '#f59e0b'
 
@@ -67,9 +68,9 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
   const csLoaded = useMaterialControlStore((s) => s.loaded)
   const fetchControl = useMaterialControlStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
-  const [tab, setTab] = useState<MatTab>('dashboard')
-  const [subs, setSubs] = useState<Partial<Record<MatTab, string>>>({})
-  const [projectId, setProjectId] = useState<string | null>(null)
+  const [tab, setTab] = useRemembered<MatTab>('tab', 'dashboard', (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
+  const [subs, setSubs] = useRemembered<Partial<Record<MatTab, string>>>('subs', {}, (v) => !!v && typeof v === 'object')
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string')
   const [locked, setLocked] = useState(false)
   const [guide, setGuide] = useState(false)
 
@@ -80,8 +81,11 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => {
-    if (!projects.length || projectId) return
-    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { setProjectId(contextProjectId); setLocked(true) } else setProjectId(projects[0].id)
+    if (!projects.length) return
+    // inside a project (radar): that project, fixed; otherwise the remembered choice while it is still in the list
+    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { if (projectId !== contextProjectId) setProjectId(contextProjectId); setLocked(true); return }
+    if (projectId && projects.some((p) => p.id === projectId)) return
+    setProjectId(projects[0].id)
   }, [projects, projectId, contextProjectId])
   useEffect(() => { resetModuleScroll(); revealTab('.im-nav-tab[aria-selected="true"]') }, [tab, subs])
 

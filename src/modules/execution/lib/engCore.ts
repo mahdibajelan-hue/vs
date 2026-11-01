@@ -1,5 +1,6 @@
 import type { useEpcStore } from '../store/useEpcStore'
 import { engProgress, engRulesOf, type Doc } from './engine/engineering'
+import { todayTehran } from '../../../lib/today'
 
 type EngRow = ReturnType<typeof useEpcStore.getState>['engDocs'][number]
 
@@ -9,7 +10,7 @@ export function engDocsOf(rows: EngRow[], projectId: string): Doc[] {
 }
 
 /** Weighted engineering progress (prepared + approved milestones) of one project, as the engineering dashboard shows it. */
-export function engCore(rows: EngRow[], projectId: string, today = new Date().toISOString().slice(0, 10), settings?: { engCredits?: { first: number; later: number; noted: number; approved: number } } | null) {
+export function engCore(rows: EngRow[], projectId: string, today = todayTehran(), settings?: { engCredits?: { first: number; later: number; noted: number; approved: number } } | null) {
   const docs = engDocsOf(rows, projectId)
   return { docs, progress: engProgress(docs, today, engRulesOf(settings)) }
 }

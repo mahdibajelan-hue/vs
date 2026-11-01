@@ -7,6 +7,7 @@ import { contractFile } from '../../lib/financeControl'
 import { Chip, DataTable, Section, fmtBn, fmtD, fmtPct, type Col } from '../../components/fn'
 import { FormModal, type FieldDef, type GroupDef, type Vals } from '../../components/FormModal'
 import { FIN_CONTRACT_ROLES, FIN_CONTRACT_ROLE_LABEL_FA, FIN_CONTRACT_STATUSES, FIN_CONTRACT_STATUS_LABEL_FA, type FinContract, type FinContractRole, type FinContractStatus } from '../../types'
+import { todayTehran } from '../../../../lib/today'
 
 const TONE = { active: 'good', completed: 'neutral', draft: 'neutral', suspended: 'warn', terminated: 'bad', replaced: 'neutral' } as const
 const GROUPS: GroupDef[] = [{ id: 'fx', title: 'بخش ارزی قرارداد (اختیاری)', collapsed: true }]
@@ -70,7 +71,7 @@ export function ContractsManage({ masterProjectId }: { masterProjectId: string }
       {amend && (
         <FormModal key={amend.id} title={`الحاقیه برای ${amend.contractNumber || amend.title}`} subtitle="افزایش یا کاهش مبلغ و تمدید مدت؛ تغییرات تصویب‌شده در مدیریت تغییرات خودکار می‌آیند و دوباره ثبت نمی‌شوند."
           fields={[{ key: 'amendmentNumber', label: 'شمارهٔ الحاقیه', kind: 'text', required: true }, { key: 'amendmentDate', label: 'تاریخ', kind: 'date', required: true }, { key: 'amount', label: 'تغییر مبلغ (ریال؛ کاهش با منفی)', kind: 'money', allowNegative: true }, { key: 'daysDelta', label: 'تمدید مدت (روز)', kind: 'num' }, { key: 'reason', label: 'موضوع', kind: 'text', span: 2, required: true }]}
-          initial={{ amendmentNumber: '', amendmentDate: new Date().toISOString().slice(0, 10), amount: 0, daysDelta: 0, reason: '' }}
+          initial={{ amendmentNumber: '', amendmentDate: todayTehran(), amount: 0, daysDelta: 0, reason: '' }}
           onSubmit={async (v) => { await addAmendment(amend.id, { amendmentNumber: String(v.amendmentNumber), amendmentDate: String(v.amendmentDate), amount: Number(v.amount) || 0, daysDelta: Number(v.daysDelta) || 0, reason: String(v.reason) }) }} onClose={() => setAmend(null)} submitLabel="ثبت الحاقیه"
           extra={<Section title="الحاقیه‌های ثبت‌شده" flush><DataTable rows={amendments.filter((a) => a.contractId === amend.id)} rowKey={(a) => a.id} empty="الحاقیه‌ای نیست." cols={[
             { key: 'd', label: 'تاریخ', render: (a) => fmtD(a.amendmentDate) }, { key: 'r', label: 'موضوع', render: (a) => <span style={{ textDecoration: a.voidedAt ? 'line-through' : undefined }}>{a.reason}</span> }, { key: 'a', label: 'مبلغ (میلیارد)', num: true, render: (a) => fmtBn(a.amount) },

@@ -4,6 +4,7 @@ import { overlayDetail } from './weldCentral'
 import { resolveLines } from './workActions'
 import { physicalProgress, plannedOverall } from './progress'
 import { DEFAULT_EX_SETTINGS } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 type ExState = Pick<ReturnType<typeof useExecutionStore.getState>, 'settingsByProject' | 'activities' | 'baselines' | 'blines' | 'reports' | 'lines'>
 type EpcState = Pick<ReturnType<typeof useEpcStore.getState>, 'welds' | 'lineWelds' | 'actionRules' | 'workActions'>
@@ -12,7 +13,7 @@ type EpcState = Pick<ReturnType<typeof useEpcStore.getState>, 'welds' | 'lineWel
  * One project's execution data and its physical progress — the single computation behind the execution module's own
  * figures (useExecutionModel), the radar and the project list, so they can never disagree. Pure: stores in, numbers out.
  */
-export function executionCore(st: ExState, epc: EpcState, projectId: string, today = new Date().toISOString().slice(0, 10)) {
+export function executionCore(st: ExState, epc: EpcState, projectId: string, today = todayTehran()) {
   const pid = projectId
   const settings = st.settingsByProject.get(pid) ?? DEFAULT_EX_SETTINGS
   const activities = st.activities.filter((a) => a.projectId === pid)

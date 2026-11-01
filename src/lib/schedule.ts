@@ -1,6 +1,7 @@
 import type { ActivityKind, ActivitySchedule, Project } from '../types'
 import type { SCurvePoint } from './progress'
 import { isCountedLog } from './progress'
+import { todayTehran } from './today'
 
 function toDate(iso: string): Date {
   return new Date(`${iso}T00:00:00`)
@@ -17,7 +18,7 @@ export function addDaysIso(iso: string, days: number): string {
 }
 
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  return todayTehran()
 }
 
 /**

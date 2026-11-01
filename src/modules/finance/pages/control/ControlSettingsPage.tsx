@@ -6,6 +6,7 @@ import { DEFAULT_THRESHOLDS, type FinThresholds } from '../../lib/financeControl
 import { useThresholds } from '../../lib/useThresholds'
 import { fmtDate } from '../../components/FinanceKpiTile'
 import { FINANCE_ACCENT } from '../../FinanceApp'
+import { todayTehran } from '../../../../lib/today'
 
 const FIELDS: { key: keyof Omit<FinThresholds, 'stageSlaDays'> | 'sla.submitted' | 'sla.under_review' | 'sla.certified'; label: string; hint?: string }[] = [
   { key: 'guaranteeExpiryDays', label: 'هشدار انقضای ضمانت‌نامه (روز مانده)' },
@@ -33,7 +34,7 @@ export function ControlSettingsPage({ masterProjectId }: { masterProjectId: stri
   const saveItem = useFinanceControlStore((s) => s.saveConfigItem)
   const loadAudit = useFinanceControlStore((s) => s.loadAudit)
   const [draft, setDraft] = useState<Record<string, string>>({})
-  const [validFrom, setValidFrom] = useState(new Date().toISOString().slice(0, 10))
+  const [validFrom, setValidFrom] = useState(todayTehran())
   const [note, setNote] = useState('')
   const [audit, setAudit] = useState<FinAuditEntry[] | null>(null)
   const [newItem, setNewItem] = useState<Record<string, { key: string; label: string }>>({})
@@ -68,7 +69,7 @@ export function ControlSettingsPage({ masterProjectId }: { masterProjectId: stri
         <div className="flex flex-wrap items-end gap-3">
           <label className="block"><span className="mb-1 block text-[11px] fin-text-secondary">اعمال از تاریخ</span><JalaliDateInput value={validFrom} onChange={setValidFrom} /></label>
           <label className="block min-w-0 flex-1"><span className="mb-1 block text-[11px] fin-text-secondary">دلیل تغییر</span><input className="fin-input" value={note} onChange={(e) => setNote(e.target.value)} /></label>
-          <button disabled={!dirty || validFrom < new Date().toISOString().slice(0, 10)} onClick={submit} className="rounded-lg px-4 py-2 text-xs font-bold text-white disabled:opacity-40" style={{ background: FINANCE_ACCENT }}>ثبت نسخهٔ جدید</button>
+          <button disabled={!dirty || validFrom < todayTehran()} onClick={submit} className="rounded-lg px-4 py-2 text-xs font-bold text-white disabled:opacity-40" style={{ background: FINANCE_ACCENT }}>ثبت نسخهٔ جدید</button>
           {dirty && <button onClick={() => setDraft({})} className="text-xs fin-text-muted"><RefreshCw size={12} className="inline" /> انصراف</button>}
         </div>
         <p className="text-[11px] leading-5 fin-text-muted">هر ثبت یک نسخهٔ جدید می‌سازد و از تاریخ اعمال به بعد گزارش‌ها از آن استفاده می‌کنند؛ نسخه‌های قبلی و ارقام قطعی گذشته تغییر نمی‌کنند. (فقط کاربران دارای مجوز «پیکربندی مالی»)</p>

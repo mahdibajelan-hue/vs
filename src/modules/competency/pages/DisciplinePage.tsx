@@ -6,6 +6,7 @@ import { CompetencySidebarShell, type CompetencySection } from '../components/Co
 import { disciplineState, KIND_LABEL_FA, STATUS_LABEL_FA, type DecisionKind } from '../lib/discipline'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { formatJalali } from '../../../lib/jalali'
+import { todayTehran } from '../../../lib/today'
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
 const STATUS_COLOR = { proposed: '#fbbf24', approved: '#f87171', rejected: '#94a3b8', revoked: '#38bdf8' } as const
@@ -26,7 +27,7 @@ export function DisciplinePage({ onExitToHub, nav }: { onExitToHub: () => void; 
   const [note, setNote] = useState<{ id: string; kind: 'reject' | 'revoke' } | null>(null)
   const [noteText, setNoteText] = useState('')
   useEffect(() => { void st.fetchAll(); void fetchProfiles() }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const nameOf = (uid: string | null) => (uid ? profiles.find((p) => p.id === uid)?.fullName || 'کاربر' : '—')
   const person = (id: string) => assessments.find((a) => a.id === id)
   const rows = useMemo(() => st.decisions.filter((d) => filter === 'all' || d.status === filter), [st.decisions, filter])
@@ -93,7 +94,7 @@ export function DisciplinePage({ onExitToHub, nav }: { onExitToHub: () => void; 
 
 function Propose({ people, onSave, onClose }: { people: { id: string; candidateName: string }[]; onSave: (a: { assessmentId: string; kind: DecisionKind; points: number | null; startDate: string; endDate: string | null; reason: string; evidenceNote: string }) => void; onClose: () => void }) {
   const [id, setId] = useState(''); const [kind, setKind] = useState<DecisionKind>('score_deduction'); const [points, setPoints] = useState(5)
-  const today = new Date().toISOString().slice(0, 10); const [start, setStart] = useState(today); const [end, setEnd] = useState(''); const [reason, setReason] = useState(''); const [ev, setEv] = useState('')
+  const today = todayTehran(); const [start, setStart] = useState(today); const [end, setEnd] = useState(''); const [reason, setReason] = useState(''); const [ev, setEv] = useState('')
   const ok = id && reason.trim() && (kind !== 'suspension' || end) && (kind !== 'score_deduction' || points > 0)
   return (
     <div className="comp-drawer-bg" onClick={onClose}>

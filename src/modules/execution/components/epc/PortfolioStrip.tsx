@@ -4,6 +4,7 @@ import { useMasterDataStore } from '../../../masterdata/store/useMasterDataStore
 import { executionCore } from '../../lib/executionCore'
 import { useEpcStore } from '../../store/useEpcStore'
 import { pct } from '../common'
+import { todayTehran } from '../../../../lib/today'
 
 /** Managers see every project they are allowed to read side by side (row-level security already filters what is loaded); a click opens that project. */
 export function PortfolioStrip({ current, onPick }: { current: string; onPick: (id: string) => void }) {
@@ -11,7 +12,7 @@ export function PortfolioStrip({ current, onPick }: { current: string; onPick: (
   const projects = useMasterDataStore((s) => s.projects)
   const epc = useEpcStore()
   const rows = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayTehran()
     return projects.map((p) => {
       // the module's own computation (same as its pages), not a re-derivation
       const core = executionCore(st, epc, p.id, today)

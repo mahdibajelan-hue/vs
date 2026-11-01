@@ -8,10 +8,11 @@ import { IssuedCard, WelderProfile } from '../components/personnel/WelderProfile
 import type { Welder } from '../lib/personnel'
 import { KIND_FA, type PersonKind } from '../lib/personnelForms'
 import { Chip, Section } from '../../finance/components/fn'
+import { todayTehran } from '../../../lib/today'
 
 const fa = (n: number | string) => String(n).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])
 const ST_FA = { active: 'فعال', suspended: 'معلق', left: 'ترک کار' } as const
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayTehran()
 const plus = (d: string, n: number) => new Date(Date.parse(d) + n * 86400000).toISOString().slice(0, 10)
 type St = 'valid' | 'soon' | 'expired' | 'none'
 const ST_CHIP: Record<St, { tone: 'good' | 'warn' | 'bad'; label: string }> = { valid: { tone: 'good', label: 'معتبر' }, soon: { tone: 'warn', label: 'رو به انقضا' }, expired: { tone: 'bad', label: 'منقضی' }, none: { tone: 'bad', label: 'کارت ندارد' } }

@@ -8,6 +8,7 @@ import { fa } from './common'
 import { useMaterialModel } from '../../lib/control/useMaterialModel'
 import { stageBackingLimit } from '../../lib/control/progress'
 import { ModalPortal } from '../../../../components/common/ModalPortal'
+import { todayTehran } from '../../../../lib/today'
 
 const TONE = { pending: 'neutral', submitted: 'warn', reviewed: 'warn', approved: 'good', rejected: 'bad' } as const
 
@@ -18,7 +19,7 @@ export function StageModal({ projectId, stage, def, item, material, onClose }: {
   const people = cs.people
   const [planned, setPlanned] = useState(stage.plannedDate ?? '')
   const [resp, setResp] = useState(stage.responsible ?? '')
-  const [actual, setActual] = useState(stage.actualDate ?? new Date().toISOString().slice(0, 10))
+  const [actual, setActual] = useState(stage.actualDate ?? todayTehran())
   const [qty, setQty] = useState<number>(stage.doneQty ?? item.qty)
   const [evidence, setEvidence] = useState(stage.evidenceUrl)
   const [note, setNote] = useState(stage.evidenceNote)

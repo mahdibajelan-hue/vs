@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabaseClient'
+import { todayTehran } from '../../../lib/today'
 
 /**
  * Additive demo-data generator for the Financial Management module — reuses whatever
@@ -31,7 +32,7 @@ function addDays(iso: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10)
 }
-const TODAY = new Date().toISOString().slice(0, 10)
+const TODAY = todayTehran()
 
 const BUDGET_CHANGE_REASONS = ['الحاقیه محدوده کار مصوب کارفرما', 'صرفه‌جویی مهندسی ارزش', 'تعدیل نرخ ارز مصالح وارداتی', 'افزایش بودجه بابت تغییرات ایمنی/HSE', 'کاهش بودجه بابت حذف بخشی از محدوده کار']
 

@@ -14,6 +14,7 @@ import { projectMetrics, type ProjectMetrics, type Slice } from './projectMetric
 import { loadStageGateBundle } from '../lifecycle/lib/stageGateBundleLoader'
 import { analyseProject, type ExternalCounts } from '../lifecycle/lib/useProjectAnalysis'
 import type { DerivedHealth, OverallHealth } from '../lifecycle/lib/health'
+import { todayTehran } from '../../lib/today'
 
 const ACTIVE_RISK = new Set(['open', 'monitoring', 'escalated'])
 const LEVELS: [string, string][] = [['critical', 'بحرانی'], ['high', 'بالا'], ['medium', 'متوسط'], ['low', 'کم']]
@@ -60,7 +61,7 @@ export function perfOf(m: ProjectMetrics): NonNullable<ExternalCounts['perf']> {
 export async function loadProjectMetrics(masterProjectId: string): Promise<ProjectSnapshot | null> {
   const [lc, risk, bundle] = await Promise.all([loadLifecycleInputs(masterProjectId), riskPicture(masterProjectId), loadStageGateBundle(masterProjectId).catch(() => null), ensureEpcStores(), ensureFinance()])
   if (!lc) return null
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const weights = weightsFromReport(lc.clientReport)
 
   // finance: the module's own definitions (live contracts, certified amounts of non-rejected certificates)

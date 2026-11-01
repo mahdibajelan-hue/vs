@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabaseClient'
 import type { HtStage, CoatingKind, ProfilePoint, Reading, SectionPlan } from './lib/htCore'
+import { todayTehran } from '../../lib/today'
 
 type Row = Record<string, any>
 const s = (v: unknown) => (v == null ? '' : String(v))
@@ -75,6 +76,6 @@ export async function addDefect(pid: string, x: Omit<CtDefect, 'id' | 'by' | 'st
   chk(r); return defectOf(r.data)
 }
 export async function setDefect(id: string, status: CtDefect['status']) {
-  const r = await supabase.from('ct_defects').update({ status, repaired_at: status === 'open' ? null : new Date().toISOString().slice(0, 10) }).eq('id', id).select('*').single()
+  const r = await supabase.from('ct_defects').update({ status, repaired_at: status === 'open' ? null : todayTehran() }).eq('id', id).select('*').single()
   chk(r); return defectOf(r.data)
 }

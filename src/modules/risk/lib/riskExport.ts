@@ -3,6 +3,7 @@ import { RM_CATEGORY_LABEL_FA, RM_RESPONSE_STRATEGY_LABEL_FA, RM_RISK_STATUS_LAB
 import { RISK_LEVEL_LABEL_FA } from './riskScore'
 import { ZONE_LABEL_FA } from './riskPolicy'
 import type { RiskState } from './riskState'
+import { todayTehran } from '../../../lib/today'
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string)
 
@@ -38,7 +39,7 @@ export function printTable(title: string, subtitle: string, filters: string[], h
 body{font-family:Vazirmatn,Tahoma,sans-serif;margin:22px;color:#111}h1{font-size:19px;margin:0 0 4px}.sub{color:#555;font-size:12px;margin-bottom:8px}.chips span{display:inline-block;background:#f1f5f9;border-radius:10px;padding:2px 10px;margin:0 0 4px 6px;font-size:11px}
 table{width:100%;border-collapse:collapse;font-size:10.5px;margin-top:8px}th,td{border:1px solid #cbd5e1;padding:4px 6px;text-align:right;vertical-align:top}th{background:#e2e8f0}tr:nth-child(even) td{background:#f8fafc}
 @media print{body{margin:8mm}thead{display:table-header-group}tr{break-inside:avoid}@page{size:A4 landscape}}</style></head><body>
-<h1>${esc(title)}</h1><div class="sub">${esc(subtitle)} · تاریخ تهیه ${formatJalali(new Date().toISOString().slice(0, 10))} · ${rows.length} ردیف</div>
+<h1>${esc(title)}</h1><div class="sub">${esc(subtitle)} · تاریخ تهیه ${formatJalali(todayTehran())} · ${rows.length} ردیف</div>
 <div class="chips">${filters.length ? filters.map((f) => `<span>${esc(f)}</span>`).join('') : '<span>بدون فیلتر</span>'}</div>
 <table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(String(c ?? ''))}</td>`).join('')}</tr>`).join('')}</tbody></table>
 <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script></body></html>`

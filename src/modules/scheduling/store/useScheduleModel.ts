@@ -3,8 +3,9 @@ import { buildLiveModel } from '../lib/model'
 import { useLinkSources } from './useLinkSources'
 import { useSchedulingStore, type VersionBundle } from './useSchedulingStore'
 import type { SchVersion } from '../lib/types'
+import { todayTehran } from '../../../lib/today'
 
-const todayIso = () => new Date().toISOString().slice(0, 10)
+const todayIso = () => todayTehran()
 
 /** One project's schedule with every derived figure — computed once from the stored versions and the facts read from the other modules; nothing derived is stored. */
 export function useScheduleModel(projectId: string, opts: { live?: boolean; baselineId?: string | null; progressMode?: 'retained' | 'override' } = {}) {

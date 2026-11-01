@@ -14,6 +14,7 @@ import { certificateOutstanding } from '../../lib/financeCalc'
 import { contractFile, daysBetween } from '../../lib/financeControl'
 import { ChartTip, Donut, HBars, PB, Ring, Tile, Waterfall, axisProps, gridProps } from '../../components/charts'
 import { JALALI_MONTHS } from '../../../../lib/jalali'
+import { todayTehran } from '../../../../lib/today'
 
 const ROLES: { id: Role; label: string; icon: LucideIcon; blurb: string; portfolio: boolean }[] = [
   { id: 'ceo', label: 'مدیرعامل', icon: Briefcase, blurb: 'تصویر کلان سبد: بودجه، تعهد، هزینهٔ نهایی و پروژه‌هایی که تصمیم می‌خواهند', portfolio: true },
@@ -101,7 +102,7 @@ export function DashboardPage({ projectId, onProject, onGo }: { projectId: strin
   const critical = scope.reduce((n, r) => n + r.critical, 0)
   const fin = useFinanceStore()
   const ctl = useFinanceControlStore()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const nowIdx = isoMonthIdx(today) ?? 0
   const vis = useMemo(() => {
     const contracts = fin.contracts.filter((c) => ids.has(c.masterProjectId) && c.status !== 'draft' && c.status !== 'replaced')

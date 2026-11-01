@@ -21,6 +21,7 @@ import { GateHero } from '../components/GateHero'
 import { GateGantt } from '../components/GateGantt'
 import { plannedPct } from '../lib/gateProgress'
 import { gateProgressFromLog, KIND_LABEL_FA, type GateEngine, type GateItemKind } from '../lib/gateModel'
+import { todayTehran } from '../../../lib/today'
 
 /**
  * Stage detail: the checklist that determines readiness, and the gate that consumes it.
@@ -94,7 +95,7 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
       }))
 
   async function setStatus(item: ChecklistItem, status: ChecklistStatus) {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayTehran()
     const done = status === 'completed' || status === 'verified'
     await updateChecklistItem(item, {
       status,
@@ -130,7 +131,7 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
         stage={bundle.stages.find((s) => s.stageKey === stageKey)} gate={gate}
         index={Math.max(0, orderedStages.findIndex((s) => s.stageKey === stageKey))} total={orderedStages.length}
         status={derivedGateStatus} actual={gateProgress}
-        planned={plannedPct(bundle.stages.find((s) => s.stageKey === stageKey) ?? { plannedStart: null, plannedFinish: null, status: 'not_started' }, new Date().toISOString().slice(0, 10))}
+        planned={plannedPct(bundle.stages.find((s) => s.stageKey === stageKey) ?? { plannedStart: null, plannedFinish: null, status: 'not_started' }, todayTehran())}
         ownerName="" canEdit={!!profile?.isAdmin || (!!gate?.gateOwnerId && gate.gateOwnerId === profile?.id)}
         onCreateSubtasks={createSubtasks}
       />

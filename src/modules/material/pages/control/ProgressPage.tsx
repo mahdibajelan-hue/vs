@@ -9,6 +9,7 @@ import { StageModal } from '../../components/control/StageModal'
 import { FormModal } from '../../../finance/components/FormModal'
 import { STAGE_STATUS_LABEL_FA, type ItemStage } from '../../types'
 import type { ProgressGroupRow } from '../../lib/control/progress'
+import { todayTehran } from '../../../../lib/today'
 
 const day = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000)
 
@@ -100,7 +101,7 @@ export function ProgressPage({ projectId, sub }: { projectId: string; sub: strin
       </Section>
       {base && <FormModal title="تصویب مبنای قیمت و وزن" subtitle={`ارزش فعلی بسته‌ها ${bn(p.value)} میلیارد ریال؛ نسخهٔ جدید همین مقادیر را ثبت می‌کند.`} submitLabel="تصویب" onClose={() => setBase(false)}
         fields={[{ key: 'method', label: 'روش قیمت‌گذاری مبنا', kind: 'text', required: true, span: 2, hint: 'مثلاً فهرست بهای پیمان، قیمت سفارش‌های صادرشده' }, { key: 'currency', label: 'ارز', kind: 'text', required: true }, { key: 'fx', label: 'ضریب تبدیل به ریال', kind: 'num' }, { key: 'date', label: 'تاریخ مبنا', kind: 'date', required: true }, { key: 'note', label: 'توضیح', kind: 'text', span: 2 }]}
-        initial={{ method: cs.baselines.filter((b) => b.masterProjectId === projectId).at(-1)?.priceMethod ?? '', currency: 'IRR', fx: 1, date: new Date().toISOString().slice(0, 10), note: '' }}
+        initial={{ method: cs.baselines.filter((b) => b.masterProjectId === projectId).at(-1)?.priceMethod ?? '', currency: 'IRR', fx: 1, date: todayTehran(), note: '' }}
         onSubmit={async (v) => { await cs.approveBaseline(projectId, { note: String(v.note ?? ''), method: String(v.method), currency: String(v.currency || 'IRR'), fx: Number(v.fx) || 1, baseDate: String(v.date) }) }} />}
       <p className="im-helper" style={{ margin: 0 }}>پیشرفت وزنی با «پیشرفت فیزیکی تحویل» یکی نیست: رسیدن کالا به کارگاه فقط مرحلهٔ ورود را کامل می‌کند، نه همهٔ مراحل را. مقدار تحویل‌شده در «موجودی و انبار» دیده می‌شود.</p>
     </div>

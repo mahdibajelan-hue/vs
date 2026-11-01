@@ -6,6 +6,7 @@ import { executionCore } from '../execution/lib/executionCore'
 import { engCore } from '../execution/lib/engCore'
 import { materialCore } from '../material/lib/control/materialCore'
 import { combineEpc, EQUAL_EPC_WEIGHTS, weightsFromReport, type EpcProgress, type EpcWeights } from './epcProgress'
+import { todayTehran } from '../../lib/today'
 
 let loading: Promise<void> | null = null
 /** Loads the engineering / material / execution stores once (they hold every project the user may read). */
@@ -26,7 +27,7 @@ export function ensureEpcStores(): Promise<void> {
  * items' value (qty × unit price × rate), construction = the approved activities' contract quantity × unit price.
  * These are the E/P/C weights — a pipeline's engineering is a sliver of its value, procurement most of it.
  */
-export function epcValuesOf(projectId: string, today = new Date().toISOString().slice(0, 10)): EpcWeights {
+export function epcValuesOf(projectId: string, today = todayTehran()): EpcWeights {
   const ex = useExecutionStore.getState(), epc = useEpcStore.getState(), ms = useMaterialStore.getState(), cs = useMaterialControlStore.getState()
   const e = epc.engDocs.filter((d) => d.projectId === projectId && d.status !== 'superseded').reduce((s, d) => s + (d.price || 0), 0)
   const p = materialCore(ms, cs, projectId, today).progress.value
@@ -41,7 +42,7 @@ const weightCache = new Map<string, { w: EpcWeights; source: 'value' | 'report' 
 export function epcWeightsOf(projectId: string, fallback?: EpcWeights | null): { w: EpcWeights; source: 'value' | 'report' | 'equal'; values: EpcWeights } {
   const hit = weightCache.get(projectId)
   if (hit) return hit
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const ex = useExecutionStore.getState(), epc = useEpcStore.getState(), ms = useMaterialStore.getState(), cs = useMaterialControlStore.getState()
   const has = { e: epc.engDocs.some((d) => d.projectId === projectId), p: materialCore(ms, cs, projectId, today).items.length > 0, c: ex.activities.some((a) => a.projectId === projectId) }
   const values = epcValuesOf(projectId, today)
@@ -55,7 +56,7 @@ export function epcWeightsOf(projectId: string, fallback?: EpcWeights | null): {
 
 /** One project's EPC progress from the modules' own computations (percentages), weighted by the disciplines' values
  * (see epcWeightsOf; `fallback` = the client report's weights when values are missing). Call after ensureEpcStores. */
-export function epcProgressOf(projectId: string, fallback?: EpcWeights | null, today = new Date().toISOString().slice(0, 10)): EpcProgress {
+export function epcProgressOf(projectId: string, fallback?: EpcWeights | null, today = todayTehran()): EpcProgress {
   const ex = useExecutionStore.getState(), epc = useEpcStore.getState(), ms = useMaterialStore.getState(), cs = useMaterialControlStore.getState()
   const eng = engCore(epc.engDocs, projectId, today, ex.settings(projectId))
   const mat = materialCore(ms, cs, projectId, today)

@@ -35,6 +35,7 @@ import type { HelpKey } from './lib/help'
 import type { IssueFilter } from './lib/imRegister'
 import './issues.css'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
+import { useRemembered } from '../../lib/navMemory'
 
 export type Tab = 'home' | 'issues' | 'tracking' | 'calendar' | 'mywork' | 'decisions' | 'tower' | 'kpi' | 'insights' | 'notifications' | 'knowledge' | 'projects' | 'report' | 'portfolio' | 'settings' | 'help'
 type DrawerTab = 'overview' | 'tasks' | 'extensions' | 'decisions'
@@ -71,7 +72,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   const cfgLoaded = useIssueConfigStore((s) => s.loaded)
   const fetchCfg = useIssueConfigStore((s) => s.fetch)
   const fetchDecisions = useDecisionStore((s) => s.fetchAll)
-  const [tab, setTab] = useState<Tab>(() => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as Tab) : 'home' })
+  const [tab, setTab] = useRemembered<Tab>('tab', () => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as Tab) : 'home' }, (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
   const [newIssueProjectId, setNewIssueProjectId] = useState<string | null | 'pick'>(null)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [drawerTab, setDrawerTab] = useState<DrawerTab>('overview')

@@ -2,6 +2,7 @@ import { runCpm, type CpmDep, type CpmTask } from '../../lifecycle/lib/cpm'
 import { WorkCalendar, DEFAULT_CALENDAR, type CalendarDef } from './calendar'
 import type { SchActivity, SchRelation } from './types'
 import { compile2, DayCal, dayOfIso, floats2, isoOfDay, run2, startFromFinish2, CONSTRAINT_TYPES, type ConsType, type Dep2, type Net2, type Task2 } from './engine2'
+import { todayTehran } from '../../../lib/today'
 
 /**
  * Calendar-aware schedule computation (critical path method) on top of the shared CPM kernel.
@@ -76,7 +77,7 @@ export function buildNetwork(inp: ScheduleInput): Network {
   const dates = acts.flatMap((a) => [a.plannedStart, a.plannedFinish, a.actualStart, a.actualFinish, a.constraintDate]).filter((x): x is string => !!x)
   if (inp.dataDate) dates.push(inp.dataDate)
   for (const d of inp.startNoEarlier?.values() ?? []) dates.push(d)
-  const anchor = dates.length ? dates.reduce((m, d) => (d < m ? d : m)) : new Date().toISOString().slice(0, 10)
+  const anchor = dates.length ? dates.reduce((m, d) => (d < m ? d : m)) : todayTehran()
   const cal = new WorkCalendar(calDef, anchor)
   const forecast = inp.mode === 'forecast' && !!inp.dataDate
   if (inp.mode === 'forecast' && !inp.dataDate) warnings.push('تاریخ وضعیت (Data Date) نامشخص است؛ پیش‌بینی بر اساس برنامه کامل انجام شد.')
@@ -159,7 +160,7 @@ export function buildNetwork2(inp: ScheduleInput): Network2 {
   const dates = acts.flatMap((a) => [a.plannedStart, a.plannedFinish, a.actualStart, a.actualFinish, a.constraintDate]).filter((x): x is string => !!x)
   if (inp.dataDate) dates.push(inp.dataDate)
   for (const d of inp.startNoEarlier?.values() ?? []) dates.push(d)
-  const anchor = dates.length ? dates.reduce((m, d) => (d < m ? d : m)) : new Date().toISOString().slice(0, 10)
+  const anchor = dates.length ? dates.reduce((m, d) => (d < m ? d : m)) : todayTehran()
   const base = dayOfIso(anchor)
   const defCal = new DayCal(defDef, base)
   const cache = new Map<string, DayCal>()

@@ -8,6 +8,7 @@ import { decisionFromRow, rastaActionFromRow, type DecisionRow, type RastaAction
 import { buildEvidenceReport, DEFAULT_THRESHOLDS, type EvidenceInput, type EvidenceReport, type Facts, type Thresholds } from './evidenceReport'
 import { useExecutionStore } from '../../execution/store/useExecutionStore'
 import { STOPPAGE_CATEGORY_FA } from '../../execution/lib/formCatalog'
+import { todayTehran } from '../../../lib/today'
 
 /** The materiality thresholds in force for a project: the global row, overridden field by field by the project's row. */
 export async function loadThresholds(masterProjectId: string | null): Promise<{ thresholds: Thresholds; version: string; global: { id: string; thresholds: Thresholds; version: number } | null; project: { id: string; thresholds: Partial<Thresholds>; version: number } | null }> {
@@ -64,7 +65,7 @@ export async function loadEvidenceReport(masterProjectId: string, projectName: s
 
   const curve = metrics ? metrics.curve.map((p) => ({ date: p.date, planned: p.planned, earned: p.earned })) : []
   const input: EvidenceInput = {
-    today: new Date().toISOString().slice(0, 10),
+    today: todayTehran(),
     project: projectName,
     metrics: metrics ? {
       asOf: metrics.asOf,
@@ -81,7 +82,7 @@ export async function loadEvidenceReport(masterProjectId: string, projectName: s
     risks, riskActions, issues, actions, decisions,
     portfolio: pfRow ? { decision: String(pfRow.decision), reviewBy: (pfRow.review_by as string) ?? null } : null,
     sourceDates: [
-      { source: 'پیشرفت (منحنی EPC)', available: !!metrics && curve.some((p) => p.earned != null), date: maxDate(curve.filter((p) => p.earned != null && p.date <= new Date().toISOString().slice(0, 10)).map((p) => p.date)) },
+      { source: 'پیشرفت (منحنی EPC)', available: !!metrics && curve.some((p) => p.earned != null), date: maxDate(curve.filter((p) => p.earned != null && p.date <= todayTehran()).map((p) => p.date)) },
       { source: 'ثبت ریسک', available: !!risks?.length, date: maxDate([...(risks ?? []).flatMap((r) => [r.identifiedDate, ...r.assessments.map((a) => a.date)])]) },
       { source: 'مدیریت مسائل', available: !!issues?.length, date: maxDate((bundle?.issues?.issues ?? []).map((i) => i.updatedAt)) },
       { source: 'اقدامات و تصمیم‌ها', available: actions.length + decisions.length > 0, date: maxDate([...actions.map((a) => a.updatedAt), ...decisions.map((d) => d.createdAt)]) },
@@ -98,7 +99,7 @@ export async function loadEvidenceReport(masterProjectId: string, projectName: s
 function periodDelays(masterProjectId: string, since: string | null): EvidenceInput['periodDelays'] {
   const ex = useExecutionStore.getState()
   if (!ex.reports.length) return null
-  const to = new Date().toISOString().slice(0, 10)
+  const to = todayTehran()
   const from = since && since < to ? since : new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   const reps = new Map(ex.reports.filter((r) => r.projectId === masterProjectId && r.status !== 'draft' && r.reportDate >= from && r.reportDate <= to).map((r) => [r.id, r.reportDate]))
   const items = ex.stoppages.filter((s) => reps.has(s.reportId) && s.hours > 0).map((s) => ({ date: reps.get(s.reportId) as string, label: STOPPAGE_CATEGORY_FA[s.category] ?? s.category, hours: s.hours, responsibility: s.responsibility, critical: s.critical }))

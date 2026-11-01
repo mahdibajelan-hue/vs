@@ -6,6 +6,7 @@ import { DECISION_FA, HEALTH_FA, type PfDecisionKind, type PfHealth, type PfProj
 import { Empty, faNum, Kpi, Panel } from '../components/pfUi'
 import { Donut } from '../components/viz'
 import { useDrill } from '../components/DrillSheet'
+import { todayTehran } from '../../../lib/today'
 
 /** The portfolio's decision record: who decided what, why, under which health and priority, and when it must be reviewed. */
 export function DecisionsTab({ views, onDecide }: { views: PfProjectView[]; onDecide: (projectId: string | null) => void }) {
@@ -14,7 +15,7 @@ export function DecisionsTab({ views, onDecide }: { views: PfProjectView[]; onDe
   const [showVoided, setShowVoided] = useState(false)
   const ids = useMemo(() => new Set(views.map((v) => v.input.id)), [views])
   const name = (id: string) => views.find((v) => v.input.id === id)?.input.name ?? '—'
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const list = st.decisions.filter((d) => ids.has(d.projectId) && (showVoided || !d.voided) && (kind === 'all' || d.decision === kind))
   const counts = (Object.keys(DECISION_FA) as PfDecisionKind[]).map((k) => ({ k, n: views.filter((v) => v.lastDecision?.decision === k).length }))
   const { drill, open } = useDrill()

@@ -1,4 +1,5 @@
 import type { Activity, Milestone, MilestoneForecastPoint, MilestoneStatus } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 /** Milestone & variance engine — the PLAN → ACTUAL → VARIANCE half of the module's core chain.
  *
@@ -26,7 +27,7 @@ export function milestoneVariance(ms: Milestone): number | null {
 }
 
 /** How many days until the milestone is due — negative once the date has passed. */
-export function daysUntilDue(ms: Milestone, today = new Date().toISOString().slice(0, 10)): number | null {
+export function daysUntilDue(ms: Milestone, today = todayTehran()): number | null {
   const due = ms.forecastDate ?? ms.baselineDate
   return daysBetween(today, due)
 }
@@ -37,7 +38,7 @@ export function daysUntilDue(ms: Milestone, today = new Date().toISOString().sli
  */
 export function deriveMilestoneStatus(
   ms: Milestone,
-  today = new Date().toISOString().slice(0, 10),
+  today = todayTehran(),
 ): MilestoneStatus {
   if (ms.actualDate) return 'achieved'
   if (ms.status === 'blocked') return 'blocked'
@@ -69,7 +70,7 @@ export interface MilestoneKpis {
 
 export function computeMilestoneKpis(
   milestones: Milestone[],
-  today = new Date().toISOString().slice(0, 10),
+  today = todayTehran(),
 ): MilestoneKpis {
   const withStatus = milestones.map((m) => ({ ms: m, status: deriveMilestoneStatus(m, today) }))
 

@@ -2,6 +2,7 @@ import type { Activity } from '../types'
 import { diffDaysIso } from '../lib/cpm'
 import { rollupProgress } from '../lib/planTree'
 import { EmptyState, fa, faNum } from './ui'
+import { todayTehran } from '../../../lib/today'
 
 /** Gate-scoped Gantt: same bar renderer idea as the plan tree, read-only, limited to one gate. */
 export function GateGantt({ activities, windowStart, windowEnd }: { activities: Activity[]; windowStart: string | null; windowEnd: string | null }) {
@@ -12,7 +13,7 @@ export function GateGantt({ activities, windowStart, windowEnd }: { activities: 
   const span = Math.max(1, diffDaysIso(start, end))
   const pos = (iso: string) => Math.min(100, Math.max(0, (diffDaysIso(start, iso) / span) * 100))
   const progress = rollupProgress(activities.map((a) => ({ id: a.id, parentId: a.parentId, name: a.name, weight: a.weight, manualPct: a.manualPct, start: a.forecastStart, finish: a.forecastFinish })))
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-[10px] text-muted"><span>{fa(start)}</span><span>{fa(end)}</span></div>

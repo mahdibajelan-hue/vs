@@ -10,6 +10,7 @@ import {
 import { EmptyState, STATUS_COLOR, STATUS_TEXT_COLOR, fa, faNum, faVariance } from '../components/ui'
 import { StatSlicer } from '../components/StatSlicer'
 import { TowerTile } from '../components/TowerTile'
+import { todayTehran } from '../../../lib/today'
 
 const STATUS_TO_HEALTH: Record<MilestoneStatus, 'green' | 'yellow' | 'red' | 'black'> = {
   achieved: 'green', on_track: 'green', at_risk: 'yellow', delayed: 'red', blocked: 'black',
@@ -220,7 +221,7 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                         <div className="mb-3 flex flex-wrap gap-2">
                           {!ms.actualDate && (
                             <button
-                              onClick={() => updateMilestone(ms, { actualDate: new Date().toISOString().slice(0, 10), status: 'achieved' })}
+                              onClick={() => updateMilestone(ms, { actualDate: todayTehran(), status: 'achieved' })}
                               className="rounded-lg px-2.5 py-1.5 text-[10px] font-medium text-white"
                               style={{ background: STATUS_COLOR.green }}
                             >

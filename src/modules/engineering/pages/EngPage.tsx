@@ -16,11 +16,13 @@ import { ActivityPicker } from '../components/ActivityPicker'
 import { EngDash } from './EngDash'
 import { EngMyTasks } from './EngMyTasks'
 import { EngSettings } from './EngSettings'
+import { EngReports } from './EngReports'
 import { isMdlLayout, parseMdl, type MdlResult } from '../lib/mdlImport'
 import { readSheetRows } from '../lib/readRows'
 import { COURT_LABEL_FA, courtOf } from '../lib/roles'
 import { canonDiscipline } from '../lib/disciplines'
 import { DocTable } from '../components/DocTable'
+import { LinkTemplates } from '../components/LinkTemplates'
 import { useLens } from '../components/LensBar'
 import { ENG_STATUS_LABEL_FA, type EngDocRow } from '../../execution/epcTypes'
 
@@ -38,6 +40,7 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
   if (sub === 'impact') return <ImpactView m={m} projectId={projectId} />
   if (sub === 'my') return <EngMyTasks m={m} projectId={projectId} />
   if (sub === 'settings') return <EngSettings m={m} projectId={projectId} />
+  if (sub === 'reports') return <EngReports m={m} projectId={projectId} />
   return <EngDash m={m} projectId={projectId} />
 }
 
@@ -140,6 +143,7 @@ function Links({ m, projectId, can }: { m: EpcModel; projectId: string; can: boo
   const act = (id: string) => m.ex.actById.get(id)
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+      <LinkTemplates m={m} projectId={projectId} can={can} />
       <p className="im-helper" style={{ margin: 0 }}>هر ارتباط می‌گوید این مدرک برای شروع یا ادامهٔ کدام فعالیت لازم است، تا چه تاریخی (مستقل از تاریخ برنامه‌ای صدور مدرک) و باید به چه وضعیتی رسیده باشد. اگر برای فعالیتی فعالیت جایگزین تعریف شود، اثر تأخیر روی برنامه با فرض اجرای جایگزین محاسبه می‌شود.</p>
       {can && <div className="im-card" style={{ padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <label className="ex-lab">مدرک<select value={f.docId} onChange={(e) => setF({ ...f, docId: e.target.value })} style={{ maxWidth: 240 }}><option value="">—</option>{docs.map((x) => <option key={x.id} value={x.id}>{x.docNo} — {x.title.slice(0, 30)}</option>)}</select></label>

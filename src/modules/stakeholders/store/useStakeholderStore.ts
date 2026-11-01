@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import type { Concern, EngagementLog, Stakeholder } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 type Row = Record<string, unknown>
 const s = (v: unknown) => (v == null ? '' : String(v))
@@ -108,7 +109,7 @@ export const useStakeholderStore = create<State>()((set, get) => {
       const pid = get().projectId
       if (!pid) return false
       const done = p.status === 'resolved' || p.status === 'closed'
-      const row = { ...concernRow(p), resolved_on: done ? new Date().toISOString().slice(0, 10) : null, updated_at: new Date().toISOString() }
+      const row = { ...concernRow(p), resolved_on: done ? todayTehran() : null, updated_at: new Date().toISOString() }
       if (id) {
         const prev = get().concerns.find((c) => c.id === id)
         return run(supabase.from('sh_concerns').update({ ...row, resolved_on: done ? prev?.resolvedOn ?? row.resolved_on : null }).eq('id', id))

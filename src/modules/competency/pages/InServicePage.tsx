@@ -8,6 +8,7 @@ import { HBars, PB } from '../../finance/components/charts'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { formatJalali } from '../../../lib/jalali'
 import '../../finance/finance-dashboard.css'
+import { todayTehran } from '../../../lib/today'
 
 const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const KINDS: RaterKind[] = ['employer', 'supervisor', 'peer', 'subordinate']
@@ -35,7 +36,7 @@ export function InServicePage({ onExitToHub, nav }: { onExitToHub: () => void; n
   const mine = (c: InServiceCycle) => st.raters.find((r) => r.cycleId === c.id && r.userId === me?.id)
   const visible = st.cycles
   // people working on a project who have no cycle for the current quarter yet: a cycle is only ever created by a manager, so without this list they would never appear on the page
-  const quarter = useMemo(() => jalaliQuarter(new Date().toISOString().slice(0, 10)), [])
+  const quarter = useMemo(() => jalaliQuarter(todayTehran()), [])
   const waiting = useMemo(() => assessments.filter((a) => a.workStatus === 'on_project' && !st.cycles.some((c) => c.assessmentId === a.id && c.periodStart === quarter.start)), [assessments, st.cycles, quarter])
   const [bulkBusy, setBulkBusy] = useState(false)
   const openFor = async (a: { id: string; workProjectName: string }) => { const id = await st.createCycle({ assessmentId: a.id, periodLabel: quarter.label, periodStart: quarter.start, periodEnd: quarter.end, projectName: a.workProjectName, dueDate: quarter.end }); if (id) setSel(id) }
@@ -179,7 +180,7 @@ function ResultsEditor({ cycle, onChange, disabled }: { cycle: InServiceCycle; o
 }
 
 function NewCycle({ people, all, onCreate, onClose }: { people: { id: string; candidateName: string; workProjectName: string }[]; all: { id: string; candidateName: string; workProjectName: string }[]; onCreate: (a: { assessmentId: string; periodLabel: string; periodStart: string; periodEnd: string; projectName: string; dueDate: string | null }) => void; onClose: () => void }) {
-  const q = jalaliQuarter(new Date().toISOString().slice(0, 10))
+  const q = jalaliQuarter(todayTehran())
   const [showAll, setShowAll] = useState(people.length === 0)
   const list = showAll ? all : people
   const [id, setId] = useState(''); const [label, setLabel] = useState(q.label)

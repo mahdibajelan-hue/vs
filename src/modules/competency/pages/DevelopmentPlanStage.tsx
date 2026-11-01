@@ -30,6 +30,7 @@ import type {
   CompProfileLite,
   CompetencyAssessment,
 } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 interface DevelopmentPlanStageProps {
   assessment: CompetencyAssessment
@@ -416,7 +417,7 @@ function ActionRow({ action: a, editable, profiles }: { action: CompDevelopmentA
   const [note, setNote] = useState(a.progressNote)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const statusMeta = ACTION_STATUS_META[a.status]
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const overdue = a.status !== 'DONE' && a.status !== 'CANCELLED' && a.dueDate != null && a.dueDate < today
   const update = (patch: Partial<DevelopmentActionInput>) => updateDevelopmentAction(a.id, patch)
   const levelInput = (value: number | null, onCommit: (v: number | null) => void) => (

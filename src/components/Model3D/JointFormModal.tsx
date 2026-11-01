@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Modal } from '../common/Modal'
 import { JalaliDateInput } from '../common/JalaliDateInput'
 import { JOINT_TYPES, JOINT_TYPE_LABEL_FA, type Equipment3D, type Joint, type JointType } from '../../types'
+import { todayTehran } from '../../lib/today'
 
 interface JointFormModalProps {
   lineLabel: string
@@ -144,7 +145,7 @@ export function JointCompleteDateModal({
   onClose: () => void
   onConfirm: (date: string) => void
 }) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayTehran())
   return (
     <Modal title="تاریخ تکمیل اتصال" onClose={onClose} width="max-w-xs">
       <div className="space-y-3">

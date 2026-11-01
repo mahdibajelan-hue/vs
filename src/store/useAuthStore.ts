@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabaseClient'
 import { useModuleStore } from './useModuleStore'
 import { useModuleAccessStore } from './useModuleAccessStore'
+import { navStorage } from '../lib/navMemory'
 
 export interface Profile {
   id: string
@@ -140,12 +141,15 @@ supabase.auth.onAuthStateChange((_event, session) => {
   useAuthStore.setState({ session, isAuthed: !!session, authLoading: false })
   if (session?.user && session.user.id !== prevUserId) {
     // A new sign-in (or a different user than before) must never inherit whichever module the
-    // previous session happened to be sitting in — always land back on the hub.
-    useModuleStore.getState().exitToHub()
+    // previous session happened to be sitting in — always land back on the hub. A page refresh
+    // restores the same user's session: that user stays on the page they were on (navMemory).
+    if (navStorage.get('user') !== session.user.id) useModuleStore.getState().exitToHub()
+    navStorage.set('user', session.user.id)
     useAuthStore.setState({ profileLoading: true })
     loadProfile(session.user.id)
     useModuleAccessStore.getState().fetchAccess()
   } else if (!session) {
+    navStorage.set('user', null)
     useModuleStore.getState().exitToHub()
     useAuthStore.setState({ profile: null, profileLoading: false })
     useModuleAccessStore.getState().reset()

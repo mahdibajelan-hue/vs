@@ -1,6 +1,7 @@
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { KIND_META as M, type ActionDef, type InboxItem, type InboxKind, type KindDef } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 const CODES: Record<string, string> = {
   not_allowed: 'نقش شما اجازهٔ این کار را ندارد', not_authorized_for_step: 'این مرحله برای نقش شما نیست', self_approval_forbidden: 'ثبت‌کنندهٔ درخواست نمی‌تواند خودش آن را تأیید کند', separation_of_duties: 'ثبت‌کننده نمی‌تواند خودش تأیید کند',
@@ -19,7 +20,7 @@ const upd = async (table: string, id: string, patch: Record<string, unknown>) =>
 const uid = async () => (await supabase.auth.getUser()).data.user?.id ?? null
 const num = (v: unknown, d = 0) => (typeof v === 'number' ? v : Number(v) || d)
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayTehran()
 /** Finance decisions keep the earlier notes and add the comment of the decision. */
 const decide = async (table: string, id: string, patch: Record<string, unknown>, note: string) => {
   const cur = note ? (await supabase.from(table).select('notes').eq('id', id).maybeSingle()).data?.notes : ''

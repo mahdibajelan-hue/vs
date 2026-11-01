@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react'
 import { useRiskData } from '../lib/useRiskData'
 import { useCountUp } from '../../issues/lib/useCountUp'
 import type { RiskTab } from '../RiskApp'
+import { todayTehran } from '../../../lib/today'
 
 interface TileDef { tab: RiskTab; en: string; fa: string; desc: string; icon: LucideIcon; color: string; stat?: { n: number; label: string } }
 
@@ -36,7 +37,7 @@ export function HubPage({ onGo }: { onGo: (tab: RiskTab) => void }) {
       reviewDue: act.filter((r) => st(r.id).reviewOverdue).length,
       kriBad: d.kris.filter((k) => k.active && (k.state === 'warn' || k.state === 'critical')).length,
       openActs: openActs.length,
-      overdueActs: openActs.filter((a) => a.dueDate && a.dueDate < new Date().toISOString().slice(0, 10)).length,
+      overdueActs: openActs.filter((a) => a.dueDate && a.dueDate < todayTehran()).length,
       noPlan: act.filter((r) => !st(r.id).hasPlan || !st(r.id).hasOwner).length,
       pending: d.suggestions.filter((x) => x.status === 'pending').length,
       realized: d.risks.filter((r) => r.status === 'realized').length,

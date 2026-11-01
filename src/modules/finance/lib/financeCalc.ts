@@ -1,8 +1,9 @@
 import { isoToJalali, jalaliToIso, todayJalali } from '../../../lib/jalali'
 import type { FinAnnualBudget, FinBudget, FinBudgetChange, FinCashflowForecast, FinClaim, FinContract, FinContractAmendment, FinGuarantee, FinPaymentCertificate, FinRetentionRelease } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  return todayTehran()
 }
 
 /** Current Budget = Approved Budget + every logged change (spec: a running log, never an overwritten single field). */

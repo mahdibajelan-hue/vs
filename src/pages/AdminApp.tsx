@@ -1,10 +1,10 @@
-import { useState } from 'react'
 import { Database, Users } from 'lucide-react'
 import { useAuthStore } from '../store/useAuthStore'
 import { useDeepLinkStore } from '../store/useDeepLinkStore'
 import { UserCenterApp } from '../modules/usercenter/UserCenterApp'
 import { MasterDataApp } from '../modules/masterdata/MasterDataApp'
 import { ModuleHeaderActions } from '../components/common/ModuleHeaderActions'
+import { useRemembered } from '../lib/navMemory'
 
 type Tab = 'users' | 'masterdata'
 
@@ -18,7 +18,7 @@ type Tab = 'users' | 'masterdata'
 export function AdminApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   // «تغییر ناظران» in the supervision module lands straight on master data → that project's team
-  const [tab, setTab] = useState<Tab>(() => (useDeepLinkStore.getState().pending?.module === 'admin' ? 'masterdata' : 'users'))
+  const [tab, setTab] = useRemembered<Tab>('tab', () => (useDeepLinkStore.getState().pending?.module === 'admin' ? 'masterdata' : 'users'), (v) => typeof v === 'string')
 
   if (!isAdmin) {
     return (

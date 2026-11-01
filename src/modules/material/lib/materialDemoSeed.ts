@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabaseClient'
+import { todayTehran } from '../../../lib/today'
 
 /**
  * Additive demo-data generator for the Material Supply & Inventory module — mirrors
@@ -33,7 +34,7 @@ function addDays(iso: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10)
 }
-const TODAY = new Date().toISOString().slice(0, 10)
+const TODAY = todayTehran()
 
 type Commodity = 'pipe' | 'fitting' | 'valve' | 'flange' | 'gasket' | 'bolt_nut' | 'instrument' | 'equipment' | 'support' | 'other'
 

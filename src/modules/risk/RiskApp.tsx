@@ -20,6 +20,7 @@ import { HubPage } from './pages/HubPage'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 import { useModuleStore } from '../../store/useModuleStore'
 import { PortfolioViewButton } from '../../components/common/PortfolioViewButton'
+import { useRemembered } from '../../lib/navMemory'
 
 const RegisterPage = lazy(() => import('./pages/RegisterPage').then((m) => ({ default: m.RegisterPage })))
 const AssessmentPage = lazy(() => import('./pages/AssessmentPage').then((m) => ({ default: m.AssessmentPage })))
@@ -69,7 +70,7 @@ export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => voi
   const fetchAll = useRiskStore((s) => s.fetchAll)
   const syncProjects = useRiskStore((s) => s.syncProjects)
   const fetchPeople = useRiskPeopleStore((s) => s.fetchAll)
-  const [tab, setTab] = useState<RiskTab>(() => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as RiskTab) : 'home' })
+  const [tab, setTab] = useRemembered<RiskTab>('tab', () => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as RiskTab) : 'home' }, (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
   const [openRisk, setOpenRisk] = useState<{ id: string; tab: RiskTabId } | null>(null)
   const [newOpen, setNewOpen] = useState(false)
   const role = useRiskRole(scope === 'all' ? null : scope)

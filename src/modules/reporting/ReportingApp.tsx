@@ -20,6 +20,7 @@ import { GuidePage } from './pages/GuidePage'
 import { PeriodReportsPage } from './pages/PeriodReportsPage'
 import type { Scope } from './components/rpx'
 import type { View } from './lib/assistantCore'
+import { useRemembered } from '../../lib/navMemory'
 
 /** The module is organised around three parts — report builder, analysis center, assistant — plus its front page, settings and guide. */
 export type Section = 'home' | 'reports' | 'builder' | 'analysis' | 'assistant' | 'settings' | 'guide'
@@ -53,8 +54,8 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
 
   // Arrived from a mission finding («مشاهده در مدیریت اقدامات»): open that project's decision center.
   const linked = useDeepLinkStore.getState().pending?.module === 'reporting' ? useDeepLinkStore.getState().pending?.masterProjectId ?? null : null
-  const [projectId, setProjectId] = useState<string | null>(linked)
-  const [section, setSection] = useState<Section>(linked ? 'analysis' : 'home')
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', linked, (v) => v === null || typeof v === 'string')
+  const [section, setSection] = useRemembered<Section>('section', linked ? 'analysis' : 'home', (v) => typeof v === 'string')
   const [builderSub, setBuilderSub] = useState<BuilderSub>('composer')
   const navInd = useTabIndicator<HTMLElement>(section)
   const subInd = useTabIndicator<HTMLElement>(`${section}:${builderSub}`)

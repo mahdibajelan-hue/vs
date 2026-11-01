@@ -8,9 +8,10 @@ import { STAGE_COLOR as PSSR_COLOR, STAGE_FA as PSSR_FA } from '../../pssr/lib/p
 import { assetPicture, dueState, EVENT_FA, OPSTATE_FA, type OpState } from '../lib/twinCore'
 import { DUE_COLOR, DUE_FA } from './AssetPanel'
 import type { Official } from '../hooks/useOfficial'
+import { todayTehran } from '../../../lib/today'
 
 const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayTehran()
 export const OP_COLOR: Record<OpState, string> = { open: '#22c55e', closed: '#ef4444', throttled: '#f59e0b', na: '#64748b' }
 
 /**

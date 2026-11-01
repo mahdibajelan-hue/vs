@@ -4,6 +4,7 @@ import { usePstStore, type Preview } from './store/usePstStore'
 import { PART_META, PARTS, recentPeriods, type Part, type Period } from './lib/stmtCore'
 import { Deductions, Figures, LinesTable, Warnings } from './Sheet'
 import { fa, Ledger, short } from './ui'
+import { todayTehran } from '../../lib/today'
 
 /**
  * صورت‌وضعیت جدید — four short steps: contract → part → month → preview. Nothing is typed: the preview is computed from
@@ -16,7 +17,7 @@ export function NewStatement({ initial, onDone }: { initial?: { contractId?: str
   const [period, setPeriod] = useState<Period | null>(null)
   const [pv, setPv] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
-  const months = useMemo(() => recentPeriods(new Date().toISOString().slice(0, 10), 18), [])
+  const months = useMemo(() => recentPeriods(todayTehran(), 18), [])
   const step = !contractId ? 1 : !part ? 2 : !pv ? 3 : 4
   const mine = st.statements.filter((s) => s.contractId === contractId && s.part === part)
   const lastTo = mine.map((s) => s.to).sort().at(-1) ?? ''

@@ -7,6 +7,7 @@ import { computeMilestoneKpis, computeScheduleVariance, baselineCompletion, fore
 import { computeWarnings, computeManagementAttention, type AttentionItem, type ComputedWarning } from './earlyWarning'
 import { isActionOverdue, type GateStatus, type LifecycleAction } from '../types'
 import { SG_DIMENSION_STAGES, isStageGateKey } from './stageGateBundle'
+import { todayTehran } from '../../../lib/today'
 
 /** One place that runs every engine over a project bundle, so the Control Tower, the dashboards
  * and the reports can never disagree about a project's numbers. */
@@ -44,7 +45,7 @@ export interface ExternalCounts {
 export function analyseProject(
   bundle: ProjectLifecycleBundle,
   external: ExternalCounts = {},
-  today = new Date().toISOString().slice(0, 10),
+  today = todayTehran(),
 ): ProjectAnalysis {
   const currentStageKey = bundle.lifecycle?.currentStageKey ?? ''
   const openCriticalRisks = external.openCriticalRisks ?? 0

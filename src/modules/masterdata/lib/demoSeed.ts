@@ -8,6 +8,7 @@ import {
   type RmRiskType,
   type RmResponseStrategy,
 } from '../../risk/types'
+import { todayTehran } from '../../../lib/today'
 
 /**
  * Coherent, seeded (reproducible) demo dataset generator + wipe/reseed orchestration, run
@@ -57,7 +58,7 @@ function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-const TODAY = new Date().toISOString().slice(0, 10)
+const TODAY = todayTehran()
 const PROJECT_START = addDays(TODAY, -300)
 
 /** Cycles through a fixed pool (real profiles fetched at seed time) — used so every management/

@@ -17,6 +17,7 @@ import {
 import { computeProjectHealth, loadHistory, loadLatestSnapshots, loadSettings, refreshAll, saveSettings, type Snapshot } from './lib/healthLoader'
 import { AnatomyHologram, OrganCards } from './components/AnatomyHologram'
 import { Ecg, HoloRing, LabTable, ORGAN_FA, ScoreRing, StatusChip, StatusIcon, Trend, VitalCard, fa, spark, valueText, type VitalView } from './components/parts'
+import { useRemembered } from '../../lib/navMemory'
 import './healthCenter.css'
 
 type Sheet =
@@ -49,7 +50,7 @@ export function HealthCenterApp({ onExitToHub }: { onExitToHub: () => void; onBa
   const [r, setR] = useState<HealthResult | null | undefined>(undefined)
   const [err, setErr] = useState<string | null>(null)
   const [sheet, setSheet] = useState<Sheet | null>(null)
-  const [tab, setTab] = useState<ImagingTab>('xray')
+  const [tab, setTab] = useRemembered<ImagingTab>('tab', 'xray', (v) => typeof v === 'string')
   const [range, setRange] = useState<Range>('90')
   const [tick, setTick] = useState(0)
 

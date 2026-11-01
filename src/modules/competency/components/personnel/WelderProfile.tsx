@@ -8,6 +8,7 @@ import type { PersonSig, Welder, WelderQual } from '../../lib/personnel'
 import { Chip, fmtD } from '../../../finance/components/fn'
 import { IdCard } from './IdCard'
 import { jdLatin, photoFromFile } from './util'
+import { todayTehran } from '../../../../lib/today'
 
 const fa = (n: number | string) => String(n).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])
 const cardPayload = (cardNo: string, stamp: string) => `RASTA|WC|${cardNo}|${stamp}`
@@ -151,7 +152,7 @@ export function WelderProfile({ w, tests }: { w: Welder; tests: WelderQual[] }) 
           <>
             {qualifying && <p className="im-helper" style={{ margin: 0 }}>از آزمون {qualifying.wqtNo}: {data.scope?.length ? `${data.scope.join('، ')} · ` : ''}{data.rows.slice(0, 4).map(([k, v]) => `${k} ${v}`).join(' · ')}</p>}
             <div className="ex-sheet-grid">
-              <label>اعتبار کارت *<select disabled={!can || locked} value={validityMode} onChange={(e) => setCard({ ...card, validity: e.target.value === 'END' ? 'END' : e.target.value === 'DATE' ? new Date().toISOString().slice(0, 10) : '' })}><option value="">—</option><option value="END">تا پایان پروژه</option><option value="DATE">تا تاریخ مشخص</option></select></label>
+              <label>اعتبار کارت *<select disabled={!can || locked} value={validityMode} onChange={(e) => setCard({ ...card, validity: e.target.value === 'END' ? 'END' : e.target.value === 'DATE' ? todayTehran() : '' })}><option value="">—</option><option value="END">تا پایان پروژه</option><option value="DATE">تا تاریخ مشخص</option></select></label>
               {validityMode === 'DATE' && <label>تاریخ انقضا<JalaliDateInput value={card.validity} onChange={(x) => !locked && setCard({ ...card, validity: x })} /></label>}
               {extraFields.map((f) => <Field key={f.key} f={f} v={card[f.key] ?? ''} set={(x) => setCard({ ...card, [f.key]: x })} dis={!can || locked} />)}
             </div>

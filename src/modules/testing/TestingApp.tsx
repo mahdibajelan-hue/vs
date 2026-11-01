@@ -16,10 +16,12 @@ import { TestPage } from './components/TestPage'
 import { TestingGuide } from './components/TestingGuide'
 import '../pssr/pssr.css'
 import './testing.css'
+import { todayTehran } from '../../lib/today'
+import { useRemembered } from '../../lib/navMemory'
 
 const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayTehran()
 type Tab = 'dash' | 'line' | 'stations' | 'coating' | 'settings'
 const CUT_FA: Record<string, string> = { elevation: 'محدودیت اختلاف ارتفاع', length: 'حداکثر طول', preferred: 'محل شیر / ایستگاه', end: 'انتهای خط' }
 
@@ -32,7 +34,7 @@ export function TestingApp({ onExitToHub }: { onExitToHub: () => void; onBackToR
   const projectId = useProjectContextStore((s) => s.projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const st = useTestingStore()
-  const [tab, setTab] = useState<Tab>('dash')
+  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string')
   const [open, setOpen] = useState<{ kind: TargetKind; id: string } | null>(null)
   const [guide, setGuide] = useState(false)
   useEffect(() => { if (!useMasterDataStore.getState().loaded) void useMasterDataStore.getState().fetchAll() }, [])

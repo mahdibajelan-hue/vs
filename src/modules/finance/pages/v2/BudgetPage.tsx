@@ -11,6 +11,7 @@ import { useThresholds } from '../../lib/useThresholds'
 import { Chip, DataTable, KpiCard, NumInput, Section, StackBar, fmtBn, fmtPct, parseNum, splitMoney, type Col } from '../../components/fn'
 import { JALALI_MONTHS } from '../../../../lib/jalali'
 import { Download, Printer } from 'lucide-react'
+import { todayTehran } from '../../../../lib/today'
 
 interface LineRow { key: string; line: FinBudgetLine | null; title: string; code: string; approved: number; committed: number; certified: number; paid: number; remaining: number }
 
@@ -32,7 +33,7 @@ export function BudgetPlanPage({ masterProjectId }: { masterProjectId: string })
   const save = useFinanceControlStore((s) => s.saveBudgetLine)
   const { thresholds } = useThresholds()
   const [draft, setDraft] = useState<{ code: string; title: string; cat: string; amount: string } | null>(null)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
 
   const m = useMemo(() => {
     const bac = currentBudget(budgets.find((b) => b.masterProjectId === masterProjectId) ?? null, budgetChanges.filter((c) => c.masterProjectId === masterProjectId))

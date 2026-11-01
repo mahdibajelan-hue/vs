@@ -6,6 +6,7 @@ import {
   type GateStatus, type Milestone, type ProjectGate, type ProjectStage, type StageKey,
 } from '../types'
 import { STATUS_COLOR, fa, faNum } from './ui'
+import { todayTehran } from '../../../lib/today'
 
 /** Same trio the gate ladder folds into one "گیت EPC" row — the rail has to tell the identical
  * story, or a manager reading both sees three stages merge in one place and stay apart in the
@@ -293,7 +294,7 @@ function ScheduleRibbon({
     const end = ends.sort()[ends.length - 1]
     const span = Math.max(1, dayDiff(start, end))
     const pos = (d: string) => Math.min(100, Math.max(0, (dayDiff(start, d) / span) * 100))
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayTehran()
 
     return {
       start, end, baseEnd, span, pos,
@@ -424,5 +425,5 @@ function dayDiff(a: string, b: string): number {
 }
 
 function daysSince(iso: string): number {
-  return Math.max(0, dayDiff(iso.slice(0, 10), new Date().toISOString().slice(0, 10)))
+  return Math.max(0, dayDiff(iso.slice(0, 10), todayTehran()))
 }

@@ -19,6 +19,7 @@ import { milestoneVariance } from '../lib/milestones'
 import { DEFAULT_STAGE_ORDER } from '../types'
 import { TEMPLATE_SEEDS } from '../lib/templates'
 import { DECISION_LABEL_FA, decisionToStatus, validateDecision, gateReadiness, type DecisionInput, type GateItemLite } from '../lib/gateModel'
+import { todayTehran } from '../../../lib/today'
 
 function reportError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
@@ -380,7 +381,7 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
     await supabase.from('plc_project_lifecycle').upsert({
       project_id: projectId, template_id: templateId,
       current_stage_key: templateStages[0]?.stage_key ?? 'idea',
-      stage_entered_at: new Date().toISOString().slice(0, 10),
+      stage_entered_at: todayTehran(),
     }, { onConflict: 'project_id' })
 
     await writeAudit({ projectId, entityType: 'lifecycle', event: 'template_instantiated', newValue: templateId })
@@ -487,7 +488,7 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
   approveGate: async (gate, comments) => {
     const { error } = await supabase.from('plc_project_gates').update({
       status: 'approved',
-      approval_date: new Date().toISOString().slice(0, 10),
+      approval_date: todayTehran(),
       approved_by: (await supabase.auth.getUser()).data.user?.id ?? null,
       comments,
     }).eq('id', gate.id)
@@ -519,7 +520,7 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
       override_by: userId,
       override_reason: reason,
       override_at: new Date().toISOString(),
-      approval_date: new Date().toISOString().slice(0, 10),
+      approval_date: todayTehran(),
       approved_by: userId,
     }).eq('id', gate.id)
     if (reportError('ثبت Override گیت', error)) return
@@ -535,7 +536,7 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
     const err = validateDecision(input, readiness)
     if (err) return err
     const userId = (await supabase.auth.getUser()).data.user?.id ?? null
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayTehran()
     const status = decisionToStatus(input.kind)
     const gateStatus = status === 'passed' ? 'approved' : status === 'conditional' ? 'conditional' : status === 'blocked' ? 'blocked' : 'in_progress'
     const { error: e1 } = await supabase.from('plc_gate_decisions').insert({
@@ -575,7 +576,7 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
   },
 
   advanceStage: async (projectId, fromStageKey, toStageKey) => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayTehran()
     const { error } = await supabase.from('plc_project_lifecycle').upsert({
       project_id: projectId, current_stage_key: toStageKey, stage_entered_at: today,
     }, { onConflict: 'project_id' })
@@ -637,7 +638,7 @@ export const useLifecycleStore = create<LifecycleState>()((set, get) => ({
     if (patch.completionPct !== undefined) row.completion_pct = patch.completionPct
     if (patch.ownerId !== undefined) row.owner_id = patch.ownerId
     if (patch.dueDate !== undefined) row.due_date = patch.dueDate
-    if (patch.status === 'completed') row.closed_date = new Date().toISOString().slice(0, 10)
+    if (patch.status === 'completed') row.closed_date = todayTehran()
 
     const { error } = await supabase.from('rasta_actions').update(row).eq('id', action.id)
     if (reportError('به‌روزرسانی اقدام', error)) return

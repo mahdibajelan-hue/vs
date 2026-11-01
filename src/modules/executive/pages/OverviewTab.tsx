@@ -6,8 +6,9 @@ import { BarList, Columns, Donut, Gauge, IDX_BANDS, Num, PALETTE, PHASE_COLOR, S
 import { useDrill } from '../components/DrillSheet'
 import { MultiProjectViews } from '../MultiProjectViews'
 import { formatJalali } from '../../../lib/jalali'
+import { todayTehran } from '../../../lib/today'
 
-const todayIso = () => new Date().toISOString().slice(0, 10)
+const todayIso = () => todayTehran()
 const HEALTH_ORDER: PfHealth[] = ['green', 'yellow', 'red', 'black', 'unknown']
 
 /** The three questions first: how is the portfolio, what needs my decision, where is the money at risk — every tile,

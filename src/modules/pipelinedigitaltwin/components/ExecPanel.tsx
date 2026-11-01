@@ -6,6 +6,7 @@ import { HEALTH_STATUS_FA, healthColor } from '../../projectMetrics/HealthGuide'
 import { STAGE_COLOR as PSSR_COLOR } from '../../pssr/lib/pssrCore'
 import { assetPicture, execReading, kmByStage, physicalProgress } from '../lib/twinCore'
 import type { Official } from '../hooks/useOfficial'
+import { todayTehran } from '../../../lib/today'
 
 const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const TONE = { good: '#22c55e', warn: '#f59e0b', bad: '#ef4444' } as const
@@ -20,7 +21,7 @@ export function ExecPanel({ official }: { official: Official }) {
   const m = official.metrics
   const routeKm = st.route.lengthMeters / 1000
   const kmBuilt = kmByStage(st.joints, st.settings.stockLengthM).backfill
-  const pic = assetPicture(st.assets, new Date().toISOString().slice(0, 10))
+  const pic = assetPicture(st.assets, todayTehran())
   const reading = execReading({ routeKm, physicalPct: physicalProgress(st.joints), officialCPct: m?.epc.cons?.actual ?? null, kmBackfilled: kmBuilt, kmUnderGas: official.kmUnderGas, jointNcr: st.joints.filter((j) => j.finalStatus === 'ncr').length, officialNcr: official.ncrOpen, assetsOverdue: pic.overdue, criticalAssetsPoor: pic.criticalPoor, landBlockedKm: official.landBlockedKm })
   // construction along the line: share of backfilled joints in each bin
   const built = useMemo(() => {

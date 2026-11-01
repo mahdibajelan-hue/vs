@@ -6,6 +6,7 @@ import { APPROVED_STATUSES, contractKey, dayDiff } from './changeKpi'
 import { computeBasis, resolveRoute, type BasisInput, type EngineRequest } from './changeRules'
 import type { Perms } from './changeFlow'
 import type { ContractInfo, ProjectInfo } from './changeData'
+import { todayTehran } from '../../../lib/today'
 
 /** Names, permissions and the client-side preview of the approval route (the server recomputes it when the evaluation is completed). */
 export function useChangeCtx() {
@@ -37,7 +38,7 @@ export function useChangeCtx() {
     const preview = (r: BasisReq & Pick<ChangeRequest, 'changeType' | 'proposedCost' | 'proposedDays' | 'orgUnit'>) => {
       const req: EngineRequest = { id: r.id, masterProjectId: r.masterProjectId, changeType: r.changeType, proposedCost: r.proposedCost, proposedDays: r.proposedDays, orgUnit: r.orgUnit, contractType: pMap.get(r.masterProjectId)?.contractType ?? null }
       const basis = computeBasis(req, basisInput(r))
-      return resolveRoute(req, activeRules, basis, new Date().toISOString().slice(0, 10))
+      return resolveRoute(req, activeRules, basis, todayTehran())
     }
     return {
       projects, contracts, activeRules, perms, preview, basisInput,

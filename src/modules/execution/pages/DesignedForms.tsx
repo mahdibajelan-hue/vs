@@ -8,6 +8,7 @@ import { GridSheet, printPlan } from '../forms/GridTemplate'
 import { Section, fmtD } from '../../finance/components/fn'
 import { EpcGate } from '../components/epc/EpcBanner'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
+import { todayTehran } from '../../../lib/today'
 
 /** Forms designed in the app (future forms): fill the header and the table, save, print on the frozen approved sheet. */
 export function DesignedForms({ projectId }: { projectId: string }) { return <EpcGate><Inner projectId={projectId} /></EpcGate> }
@@ -25,7 +26,7 @@ function Inner({ projectId }: { projectId: string }) {
   const [cur, setCur] = useState<{ id?: string; date: string; header: string[]; rows: string[][] } | null>(null)
   if (!tpls.length) return <p className="im-helper">هنوز فرم طراحی‌شدهٔ تأییدشده‌ای نیست. از «تنظیمات ← کتابخانهٔ قالب‌های مصوب فرم» یک فرم طراحی و تأیید کنید.</p>
   if (!tpl || !shape) return null
-  const blank = () => { setSel(null); setCur({ date: new Date().toISOString().slice(0, 10), header: shape.headers.map(() => ''), rows: free ? [] : Array.from({ length: shape.rows }, () => shape.columns.map(() => '')) }) }
+  const blank = () => { setSel(null); setCur({ date: todayTehran(), header: shape.headers.map(() => ''), rows: free ? [] : Array.from({ length: shape.rows }, () => shape.columns.map(() => '')) }) }
   const cells = (rows: string[][]) => Object.fromEntries(rows.map((r) => [r[0], r[1]]))
   const setCell = (a: string, v: string) => cur && setCur({ ...cur, rows: [...cur.rows.filter((r) => r[0] !== a), ...(v ? [[a, v]] : [])] })
   const plan = printPlan(tpl.layout)

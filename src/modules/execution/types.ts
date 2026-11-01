@@ -76,6 +76,9 @@ export interface ExSettings {
   groupWeights?: Record<string, number>
   /** total engineering contract amount (rial): a document's cost is its weight share of it */
   engAmount?: number
+  /** engineering reports: days a document may stay with the consultant / wait for the contractor's resubmission before it is listed as overdue (default 15) */
+  engConsultantDays?: number
+  engCommentDays?: number
   /** progress credit (percent) of an engineering document by the step reached: first submission (Rev A), a later one (Rev B, …), Approved as Noted, Approved */
   engCredits?: { first: number; later: number; noted: number; approved: number }
   rolePerms?: Partial<Record<ExRole, string[]>>

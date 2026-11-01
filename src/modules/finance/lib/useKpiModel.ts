@@ -7,6 +7,7 @@ import { currentBudget, currentJalaliYearBudget } from './financeCalc'
 import { findExceptions, landBridge, type FinThresholds } from './financeControl'
 import { projectKpis, type ProjectKpi } from './financeKpis'
 import { useThresholds } from './useThresholds'
+import { todayTehran } from '../../../lib/today'
 
 export interface ProjectRow { id: string; name: string; kpi: ProjectKpi; exceptions: number; critical: number }
 
@@ -18,7 +19,7 @@ export function useKpiModel() {
   const physical = useProgressStore((s) => s.physical)
   const loadProgress = useProgressStore((s) => s.load)
   const { thresholds } = useThresholds()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   useEffect(() => { loadProgress(projects) }, [projects, loadProgress])
 
   return useMemo(() => {

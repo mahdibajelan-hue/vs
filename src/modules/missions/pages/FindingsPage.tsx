@@ -8,6 +8,7 @@ import { Card, EmptyState } from '../components/ui'
 import { FindingCard } from '../components/FindingCard'
 import { liveFindings } from '../lib/reportBuilder'
 import { FINDING_KIND_SHORT, type FindingKind } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 const KINDS: FindingKind[] = ['issue', 'risk', 'action', 'commitment', 'decision']
 const STATES = [
@@ -29,7 +30,7 @@ export function FindingsPage() {
   const [moving, setMoving] = useState<string | null>(null)
 
   const all = useMemo(() => liveFindings(portfolio?.findings ?? []).filter((f) => KINDS.includes(f.kind)), [portfolio])
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const shown = all.filter((f) => (kind === 'all' || f.kind === kind) && (state === 'all' || (state === 'proposed' && !f.transferredId && f.approval === 'proposed') || (state === 'transferred' && !!f.transferredId) || (state === 'overdue' && !!f.dueDate && f.dueDate < today && !f.transferredId)))
   const missions = portfolio?.missions ?? []
 

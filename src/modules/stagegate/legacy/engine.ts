@@ -5,6 +5,7 @@
 // orbit behave identically; only the data layer is adapted (sg_* tables) and the globals the source
 // took from its host page are injected through `env`.
 import { SG_PHASE_GUIDE, SG_SOURCE_LABEL, SG_HOW_TO } from '../sgGuide'
+import { todayTehran } from '../../../lib/today'
 
 export function createStageGateEngine(env) {
   const { _supabase, currentUser, currentProfile, onGotoClientReport } = env
@@ -555,7 +556,7 @@ export function createStageGateEngine(env) {
         // yet 100% actual) — leaves only, so a parent container isn't
         // separately flagged for a delay that's really its child's.
         function lcMostDelayedScheduleItem(phaseCode) {
-            const todayIso = new Date().toISOString().slice(0, 10);
+            const todayIso = todayTehran();
             let worst = null;
             const walk = (parentId) => {
                 lcScheduleChildren(phaseCode, parentId).forEach(item => {
@@ -1397,7 +1398,7 @@ export function createStageGateEngine(env) {
             const plannedStart = lcState.phases.length ? lcState.projectPhases[lcState.phases[0].code]?.planned_start : null;
             const plannedEnd = cr?.contract_end_date || null;
             const forecastEnd = cr?.forecast_completion_date || null;
-            const todayIso = new Date().toISOString().slice(0, 10);
+            const todayIso = todayTehran();
             const durDays = (a, b) => (a && b) ? Math.round((new Date(b) - new Date(a)) / 86400000) : null;
             const plannedDuration = durDays(plannedStart, plannedEnd);
             const elapsed = plannedStart ? durDays(plannedStart, todayIso) : null;
@@ -1867,7 +1868,7 @@ export function createStageGateEngine(env) {
             const phase = lcState.phases.find(p => p.code === phaseCode);
             const anchor = lcState.projectPhases[phaseCode];
             if (!phase || !anchor?.planned_start) { alert('ابتدا باید بازه زمانی برنامه‌ای این فاز مشخص شده باشد.'); return; }
-            const todayIso = new Date().toISOString().slice(0, 10);
+            const todayIso = todayTehran();
             const delta = lcDaysBetween(anchor.planned_start, todayIso);
             if (delta <= 0) { alert('این فاز هنوز به تاخیر نیفتاده — نیازی به ری‌پلن نیست.'); return; }
             const order = lcState.phases.map(p => p.code);
@@ -1956,7 +1957,7 @@ export function createStageGateEngine(env) {
                     if (fillPct > 0) inlineFill = `<div class="absolute inset-y-0 left-0 rounded" style="width:${fillPct}%; background:${LC_NEON_GREEN}; opacity:.85;"></div>`;
                 } else if (row.actualStart) {
                     const aStartPct = lcPctForDate(row.actualStart, range);
-                    const aFinishPct = lcPctForDate(row.actualFinish || new Date().toISOString().slice(0, 10), range);
+                    const aFinishPct = lcPctForDate(row.actualFinish || todayTehran(), range);
                     const aLeft = Math.min(aStartPct, aFinishPct), aWidth = Math.max(0.8, Math.abs(aFinishPct - aStartPct));
                     actualBar = `<div class="absolute rounded" style="left:${aLeft}%; width:${aWidth}%; top:${barTop + 15}px; height:5px; background:${LC_NEON_GREEN}; box-shadow:0 0 6px ${LC_NEON_GREEN}aa;"></div>`;
                 }
@@ -2041,7 +2042,7 @@ export function createStageGateEngine(env) {
             const allTicks = lcJalaliMonthTicks(range);
             const tickStep = [1, 2, 3, 6, 12].find(n => (lcGanttTimelineW() / Math.max(1, allTicks.length)) * n >= 38) || 12;
             const ticks = allTicks.filter((_, i) => i % tickStep === 0).map((t, i, a) => ({ ...t, yearLabel: i === 0 || a[i - 1].yearLabel !== t.yearLabel ? t.yearLabel : '' }));
-            const todayIso = new Date().toISOString().slice(0, 10);
+            const todayIso = todayTehran();
             const todayPct = (todayIso >= range.minIso && todayIso <= range.maxIso) ? lcPctForDate(todayIso, range) : null;
             const bodyH = rows.length * LC_GANTT_ROW_H;
 
@@ -2261,7 +2262,7 @@ export function createStageGateEngine(env) {
         }
 
         function lcSetStrategyDraft(key) {
-            lcState.strategyDraft = { execution_strategy: key, project_start_date: lcMasterScheduleStartIso() || new Date().toISOString().slice(0, 10) };
+            lcState.strategyDraft = { execution_strategy: key, project_start_date: lcMasterScheduleStartIso() || todayTehran() };
             lcRenderAll();
         }
         function lcSetStrategyDraftStart(jalaliStr) {
@@ -2454,7 +2455,7 @@ export function createStageGateEngine(env) {
 
         function lcMasterScheduleStrategyRowHtml() {
             const current = lcMasterScheduleStrategy();
-            const startIso = lcMasterScheduleStartIso() || new Date().toISOString().slice(0, 10);
+            const startIso = lcMasterScheduleStartIso() || todayTehran();
             return `<div class="mb-3">
                 <div class="flex flex-wrap items-center gap-2 mb-2">
                     ${LC_STRATEGIES.map(s => `<button type="button" data-lc-set-strategy="${s.key}" title="${esc(s.desc)}" class="text-[10.5px] font-bold px-3 py-1.5 rounded-lg border transition ${current === s.key ? 'bg-blue-900 text-white border-blue-900' : 'text-slate-200 hover:bg-white/5'}">${esc(s.label)}</button>`).join('')}
@@ -3092,7 +3093,7 @@ export function createStageGateEngine(env) {
                 const { data: urlData } = _supabase.storage.from('lifecycle-evidence').getPublicUrl(path);
                 patch.evidence_file_url = urlData.publicUrl;
             }
-            const todayIso = new Date().toISOString().slice(0, 10);
+            const todayIso = todayTehran();
             if (status === 'submitted' && kind === 'output') patch.submitted_by = currentUser.email;
             if (status === 'verified') { patch.verified_by = currentUser.email; patch.verification_date = todayIso; }
             const { data, error } = await _supabase.from('sg_project_phase_items')

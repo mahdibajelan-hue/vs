@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { Gauge, Link2, ListChecks, Loader2, Ruler, Settings2, ShieldCheck, FileStack } from 'lucide-react'
+import { Gauge, Link2, ListChecks, Loader2, Printer, Ruler, Settings2, ShieldCheck, FileStack } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -14,15 +14,18 @@ import { useEpcStore } from '../execution/store/useEpcStore'
 import { buildEngTasks, lensOf } from './lib/roles'
 import { ErrorBoundary } from '../../components/common/ErrorBoundary'
 import { useAuthStore } from '../../store/useAuthStore'
+import { todayTehran } from '../../lib/today'
+import { useRemembered } from '../../lib/navMemory'
 
 export const ENGINEERING_ACCENT = '#6366f1'
-type Tab = 'dash' | 'my' | 'register' | 'links' | 'impact' | 'settings'
+type Tab = 'dash' | 'my' | 'register' | 'links' | 'impact' | 'reports' | 'settings'
 const NAV: { id: Tab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'dash', label: 'داشبورد مهندسی', icon: Gauge, color: '#6366f1' },
   { id: 'my', label: 'کارهای من', icon: ListChecks, color: '#ec4899' },
   { id: 'register', label: 'فهرست مدارک', icon: FileStack, color: '#0ea5e9' },
   { id: 'links', label: 'ارتباط مدارک و فعالیت‌ها', icon: Link2, color: '#14b8a6' },
   { id: 'impact', label: 'آمادگی و اثر تأخیر', icon: ShieldCheck, color: '#f97316' },
+  { id: 'reports', label: 'گزارش‌های مهندسی', icon: Printer, color: '#22c55e' },
   { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#94a3b8' },
 ]
 const EngPage = lazy(() => import('./pages/EngPage').then((m) => ({ default: m.EngPage })))
@@ -39,8 +42,8 @@ export function EngineeringApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   const exLoaded = useExecutionStore((s) => s.loaded)
   const fetchEx = useExecutionStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
-  const [tab, setTab] = useState<Tab>('dash')
-  const [projectId, setProjectId] = useState<string | null>(null)
+  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string')
   const [locked, setLocked] = useState(false)
 
   useEffect(() => {
@@ -49,8 +52,11 @@ export function EngineeringApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => {
-    if (!projects.length || projectId) return
-    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { setProjectId(contextProjectId); setLocked(true) } else setProjectId(projects[0].id)
+    if (!projects.length) return
+    // inside a project (radar): that project, fixed; otherwise the remembered choice while it is still in the list
+    if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { if (projectId !== contextProjectId) setProjectId(contextProjectId); setLocked(true); return }
+    if (projectId && projects.some((p) => p.id === projectId)) return
+    setProjectId(projects[0].id)
   }, [projects, projectId, contextProjectId])
   const loading = !mdLoaded || !exLoaded
   const engDocs = useEpcStore((s) => s.engDocs)
@@ -60,7 +66,7 @@ export function EngineeringApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   const myCount = useMemo(() => {
     if (!projectId) return 0
     const mine = exRoles.filter((r) => r.projectId === projectId && r.userId === uid && r.active).map((r) => r.role)
-    return buildEngTasks(engDocs.filter((d) => d.projectId === projectId), isAdmin ? 'manager' : lensOf(mine), new Date().toISOString().slice(0, 10)).length
+    return buildEngTasks(engDocs.filter((d) => d.projectId === projectId), isAdmin ? 'manager' : lensOf(mine), todayTehran()).length
   }, [exRoles, uid, engDocs, projectId, isAdmin])
 
   return (

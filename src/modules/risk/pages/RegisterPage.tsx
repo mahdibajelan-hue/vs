@@ -15,6 +15,7 @@ import { ZONE_LABEL_FA, type RiskZone } from '../lib/riskPolicy'
 import { LevelChip, PersonSelect, ScoreTriple, StatusChip, useCategoryLabel } from '../components/rk'
 import type { PageProps } from '../RiskApp'
 import { ModalPortal } from '../../../components/common/ModalPortal'
+import { todayTehran } from '../../../lib/today'
 
 interface Filter { q: string; project: string; status: string; level: string; zone: string; category: string; owner: string; source: string; attention: boolean; reviewOverdue: boolean; cell: { p: number; i: number } | null }
 const EMPTY: Filter = { q: '', project: 'all', status: 'active', level: 'all', zone: 'all', category: 'all', owner: 'all', source: 'all', attention: false, reviewOverdue: false, cell: null }
@@ -126,7 +127,7 @@ export function RegisterPage({ onOpenRisk, onNew }: PageProps) {
           <div className="im-section-title">تغییر گروهی برای {sel.size} ریسک</div>
           <div className="rk-grid3">
             <div className="im-field"><label>مالک جدید</label><PersonSelect value={bulk.owner} onChange={(v) => setBulk({ ...bulk, owner: v })} people={dir.all.map((p) => ({ userId: p.userId, name: p.name }))} placeholder="— بدون تغییر —" /></div>
-            <div className="im-field"><label>موعد بازنگری بعدی</label><div style={{ display: 'flex', gap: 6 }}><div style={{ flex: 1 }}><JalaliDateField value={bulk.review ?? new Date().toISOString().slice(0, 10)} onChange={(v) => setBulk({ ...bulk, review: v })} /></div>{bulk.review && <button className="im-ghostlink" onClick={() => setBulk({ ...bulk, review: null })}>بدون تغییر</button>}</div></div>
+            <div className="im-field"><label>موعد بازنگری بعدی</label><div style={{ display: 'flex', gap: 6 }}><div style={{ flex: 1 }}><JalaliDateField value={bulk.review ?? todayTehran()} onChange={(v) => setBulk({ ...bulk, review: v })} /></div>{bulk.review && <button className="im-ghostlink" onClick={() => setBulk({ ...bulk, review: null })}>بدون تغییر</button>}</div></div>
           </div>
           <div className="im-actions"><button className="im-btn im-btn-primary im-btn-sm" disabled={!bulk.owner && !bulk.review} onClick={applyBulk}>اعمال</button><button className="im-btn im-btn-ghost im-btn-sm" onClick={() => setBulk(null)}>بستن</button></div>
         </div>

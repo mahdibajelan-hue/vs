@@ -13,6 +13,7 @@ import { exportFinanceReportToExcel } from '../../lib/financeExport'
 import { Download } from 'lucide-react'
 import { StampBadge } from '../../components/FinanceDashboardUI'
 import { FINANCE_ACCENT } from '../../FinanceApp'
+import { todayTehran } from '../../../../lib/today'
 
 const SEV_FA = { critical: 'بحرانی', high: 'زیاد', medium: 'متوسط' } as const
 const SEV_TONE = { critical: 'bad', high: 'warn', medium: 'info' } as const
@@ -49,13 +50,13 @@ export function ExceptionsPage({ masterProjectId }: { masterProjectId: string })
     const budget = currentBudget(b, budgetChanges.filter((x) => x.masterProjectId === masterProjectId))
     const landSum = land.get(masterProjectId)
     const commitment = pc.filter((c) => c.status === 'active' || c.status === 'completed').reduce((n, c) => n + currentContractValue(c, amendments), 0) + (landSum?.exposure ?? 0)
-    return findExceptions({ contracts: pc, amendments, certificates: certificates.filter((c) => ids.has(c.contractId)), guarantees: guarantees.filter((g) => ids.has(g.contractId)), claims: claims.filter((c) => ids.has(c.contractId)), thresholds, today: new Date().toISOString().slice(0, 10),
+    return findExceptions({ contracts: pc, amendments, certificates: certificates.filter((c) => ids.has(c.contractId)), guarantees: guarantees.filter((g) => ids.has(g.contractId)), claims: claims.filter((c) => ids.has(c.contractId)), thresholds, today: todayTehran(),
       budgetByProject: new Map([[masterProjectId, { budget, commitment }]]), land: landSum ? new Map([[masterProjectId, landBridge(landSum, thresholds)]]) : undefined })
   }, [contracts, amendments, certificates, guarantees, claims, budgets, budgetChanges, land, masterProjectId, thresholds])
 
   const insights = useMemo(() => {
     const pc = contracts.filter((c) => c.masterProjectId === masterProjectId)
-    return buildInsights({ contracts: pc, amendments, certificates, clearances, today: new Date().toISOString().slice(0, 10) }).filter((i) => !reviews.has(i.key))
+    return buildInsights({ contracts: pc, amendments, certificates, clearances, today: todayTehran() }).filter((i) => !reviews.has(i.key))
   }, [contracts, amendments, certificates, clearances, reviews, masterProjectId])
   const acceptInsight = async (i: (typeof insights)[number]) => {
     setBusy(i.key)

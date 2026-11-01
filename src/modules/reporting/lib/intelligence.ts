@@ -5,6 +5,7 @@ import { computeIssueMetrics } from '../../issues/lib/issueAnalytics'
 import { isIssueOverdue } from '../../issues/lib/issueRing'
 import type { SemanticTone } from '../types'
 import type { ProjectIntelligenceBundle } from './dataAdapter'
+import { todayTehran } from '../../../lib/today'
 
 export interface ChangeItem {
   id: string
@@ -88,7 +89,7 @@ export interface EarlyWarning {
  * in the spec, which needs data this schema doesn't carry yet, e.g. milestone due-dates and a
  * stored forecast-finish history; see the closing scoping summary for what's deferred).
  */
-export function computeEarlyWarnings(bundle: ProjectIntelligenceBundle, today = new Date().toISOString().slice(0, 10)): EarlyWarning[] {
+export function computeEarlyWarnings(bundle: ProjectIntelligenceBundle, today = todayTehran()): EarlyWarning[] {
   const warnings: EarlyWarning[] = []
 
   if (bundle.pipepulse) {

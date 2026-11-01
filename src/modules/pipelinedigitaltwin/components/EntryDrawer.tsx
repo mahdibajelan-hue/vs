@@ -5,12 +5,13 @@ import { usePdtStore } from '../store/usePdtStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { formatChainage } from '../lib/chainage'
 import { bulkPreview, frontOf, jointNumberOf, jointRangeOfKm, STAGE_DEFAULT, STAGE_FA, STAGE_OPTIONS, STAGE_ORDER, type StageKey } from '../lib/twinCore'
+import { todayTehran } from '../../../lib/today'
 
 const STAGE_ICON: Record<StageKey, LucideIcon> = { welding: Flame, ndt: ScanLine, coating: PaintBucket, lowering: ArrowDownToLine, backfill: Layers }
 export const STAGE_COLOR: Record<StageKey, string> = { welding: '#38bdf8', ndt: '#2dd4bf', coating: '#eab308', lowering: '#a78bfa', backfill: '#22c55e' }
 const TONE: Record<string, string> = { done: '#22c55e', bad: '#ef4444', neutral: '#94a3b8' }
 const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayTehran()
 
 /**
  * «ثبت پیشرفت» — how site reports actually arrive: one activity over a stretch of line («پوشش از کیلومتر ۱۲+۴۰۰ تا ۱۳+۱۰۰»).

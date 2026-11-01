@@ -5,6 +5,7 @@ import { formatJalali } from '../../lib/jalali'
 import { usePssrStore } from './store/usePssrStore'
 import { STAGE_COLOR, STAGE_FA, STAGE_ORDER, type SystemStatus } from './lib/pssrCore'
 import type { PssrSystem } from './types'
+import { todayTehran } from '../../lib/today'
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
 const W = 1000, PAD = 40, RAIL_Y = 92
@@ -29,7 +30,7 @@ export function ReadinessMap({ statusOf, onOpen }: { statusOf: Map<string, Syste
   const isStation = (s: PssrSystem) => s.kmTo == null || s.kmTo - (s.kmFrom ?? 0) < 1
   const key = (id: string) => (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(id) } }
   const present = STAGE_ORDER.filter((st) => systems.some((s) => statusOf.get(s.id)?.stage === st))
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const schedule = [...systems].sort((a, b) => (a.targetGasIn ?? '9999').localeCompare(b.targetGasIn ?? '9999'))
 
   return (

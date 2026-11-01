@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { KIND_FA, type CardData, type PersonKind } from '../../lib/personnelForms'
 import type { PersonSig } from '../../lib/personnel'
 import { jdLatin } from './util'
+import { todayTehran } from '../../../../lib/today'
 
 const NAVY = '#0b2545', NAVY2 = '#14407a', AMBER = '#f59e0b', INK = '#0f172a', MUTE = '#64748b'
 /** on-screen size relative to the real card (print and export stay full size): 60% on a desktop, the full width of the screen on a phone */
@@ -28,7 +29,7 @@ export function IdCard({ kind, data, photo, cardNo, projectName, payload, sigA, 
     const fit = () => { const w = el.clientWidth; setView(window.innerWidth < 640 && w > 0 ? Math.min(1, w / 454) : Math.min(VIEW, w > 0 ? w / 454 : VIEW)) }
     fit(); const ro = new ResizeObserver(fit); ro.observe(el); return () => ro.disconnect()
   }, [])
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const iso = /^\d{4}-\d{2}-\d{2}$/.test(data.validityRaw) ? data.validityRaw : ''
   const open = data.validityRaw === 'END'
   const expired = !!iso && iso < today

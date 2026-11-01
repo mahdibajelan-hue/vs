@@ -1,6 +1,7 @@
 import { supabase } from '../../../lib/supabaseClient'
 import { DEFAULT_STAGE_ORDER, type StageKey } from '../types'
 import { DEFAULT_TEMPLATE_STAGES } from './templates'
+import { todayTehran } from '../../../lib/today'
 
 /**
  * Lifecycle demo data.
@@ -32,7 +33,7 @@ function addDays(iso: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days)
   return d.toISOString().slice(0, 10)
 }
-const TODAY = new Date().toISOString().slice(0, 10)
+const TODAY = todayTehran()
 
 export interface LifecycleSeedProgress { (message: string): void }
 

@@ -11,8 +11,9 @@ import { criticalOverdue, ISSUE_BANDS, issueKpi, pressureOrder, sharedCategories
 import { Empty, faNum, Kpi, Panel } from '../components/pfUi'
 import { Donut, Gauge } from '../components/viz'
 import { useDrill } from '../components/DrillSheet'
+import { todayTehran } from '../../../lib/today'
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayTehran()
 const pct = (x: number | null) => (x == null ? '—' : `${faNum(Math.round(x * 100))}٪`)
 const SIG: Record<Signal, string> = { good: '#22c55e', watch: '#f59e0b', bad: '#ef4444', none: 'var(--text-muted)' }
 

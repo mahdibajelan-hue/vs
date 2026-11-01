@@ -14,6 +14,7 @@ import { Field, nf } from '../components/cm'
 import { Dialog } from '../components/drawer/Dialogs'
 import { Segmented } from '../../issues/components/ui'
 import type { PageProps } from '../ChangeApp'
+import { todayTehran } from '../../../lib/today'
 
 type Sub = 'rules' | 'sim' | 'limits' | 'audit'
 const STATUS_FA = { draft: 'پیش‌نویس', active: 'فعال', archived: 'بایگانی' } as const
@@ -117,7 +118,7 @@ export function RulesPage(_: PageProps) {
       {dlg?.k === 'route' && set && <RouteDialog route={dlg.route} onClose={() => setDlg(null)} onSave={async (d) => done(dlg.route ? await st.updateRow('cm_routes', dlg.route.id, d) : await st.insertRow('cm_routes', { ...d, rule_set_id: set.id }))} />}
       {dlg?.k === 'step' && <StepDialog step={dlg.step} nextSeq={steps(dlg.route.id).length + 1} roles={roles} onClose={() => setDlg(null)} onSave={async (d) => done(dlg.step ? await st.updateRow('cm_route_steps', dlg.step.id, d) : await st.insertRow('cm_route_steps', { ...d, route_id: dlg.route.id }))} />}
       {dlg?.k === 'clone' && set && <Dialog title="ساخت نسخهٔ جدید" confirm="ساخت پیش‌نویس" onClose={() => setDlg(null)} onConfirm={async () => { const { data, error } = await supabase.rpc('cm_clone_rule_set', { p_set: set.id, p_name: null }); if (error) return friendly(error); await reload(); setSel(data as string); return null }}><div className="cm-note"><div>یک پیش‌نویس با همهٔ مسیرها و قواعد نسخهٔ {set.version} ساخته می‌شود. پس از ویرایش و اعتبارسنجی می‌توانید آن را فعال کنید؛ نسخهٔ فعلی تا آن زمان در کار می‌ماند.</div></div></Dialog>}
-      {dlg?.k === 'activate' && set && <Dialog title={`فعال‌سازی نسخهٔ ${set.version}`} confirm="فعال‌سازی" onClose={() => setDlg(null)} onConfirm={async () => { const { error } = await supabase.rpc('cm_activate_rule_set', { p_set: set.id, p_effective_from: new Date().toISOString().slice(0, 10) }); if (error) return friendly(error); await reload(); await st.fetchActiveRules(); return null }}>
+      {dlg?.k === 'activate' && set && <Dialog title={`فعال‌سازی نسخهٔ ${set.version}`} confirm="فعال‌سازی" onClose={() => setDlg(null)} onConfirm={async () => { const { error } = await supabase.rpc('cm_activate_rule_set', { p_set: set.id, p_effective_from: todayTehran() }); if (error) return friendly(error); await reload(); await st.fetchActiveRules(); return null }}>
         <div className="cm-warn"><div>با فعال‌سازی، نسخهٔ فعلی بایگانی می‌شود و درخواست‌های جدید (و درخواست‌هایی که ارزیابی‌شان هنوز تکمیل نشده) با این نسخه بررسی می‌شوند. درخواست‌های در انتظار تصویب با مسیر و نسخهٔ قبلی ادامه می‌دهند.</div></div>
         {issueList.filter((i) => i.level === 'warn').map((i, k) => <div key={k} className="im-helper">هشدار: {i.message}</div>)}</Dialog>}
     </div>
@@ -134,7 +135,7 @@ function Simulator({ engine }: { engine: EngineRuleSet }) {
   const BASE = 100_000_000_000, DUR = 500
   const req = { masterProjectId: 'sim', changeType: type, proposedCost: BASE * cost / 100, proposedDays: days, orgUnit: unit }
   const basis = computeBasis(req, { baseAmount: BASE, baseSource: 'manual', durationDays: DUR, durationSource: 'manual', cumPrevAmount: BASE * prev / 100, cumPrevDays: prevDays })
-  const res = resolveRoute(req, engine, basis, new Date().toISOString().slice(0, 10))
+  const res = resolveRoute(req, engine, basis, todayTehran())
   return (
     <div className="im-card" style={{ display: 'grid', gap: 10 }}>
       <div className="im-helper">با مبنای فرضی (مبلغ اولیه ۱۰۰ واحد، مدت ۵۰۰ روز) مسیر را با همین نسخهٔ قواعد بیازمایید؛ چیزی ثبت نمی‌شود.</div>

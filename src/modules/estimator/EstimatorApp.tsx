@@ -16,6 +16,7 @@ import { ResultsPage } from './pages/ResultsPage'
 import { HistoryPage, versionName } from './pages/HistoryPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { useRemembered } from '../../lib/navMemory'
 
 type View = 'home' | 'library' | 'settings' | 'start' | 'specs' | 'results' | 'history'
 
@@ -43,7 +44,7 @@ export function EstimatorApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const saveEstimate = useEstimatorStore((s) => s.saveEstimate)
   const deleteEstimate = useEstimatorStore((s) => s.deleteEstimate)
 
-  const [view, setView] = useState<View>('home')
+  const [view, setView] = useRemembered<View>('view', 'home', (v) => typeof v === 'string')
   const [inputs, setInputs] = useState<EstFullInputs>(buildDefaultInputs())
   /** name of the saved version currently on screen; cleared as soon as an input changes */
   const [openVersion, setOpenVersion] = useState<string | undefined>()

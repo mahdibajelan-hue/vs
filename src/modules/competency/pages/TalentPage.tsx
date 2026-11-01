@@ -10,6 +10,7 @@ import { formatJalali } from '../../../lib/jalali'
 import { disciplineState } from '../lib/discipline'
 import { useInServiceStore } from '../store/useInServiceStore'
 import type { CompetencyAssessment } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 const fitColor = (fit: number | null) => (fit == null ? '#94a3b8' : fit >= 85 ? '#34d399' : fit >= 70 ? '#38bdf8' : fit >= 55 ? '#fbbf24' : '#f87171')
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('')
@@ -47,7 +48,7 @@ export function TalentPage({ onOpen, onExitToHub, nav }: { onOpen: (id: string, 
   const cycles = useInServiceStore((s) => s.cycles)
   const fetchInService = useInServiceStore((s) => s.fetchAll)
   useEffect(() => { void fetchScores(); void fetchInService() }, [fetchScores, fetchInService])
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
 
   const reqByRole = useMemo(() => { const m = new Map<string, Requirement[]>(); for (const r of requirements) m.set(r.jobRole, [...(m.get(r.jobRole) ?? []), r]); return m }, [requirements])
   const compName = useMemo(() => new Map(competencies.map((c) => [c.id, c.labelFa])), [competencies])

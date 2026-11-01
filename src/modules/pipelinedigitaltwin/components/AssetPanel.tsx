@@ -5,9 +5,10 @@ import { useAuthStore } from '../../../store/useAuthStore'
 import { formatJalali } from '../../../lib/jalali'
 import { formatChainage } from '../lib/chainage'
 import { ASSET_KIND_FA, assetPicture, CONDITION_COLOR, CONDITION_FA, CRIT_FA, dueState, EVENT_FA, OPSTATE_FA, type Asset, type AssetCondition, type AssetEvent, type AssetKind, type OpState } from '../lib/twinCore'
+import { todayTehran } from '../../../lib/today'
 
 const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayTehran()
 const jd = (d: string | null) => (d ? formatJalali(d.slice(0, 10)) : '—')
 export const DUE_FA = { overdue: 'بازرسی عقب‌افتاده', soon: 'بازرسی نزدیک', ok: 'به‌موقع', none: 'بدون برنامهٔ بازرسی' } as const
 export const DUE_COLOR = { overdue: '#ef4444', soon: '#f59e0b', ok: '#22c55e', none: '#64748b' } as const

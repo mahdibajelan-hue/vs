@@ -1,4 +1,5 @@
 import type { GateEngine, GateItemKind, GateItemStatus, PhaseGroup } from './lib/gateModel'
+import { todayTehran } from '../../lib/today'
 
 /** Project Lifecycle & Control Tower — domain types.
  *
@@ -173,7 +174,7 @@ export interface ChecklistItem {
 
 /** An item is overdue when it has a due date in the past and is not finished — derived rather
  * than stored, so it can never go stale relative to today's date. */
-export function isChecklistOverdue(item: ChecklistItem, today = new Date().toISOString().slice(0, 10)): boolean {
+export function isChecklistOverdue(item: ChecklistItem, today = todayTehran()): boolean {
   if (item.status === 'completed' || item.status === 'verified' || item.status === 'waived') return false
   return !!item.dueDate && item.dueDate < today
 }
@@ -379,7 +380,7 @@ export interface LifecycleAction {
   closedDate: string | null
 }
 
-export function isActionOverdue(a: LifecycleAction, today = new Date().toISOString().slice(0, 10)): boolean {
+export function isActionOverdue(a: LifecycleAction, today = todayTehran()): boolean {
   if (a.status === 'completed' || a.status === 'cancelled') return false
   return !!a.dueDate && a.dueDate < today
 }

@@ -11,6 +11,7 @@ import { useThresholds } from '../../lib/useThresholds'
 import { Chip, DataTable, KpiCard, Section, StackBar, faDigits, fmtBn, fmtD, fmtPct, splitMoney, type Col } from '../../components/fn'
 import { FIN_CERTIFICATE_STATUS_LABEL_FA, FIN_CONTRACT_ROLE_LABEL_FA, FIN_CONTRACT_STATUS_LABEL_FA, FIN_GUARANTEE_STATUS_LABEL_FA, FIN_CLAIM_STATUS_LABEL_FA, type FinContract } from '../../types'
 import type { FinTab } from '../../FinanceApp'
+import { todayTehran } from '../../../../lib/today'
 
 const ST_TONE: Record<string, Tone> = { active: 'good', completed: 'neutral', draft: 'neutral', suspended: 'warn', terminated: 'bad', replaced: 'neutral' }
 const CERT_TONE: Record<string, Tone> = { paid: 'good', certified: 'warn', partially_paid: 'warn', rejected: 'bad', submitted: 'neutral', under_review: 'neutral', draft: 'neutral' }
@@ -30,7 +31,7 @@ export function ContractsRegister({ masterProjectId, onGo }: { masterProjectId: 
   const [status, setStatus] = useState<'all' | 'active' | 'closed'>('active')
   const [q, setQ] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
 
   const rows = useMemo<Row[]>(() => contracts.map((c) => {
     const f = contractFile(c, amendments)
@@ -84,7 +85,7 @@ function ContractFile({ row, onBack, onGo }: { row: Row; onBack: () => void; onG
   const { thresholds } = useThresholds()
   const [tab, setTab] = useState<'sum' | 'amend' | 'bill' | 'guar' | 'claims'>('sum')
   const adv = advanceStatus(c, amendments, certs)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const payRows = payments.filter((p) => certs.some((x) => x.id === p.certificateId))
   const cur = splitMoney(f.current)
   const TABS = [['sum', 'خلاصه'], ['amend', `الحاقیه و تغییرات (${(amendments.length + changes.filter((x) => PENDING_CHANGE_STATUSES.includes(x.status)).length).toLocaleString('fa-IR')})`], ['bill', `صورت‌وضعیت و پرداخت (${certs.length.toLocaleString('fa-IR')})`], ['guar', 'ضمانت‌نامه و مفاصاحساب'], ['claims', `ادعاها (${claims.length.toLocaleString('fa-IR')})`]] as const

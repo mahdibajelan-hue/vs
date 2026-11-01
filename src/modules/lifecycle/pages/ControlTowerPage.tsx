@@ -22,6 +22,7 @@ import { TowerTile } from '../components/TowerTile'
 import { VerdictTile, buildVerdict } from '../components/VerdictTile'
 import { OverdueActionsIssuePanel } from '../components/OverdueActionsIssuePanel'
 import { Card, EmptyState, SeverityPill, StatusDot, STATUS_COLOR, STATUS_TEXT_COLOR, fa, faNum, faText, faVariance } from '../components/ui'
+import { todayTehran } from '../../../lib/today'
 
 /**
  * The Project Control Tower.
@@ -52,7 +53,7 @@ export function ControlTowerPage({
   const orgs = useMasterDataStore((s) => s.organizations)
   const analysis = useProjectAnalysis(bundle)
   const progressInfo = useMemo(() => {
-    const m = stageProgressMap(bundle.stages, bundle.gates, bundle.checklist, bundle.progressLog, new Date().toISOString().slice(0, 10))
+    const m = stageProgressMap(bundle.stages, bundle.gates, bundle.checklist, bundle.progressLog, todayTehran())
     // a Stage-Gate project shows the lifecycle module's own actual / planned / phase weights
     if (bundle.sgProgress) for (const [k, v] of Object.entries(bundle.sgProgress)) { const i = m.get(k); if (i) m.set(k, { ...i, actual: v.actual, planned: v.planned, weight: v.weight }) }
     return m

@@ -3,6 +3,7 @@ import { mapContract, mapEvent } from '../store/useDelayStore'
 import { ACT_COLS, BASE_COLS, fetchAllRows, mapAct, mapCal, mapRel, mapVersion } from '../store/useSchedulingStore'
 import { calendarMap, pickCalendar } from './schedule'
 import { summarize, type ScheduleSummary } from './summary'
+import { todayTehran } from '../../../lib/today'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -23,7 +24,7 @@ export async function loadScheduleSummary(projectId: string): Promise<ScheduleSu
     supabase.from('sch_delay_events').select('*').eq('project_id', projectId),
   ])
   const acts = a.map(mapAct).sort((x, y) => x.sort - y.sort), cals = ((c.data ?? []) as Row[]).map(mapCal)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   return summarize({
     sched: { activities: acts, relations: r.map(mapRel), calendar: pickCalendar(cals), calendars: calendarMap(cals), mode: 'forecast', dataDate: v.dataDate ?? today },
     activities: acts, baselineFinish: baseline?.projectFinish ?? null, contract: ct.data ? mapContract(ct.data as Row) : null, events: ((ev.data ?? []) as Row[]).map(mapEvent), today,

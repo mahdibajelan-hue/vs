@@ -9,6 +9,7 @@ import { RECOMMENDED_PM_COURSES } from '../lib/competencyModel'
 import { computeAge, formatDurationFa, monthsBetween, monthsToYears, totalInsuranceMonths, totalMonths, totalPipelineMonths } from '../lib/profileCalc'
 import { DocSlotHeading, DocumentSlot } from './EntryDocuments'
 import { docsFor, type ProfileDocuments } from '../lib/profileDocuments'
+import { todayTehran } from '../../../lib/today'
 
 const EMPTY: CandidateProfileInput = {
   jobRole: 'project_manager',
@@ -28,7 +29,7 @@ const EMPTY: CandidateProfileInput = {
   employmentHistory: [],
   certifications: [],
   notableProjects: '',
-  interviewDate: new Date().toISOString().slice(0, 10),
+  interviewDate: todayTehran(),
 }
 
 function newId() {

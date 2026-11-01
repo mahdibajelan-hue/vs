@@ -16,6 +16,7 @@ import { ToneBadge } from '../components/ui'
 import { useDeepLinkStore } from '../../../store/useDeepLinkStore'
 import { MissionOriginChip } from '../../missions/integration/originChip'
 import { supabase } from '../../../lib/supabaseClient'
+import { todayTehran } from '../../../lib/today'
 
 type Tab = 'decisions' | 'register' | 'actions'
 
@@ -267,7 +268,7 @@ function ActionsTab({ masterProjectId }: { masterProjectId: string }) {
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
-                {a.dueDate && a.dueDate < new Date().toISOString().slice(0, 10) && a.status !== 'completed' && a.status !== 'cancelled' && <ToneBadge tone="critical" label="عقب‌افتاده" />}
+                {a.dueDate && a.dueDate < todayTehran() && a.status !== 'completed' && a.status !== 'cancelled' && <ToneBadge tone="critical" label="عقب‌افتاده" />}
                 <select
                   value={a.status}
                   onChange={(e) => setActionStatus(a.id, masterProjectId, e.target.value as RastaActionStatus)}

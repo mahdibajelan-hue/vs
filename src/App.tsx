@@ -19,6 +19,7 @@ import { fetchModuleProjectMappings } from './modules/masterdata/lib/hierarchyRo
 import { supabase } from './lib/supabaseClient'
 import { LogoFull } from './components/common/Logo'
 import { StorageErrorBanner } from './components/Layout/StorageErrorBanner'
+import { useRemembered } from './lib/navMemory'
 
 // Lazy-loaded: pulls in three.js (large) only when the user actually opens the 3D viewer tab,
 // keeping it out of the initial bundle every other page load pays for.
@@ -55,7 +56,7 @@ function App() {
   const isAuthed = useAuthStore((s) => s.isAuthed)
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
 
-  const [page, setPage] = useState<Page>('viewer')
+  const [page, setPage] = useRemembered<Page>('page', 'viewer', (v) => typeof v === 'string')
   const [showNewProject, setShowNewProject] = useState(false)
   const [demoLoading, setDemoLoading] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)

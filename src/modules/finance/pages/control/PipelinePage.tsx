@@ -5,6 +5,7 @@ import { daysBetween } from '../../lib/financeControl'
 import { useThresholds } from '../../lib/useThresholds'
 import { fmtCurrency, fmtDate } from '../../components/FinanceKpiTile'
 import type { FinPaymentCertificate } from '../../types'
+import { todayTehran } from '../../../../lib/today'
 
 const COLS: { key: string; label: string; statuses: string[]; sla?: 'submitted' | 'under_review' | 'certified'; since: (c: FinPaymentCertificate) => string | null }[] = [
   { key: 'submitted', label: 'ارائه‌شده', statuses: ['submitted'], sla: 'submitted', since: (c) => c.submittedDate },
@@ -20,7 +21,7 @@ export function PipelinePage({ masterProjectId }: { masterProjectId: string }) {
   const contracts = useFinanceStore((s) => s.contracts).filter((c) => c.masterProjectId === masterProjectId)
   const certificates = useFinanceStore((s) => s.certificates)
   const { thresholds } = useThresholds()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const ids = useMemo(() => new Map(contracts.map((c) => [c.id, c])), [contracts])
   const mine = certificates.filter((c) => ids.has(c.contractId))
   if (!project) return null

@@ -5,6 +5,7 @@ import { monthOf } from '../lib/periods'
 import { rankWelders, welderQuality } from '../lib/welderQuality'
 import { Chip, KpiCard, Section } from '../../finance/components/fn'
 import { Empty, fa } from '../components/common'
+import { todayTehran } from '../../../lib/today'
 
 /** Welders and coating applicators whose qualification card was ISSUED in the Competency module for this project: identity, repair % and the rank among the project's welders (rank 1 = lowest repair %). Everything is read, nothing is typed here. */
 export function PersonnelReport({ projectId }: { projectId: string }) {
@@ -20,7 +21,7 @@ export function PersonnelReport({ projectId }: { projectId: string }) {
   }, [m.lines, m.reports])
   const ranks = useMemo(() => rankWelders(quality, period, minTested), [quality, period, minTested])
   const months = useMemo(() => { const set = new Map<string, string>(); for (const v of quality.values()) for (const x of v.months) set.set(x.key, x.label); return [...set].sort((a, b) => b[0].localeCompare(a[0])) }, [quality])
-  const curMonth = monthOf(new Date().toISOString().slice(0, 10)).key
+  const curMonth = monthOf(todayTehran()).key
   const rows = useMemo(() => people.map((w) => {
     const q = w.kind === 'welder' ? quality.get(w.key) : undefined, rk = w.kind === 'welder' ? ranks.get(w.key) : undefined
     const inPeriod = rk && rk.tested > 0 ? rk : undefined

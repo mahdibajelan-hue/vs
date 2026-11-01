@@ -4,6 +4,7 @@ import type {
 import { isActionOverdue, isChecklistOverdue, WARNING_SEVERITY_RANK } from '../types'
 import { analyseDrift, daysUntilDue, deriveMilestoneStatus, milestoneVariance } from './milestones'
 import type { StageReadiness } from './readiness'
+import { todayTehran } from '../../../lib/today'
 
 /** Early-warning + management-attention engine.
  *
@@ -49,7 +50,7 @@ export interface WarningInput {
 }
 
 export function computeWarnings(input: WarningInput): ComputedWarning[] {
-  const today = input.today ?? new Date().toISOString().slice(0, 10)
+  const today = input.today ?? todayTehran()
   const out: ComputedWarning[] = []
 
   /* 1 — a milestone whose forecast keeps slipping. The drift, not the variance, is the signal. */

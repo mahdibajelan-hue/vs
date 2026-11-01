@@ -11,6 +11,7 @@ import { latestReportDate, loadSiteInput } from '../lib/periodReportLoader'
 import type { ProjectFacts } from '../lib/analyticsCore'
 import { FactsGate, ScopeBar, inScope, type Scope } from '../components/rpx'
 import './periodReports.css'
+import { todayTehran } from '../../../lib/today'
 
 type Kind = PeriodKind | 'executive'
 const ICON: Record<string, LucideIcon> = { TrendingUp, Factory, ClipboardCheck, Users, Truck, TimerOff, ShieldCheck, FileStack, Package, Wallet, AlertTriangle, Gavel, CalendarCheck, HeartPulse, Activity, ShieldAlert, Building2 }
@@ -22,7 +23,7 @@ const KINDS: { key: Kind; title: string; sub: string; icon: LucideIcon; color: s
   { key: 'monthly', title: 'گزارش ماهانه', sub: 'همهٔ بخش‌های پروژه در ماه شمسی، با پیشرفت، مالی، مهندسی و تأمین', icon: CalendarRange, color: '#6366f1' },
   { key: 'executive', title: 'خلاصهٔ مدیریتی', sub: 'سلامت، پیشرفت، هزینه، تصمیم‌ها و ریسک همهٔ پروژه‌های محدوده', icon: Presentation, color: '#ec4899' },
 ]
-const todayIso = () => new Date().toISOString().slice(0, 10)
+const todayIso = () => todayTehran()
 
 /** the four periodic reports: a graphic first page of section tiles; each tile opens the tables behind it */
 export function PeriodReportsPage({ initialProject, initialKind = 'daily' }: { initialProject: string | null; initialKind?: string }) {

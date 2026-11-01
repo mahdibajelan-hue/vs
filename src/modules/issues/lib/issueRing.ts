@@ -1,7 +1,8 @@
 import type { ImIssue } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  return todayTehran()
 }
 
 /** b - a, in days. */

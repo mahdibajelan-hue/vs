@@ -12,6 +12,7 @@ import { useSupervisionStore } from './store/useSupervisionStore'
 import { thisMonth, type Ym } from './lib/svMonth'
 import { MonthPage } from './pages/MonthPage'
 import { MyCheckinPage, loadMyLinks, type MyLink } from './pages/MyCheckinPage'
+import { useRemembered } from '../../lib/navMemory'
 
 const FacilitiesPage = lazy(() => import('./pages/FacilitiesPage').then((m) => ({ default: m.FacilitiesPage })))
 const ReportPage = lazy(() => import('./pages/ReportPage').then((m) => ({ default: m.ReportPage })))
@@ -42,8 +43,8 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   const load = useSupervisionStore((s) => s.load)
   const loading = useSupervisionStore((s) => s.loading)
   const error = useSupervisionStore((s) => s.error)
-  const [tab, setTab] = useState<Tab>('month')
-  const [projectId, setProjectId] = useState<string | null>(null)
+  const [tab, setTab] = useRemembered<Tab>('tab', 'month', (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string')
   const [month, setMonth] = useState<Ym>(thisMonth())
   // people linked to the signed-in account check in with their phone; for them that page comes first
   const [links, setLinks] = useState<MyLink[] | null>(null)

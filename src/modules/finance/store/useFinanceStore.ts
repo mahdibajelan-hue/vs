@@ -28,6 +28,7 @@ import {
   finRetentionReleaseFromRow,
   finRetentionReleaseToRow,
 } from '../lib/financeData'
+import { todayTehran } from '../../../lib/today'
 
 function reportError(action: string, error: { message: string } | null): boolean {
   if (!error) return false
@@ -260,7 +261,7 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
     const userId = useAuthStore.getState().profile?.id ?? null
     const { error } = await supabase
       .from('fin_payment_certificates')
-      .update({ certified_amount: certifiedAmount, certified_by: userId, certified_date: new Date().toISOString().slice(0, 10), status: 'certified' })
+      .update({ certified_amount: certifiedAmount, certified_by: userId, certified_date: todayTehran(), status: 'certified' })
       .eq('id', id)
     if (reportError('ثبت تایید کارکرد', error)) return
     await get().fetchAll()
@@ -269,7 +270,7 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
     const userId = useAuthStore.getState().profile?.id ?? null
     const { error } = await supabase
       .from('fin_payment_certificates')
-      .update({ approved_by: userId, approved_date: new Date().toISOString().slice(0, 10) })
+      .update({ approved_by: userId, approved_date: todayTehran() })
       .eq('id', id)
     if (reportError('ثبت تصویب نهایی', error)) return
     await get().fetchAll()

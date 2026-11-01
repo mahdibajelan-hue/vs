@@ -1,4 +1,5 @@
 import type { RmRisk, RmRiskAction, RmRiskAssessment } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 export type RmLifecycleStage = 'identified' | 'monitoring' | 'escalating' | 'closed'
 
@@ -56,7 +57,7 @@ export function riskLevel(score: number): RiskLevel {
 }
 
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  return todayTehran()
 }
 
 export function isActionOverdue(action: RmRiskAction, today = todayIso()): boolean {

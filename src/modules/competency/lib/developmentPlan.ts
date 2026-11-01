@@ -8,6 +8,7 @@ import type {
   CompDevelopmentPriority,
   CompGapOutcome,
 } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 // ---------------------------------------------------------------------------
 // Individual Development Plan (Phase 5) — presentation helpers over
@@ -69,7 +70,7 @@ export function planProgress(actions: CompDevelopmentAction[]) {
   const live = actions.filter((a) => a.status !== 'CANCELLED')
   const done = live.filter((a) => a.status === 'DONE').length
   const inProgress = live.filter((a) => a.status === 'IN_PROGRESS').length
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const overdue = live.filter((a) => a.status !== 'DONE' && a.dueDate != null && a.dueDate < today).length
   return { total: live.length, done, inProgress, overdue, percent: live.length > 0 ? Math.round((done / live.length) * 100) : 0 }
 }

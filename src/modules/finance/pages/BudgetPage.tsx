@@ -9,6 +9,7 @@ import { BudgetLinesCard } from '../components/BudgetLinesCard'
 import { FINANCE_ACCENT } from '../FinanceApp'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { todayJalali } from '../../../lib/jalali'
+import { todayTehran } from '../../../lib/today'
 
 export function BudgetPage({ masterProjectId }: { masterProjectId: string }) {
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === masterProjectId))
@@ -289,7 +290,7 @@ export function BudgetPage({ masterProjectId }: { masterProjectId: string }) {
 }
 
 function AddBudgetChangeModal({ onClose, onSave }: { onClose: () => void; onSave: (data: { changeDate: string; amount: number; reason: string }) => Promise<void> }) {
-  const [changeDate, setChangeDate] = useState(new Date().toISOString().slice(0, 10))
+  const [changeDate, setChangeDate] = useState(todayTehran())
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)

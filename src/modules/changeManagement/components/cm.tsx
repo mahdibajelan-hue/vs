@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { STATUS_COLOR, STATUS_FA, type ChangeStatus } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 export const nf = (n: number | null | undefined) => (n === null || n === undefined ? '—' : Math.round(n).toLocaleString('en-US'))
 export const pct = (n: number | null | undefined) => (n === null || n === undefined ? '—' : `${(Math.round(n * 100) / 100).toLocaleString('en-US')}٪`)
@@ -14,7 +15,7 @@ export const money = (n: number | null | undefined) => {
 }
 export const faDigits = (v: string) => v.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
 export const parseMoney = (v: string): number => { const t = faDigits(v).replace(/[^\d-]/g, ''); const neg = t.startsWith('-'); const n = Number(t.replace(/-/g, '')) || 0; return neg ? -n : n }
-export const todayIso = () => new Date().toISOString().slice(0, 10)
+export const todayIso = () => todayTehran()
 
 export function Field({ label, error, hint, children, htmlFor }: { label: string; error?: string; hint?: string; children: ReactNode; htmlFor?: string }) {
   return (

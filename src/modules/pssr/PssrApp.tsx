@@ -13,10 +13,12 @@ import { CHECK_FA, DEFAULT_SIGN_CHAIN, GASIN_CHECKS, GASIN_LOG_FA, GASIN_STATUS_
 import { PssrGuide } from './PssrGuide'
 import { ReadinessMap } from './ReadinessMap'
 import './pssr.css'
+import { todayTehran } from '../../lib/today'
+import { useRemembered } from '../../lib/navMemory'
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayTehran()
 const AFTER_RFSU: PssrStage[] = ['rfsu', 'permit', 'gasin', 'live']
 type Tab = 'dash' | 'map' | 'systems' | 'punches' | 'settings'
 /** tablet (field) mode: big touch targets, one-tap check status, camera evidence, one-tap gas-in events */
@@ -31,7 +33,7 @@ export function PssrApp({ onExitToHub }: { onExitToHub: () => void; onBackToRada
   const projectId = useProjectContextStore((s) => s.projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const st = usePssrStore()
-  const [tab, setTab] = useState<Tab>('dash')
+  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string')
   const [openSys, setOpenSys] = useState<string | null>(null)
   const [guide, setGuide] = useState(false)
   const [tablet, setTablet] = useState(() => { try { return localStorage.getItem(TABLET_KEY) === '1' } catch { return false } })

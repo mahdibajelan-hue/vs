@@ -10,6 +10,7 @@ import {
   DEFAULT_MTL_SETTINGS, type AuditRow, type Baseline, type ItemStage, type MtlChange, type MtlDiscrepancy, type MtlGroup, type MtlLink, type MtlNorm, type MtlPackage, type MtlPattern, type MtlRole,
   type MtlSettings, type MtlTxn, type MtlUnit, type MtlLookup, type PackageItem, type PatternWeight, type ProjectRole, type Requisition, type RequisitionLine, type RequisitionSigner, type StageDef, type TxnKind, type VoucherOp,
 } from '../types'
+import { todayTehran } from '../../../lib/today'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 export interface LinkTarget { id: string; kind: 'risk' | 'issue'; code: string; title: string; status: string; ownerId: string | null; dueDate: string | null; realizedAt: string | null }
@@ -145,7 +146,7 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     for (const r of ok<Row>(iss as never)) targets.set(r.id, { id: r.id, kind: 'issue', code: r.code ?? '', title: r.title ?? '', status: r.status ?? '', ownerId: r.owner_id ?? r.pursuer_id ?? null, dueDate: r.resolve_due_date ?? r.deadline_date ?? null, realizedAt: null })
     for (const r of ok<Row>(rsk as never)) targets.set(r.id, { id: r.id, kind: 'risk', code: r.code ?? '', title: r.title ?? '', status: r.status ?? '', ownerId: r.owner_id ?? null, dueDate: r.next_review_date ?? null, realizedAt: r.realized_at ?? null })
     const versions = ok<Row>(sets)
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayTehran()
     const inForce = [...versions].reverse().find((v) => v.valid_from <= today)
     const settings: MtlSettings = { ...DEFAULT_MTL_SETTINGS, ...(inForce?.values_json ?? {}), priority: { ...DEFAULT_MTL_SETTINGS.priority, ...(inForce?.values_json?.priority ?? {}) } }
     const n = (x: unknown) => Number(x)
@@ -214,7 +215,7 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     await get().fetchAll(); return true
   },
   saveSettings: async (values, note) => {
-    const { error } = await supabase.rpc('mtl_save_settings', { p_values: values, p_valid_from: new Date().toISOString().slice(0, 10), p_note: note })
+    const { error } = await supabase.rpc('mtl_save_settings', { p_values: values, p_valid_from: todayTehran(), p_note: note })
     if (report('ذخیرهٔ تنظیمات', error)) return false
     await get().fetchAll(); return true
   },

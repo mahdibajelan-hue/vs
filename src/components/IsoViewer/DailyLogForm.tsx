@@ -4,6 +4,7 @@ import { JalaliDateInput } from '../common/JalaliDateInput'
 import type { DailyLog, IsoLine } from '../../types'
 import { ACTIVITY_KINDS, ACTIVITY_LABEL_FA, type ActivityKind } from '../../types'
 import { useStore } from '../../store/useStore'
+import { todayTehran } from '../../lib/today'
 
 interface DailyLogFormProps {
   projectId: string
@@ -18,7 +19,7 @@ export function DailyLogForm({ projectId, lines, initialLineId, editingLog, onCl
   const updateLog = useStore((s) => s.updateLog)
 
   const [lineId, setLineId] = useState(editingLog?.lineId ?? initialLineId ?? lines[0]?.id ?? '')
-  const [date, setDate] = useState(editingLog?.date ?? new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(editingLog?.date ?? todayTehran())
   const [lengthDone, setLengthDone] = useState(editingLog?.lengthDone ?? 0)
   const [weldCount, setWeldCount] = useState(editingLog?.weldCount ?? 0)
   const [activity, setActivity] = useState<ActivityKind>(editingLog?.activity ?? 'welding')

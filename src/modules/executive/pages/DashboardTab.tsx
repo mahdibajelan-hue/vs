@@ -13,8 +13,9 @@ import { faNum, fmtMoney } from '../components/pfUi'
 import { PortfolioMap } from '../components/PortfolioMap'
 import { ProgressChart } from '../components/ProgressChart'
 import './dashboard.css'
+import { todayTehran } from '../../../lib/today'
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayTehran()
 const jd = (iso: string | null | undefined) => (iso ? formatJalali(iso.slice(0, 10)).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]) : '—')
 const pct = (n: number | null | undefined, d = 0) => (n == null ? '—' : `${faNum(n, d)}٪`)
 

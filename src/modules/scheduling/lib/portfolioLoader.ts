@@ -4,6 +4,7 @@ import { calendarMap, pickCalendar } from './schedule'
 import { NO_COST_PARAMS, type CostParams, type DurationRisk, type McInput, type RiskEvent } from './monteCarlo'
 import type { PortfolioDriver } from './portfolio'
 import type { SchVersion } from './types'
+import { todayTehran } from '../../../lib/today'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -30,7 +31,7 @@ export async function loadPortfolioSource(projectId: string): Promise<PortfolioS
   const durationRisks = ((d.data ?? []) as Row[]).map((x): DurationRisk => ({ uid: x.activity_uid, min: Number(x.min_dur), likely: Number(x.likely_dur), max: Number(x.max_dur) }))
   const events = ((e.data ?? []) as Row[]).map((x): RiskEvent => ({ id: x.id, title: x.title, probability: Number(x.probability), days: { min: Number(x.days_min), likely: Number(x.days_likely), max: Number(x.days_max) }, cost: { min: Number(x.cost_min), likely: Number(x.cost_likely), max: Number(x.cost_max) }, activityUids: x.activity_uids ?? [], active: !!x.active }))
   const costParams = cp.data ? mapCost(cp.data as Row) : NO_COST_PARAMS
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   return {
     projectId, version: v, activities: acts.length, costParams,
     input: { schedule: { activities: acts, relations: r.map(mapRel), calendar: pickCalendar(cals), calendars: calendarMap(cals), mode: 'forecast', dataDate: v.dataDate ?? today }, durationRisks, events, costParams },

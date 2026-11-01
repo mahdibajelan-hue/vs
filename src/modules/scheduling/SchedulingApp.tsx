@@ -11,6 +11,7 @@ import '../finance/finance-dashboard.css'
 import '../material/material-control.css'
 import '../execution/execution.css'
 import { useExecutionStore } from '../execution/store/useExecutionStore'
+import { useRemembered } from '../../lib/navMemory'
 
 export const SCHEDULING_ACCENT = '#0ea5a4'
 export type SchTab = 'dash' | 'lifeplan' | 'import' | 'versions' | 'gantt' | 'analysis' | 'links' | 'delay' | 'health' | 'resources' | 'edit' | 'risk' | 'help'
@@ -46,8 +47,8 @@ export function SchedulingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
   const contextProjectId = useProjectContextStore((s) => s.projectId)
   // the shared inbox opens a waiting item here: it leaves the target tab / project in sessionStorage (read once)
   const [opened] = useState(() => { try { const t = sessionStorage.getItem('sch.openTab'), p = sessionStorage.getItem('sch.openProject'); sessionStorage.removeItem('sch.openTab'); sessionStorage.removeItem('sch.openProject'); return { tab: t as SchTab | null, project: p } } catch { return { tab: null, project: null } } })
-  const [tab, setTab] = useState<SchTab>(opened.tab && NAV.some((n) => n.id === opened.tab) ? opened.tab : 'dash')
-  const [projectId, setProjectId] = useState<string | null>(null)
+  const [tab, setTab] = useRemembered<SchTab>('tab', opened.tab && NAV.some((n) => n.id === opened.tab) ? opened.tab : 'dash', (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string')
   const [locked, setLocked] = useState(false)
 
   useEffect(() => {
@@ -56,9 +57,11 @@ export function SchedulingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => {
-    if (!projects.length || projectId) return
+    if (!projects.length) return
+    if (contextProjectId && projects.some((p) => p.id === contextProjectId) && !opened.project) { if (projectId !== contextProjectId) setProjectId(contextProjectId); setLocked(true); return }
+    if (projectId && projects.some((p) => p.id === projectId)) return
     if (opened.project && projects.some((p) => p.id === opened.project)) setProjectId(opened.project)
-    else if (contextProjectId && projects.some((p) => p.id === contextProjectId)) { setProjectId(contextProjectId); setLocked(true) } else setProjectId(projects[0].id)
+    else setProjectId(projects[0].id)
   }, [projects, projectId, contextProjectId])
   // only the project list gates the page; the other modules' data keeps loading in the background (the page says so while it is incomplete)
   const loading = !mdLoaded

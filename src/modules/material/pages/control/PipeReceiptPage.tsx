@@ -9,6 +9,7 @@ import { GridSheet, printPlan } from '../../../execution/forms/GridTemplate'
 import { GRID_SPECS, specPage, specPages } from '../../../execution/forms/gridSpecs'
 import { jdLatin, useSheet } from '../../../execution/components/PersonSheet'
 import type { Pipe } from '../../../execution/lib/registers'
+import { todayTehran } from '../../../../lib/today'
 
 /** The pipe-delivery record printed from the register for one entry date: the register is the source, nothing is typed again. Totals «to date» add every earlier entry. */
 function EntryPreview({ pipes, date }: { pipes: Pipe[]; date: string }) {
@@ -31,7 +32,7 @@ function EntryPreview({ pipes, date }: { pipes: Pipe[]; date: string }) {
 }
 
 const ST_FA = { in_stock: 'سالم', rejected: 'مردود', scrapped: 'اسقاط' } as const
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayTehran()
 const num = (v: unknown): number | null => { const n = Number(String(v ?? '').replace('٫', '.').replace(',', '.').trim()); return String(v ?? '').trim() !== '' && Number.isFinite(n) ? n : null }
 
 /** «ورود لوله به کارگاه»: every entry becomes an MRS (رسید انبار) with its pipes; the printed form «صورتجلسهٔ ورود لوله» is produced from it, and the Execution module reads the same pipes. */

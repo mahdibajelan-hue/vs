@@ -191,7 +191,19 @@ export const useEpcStore = create<State>((set, get) => ({
     ]
     await Promise.all(groups.map((run) => run()))
     const t = (name: string) => supabase.from(name).select('*')
-    const [crew, docs, dlinks, pre, deps, look, meas, props, imps, cyc] = await Promise.all([t('ex_crew_logs'), t('ex_eng_docs').order('doc_no'), t('ex_doc_links'), t('ex_prereqs'), t('ex_activity_deps'), t('ex_lookahead').order('week_start'), t('ex_measurements'), t('ex_form_proposals'), t('ex_schedule_imports').order('imported_at', { ascending: false }).limit(50), t('ex_eng_doc_cycles').order('seq')])
+    // the API returns at most 1000 rows per request: the document register, its links and cycles are read page by page
+    const paged = async (name: string, order: string[]): Promise<{ data: Row[] | null; error: { message: string } | null }> => {
+      const out: Row[] = []
+      for (let from = 0; ; from += 1000) {
+        let q = supabase.from(name).select('*')
+        for (const o of order) q = q.order(o)
+        const r = await q.range(from, from + 999)
+        if (r.error) return { data: null, error: r.error }
+        out.push(...((r.data ?? []) as Row[]))
+        if ((r.data ?? []).length < 1000) return { data: out, error: null }
+      }
+    }
+    const [crew, docs, dlinks, pre, deps, look, meas, props, imps, cyc] = await Promise.all([t('ex_crew_logs'), paged('ex_eng_docs', ['doc_no', 'id']), paged('ex_doc_links', ['id']), t('ex_prereqs'), t('ex_activity_deps'), t('ex_lookahead').order('week_start'), t('ex_measurements'), t('ex_form_proposals'), t('ex_schedule_imports').order('imported_at', { ascending: false }).limit(50), paged('ex_eng_doc_cycles', ['doc_id', 'seq'])])
     // a missing table (migration not applied) is not an error the user can act on screen by screen: remember it once
     if (crew.error && /does not exist|schema cache|relation/i.test(crew.error.message)) { set({ available: false, loaded: true }); return }
     const ok = <T,>(r: { data: T[] | null; error: unknown }): T[] => (r.error ? [] : r.data ?? [])

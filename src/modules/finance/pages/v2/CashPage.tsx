@@ -9,6 +9,7 @@ import { exportFinanceReportToExcel } from '../../lib/financeExport'
 import { JALALI_MONTHS } from '../../../../lib/jalali'
 import { KpiCard, NumInput, Section, fmtPct } from '../../components/fn'
 import { ChartTip, PB, Tile, axisProps, gridProps } from '../../components/charts'
+import { todayTehran } from '../../../../lib/today'
 
 const mname = (jy: number, jm: number) => `${JALALI_MONTHS[jm - 1]} ${jy.toLocaleString('fa-IR', { useGrouping: false })}`
 const SRC_FA: Record<string, string> = { manual: 'دستی', shape: 'به شکل مبنا', even: 'پخش مساوی', project: 'مبنای کلان' }
@@ -34,7 +35,7 @@ export function CashPage({ masterProjectId }: { masterProjectId: string }) {
   const [scope, setScope] = useState<string>('all')
   const [busy, setBusy] = useState(false)
   const [showAll, setShowAll] = useState(false)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayTehran()
   const nowIdx = isoMonthIdx(today) ?? 0
 
   const plans = useMemo(() => allPlans.filter((p) => p.projectId === masterProjectId), [allPlans, masterProjectId])

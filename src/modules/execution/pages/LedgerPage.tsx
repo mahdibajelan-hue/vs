@@ -8,6 +8,7 @@ import type { Ledger, MismatchKind } from '../lib/engine/reconcile'
 import { Chip, DataTable, KpiCard, Section, type Col } from '../../finance/components/fn'
 import { Empty, fa } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
+import { todayTehran } from '../../../lib/today'
 
 const MM_FA: Record<MismatchKind, string> = { measured_over_approved: 'اندازه‌گیری > تأییدشده', billed_over_measured: 'صورت‌وضعیت > اندازه‌گیری', paid_over_billed: 'پرداخت > صورت‌وضعیت', approved_not_measured: 'تأییدشدهٔ اندازه‌گیری‌نشده', billed_without_certificate: 'بدون ارجاع به صورت‌وضعیت', approved_without_evidence: 'بدون مستند', approved_over_executed: 'تأییدشده > اعلامی' }
 const LABEL_KEYS = ['certificate_no', 'number', 'no', 'title', 'name', 'code']
@@ -52,7 +53,7 @@ function Inner({ projectId }: { projectId: string }) {
 
 function Periods({ ledger, projectId, can, certs, rows }: { ledger: Ledger; projectId: string; can: boolean; certs: { id: string; label: string }[]; rows: ReturnType<typeof useEpcStore.getState>['measurements'] }) {
   const save = useEpcStore((s) => s.saveMeasurement)
-  const [key, setKey] = useState(monthOf(new Date().toISOString().slice(0, 10)).key.replace(/^M/, ''))
+  const [key, setKey] = useState(monthOf(todayTehran()).key.replace(/^M/, ''))
   const blank = { measured: 0, billed: 0, paid: 0, certificateId: '' as string | null, note: '' }
   const ex = rows.find((r) => r.periodKey === key)
   const [f, setF] = useState(ex ?? blank)

@@ -1,9 +1,10 @@
 import { DECISION_STATUS_LABEL_FA, RASTA_ACTION_PRIORITY_LABEL_FA, RASTA_ACTION_STATUS_LABEL_FA, type Decision, type RastaAction } from '../../types'
 import type { WidgetDefinition } from '../../lib/widgetTypes'
 import { EmptyWidgetState, ToneBadge } from '../ui'
+import { todayTehran } from '../../../../lib/today'
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  return todayTehran()
 }
 
 export const decisionsRequiredWidget: WidgetDefinition<Decision[]> = {

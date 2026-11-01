@@ -13,6 +13,7 @@ import { SettingsDialog } from './components/SettingsDialog'
 import { useOfficial } from './hooks/useOfficial'
 import { TwinGuide } from './components/TwinGuide'
 import './twin.css'
+import { todayTehran } from '../../lib/today'
 
 const MODULE_ACCENT = '#38bdf8'
 const LENSES: { key: Lens; label: string; who: string; icon: LucideIcon; color: string }[] = [
@@ -65,7 +66,7 @@ export function PipelineDigitalTwinApp({ onExitToHub, onBackToRadar }: { onExitT
         <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:gap-2">
           {st.phase && <span className="tw-chip hidden lg:inline-flex">فاز چرخهٔ عمر: <b>{st.phase}</b></span>}
           {hasRoute && <span className={`tw-chip hidden md:inline-flex ${st.routeOrigin === 'twin' && st.route.source === 'demo' ? 'is-warn' : ''}`} title={st.routeOrigin === 'land' ? 'همان مسیری که ماژول تحصیل اراضی رسم می‌کند' : ''}>{st.routeOrigin === 'land' ? 'مسیر مشترک پروژه' : st.route.source === 'demo' ? 'مسیر نمونه (فرضی)' : 'مسیر این ماژول'} · <b>{(st.route.lengthMeters / 1000).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} km</b></span>}
-          <span className="tw-chip hidden sm:inline-flex"><CalendarDays size={12} /> <b className="num">{formatJalali(new Date().toISOString().slice(0, 10))}</b></span>
+          <span className="tw-chip hidden sm:inline-flex"><CalendarDays size={12} /> <b className="num">{formatJalali(todayTehran())}</b></span>
           {projectId && <button type="button" className="tw-btn" onClick={() => setSettings(true)} title="مشخصات لوله و مسیر"><Settings size={14} /> تنظیمات</button>}
           <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setGuide((g) => !g)} guideActive={guide} />
         </div>
