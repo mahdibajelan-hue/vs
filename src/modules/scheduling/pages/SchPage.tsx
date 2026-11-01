@@ -15,7 +15,6 @@ import { SchGantt } from './SchGantt'
 import { SchAnalysis } from './SchAnalysis'
 import { SchLinks } from './SchLinks'
 import { SchRiskLink } from './SchRiskLink'
-import { SchHelp } from './SchHelp'
 import { SchEdit } from './SchEdit'
 import { SchDelay } from './SchDelay'
 import { SchHealth } from './SchHealth'
@@ -29,7 +28,6 @@ function Inner({ projectId, tab, go }: { projectId: string; tab: SchTab; go: (t:
   const [view, setView] = useState(readView)
   const setV = (v: Partial<typeof view>) => { const n = { ...view, ...v }; setView(n); try { localStorage.setItem(KEY, JSON.stringify(n)) } catch { /* private mode */ } }
   const m = useScheduleModel(projectId, view)
-  if (tab === 'help') return <SchHelp />
   if (tab === 'import') return <SchImport projectId={projectId} m={m} go={go} />
   if (tab === 'versions') return <SchVersions projectId={projectId} m={m} go={go} />
   if (tab === 'edit') return <SchEdit projectId={projectId} m={m} />
@@ -89,7 +87,7 @@ function NoSchedule({ go, loading }: { go: (t: SchTab) => void; loading: boolean
       <span className="im-helper" style={{ margin: 0 }}>برنامه را از Excel یا Primavera P6 وارد کنید؛ پس از بررسی، نسخه را تأیید و به‌عنوان خط مبنا تعیین کنید.</span>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
         <button className="im-btn im-btn-primary" onClick={() => go('import')}>ورود برنامه</button>
-        <button className="im-btn" onClick={() => go('help')}>راهنمای ماژول</button>
+        <button className="im-btn" onClick={() => window.dispatchEvent(new Event('open-module-guide'))}>راهنمای ماژول</button>
       </div>
     </div>
   )

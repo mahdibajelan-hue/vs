@@ -1,5 +1,4 @@
-import { Area, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ChartTip, axisProps, gridProps } from '../../finance/components/charts'
+import { SCurveChart } from '../../../components/charts/SCurveChart'
 import { addDays, daysBetween, jalaliText } from '../../execution/lib/periods'
 import { engProgress, type CurveForecast, type Doc, type EngRules } from '../../execution/lib/engine/engineering'
 
@@ -41,25 +40,18 @@ export function EngCurve({ docs, today, rules, fc, h = 300 }: { docs: Doc[]; tod
     return { t, d: jalaliText(t), planned: +(s.plannedScore * 100).toFixed(2), actual: t <= today ? +(s.actualScore * 100).toFixed(2) : null, forecast: f == null ? null : +(f * 100).toFixed(2) }
   })
   if (rows.length < 2) return <p className="im-helper" style={{ margin: '24px 12px', textAlign: 'center' }}>برای رسم منحنی دست‌کم دو تاریخ لازم است.</p>
-  const label = (t: string | null | undefined) => (t ? jalaliText(t) : undefined)
   return (
-    <div style={{ height: h }} dir="ltr"><ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={rows} margin={{ top: 22, right: 14, left: 0, bottom: 4 }}>
-        <defs>
-          <linearGradient id="engActFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={CURVE_COLORS.actual} stopOpacity={0.28} /><stop offset="1" stopColor={CURVE_COLORS.actual} stopOpacity={0} /></linearGradient>
-        </defs>
-        <CartesianGrid {...gridProps} />
-        <XAxis dataKey="d" {...axisProps} minTickGap={28} />
-        <YAxis {...axisProps} width={38} domain={[0, 100]} unit="٪" />
-        <Tooltip content={<ChartTip fmt={(v) => `${v.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}٪`} />} />
-        <Legend wrapperStyle={{ fontSize: 11 }} />
-        <ReferenceLine x={label(today)} stroke="#94a3b8" strokeDasharray="2 3" label={{ value: 'امروز', position: 'top', fontSize: 10, fill: '#94a3b8' }} />
-        {fc?.plannedEnd && <ReferenceLine x={label(fc.plannedEnd)} stroke={CURVE_COLORS.planned} strokeOpacity={0.6} strokeDasharray="4 4" label={{ value: 'پایان برنامه', position: 'insideTopRight', fontSize: 10, fill: CURVE_COLORS.planned }} />}
-        {fc && <ReferenceLine x={label(fc.endDate)} stroke={CURVE_COLORS.forecast} strokeDasharray="4 4" label={{ value: 'پایان پیش‌بینی', position: 'insideBottomLeft', fontSize: 10, fill: CURVE_COLORS.forecast }} />}
-        <Area type="monotone" dataKey="actual" name="واقعی" stroke={CURVE_COLORS.actual} strokeWidth={3} fill="url(#engActFill)" dot={false} connectNulls={false} isAnimationActive={false} />
-        <Line type="monotone" dataKey="planned" name="برنامه" stroke={CURVE_COLORS.planned} strokeWidth={2} dot={false} isAnimationActive={false} />
-        <Line type="monotone" dataKey="forecast" name="پیش‌بینی با روند فعلی" stroke={CURVE_COLORS.forecast} strokeWidth={2.5} strokeDasharray="6 5" dot={false} connectNulls isAnimationActive={false} />
-      </ComposedChart>
-    </ResponsiveContainer></div>
+    <SCurveChart h={h}
+      rows={rows.map((r) => ({ date: r.t, planned: r.planned, actual: r.actual, forecast: r.forecast }))}
+      series={[
+        { key: 'planned', label: 'برنامه', color: CURVE_COLORS.planned, kind: 'planned' },
+        { key: 'actual', label: 'واقعی (تا امروز)', color: CURVE_COLORS.actual, kind: 'actual' },
+        ...(fc ? [{ key: 'forecast', label: 'پیش‌بینی با روند فعلی', color: CURVE_COLORS.forecast, kind: 'forecast' as const }] : []),
+      ]}
+      markers={[
+        { date: today, label: 'امروز', color: '#f43f5e', strong: true },
+        ...(fc?.plannedEnd ? [{ date: fc.plannedEnd, label: 'پایان برنامه', color: CURVE_COLORS.planned }] : []),
+        ...(fc ? [{ date: fc.endDate, label: 'پایان پیش‌بینی', color: CURVE_COLORS.forecast }] : []),
+      ]} />
   )
 }

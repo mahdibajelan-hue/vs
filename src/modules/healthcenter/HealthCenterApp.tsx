@@ -18,6 +18,7 @@ import { computeProjectHealth, loadHistory, loadLatestSnapshots, loadSettings, r
 import { AnatomyHologram, OrganCards } from './components/AnatomyHologram'
 import { Ecg, HoloRing, LabTable, ORGAN_FA, ScoreRing, StatusChip, StatusIcon, Trend, VitalCard, fa, spark, valueText, type VitalView } from './components/parts'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 import './healthCenter.css'
 
 type Sheet =
@@ -256,11 +257,11 @@ function Body({ r, history, settings, tab, setTab, range, setRange, open }: {
 
       <section className="phc-panel">
         <PanelHead icon={<ScanLine size={17} />} title="تصویربرداری" sub="نمای کلی، ساختار، گلوگاه‌ها، جبهه‌ها و جریان تأمین و نقدینگی" />
-        <div className="phc-tabs" role="tablist">
+        <NavScroller label="بخش‌های ماژول"><div className="phc-tabs" role="tablist">
           {([['xray', 'X-Ray', 'تصویر کلی'], ['ct', 'CT', 'ساختار WBS'], ['mri', 'MRI', 'گلوگاه‌ها'], ['us', 'سونوگرافی', 'جبهه‌های اجرا'], ['angio', 'آنژیوگرافی', 'جریان تأمین و نقدینگی']] as const).map(([k, a, b]) => (
             <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'is-on' : ''} onClick={() => setTab(k)}><b>{a}</b><small>{b}</small></button>
           ))}
-        </div>
+        </div></NavScroller>
         <Imaging r={r} tab={tab} open={open} />
       </section>
 

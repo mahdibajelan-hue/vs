@@ -42,7 +42,7 @@ export function SchDash({ m, go }: { projectId: string; m: LiveModel; go: (t: Sc
           <button className="im-btn im-btn-sm" onClick={() => go('import')}><Upload size={13} /> ورود برنامه</button>
           <button className="im-btn im-btn-sm" onClick={() => go('gantt')}><ChartGantt size={13} /> گانت</button>
           <button className="im-btn im-btn-sm" onClick={() => go('analysis')}><Siren size={13} /> تحلیل انحراف</button>
-          <button className="im-btn im-btn-sm" onClick={() => go('help')}><BookOpen size={13} /> راهنمای ماژول</button>
+          <button className="im-btn im-btn-sm" onClick={() => window.dispatchEvent(new Event('open-module-guide'))}><BookOpen size={13} /> راهنمای ماژول</button>
         </div>
       </div>
 

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { SCurveChart } from '../../../components/charts/SCurveChart'
+import { todayTehran } from '../../../lib/today'
 import { Download, FileDown } from 'lucide-react'
 import { jalaliText } from '../../execution/lib/periods'
 import { Chip, KpiCard, Section } from '../../finance/components/fn'
-import { PB, Tile, axisProps, gridProps } from '../../finance/components/charts'
+import { Tile } from '../../finance/components/charts'
 import { fa } from '../../execution/components/common'
 import { sCurve } from '../lib/evm'
 import { downloadText, downloadWorkbook } from '../lib/exportXlsx'
@@ -22,6 +23,7 @@ const pct = (v: number | null, n = 1) => (v == null ? '—' : `${fa(v, n)}٪`)
 /** Schedule health (DCMA-style checks), S-curve with earned value / earned schedule, WBS roll-up and exports. */
 export function SchHealth({ projectId, m }: { projectId: string; m: LiveModel }) {
   const st = useSchedulingStore()
+  const today = todayTehran()
   const [depth, setDepth] = useState(2)
   const checks = useMemo(() => qualityChecks(m.cur!.activities, m.cur!.relations, m.forecast, m.dataDate), [m.cur, m.forecast, m.dataDate])
   const score = qualityScore(checks)
@@ -57,16 +59,20 @@ export function SchHealth({ projectId, m }: { projectId: string; m: LiveModel })
       </div>
 
       {ev && (
-        <Tile title={<span>منحنی S: برنامه‌ای، واقعی و پیش‌بینی <Hint id="scurve" /></span>} hint={`تاریخ وضعیت ${d(m.dataDate)} · وزن بر پایهٔ ${ev.byBudget ? 'بودجه' : 'مدت'}`}>
-          <div style={{ height: 280 }} dir="ltr"><ResponsiveContainer width="100%" height="100%"><LineChart data={ev.points.map((p) => ({ x: jalaliText(p.date), date: p.date, planned: p.planned, actual: p.actual, forecast: p.forecast, cost: p.cost ?? null }))} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid {...gridProps} /><XAxis dataKey="x" {...axisProps} interval="preserveStartEnd" /><YAxis {...axisProps} width={36} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-            <Tooltip formatter={(v, n) => [`${fa(Number(v), 1)}٪`, n === 'planned' ? 'برنامه‌ای (خط مبنا)' : n === 'actual' ? 'پیشرفت واقعی' : n === 'cost' ? 'هزینهٔ واقعی (٪ بودجه)' : 'پیش‌بینی']} />
-            <ReferenceLine x={jalaliText(m.dataDate)} stroke={PB.slate} strokeDasharray="4 3" label={{ value: 'وضعیت', fontSize: 10, fill: PB.slate }} />
-            <Line type="monotone" dataKey="planned" stroke={PB.blue} dot={false} strokeWidth={2} isAnimationActive={false} />
-            <Line type="monotone" dataKey="forecast" stroke={PB.coral} strokeDasharray="5 4" dot={false} strokeWidth={2} isAnimationActive={false} connectNulls />
-            <Line type="monotone" dataKey="cost" stroke={PB.violet} strokeDasharray="2 3" dot={false} strokeWidth={2} isAnimationActive={false} connectNulls />
-            <Line type="monotone" dataKey="actual" stroke={PB.teal} dot={false} strokeWidth={2.5} isAnimationActive={false} connectNulls />
-          </LineChart></ResponsiveContainer></div>
+        <Tile title={<span>منحنی S: برنامه‌ای، واقعی و پیش‌بینی <Hint id="scurve" /></span>} hint={`وزن بر پایهٔ ${ev.byBudget ? 'بودجه' : 'مدت'}`}>
+          <SCurveChart h={320}
+            rows={ev.points.map((p) => ({ date: p.date, planned: p.planned, actual: p.actual, forecast: p.forecast, cost: p.cost ?? null }))}
+            series={[
+              { key: 'planned', label: 'برنامه‌ای (خط مبنا)', color: '#6366f1', kind: 'planned' },
+              { key: 'actual', label: 'پیشرفت واقعی', color: '#14b8a6', kind: 'actual' },
+              { key: 'forecast', label: 'پیش‌بینی از تاریخ وضعیت', color: '#f59e0b', kind: 'forecast' },
+              ...(ev.points.some((p) => p.cost != null) ? [{ key: 'cost', label: 'هزینهٔ واقعی (٪ بودجه)', color: '#a855f7', kind: 'aux' as const }] : []),
+            ]}
+            markers={[
+              { date: today, label: 'امروز', color: '#f43f5e', strong: true },
+              ...(m.dataDate !== today ? [{ date: m.dataDate, label: 'تاریخ وضعیت برنامه', color: '#94a3b8' }] : []),
+            ]} />
+          {m.dataDate < today && <p className="im-helper" style={{ margin: '6px 0 0' }}>پیشرفت واقعی تا «تاریخ وضعیت» برنامه ({d(m.dataDate)}) ثبت شده است؛ یعنی تاریخی که آخرین به‌روزرسانی برنامه به آن رسیده، نه امروز. برای جلو بردن آن، برنامهٔ به‌روزشده را وارد کنید.</p>}
           <p className="im-helper" style={{ margin: '6px 0 0' }}>EV بر پایهٔ پیشرفت وزنی (بودجهٔ فعالیت‌ها) است. CPI = EV ÷ AC فقط با بودجهٔ همهٔ فعالیت‌ها و ثبت هزینهٔ واقعی محاسبه می‌شود.</p>
         </Tile>
       )}

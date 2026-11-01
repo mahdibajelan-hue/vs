@@ -23,6 +23,7 @@ import { DrillSheet } from './components/DrillSheet'
 import { ScopePicker } from './components/ScopePicker'
 import { faNum } from './components/pfUi'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 import './mpv.css'
 import './portfolio.css'
 
@@ -94,12 +95,12 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       <StorageErrorBanner />
 
       <div className="pf-bar no-print" dir="rtl">
-        <nav ref={tabInd.list} className="pf-tabs" role="tablist" aria-label="بخش‌های پرتفولیو">
+        <NavScroller label="بخش‌های پرتفولیو"><nav ref={tabInd.list} className="pf-tabs" role="tablist" aria-label="بخش‌های پرتفولیو">
           <span ref={tabInd.indicator} className="tab-ind pf-tab-ind" aria-hidden />
           {TABS.map((t) => (
             <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'is-on' : ''} onClick={() => setTab(t.key)}>{t.icon}{t.label}</button>
           ))}
-        </nav>
+        </nav></NavScroller>
         {tab !== 'pipeline' && tab !== 'guide' && (
           <div className="pf-scope">
             <ScopePicker icon={Briefcase} caption="پورتفولیو" allLabel="همهٔ پورتفولیوها" tone="#4f46e5" value={scope.portfolioId}

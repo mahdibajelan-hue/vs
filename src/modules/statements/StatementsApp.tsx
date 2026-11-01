@@ -13,6 +13,7 @@ import { PaymentDesk, StatementReports } from './FinanceDesk'
 import { useModuleStore } from '../../store/useModuleStore'
 import { fa, PartChip, pct, short, StatusChip } from './ui'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 import '../pssr/pssr.css'
 import './statements.css'
 
@@ -51,11 +52,11 @@ export function StatementsApp({ onExitToHub }: { onExitToHub: () => void; onBack
           <ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome onGuide={() => setGuide((g) => !g)} guideActive={guide} />
         </div>
       </header>
-      <nav className="ps-tabs" aria-label="بخش‌ها">
+      <NavScroller label="بخش‌ها"><nav className="ps-tabs" aria-label="بخش‌ها">
         {([['dash', 'داشبورد', LayoutDashboard], ['list', 'صورت‌وضعیت‌ها', ListChecks], ['new', 'صورت‌وضعیت جدید', FilePlus2], ['pay', 'تأیید نهایی و پرداخت', BadgeCheck], ['reports', 'گزارش‌ها', BarChart3], ['settings', 'تنظیمات و توالی پرداخت', Settings2]] as const).map(([k, l, I]) => (
           <button key={k} type="button" className={`ps-tab ${tab === k && !open ? 'is-on' : ''}`} onClick={() => go(k)}><I size={15} aria-hidden />{l}</button>
         ))}
-      </nav>
+      </nav></NavScroller>
       <main className="ps-main">
         {!projectId ? <div className="pst-empty"><b>پروژه‌ای انتخاب نشده است.</b>ابتدا از رادار پروژه یک پروژه را انتخاب کنید.</div>
           : st.error ? <div className="pst-empty"><b>خطا</b>{st.error}</div>

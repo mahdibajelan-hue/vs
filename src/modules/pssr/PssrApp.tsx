@@ -15,6 +15,7 @@ import { ReadinessMap } from './ReadinessMap'
 import './pssr.css'
 import { todayTehran } from '../../lib/today'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
@@ -64,11 +65,11 @@ export function PssrApp({ onExitToHub }: { onExitToHub: () => void; onBackToRada
           <ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome onGuide={() => setGuide((g) => !g)} guideActive={guide} />
         </div>
       </header>
-      <nav className="ps-tabs" aria-label="بخش‌ها">
+      <NavScroller label="بخش‌ها"><nav className="ps-tabs" aria-label="بخش‌ها">
         {([['dash', 'داشبورد آمادگی', ClipboardCheck], ['map', 'نقشهٔ آمادگی', MapIcon], ['systems', 'سیستم‌ها', ListChecks], ['punches', 'پانچ‌لیست', AlertTriangle], ['settings', 'تنظیمات', Settings2]] as const).map(([k, l, I]) => (
           <button key={k} type="button" className={`ps-tab ${tab === k && !openSys ? 'is-on' : ''}`} onClick={() => { setTab(k); setOpenSys(null) }}><I size={15} aria-hidden />{l}</button>
         ))}
-      </nav>
+      </nav></NavScroller>
       <main className="ps-main">
         {!projectId ? <Empty text="ابتدا از رادار پروژه یک پروژه را انتخاب کنید." />
           : missingTables ? <Empty text="جدول‌های ماژول PSSR هنوز در پایگاه داده ساخته نشده‌اند. فایل‌های supabase/pssr/001_pssr.sql و 003_pssr_chain_gasin.sql را یک بار در SQL Editor اجرا کنید." />

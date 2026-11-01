@@ -36,6 +36,7 @@ import type { IssueFilter } from './lib/imRegister'
 import './issues.css'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 
 export type Tab = 'home' | 'issues' | 'tracking' | 'calendar' | 'mywork' | 'decisions' | 'tower' | 'kpi' | 'insights' | 'notifications' | 'knowledge' | 'projects' | 'report' | 'portfolio' | 'settings' | 'help'
 type DrawerTab = 'overview' | 'tasks' | 'extensions' | 'decisions'
@@ -145,14 +146,14 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setTab(tab === 'help' ? 'home' : 'help')} guideActive={tab === 'help'} />
           </div>
         </div>
-        <nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت موانع و اقدامات">
+        <NavScroller label="بخش‌های مدیریت موانع و اقدامات"><nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت موانع و اقدامات">
           {/* inside one project the portfolio-wide tabs live in the portfolio view instead */}
           {NAV.filter((n) => !locked || (n.id !== 'insights' && n.id !== 'portfolio')).map((n) => (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
               <n.icon size={15} aria-hidden />{n.label}
             </button>
           ))}
-        </nav>
+        </nav></NavScroller>
       </header>
 
       <StorageErrorBanner />

@@ -19,6 +19,7 @@ import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 import { useModuleStore } from '../../store/useModuleStore'
 import { PortfolioViewButton } from '../../components/common/PortfolioViewButton'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 
 const RequestsPage = lazy(() => import('./pages/RequestsPage').then((m) => ({ default: m.RequestsPage })))
 const RulesPage = lazy(() => import('./pages/RulesPage').then((m) => ({ default: m.RulesPage })))
@@ -87,9 +88,9 @@ export function ChangeApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setTab(tab === 'help' ? 'dashboard' : 'help')} guideActive={tab === 'help'} />
           </div>
         </div>
-        <nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت تغییرات">
+        <NavScroller label="بخش‌های مدیریت تغییرات"><nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت تغییرات">
           {NAV.map((n) => <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}><n.icon size={15} aria-hidden />{n.label}</button>)}
-        </nav>
+        </nav></NavScroller>
       </header>
       <StorageErrorBanner />
       <main className="im-main" id="im-main">

@@ -16,6 +16,7 @@ import { ErrorBoundary } from '../../components/common/ErrorBoundary'
 import { useAuthStore } from '../../store/useAuthStore'
 import { todayTehran } from '../../lib/today'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 
 export const ENGINEERING_ACCENT = '#6366f1'
 type Tab = 'dash' | 'my' | 'register' | 'links' | 'impact' | 'reports' | 'settings'
@@ -87,11 +88,11 @@ export function EngineeringApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
-        <nav className="im-nav" role="tablist" aria-label="بخش‌های پایش مهندسی">
+        <NavScroller label="بخش‌های پایش مهندسی"><nav className="im-nav" role="tablist" aria-label="بخش‌های پایش مهندسی">
           {NAV.map((n) => (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}><n.icon size={15} aria-hidden />{n.label}{n.id === 'my' && myCount > 0 && <em className="im-nav-badge" style={{ fontStyle: 'normal', marginInlineStart: 4, background: '#ef4444', color: '#fff', borderRadius: 99, padding: '0 6px', fontSize: 10.5 }}>{myCount.toLocaleString('fa-IR')}</em>}</button>
           ))}
-        </nav>
+        </nav></NavScroller>
       </header>
       <StorageErrorBanner />
       <main className="im-main" id="im-main">

@@ -3,6 +3,8 @@
  * (a guide page or dialog) passes `onGuide` to the bar instead; this file covers every other module.
  * Loaded on demand, so the text costs nothing until someone opens a guide.
  */
+import { GUIDE as SCH_GUIDE, HELP as SCH_HELP } from '../modules/scheduling/lib/help'
+
 export interface GuideSection {
   title: string
   text?: string
@@ -19,9 +21,18 @@ export interface ModuleGuide {
 
 export type GuideKey =
   | 'pipepulse' | 'engineering' | 'finance' | 'lifecycle' | 'supervision' | 'missions' | 'competency' | 'admin'
-  | 'projectdashboard' | 'healthcenter' | 'stakeholders' | 'landacq' | 'estimator' | 'material' | 'radar'
+  | 'projectdashboard' | 'healthcenter' | 'stakeholders' | 'landacq' | 'estimator' | 'material' | 'radar' | 'scheduling'
 
 export const MODULE_GUIDES: Record<GuideKey, ModuleGuide> = {
+  // the scheduling module's guide and the glossary behind its «؟» buttons, from the module's own text
+  scheduling: {
+    title: 'برنامه‌ریزی و کنترل زمان پروژه',
+    summary: 'این ماژول برنامهٔ زمان‌بندی پروژه را از Excel یا Primavera P6 دریافت می‌کند، خط مبنا و برنامهٔ جاری را نگه می‌دارد و انحراف، مسیر بحرانی، تأخیرها و تاریخ تکمیل محتمل را نشان می‌دهد.',
+    sections: [
+      ...SCH_GUIDE.map((g) => ({ title: g.title, items: g.body.map((b) => b.replace(/^[۰-۹0-9]+\)\s*/, '')), steps: g.id === 'flow' })),
+      { title: 'واژه‌نامه و توضیح گزینه‌ها', items: Object.values(SCH_HELP).map((e) => `${e.title}: ${e.what}${e.result ? ` ${e.result}` : ''}${e.warn ? ` توجه: ${e.warn}` : ''}`) },
+    ],
+  },
   pipepulse: {
     title: 'پایش لوله‌کشی و نقشه‌های ایزومتریک',
     summary: 'در این ماژول نقشه‌های ایزومتریک خطوط بارگذاری می‌شود و پیشرفت جوشکاری، آزمون غیرمخرب و پوشش روی همان نقشه و در گزارش‌های روزانه دنبال می‌شود.',

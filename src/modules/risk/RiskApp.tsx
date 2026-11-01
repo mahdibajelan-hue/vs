@@ -21,6 +21,7 @@ import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 import { useModuleStore } from '../../store/useModuleStore'
 import { PortfolioViewButton } from '../../components/common/PortfolioViewButton'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 
 const RegisterPage = lazy(() => import('./pages/RegisterPage').then((m) => ({ default: m.RegisterPage })))
 const AssessmentPage = lazy(() => import('./pages/AssessmentPage').then((m) => ({ default: m.AssessmentPage })))
@@ -129,14 +130,14 @@ export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => voi
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setTab(tab === 'help' ? 'home' : 'help')} guideActive={tab === 'help'} />
           </div>
         </div>
-        <nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت ریسک">
+        <NavScroller label="بخش‌های مدیریت ریسک"><nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت ریسک">
           {/* inside one project the portfolio-wide tab has nothing to show — it lives in the portfolio view */}
           {NAV.filter((n) => !locked || n.id !== 'portfolio').map((n) => (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
               <n.icon size={15} aria-hidden />{n.label}
             </button>
           ))}
-        </nav>
+        </nav></NavScroller>
       </header>
 
       <StorageErrorBanner />

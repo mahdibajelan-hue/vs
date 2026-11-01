@@ -25,6 +25,7 @@ import { HelpButton } from './components/Help'
 import type { HelpKey } from './lib/help'
 import { faNum } from './lib/fa'
 import { revealTab } from '../../lib/revealTab'
+import { NavScroller } from '../../components/common/NavScroller'
 
 interface Props {
   repo: LandRepo
@@ -121,14 +122,14 @@ export function LandAcqApp({ repo, onExitToHub, onBackToRadar }: Props) {
             <HelpButton topic={tab as HelpKey} label="راهنمای این بخش" />
           </span>
         </div>
-        <nav className="la-tabs" role="tablist" aria-label="بخش‌های مدیریت تملک و آزادسازی اراضی">
+        <NavScroller label="بخش‌های مدیریت تملک و آزادسازی اراضی"><nav className="la-tabs" role="tablist" aria-label="بخش‌های مدیریت تملک و آزادسازی اراضی">
           {TABS.map((t) => (
             <button key={t.key} className="la-tab" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)} style={{ '--p': t.color } as React.CSSProperties}>
               <t.icon size={15} aria-hidden /> {t.label}
               {badge(t.key) > 0 && <span className="la-num la-tab-badge">{faNum(badge(t.key))}</span>}
             </button>
           ))}
-        </nav>
+        </nav></NavScroller>
       </header>
 
       <StorageErrorBanner />

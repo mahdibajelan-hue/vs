@@ -13,6 +13,7 @@ import { thisMonth, type Ym } from './lib/svMonth'
 import { MonthPage } from './pages/MonthPage'
 import { MyCheckinPage, loadMyLinks, type MyLink } from './pages/MyCheckinPage'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 
 const FacilitiesPage = lazy(() => import('./pages/FacilitiesPage').then((m) => ({ default: m.FacilitiesPage })))
 const ReportPage = lazy(() => import('./pages/ReportPage').then((m) => ({ default: m.ReportPage })))
@@ -110,13 +111,13 @@ export function SupervisionApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
-        <nav className="im-nav" role="tablist" aria-label="بخش‌های حضور و غیاب دستگاه نظارت">
+        <NavScroller label="بخش‌های حضور و غیاب دستگاه نظارت"><nav className="im-nav" role="tablist" aria-label="بخش‌های حضور و غیاب دستگاه نظارت">
           {((links?.length ?? 0) > 0 ? NAV : [...NAV.filter((n) => n.id !== 'me'), NAV[0]]).map((n) => (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => { picked.current = true; setTab(n.id) }}>
               <n.icon size={15} aria-hidden />{n.label}
             </button>
           ))}
-        </nav>
+        </nav></NavScroller>
       </header>
       <StorageErrorBanner />
       <main className="im-main" id="im-main">

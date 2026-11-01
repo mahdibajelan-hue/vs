@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { BookOpen, ChartGantt, Orbit, CalendarClock, Dices, PencilRuler, Scale, Stethoscope, Gauge, GitCompare, Link2, Loader2, TrendingUp, Upload, Users } from 'lucide-react'
+import { ChartGantt, Orbit, CalendarClock, Dices, PencilRuler, Scale, Stethoscope, Gauge, GitCompare, Link2, Loader2, TrendingUp, Upload, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -12,11 +12,13 @@ import '../material/material-control.css'
 import '../execution/execution.css'
 import { useExecutionStore } from '../execution/store/useExecutionStore'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 
 export const SCHEDULING_ACCENT = '#0ea5a4'
-export type SchTab = 'dash' | 'lifeplan' | 'import' | 'versions' | 'gantt' | 'analysis' | 'links' | 'delay' | 'health' | 'resources' | 'edit' | 'risk' | 'help'
+export type SchTab = 'dash' | 'health' | 'lifeplan' | 'import' | 'versions' | 'gantt' | 'analysis' | 'links' | 'delay' | 'resources' | 'edit' | 'risk'
 const NAV: { id: SchTab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'dash', label: 'داشبورد برنامه', icon: Gauge, color: '#0ea5a4' },
+  { id: 'health', label: 'سلامت و منحنی S', icon: Stethoscope, color: '#22c55e' },
   { id: 'lifeplan', label: 'مستر پلن چرخه عمر پروژه', icon: Orbit, color: '#3b82f6' },
   { id: 'import', label: 'ورود برنامه', icon: Upload, color: '#6366f1' },
   { id: 'versions', label: 'نسخه‌ها و خط مبنا', icon: GitCompare, color: '#8b5cf6' },
@@ -24,11 +26,9 @@ const NAV: { id: SchTab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'analysis', label: 'تحلیل انحراف', icon: TrendingUp, color: '#f97316' },
   { id: 'links', label: 'اتصال‌ها و آمادگی', icon: Link2, color: '#14b8a6' },
   { id: 'delay', label: 'تحلیل تاخیرات', icon: Scale, color: '#ef4444' },
-  { id: 'health', label: 'سلامت و منحنی S', icon: Stethoscope, color: '#22c55e' },
   { id: 'resources', label: 'منابع و هیستوگرام', icon: Users, color: '#06b6d4' },
   { id: 'edit', label: 'ویرایش برنامه', icon: PencilRuler, color: '#f59e0b' },
   { id: 'risk', label: 'تحلیل کمی (ماژول ریسک)', icon: Dices, color: '#ec4899' },
-  { id: 'help', label: 'راهنمای ماژول', icon: BookOpen, color: '#64748b' },
 ]
 const SchPage = lazy(() => import('./pages/SchPage').then((m) => ({ default: m.SchPage })))
 const LifecycleMasterPlan = lazy(() => import('./pages/LifecycleMasterPlan').then((m) => ({ default: m.LifecycleMasterPlan })))
@@ -81,14 +81,14 @@ export function SchedulingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
             {projects.length > 0 && (locked
               ? <span className="im-select-pill" style={{ pointerEvents: 'none' }}>{projects.find((p) => p.id === projectId)?.officialName}</span>
               : <select className="im-select-pill" value={projectId ?? ''} onChange={(e) => setProjectId(e.target.value || null)} aria-label="پروژه">{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select>)}
-            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setTab(tab === 'help' ? 'dash' : 'help')} guideActive={tab === 'help'} />
+            <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
-        <nav className="im-nav" role="tablist" aria-label="بخش‌های برنامه‌ریزی و کنترل زمان">
+        <NavScroller label="بخش‌های برنامه‌ریزی و کنترل زمان"><nav className="im-nav" role="tablist" aria-label="بخش‌های برنامه‌ریزی و کنترل زمان">
           {NAV.map((n) => (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}><n.icon size={15} aria-hidden />{n.label}</button>
           ))}
-        </nav>
+        </nav></NavScroller>
       </header>
       <StorageErrorBanner />
       <main className="im-main" id="im-main">

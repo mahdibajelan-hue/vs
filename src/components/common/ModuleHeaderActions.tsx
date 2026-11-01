@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BookOpenText, Home, LayoutDashboard, Radar } from 'lucide-react'
 import { PROJECT_SCOPED_MODULES, useModuleStore } from '../../store/useModuleStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -12,7 +12,7 @@ import { ModuleGuideDrawer } from './ModuleGuideDrawer'
 import type { GuideKey } from '../../guides/moduleGuides'
 
 /** modules whose guide lives in the shared registry (the rest pass `onGuide` to open their own) */
-const REGISTRY: ReadonlySet<string> = new Set<GuideKey>(['pipepulse', 'engineering', 'finance', 'lifecycle', 'supervision', 'missions', 'competency', 'admin', 'projectdashboard', 'healthcenter', 'stakeholders', 'landacq', 'estimator', 'material', 'radar'])
+const REGISTRY: ReadonlySet<string> = new Set<GuideKey>(['pipepulse', 'engineering', 'finance', 'lifecycle', 'supervision', 'missions', 'competency', 'admin', 'projectdashboard', 'healthcenter', 'stakeholders', 'landacq', 'estimator', 'material', 'radar', 'scheduling'])
 
 interface ModuleHeaderActionsProps {
   onExitToHub: () => void
@@ -43,6 +43,13 @@ export function ModuleHeaderActions({ onExitToHub, className = '', hideModuleHom
   const sharedKey = (guideKey ?? (activeModule && REGISTRY.has(activeModule) ? activeModule : null)) as GuideKey | null
   const [shared, setShared] = useState(false)
   const openGuide = onGuide ?? (sharedKey ? () => setShared((v) => !v) : null)
+  // a page can open the module's guide too (e.g. a «راهنمای ماژول» button in an empty state): window.dispatchEvent(new Event('open-module-guide'))
+  useEffect(() => {
+    if (!sharedKey || onGuide) return
+    const h = () => setShared(true)
+    window.addEventListener('open-module-guide', h)
+    return () => window.removeEventListener('open-module-guide', h)
+  }, [sharedKey, onGuide])
   return (
     <div className={`tb-bar relative flex shrink-0 items-center gap-1 ${className}`} role="toolbar" aria-label="میانبرهای سامانه">
       <UserChip />

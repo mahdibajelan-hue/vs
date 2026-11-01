@@ -18,6 +18,7 @@ import '../pssr/pssr.css'
 import './testing.css'
 import { todayTehran } from '../../lib/today'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 
 const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
@@ -54,11 +55,11 @@ export function TestingApp({ onExitToHub }: { onExitToHub: () => void; onBackToR
           <ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome onGuide={() => setGuide((g) => !g)} guideActive={guide} />
         </div>
       </header>
-      <nav className="ps-tabs" aria-label="بخش‌ها">
+      <NavScroller label="بخش‌ها"><nav className="ps-tabs" aria-label="بخش‌ها">
         {([['dash', 'داشبورد', ClipboardCheck], ['line', 'هیدروتست خط', Waves], ['stations', 'هیدروتست ایستگاه‌ها', Factory], ['coating', 'تست پوشش', ShieldCheck], ['settings', 'تنظیمات', Settings2]] as const).map(([k, l, I]) => (
           <button key={k} type="button" className={`ps-tab ${tab === k && !open ? 'is-on' : ''}`} onClick={() => go(k)}><I size={15} aria-hidden />{l}</button>
         ))}
-      </nav>
+      </nav></NavScroller>
       <main className="ps-main">
         {!projectId ? <Empty text="ابتدا از رادار پروژه یک پروژه را انتخاب کنید." />
           : missing ? <Empty text={st.error!} />

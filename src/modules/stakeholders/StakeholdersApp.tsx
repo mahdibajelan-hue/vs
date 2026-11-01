@@ -19,6 +19,7 @@ import {
 } from './types'
 import { StakeholderOrbit } from './components/StakeholderOrbit'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 import './stakeholders.css'
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
@@ -66,7 +67,7 @@ export function StakeholdersApp({ onExitToHub }: { onExitToHub: () => void; onBa
           <ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome />
         </div>
       </header>
-      <nav className="sh-tabs" aria-label="بخش‌ها">
+      <NavScroller label="بخش‌ها"><nav className="sh-tabs" aria-label="بخش‌ها">
         {([
           ['dash', 'داشبورد', LayoutDashboard, 0], ['register', 'شناسنامهٔ ذینفعان', UsersRound, summary.active], ['grid', 'ماتریس قدرت و علاقه', Grid3x3, 0],
           ['engagement', 'ماتریس سطح تعامل', Target, summary.belowDesired], ['log', 'تعاملات و پیگیری‌ها', MessagesSquare, summary.overdueFollowUps], ['concerns', 'نگرانی‌ها و انتظارات', MessageSquareWarning, summary.openConcerns],
@@ -75,7 +76,7 @@ export function StakeholdersApp({ onExitToHub }: { onExitToHub: () => void; onBa
             <I size={15} aria-hidden />{l}{n > 0 && <em className={k === 'log' || k === 'concerns' || k === 'engagement' ? 'is-warn' : ''}>{fa(n)}</em>}
           </button>
         ))}
-      </nav>
+      </nav></NavScroller>
       <main className="sh-main">
         {!projectId ? <Empty icon={<UsersRound size={28} />} title="پروژه‌ای انتخاب نشده است" text="ابتدا از رادار پروژه‌ها یک پروژه را انتخاب کنید." />
           : missing ? <Empty icon={<TriangleAlert size={28} />} title="جدول‌های ماژول ساخته نشده‌اند" text="فایل supabase/stakeholders/001_stakeholders.sql باید یک بار در پایگاه داده اجرا شود." />

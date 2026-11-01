@@ -16,6 +16,7 @@ import { useMyTasks } from './lib/control/useMyTasks'
 import { GuideWizard, HelpBox, shouldAutoGuide } from './components/control/GuideKit'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 
 export const MATERIAL_ACCENT = '#f59e0b'
 
@@ -134,13 +135,13 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={projectId ? () => setGuide((g) => !g) : undefined} guideActive={guide} />
           </div>
         </div>
-        <nav className="im-nav" role="tablist" aria-label="بخش‌های کنترل و پایش متریال">
+        <NavScroller label="بخش‌های کنترل و پایش متریال"><nav className="im-nav" role="tablist" aria-label="بخش‌های کنترل و پایش متریال">
           {NAV.map((n) => { const b = projectId ? badge(n.id) : 0; return (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
               <n.icon size={15} aria-hidden />{n.label}{b > 0 && <span className="im-nav-count" aria-label={`${b} مورد`}>{b.toLocaleString('fa-IR')}</span>}
             </button>
           ) })}
-        </nav>
+        </nav></NavScroller>
       </header>
 
       <StorageErrorBanner />

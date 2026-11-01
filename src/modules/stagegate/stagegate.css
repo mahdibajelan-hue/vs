@@ -231,3 +231,67 @@
 .sgx-phase { grid-template-columns: minmax(0, 1fr); }
 .sgx-phase > *, .sgx-sec-body > * { min-width: 0; }
 .sgx-gantt { max-width: 100%; }
+
+/* ── Master Schedule (چرخه عمر / مستر پلن) in the light theme: a coloured, legible card instead of a washed-out copy of
+   the dark control room. Matched on the legacy engine's own classes and inline values; the dark theme is untouched. */
+:root[data-theme="light"] .sg-root .lc-dark-panel {
+  background:
+    radial-gradient(60% 50% at 100% 0%, rgba(99, 102, 241, .10), transparent 70%),
+    radial-gradient(50% 45% at 0% 100%, rgba(20, 184, 166, .10), transparent 70%),
+    linear-gradient(180deg, #ffffff, #f8fbff) !important;
+  border: 1px solid #d7e1f0 !important;
+  box-shadow: 0 1px 0 #fff inset, 0 18px 40px -26px rgba(30, 64, 175, .45) !important;
+}
+/* larger, darker type: the legacy sizes (8.5–10.5px) were set for a dark screen */
+:root[data-theme="light"] .sg-root .lc-dark-panel h3 { font-size: 15px !important; color: #0b1324 !important; letter-spacing: -.01em; }
+:root[data-theme="light"] .sg-root .lc-dark-panel h4 { font-size: 13px !important; color: #0b1324 !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .text-\[8\.5px\] { font-size: 10px !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .text-\[9\.5px\] { font-size: 11px !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .text-\[10px\] { font-size: 11px !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .text-\[10\.5px\] { font-size: 11.5px !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel [style*="color:#94a3b8; opacity:.6"] { color: #475569 !important; opacity: 1 !important; font-weight: 600; }
+:root[data-theme="light"] .sg-root .lc-dark-panel [style*="color:#475569"] { color: #64748b !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel [style*="color:#93c5fd"] { color: #1d4ed8 !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel [style*="color:#fbbf24"] { color: #b45309 !important; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 6px 10px; }
+:root[data-theme="light"] .sg-root .lc-dark-panel [style*="color:#fb923c"] { color: #ea580c !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel [style*="color:#a78bfa"] { color: #7c3aed !important; }
+
+/* the four headline figures: one colour each, with a coloured edge */
+:root[data-theme="light"] .sg-root .lc-dark-panel .rounded-xl.p-3.text-center {
+  --k: #4f46e5; position: relative; overflow: hidden;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--k) 10%, #fff), #fff 70%) !important;
+  border: 1px solid color-mix(in srgb, var(--k) 28%, #e2e8f0) !important;
+  box-shadow: 0 10px 22px -18px var(--k);
+}
+:root[data-theme="light"] .sg-root .lc-dark-panel .rounded-xl.p-3.text-center::before { content: ""; position: absolute; inset-block: 0; inset-inline-start: 0; width: 4px; background: var(--k); }
+:root[data-theme="light"] .sg-root .lc-dark-panel .rounded-xl.p-3.text-center:nth-of-type(2) { --k: #059669; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .rounded-xl.p-3.text-center:nth-of-type(3) { --k: #d97706; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .rounded-xl.p-3.text-center:nth-of-type(4) { --k: #0284c7; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .rounded-xl.p-3.text-center > p:first-child { color: var(--k) !important; font-weight: 800; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .rounded-xl.p-3.text-center > p:last-child { font-size: 18px !important; color: #0b1324 !important; }
+
+/* buttons and the stage chips: real controls on white */
+:root[data-theme="light"] .sg-root .lc-dark-panel button.border:not(.bg-blue-900) {
+  background: #fff; border-color: #cbd5e1 !important; color: #1e293b !important; box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
+  transition: transform .14s ease-out, border-color .14s, box-shadow .14s;
+}
+:root[data-theme="light"] .sg-root .lc-dark-panel button.border:not(.bg-blue-900):hover { border-color: #6366f1 !important; box-shadow: 0 6px 14px -10px #6366f1; }
+:root[data-theme="light"] .sg-root .lc-dark-panel button:active { transform: scale(.97); }
+:root[data-theme="light"] .sg-root .lc-dark-panel .bg-blue-900 { background: linear-gradient(135deg, #4f46e5, #2563eb) !important; color: #fff !important; border-color: transparent !important; box-shadow: 0 8px 18px -10px #4f46e5; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .bg-emerald-600 { background: linear-gradient(135deg, #10b981, #0d9488) !important; box-shadow: 0 8px 18px -10px #10b981; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .rounded-full.border.text-slate-500 { background: #fff; border-color: #cbd5e1 !important; color: #475569 !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel input[type="text"] { background: #fff !important; border-color: #cbd5e1 !important; color: #0f172a !important; }
+
+/* strategy table: the chosen strategy reads as the answer */
+:root[data-theme="light"] .sg-root .lc-dark-panel table thead tr { color: #475569 !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel table tbody tr { border-bottom: 1px solid #eef2f7; }
+:root[data-theme="light"] .sg-root .lc-dark-panel table tbody tr[style*="font-weight:800"] { background: #eef2ff; color: #3730a3 !important; }
+
+/* Gantt: readable rows and bars with depth */
+:root[data-theme="light"] .sg-root .lc-dark-panel .text-\[10\.5px\].text-white.font-extrabold { color: #0b1324 !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .text-slate-200.font-bold { color: #334155 !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel [style*="height:30px"]:hover { background: #f5f8ff; }
+:root[data-theme="light"] .sg-root .lc-dark-panel [style*="background:#39ff8a"] {
+  background: linear-gradient(90deg, #10b981, #14b8a6) !important; opacity: 1 !important; border-radius: 6px; box-shadow: 0 4px 10px -6px #0d9488 !important;
+}
+:root[data-theme="light"] .sg-root .lc-dark-panel [style*="background:#7dd3fc33"] { background: linear-gradient(90deg, #e0e7ff, #dbeafe) !important; border-color: #818cf8 !important; border-radius: 6px; }

@@ -13,6 +13,7 @@ import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 import { useModuleStore } from '../../store/useModuleStore'
 import { PortfolioViewButton } from '../../components/common/PortfolioViewButton'
 import { useRemembered } from '../../lib/navMemory'
+import { NavScroller } from '../../components/common/NavScroller'
 
 /** Accent used for fills inside the module (white text on it keeps ≥ 4:1 contrast). */
 export const FINANCE_ACCENT = '#059669'
@@ -121,13 +122,13 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} />
           </div>
         </div>
-        <nav className="im-nav" role="tablist" aria-label="بخش‌های کنترل قراردادها و مالی">
+        <NavScroller label="بخش‌های کنترل قراردادها و مالی"><nav className="im-nav" role="tablist" aria-label="بخش‌های کنترل قراردادها و مالی">
           {NAV.map((n) => (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
               <n.icon size={15} aria-hidden />{n.label}
             </button>
           ))}
-        </nav>
+        </nav></NavScroller>
       </header>
 
       <StorageErrorBanner />
