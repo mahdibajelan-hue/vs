@@ -1,5 +1,5 @@
 import { useId, useMemo, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp, Minus } from 'lucide-react'
+import { ArrowDown, ArrowUp, CircleCheck, CircleHelp, Eye, Minus, Siren, TriangleAlert } from 'lucide-react'
 import { Spark, useCountUp } from '../../executive/components/viz'
 import { DEF, STATUS_COLOR, STATUS_FA, rangeText, type Band, type HealthResult, type Indicator, type OrganKey, type Status } from '../lib/healthCore'
 
@@ -22,10 +22,16 @@ export function Trend({ id, ind, band }: { id: string; ind: Indicator; band: Ban
   )
 }
 
+const STATUS_ICON = { good: CircleCheck, watch: Eye, bad: TriangleAlert, critical: Siren, none: CircleHelp } as const
+export function StatusIcon({ status, size = 13 }: { status: Status; size?: number }) {
+  const Icon = STATUS_ICON[status]
+  return <Icon size={size} strokeWidth={2} aria-hidden />
+}
+
 export function StatusChip({ status, flag }: { status: Status; flag?: string }) {
   return (
     <span className="phc-chip" style={{ ['--c' as string]: STATUS_COLOR[status] }}>
-      <i aria-hidden />{STATUS_FA[status]}{flag ? <b>{flag}</b> : null}
+      <StatusIcon status={status} size={12} />{STATUS_FA[status]}{flag ? <b>{flag}</b> : null}
     </span>
   )
 }
@@ -156,52 +162,6 @@ export const ORGAN_FA: Record<OrganKey, { name: string; role: string }> = {
   nerves: { name: 'سیستم عصبی', role: 'ارتباطات و جریان اطلاعات' },
   immune: { name: 'سیستم ایمنی', role: 'مدیریت ریسک' },
 }
-/** hotspot positions on the 200×400 body, and which side the label sits on */
-const SPOT: Record<OrganKey, { x: number; y: number; side: 'l' | 'r' }> = {
-  brain: { x: 100, y: 40, side: 'r' }, nerves: { x: 100, y: 92, side: 'l' }, lungs: { x: 80, y: 130, side: 'l' }, heart: { x: 114, y: 136, side: 'r' },
-  immune: { x: 100, y: 196, side: 'r' }, muscles: { x: 42, y: 180, side: 'l' }, skeleton: { x: 84, y: 300, side: 'l' },
-}
-
-export function OrganBody({ r, picked, onPick }: { r: HealthResult; picked: OrganKey | null; onPick: (k: OrganKey) => void }) {
-  return (
-    <div className="phc-body">
-      <svg viewBox="0 0 200 400" className="phc-body-svg" aria-hidden>
-        <defs>
-          <linearGradient id="phcBody" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#22d3ee" stopOpacity=".28" />
-            <stop offset="1" stopColor="#22d3ee" stopOpacity=".06" />
-          </linearGradient>
-        </defs>
-        <g className="phc-body-shape">
-          <ellipse cx="100" cy="42" rx="24" ry="28" />
-          <path d="M90 68 h20 v14 h-20 Z" />
-          <path d="M58 88 Q100 74 142 88 L150 150 Q146 210 134 236 L66 236 Q54 210 50 150 Z" />
-          <path d="M58 90 Q40 96 36 140 L30 214 L42 216 L52 150 Z" />
-          <path d="M142 90 Q160 96 164 140 L170 214 L158 216 L148 150 Z" />
-          <path d="M68 236 L64 380 L88 380 L98 252 L102 252 L112 380 L136 380 L132 236 Z" />
-        </g>
-        {/* spine and nerves */}
-        <path d="M100 70 L100 236" className="phc-body-spine" />
-        {Array.from({ length: 12 }, (_, i) => <path key={i} d={`M100 ${92 + i * 12} l${i % 2 ? 10 : -10} 4`} className="phc-body-nerve" />)}
-        {/* ribs */}
-        {Array.from({ length: 5 }, (_, i) => <path key={i} d={`M66 ${110 + i * 12} Q100 ${100 + i * 12} 134 ${110 + i * 12}`} className="phc-body-rib" />)}
-        <path d="M84 120 q-14 6 -12 34 q8 6 18 -2 Z M116 120 q14 6 12 34 q-8 6 -18 -2 Z" className="phc-body-lung" />
-        <path d="M78 300 L82 360 M122 300 L118 360" className="phc-body-rib" />
-        <line x1="0" x2="200" y1="0" y2="0" className="phc-body-scan" />
-      </svg>
-      {r.organs.map((o) => {
-        const s = SPOT[o.key], c = STATUS_COLOR[o.status]
-        return (
-          <button key={o.key} type="button" className={`phc-organ is-${s.side}${picked === o.key ? ' is-picked' : ''}`} style={{ left: `${(s.x / 200) * 100}%`, top: `${(s.y / 400) * 100}%`, ['--c' as string]: c }} onClick={() => onPick(o.key)} aria-label={`${ORGAN_FA[o.key].name} — ${ORGAN_FA[o.key].role}: ${o.score == null ? 'داده ناقص' : `${fa(o.score)} از ۱۰۰`}`}>
-            <i aria-hidden />
-            <span className="phc-organ-tag"><b>{ORGAN_FA[o.key].name}</b><small>{o.score == null ? 'ناقص' : fa(o.score)}</small></span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 /* ── a small score ring (immune system) ───────────────────────────── */
 export function ScoreRing({ score, label, value, size = 92, onClick }: { score: number | null; label: string; value: string; size?: number; onClick?: () => void }) {
   const st: Status = score == null ? 'none' : score >= 80 ? 'good' : score >= 55 ? 'watch' : score >= 30 ? 'bad' : 'critical'

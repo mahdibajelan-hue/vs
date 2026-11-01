@@ -120,7 +120,6 @@
 .phc-stage-grid { position: absolute; inset: auto 0 0 0; height: 46%; background-image: linear-gradient(rgb(45 212 191 / .12) 1px, transparent 1px), linear-gradient(90deg, rgb(45 212 191 / .12) 1px, transparent 1px); background-size: 28px 28px; transform: perspective(380px) rotateX(58deg); transform-origin: bottom; mask-image: linear-gradient(to top, #000 10%, transparent 90%); pointer-events: none; }
 .phc-eng { position: relative; width: 100%; max-height: 400px; filter: drop-shadow(0 18px 24px rgb(0 0 0 / .55)); }
 .phc-stage-holo { position: relative; display: grid; place-items: center; align-self: center; padding-bottom: 1.5rem; }
-.phc-stage-disc { position: absolute; bottom: .4rem; width: 62%; height: 18px; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--c) 55%, transparent), transparent); }
 .phc-holo { position: relative; width: min(100%, 250px); aspect-ratio: 1; }
 .phc-holo svg { width: 100%; height: 100%; overflow: visible; }
 @media (prefers-reduced-motion: no-preference) { .phc-holo { animation: phc-float 6s ease-in-out infinite; } .phc-holo-halo { animation: phc-pulse 3.2s ease-in-out infinite; } }
@@ -169,7 +168,6 @@
 
 /* status chip */
 .phc-chip { display: inline-flex; align-items: center; gap: .3rem; padding: .12rem .5rem; border-radius: 99px; font-size: 11px; font-weight: 700; white-space: nowrap; color: var(--c); background: color-mix(in srgb, var(--c) 13%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); }
-.phc-chip i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px var(--c); }
 .phc-chip b { font-family: var(--font-mono); font-size: 10px; padding: 0 .25rem; border-radius: .3rem; color: #fff; background: var(--c); }
 
 /* blood test */
@@ -194,27 +192,98 @@
 .phc-lab-range, .phc-lab-unit { font-size: 11px; color: var(--ink-2); white-space: nowrap; }
 .phc-lab input { width: 5.5rem; padding: .3rem .45rem; border-radius: .45rem; font-size: 12px; color: var(--text-primary); background: var(--bg-app); border: 1px solid var(--border-soft); }
 
-/* organs */
-.phc-body { position: relative; width: min(100%, 320px); margin: 0 auto; aspect-ratio: 1 / 2; max-height: 560px; }
-.phc-body-svg { width: 100%; height: 100%; overflow: visible; }
-.phc-body-shape > * { fill: url(#phcBody); stroke: rgb(34 211 238 / .55); stroke-width: 1; }
-.phc-body-spine { stroke: rgb(94 234 212 / .55); stroke-width: 2; stroke-dasharray: 3 3; }
-.phc-body-nerve { stroke: rgb(94 234 212 / .3); stroke-width: 1; fill: none; }
-.phc-body-rib { stroke: rgb(125 211 252 / .28); stroke-width: 1; fill: none; }
-.phc-body-lung { fill: rgb(56 189 248 / .12); stroke: rgb(56 189 248 / .4); stroke-width: 1; }
-.phc-body-scan { stroke: rgb(94 234 212 / .7); stroke-width: 1.5; filter: drop-shadow(0 0 4px #2dd4bf); }
-@media (prefers-reduced-motion: no-preference) { .phc-body-scan { animation: phc-scan 5s ease-in-out infinite; } }
-@media (prefers-reduced-motion: reduce) { .phc-body-scan { display: none; } }
-.phc-organ { position: absolute; display: flex; align-items: center; gap: .4rem; transform: translate(-50%, -50%); }
-.phc-organ i { flex: none; width: 16px; height: 16px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 25%, transparent), 0 0 18px var(--c); transition: transform 160ms var(--ease); }
-@media (prefers-reduced-motion: no-preference) { .phc-organ i { animation: phc-beat 2.4s ease-in-out infinite; } }
-.phc-organ-tag { position: absolute; top: 50%; display: grid; padding: .25rem .5rem; border-radius: .55rem; white-space: nowrap; line-height: 1.25; text-align: right; transform: translateY(-50%); background: rgb(2 8 20 / .85); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); transition: border-color 160ms ease; }
-.phc-organ.is-r .phc-organ-tag { left: calc(100% + 6px); }
-.phc-organ.is-l .phc-organ-tag { right: calc(100% + 6px); }
-.phc-organ-tag b { font-size: 11.5px; } .phc-organ-tag small { font-size: 11px; font-weight: 800; color: var(--c); }
-.phc-organ:active i { transform: scale(.9); }
-@media (hover: hover) and (pointer: fine) { .phc-organ:hover .phc-organ-tag { border-color: var(--c); } .phc-organ:hover i { transform: scale(1.15); } }
-.phc-organ.is-l { flex-direction: row-reverse; }
+/* organs: a holographic anatomy on a pedestal, organ cards beside it */
+.phc-anat { overflow: hidden; background: radial-gradient(900px 520px at 30% 45%, rgb(14 165 233 / .14), transparent 65%), linear-gradient(180deg, rgb(4 14 32 / .92), rgb(3 9 22 / .96)); border-color: rgb(56 189 248 / .22); }
+.phc-anat-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1.25rem; align-items: center; }
+.phc-anat-stage { position: relative; width: 100%; max-width: 560px; margin: 0 auto; aspect-ratio: 520 / 600; }
+.phc-anat-svg { width: 100%; height: 100%; overflow: visible; }
+.phc-anat-ring { fill: none; stroke: rgb(56 189 248 / .12); stroke-width: 1; }
+.phc-anat-dash { fill: none; stroke: rgb(56 189 248 / .35); stroke-width: 1.2; stroke-dasharray: 2 10; }
+.phc-anat-dash.is-fine { stroke: rgb(94 234 212 / .3); stroke-dasharray: 26 14 4 14; }
+.phc-anat-arc { fill: none; stroke: #38bdf8; stroke-width: 2.2; stroke-linecap: round; filter: drop-shadow(0 0 6px #38bdf8); }
+.phc-anat-tick { stroke: rgb(125 211 252 / .3); stroke-width: 1; }
+.phc-anat-corner { fill: none; stroke: rgb(94 234 212 / .5); stroke-width: 1.6; }
+.phc-anat-spin { transform-box: view-box; transform-origin: 260px 250px; }
+.phc-anat-beam { opacity: .6; }
+.phc-ped-ring { fill: none; stroke: rgb(103 232 249 / .45); stroke-width: 1.2; }
+.phc-ped-ring.is-dash { stroke-dasharray: 3 7; stroke: rgb(103 232 249 / .65); }
+.phc-ped-ring.is-bright { stroke: #a5f3fc; stroke-width: 1.8; filter: drop-shadow(0 0 6px #22d3ee); }
+.phc-ped-core { fill: rgb(165 243 252 / .35); filter: drop-shadow(0 0 10px #22d3ee); }
+.phc-anat-edge { fill: none; stroke: #bae6fd; stroke-width: 1.5; stroke-linejoin: round; filter: drop-shadow(0 0 3px rgb(56 189 248 / .9)); }
+.phc-anat-contour { fill: none; stroke: rgb(125 211 252 / .42); stroke-width: .9; stroke-linecap: round; }
+.phc-anat-scan { fill: #a5f3fc; opacity: .8; filter: drop-shadow(0 0 6px #22d3ee); }
+.phc-viscera path { fill: rgb(244 114 182 / .12); stroke: rgb(249 168 212 / .35); stroke-width: .8; }
+.phc-viscera path.is-line { fill: none; }
+
+.phc-org { cursor: pointer; transition: opacity 220ms ease; }
+.phc-org.is-dim { opacity: .28; }
+.phc-org.is-on { filter: drop-shadow(0 0 7px var(--c)); }
+.phc-bone { fill: none; stroke: color-mix(in srgb, var(--c) 45%, #e2e8f0); stroke-opacity: .5; stroke-width: 1.4; stroke-linecap: round; }
+.phc-vert { fill: color-mix(in srgb, var(--c) 40%, #e2e8f0); fill-opacity: .4; }
+.phc-org.is-on .phc-bone { stroke-opacity: .95; }
+.phc-muscle { fill: var(--c); fill-opacity: .2; stroke: var(--c); stroke-opacity: .55; stroke-width: .8; }
+.phc-org.is-on .phc-muscle { fill-opacity: .42; }
+.phc-nerve { fill: none; stroke: var(--c); stroke-opacity: .55; stroke-width: 1; stroke-linecap: round; }
+.phc-nerve.is-cord { stroke-width: 2.2; stroke-opacity: .85; }
+.phc-nerve.is-pulse { stroke-width: 2.4; stroke-opacity: 1; stroke-dasharray: 6 60; filter: drop-shadow(0 0 4px var(--c)); }
+.phc-lung { fill: var(--c); fill-opacity: .28; stroke: var(--c); stroke-width: 1.1; }
+.phc-airway { fill: none; stroke: color-mix(in srgb, var(--c) 60%, #fff); stroke-width: 1.6; stroke-linecap: round; }
+.phc-airway.is-fine { stroke-width: .8; stroke-opacity: .7; }
+.phc-org.is-on .phc-lung { fill-opacity: .48; }
+.phc-heart path:first-child { fill: var(--c); fill-opacity: .85; stroke: color-mix(in srgb, var(--c) 50%, #fff); stroke-width: 1; }
+.phc-heart, .phc-alarm circle { transform-box: fill-box; transform-origin: center; }
+.phc-aorta { fill: none; stroke: color-mix(in srgb, var(--c) 70%, #fff); stroke-width: 2.4; stroke-linecap: round; }
+.phc-immune-o { fill: var(--c); fill-opacity: .5; stroke: var(--c); stroke-width: .8; }
+.phc-node { fill: var(--c); filter: drop-shadow(0 0 3px var(--c)); }
+.phc-brain { fill: var(--c); fill-opacity: .35; stroke: color-mix(in srgb, var(--c) 60%, #fff); stroke-width: 1.1; }
+.phc-gyri { fill: none; stroke: color-mix(in srgb, var(--c) 45%, #fff); stroke-width: .9; stroke-linecap: round; stroke-opacity: .85; }
+.phc-alarm circle { fill: none; stroke: var(--c); stroke-width: 1.6; opacity: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .phc-anat-spin { animation: phc-rot 60s linear infinite; }
+  .phc-anat-spin.is-rev { animation-duration: 90s; animation-direction: reverse; }
+  .phc-ped-ring.is-dash { animation: phc-flow 2.4s linear infinite; }
+  .phc-anat-scan { animation: phc-bodyscan 6s cubic-bezier(.65, 0, .35, 1) infinite; }
+  .phc-heart { animation: phc-heartbeat 1.1s ease-in-out infinite; }
+  .phc-nerve.is-pulse { animation: phc-signal 2.6s linear infinite; }
+  .phc-node { animation: phc-blink 3s ease-in-out infinite; }
+  .phc-alarm circle { animation: phc-ping 2s cubic-bezier(.23, 1, .32, 1) infinite; }
+  .phc-alarm circle.is-2 { animation-delay: 1s; }
+}
+@media (prefers-reduced-motion: reduce) { .phc-anat-scan { display: none; } .phc-alarm circle { opacity: .8; } }
+
+.phc-ocards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+.phc-ocards li:first-child { grid-column: 1 / -1; }
+.phc-ocard { position: relative; width: 100%; display: flex; align-items: center; gap: .65rem; padding: .65rem .7rem; border-radius: 1rem; text-align: right; background: linear-gradient(135deg, color-mix(in srgb, var(--c) 10%, transparent), transparent 60%), rgb(2 8 20 / .6); border: 1px solid color-mix(in srgb, var(--c) 22%, var(--line)); overflow: hidden; transition: border-color 180ms ease, transform 160ms var(--ease), box-shadow 220ms ease; }
+.phc-ocard::after { content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; width: 3px; background: var(--c); box-shadow: 0 0 12px var(--c); }
+.phc-ocard:active { transform: scale(.98); }
+.phc-ocard.is-on { border-color: color-mix(in srgb, var(--c) 70%, transparent); box-shadow: 0 0 28px -12px var(--c); }
+@media (hover: hover) and (pointer: fine) { .phc-ocard:hover { border-color: color-mix(in srgb, var(--c) 60%, transparent); } }
+@media (prefers-reduced-motion: no-preference) { .phc-ocards li { animation: phc-rise 420ms calc(var(--i) * 50ms) var(--ease) both; } }
+.phc-ocard-ring { position: relative; flex: none; display: grid; place-items: center; width: 52px; height: 52px; color: var(--c); }
+.phc-ocard-ring svg { position: absolute; inset: 0; }
+.phc-ocard-ring .t { fill: rgb(2 6 23 / .6); stroke: rgb(148 163 184 / .16); stroke-width: 4; }
+.phc-ocard-ring .v { fill: none; stroke: var(--c); stroke-width: 4; stroke-linecap: round; filter: drop-shadow(0 0 4px var(--c)); transition: stroke-dasharray 700ms var(--ease); }
+.phc-ocard-ring > svg + svg { position: relative; filter: drop-shadow(0 0 6px var(--c)); }
+.phc-ocard-txt { flex: 1; min-width: 0; display: grid; line-height: 1.45; }
+.phc-ocard-txt b { font-size: 13px; }
+.phc-ocard-txt small { font-size: 10.5px; color: var(--ink-3); }
+.phc-ocard-txt em { font-style: normal; font-size: 10.5px; color: color-mix(in srgb, var(--c) 75%, #fff); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phc-ocard-score { flex: none; display: grid; justify-items: end; line-height: 1.1; }
+.phc-ocard-score strong { font-size: 24px; font-weight: 900; color: var(--c); text-shadow: 0 0 14px color-mix(in srgb, var(--c) 55%, transparent); font-variant-numeric: tabular-nums; }
+.phc-ocard-score small { font-size: 10px; color: var(--ink-3); }
+.phc-tally { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .3rem; }
+.phc-tally span { display: inline-flex; align-items: center; gap: .25rem; padding: .15rem .5rem; border-radius: 99px; font-size: 11px; font-weight: 700; color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); white-space: nowrap; }
+
+/* index pill and pedestal in the hero */
+.phc-holo-txt > span { display: none; }
+.phc-pill { position: relative; z-index: 2; display: grid; justify-items: center; gap: .1rem; margin-top: -.4rem; padding: .4rem 1.1rem .5rem; border-radius: 1rem; background: linear-gradient(180deg, color-mix(in srgb, var(--c) 28%, rgb(2 8 20 / .7)), rgb(2 8 20 / .75)); border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); box-shadow: 0 0 30px -8px var(--c), inset 0 1px 0 rgb(255 255 255 / .12); backdrop-filter: blur(8px); }
+.phc-pill small { font-size: 10.5px; color: var(--ink-2); }
+.phc-pill b { display: inline-flex; align-items: center; gap: .35rem; font-size: 17px; font-weight: 900; color: #fff; text-shadow: 0 0 12px var(--c); }
+.phc-pill b svg { color: var(--c); }
+.phc-pedestal { width: min(100%, 290px); margin-top: -.9rem; overflow: visible; }
+@media (prefers-reduced-motion: no-preference) { .phc-pedestal .is-dash { animation: phc-flow 2.4s linear infinite; } }
+.phc-chip svg { flex: none; }
 
 /* imaging */
 .phc-tabs { display: flex; gap: .35rem; overflow-x: auto; padding-bottom: .2rem; margin-bottom: .8rem; scrollbar-width: none; }
@@ -346,7 +415,7 @@
   .phc-rx-prog { grid-column: 1 / -1; }
 }
 @media (max-width: 1080px) {
-  .phc-cols, .phc-cols.is-wide { grid-template-columns: minmax(0, 1fr); }
+  .phc-cols, .phc-cols.is-wide, .phc-anat-grid { grid-template-columns: minmax(0, 1fr); }
   .phc-hero { grid-template-columns: minmax(0, 1fr); }
   .phc-stage { min-height: 320px; max-width: 620px; width: 100%; margin: 0 auto; order: -1; }
 }
@@ -365,6 +434,12 @@
   .phc-stage { min-height: 280px; }
   .phc-rx-head { flex-wrap: wrap; }
   .phc-top { position: static; }
+}
+@media (max-width: 560px) {
+  .phc-ocards { grid-template-columns: minmax(0, 1fr); }
+  .phc-ph { flex-wrap: wrap; }
+  .phc-ph-end { width: 100%; }
+  .phc-tally { justify-content: flex-start; }
 }
 @media (max-width: 460px) {
   .phc-vitals { grid-template-columns: minmax(0, 1fr); }
@@ -392,3 +467,9 @@
 @keyframes phc-beat { 0%, 70%, 100% { transform: scale(1); } 80% { transform: scale(1.18); } }
 @keyframes phc-scan { 0%, 100% { transform: translateY(10px); opacity: 0; } 10% { opacity: 1; } 50% { transform: translateY(390px); opacity: 1; } 60% { opacity: 0; } }
 @keyframes phc-flow { to { stroke-dashoffset: -32; } }
+@keyframes phc-rot { to { transform: rotate(360deg); } }
+@keyframes phc-bodyscan { 0% { transform: translateY(0); opacity: 0; } 8% { opacity: .9; } 50% { transform: translateY(510px); opacity: .9; } 58%, 100% { transform: translateY(510px); opacity: 0; } }
+@keyframes phc-heartbeat { 0%, 100% { transform: scale(1); } 15% { transform: scale(1.12); } 30% { transform: scale(.97); } 45% { transform: scale(1.06); } }
+@keyframes phc-signal { from { stroke-dashoffset: 66; } to { stroke-dashoffset: 0; } }
+@keyframes phc-ping { 0% { transform: scale(.6); opacity: .9; } 100% { transform: scale(2.6); opacity: 0; } }
+@keyframes phc-rise { from { opacity: 0; transform: translateY(8px); } }

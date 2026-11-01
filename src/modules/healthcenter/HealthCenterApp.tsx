@@ -16,7 +16,8 @@ import {
 } from './lib/healthCore'
 import { computeProjectHealth, loadHistory, loadLatestSnapshots, loadSettings, refreshAll, saveSettings, type Snapshot } from './lib/healthLoader'
 import { Engineer } from './components/Engineer'
-import { Ecg, HoloRing, LabTable, ORGAN_FA, OrganBody, ScoreRing, StatusChip, Trend, VitalCard, fa, spark, valueText, type VitalView } from './components/parts'
+import { AnatomyHologram, OrganCards } from './components/AnatomyHologram'
+import { Ecg, HoloRing, LabTable, ORGAN_FA, ScoreRing, StatusChip, StatusIcon, Trend, VitalCard, fa, spark, valueText, type VitalView } from './components/parts'
 import './healthCenter.css'
 
 type Sheet =
@@ -134,6 +135,7 @@ function Body({ r, history, settings, tab, setTab, range, setRange, open }: {
   r: HealthResult; history: Snapshot[]; settings: HealthSettings; tab: ImagingTab; setTab: (t: ImagingTab) => void; range: Range; setRange: (r: Range) => void; open: (s: Sheet) => void
 }) {
   const color = INDEX_COLOR[r.status]
+  const [organ, setOrgan] = useState<OrganKey | null>(null)
   const delta = r.prevIndex == null ? null : r.index - r.prevIndex
   const I = r.indicators, B = settings.bands
   const counted = INDICATORS.filter((d) => d.domain)
@@ -211,7 +213,8 @@ function Body({ r, history, settings, tab, setTab, range, setRange, open }: {
           <Engineer tone={color} />
           <div className="phc-stage-holo">
             <HoloRing value={r.index} color={color} label={INDEX_FA[r.status]} sub={r.caps.length ? `سقف ${fa(Math.min(...r.caps.map((c) => c.cap)))} · بدون سقف ${fa(r.rawIndex)}` : r.prevIndex != null ? `قبلی ${fa(r.prevIndex)}` : 'نخستین اندازه‌گیری'} />
-            <span className="phc-stage-disc" aria-hidden />
+            <span className="phc-pill" dir="rtl"><small>وضعیت کلی پروژه</small><b><StatusIcon status={r.status} size={17} />{INDEX_FA[r.status]}</b></span>
+            <Pedestal />
           </div>
         </div>
       </section>
@@ -224,26 +227,19 @@ function Body({ r, history, settings, tab, setTab, range, setRange, open }: {
         </div>
       </section>
 
+      <section className="phc-panel phc-anat">
+        <PanelHead icon={<HeartPulse size={17} />} title="سلامت اندام‌های پروژه" sub="هر اندام یک کارکرد پروژه است؛ اندام‌های نامطلوب روی بدن هشدار می‌دهند. روی اندام یا کارت آن بزنید تا شاخص‌ها را ببینید"
+          end={<OrganTally r={r} />} />
+        <div className="phc-anat-grid">
+          <AnatomyHologram r={r} active={organ} onHover={setOrgan} onPick={(k) => open({ kind: 'organ', key: k })} />
+          <OrganCards r={r} active={organ} onHover={setOrgan} onPick={(k) => open({ kind: 'organ', key: k })} />
+        </div>
+      </section>
+
       <div className="phc-cols">
         <section className="phc-panel">
           <PanelHead icon={<ClipboardList size={17} />} title="آزمایش خون پروژه" sub="محدوده‌های مرجع مدیریتی‌اند و مدیر سامانه آن‌ها را تعیین می‌کند؛ روی هر ردیف بزنید تا فرمول و منبع را ببینید" />
           <LabTable r={r} bands={B} onOpen={(id) => open({ kind: 'ind', id })} />
-        </section>
-        <section className="phc-panel">
-          <PanelHead icon={<HeartPulse size={17} />} title="سلامت اندام‌ها" sub="هر اندام یک کارکرد پروژه است؛ برای دیدن شاخص‌ها روی آن بزنید" />
-          <OrganBody r={r} picked={null} onPick={(k) => open({ kind: 'organ', key: k })} />
-        </section>
-      </div>
-
-      <div className="phc-cols is-wide">
-        <section className="phc-panel">
-          <PanelHead icon={<ScanLine size={17} />} title="تصویربرداری" sub="نمای کلی، ساختار، گلوگاه‌ها، جبهه‌ها و جریان تأمین و نقدینگی" />
-          <div className="phc-tabs" role="tablist">
-            {([['xray', 'X-Ray', 'تصویر کلی'], ['ct', 'CT', 'ساختار WBS'], ['mri', 'MRI', 'گلوگاه‌ها'], ['us', 'سونوگرافی', 'جبهه‌های اجرا'], ['angio', 'آنژیوگرافی', 'جریان تأمین و نقدینگی']] as const).map(([k, a, b]) => (
-              <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'is-on' : ''} onClick={() => setTab(k)}><b>{a}</b><small>{b}</small></button>
-            ))}
-          </div>
-          <Imaging r={r} tab={tab} open={open} />
         </section>
         <section className="phc-panel">
           <PanelHead icon={<ShieldCheck size={17} />} title="سیستم ایمنی پروژه" sub="توان پروژه در پیشگیری، پاسخ و بازیابی" />
@@ -259,6 +255,16 @@ function Body({ r, history, settings, tab, setTab, range, setRange, open }: {
         </section>
       </div>
 
+      <section className="phc-panel">
+        <PanelHead icon={<ScanLine size={17} />} title="تصویربرداری" sub="نمای کلی، ساختار، گلوگاه‌ها، جبهه‌ها و جریان تأمین و نقدینگی" />
+        <div className="phc-tabs" role="tablist">
+          {([['xray', 'X-Ray', 'تصویر کلی'], ['ct', 'CT', 'ساختار WBS'], ['mri', 'MRI', 'گلوگاه‌ها'], ['us', 'سونوگرافی', 'جبهه‌های اجرا'], ['angio', 'آنژیوگرافی', 'جریان تأمین و نقدینگی']] as const).map(([k, a, b]) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'is-on' : ''} onClick={() => setTab(k)}><b>{a}</b><small>{b}</small></button>
+          ))}
+        </div>
+        <Imaging r={r} tab={tab} open={open} />
+      </section>
+
       <Doctor r={r} open={open} />
 
       <section className="phc-panel">
@@ -272,6 +278,36 @@ function Body({ r, history, settings, tab, setTab, range, setRange, open }: {
         <button type="button" className="phc-btn" onClick={() => open({ kind: 'catalog' })}><BookOpenText size={15} aria-hidden /> شناسنامهٔ شاخص‌ها</button>
       </footer>
     </main>
+  )
+}
+
+function OrganTally({ r }: { r: HealthResult }) {
+  const n = (s: string) => r.organs.filter((o) => o.status === s).length
+  return (
+    <span className="phc-tally">
+      {(['critical', 'bad', 'watch', 'good', 'none'] as const).filter((s) => n(s)).map((s) => (
+        <span key={s} style={{ ['--c' as string]: STATUS_COLOR[s] }}><StatusIcon status={s} size={13} />{fa(n(s))} {STATUS_FA[s]}</span>
+      ))}
+    </span>
+  )
+}
+
+/** the holographic platform the index ring floats on */
+function Pedestal() {
+  return (
+    <svg className="phc-pedestal" viewBox="0 0 300 70" aria-hidden>
+      <defs>
+        <radialGradient id="phcPedGlow" cx=".5" cy=".5" r=".5">
+          <stop offset="0" style={{ stopColor: 'var(--c)', stopOpacity: 0.75 }} />
+          <stop offset=".6" style={{ stopColor: 'var(--c)', stopOpacity: 0.18 }} />
+          <stop offset="1" style={{ stopColor: 'var(--c)', stopOpacity: 0 }} />
+        </radialGradient>
+      </defs>
+      <ellipse cx="150" cy="35" rx="148" ry="30" fill="url(#phcPedGlow)" />
+      <ellipse cx="150" cy="35" rx="124" ry="22" className="phc-ped-ring" />
+      <ellipse cx="150" cy="35" rx="96" ry="16" className="phc-ped-ring is-dash" />
+      <ellipse cx="150" cy="35" rx="64" ry="10" className="phc-ped-ring is-bright" />
+    </svg>
   )
 }
 
