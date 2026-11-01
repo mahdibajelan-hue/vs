@@ -162,7 +162,7 @@ const doc = (id, o = {}) => ({ id, code: id.toUpperCase(), title: id, discipline
 const edocs = [doc('d1', { weight: 2, status: 'approved', actualPrepared: '2026-01-04', actualApproved: '2026-01-12' }), doc('d2', { weight: 1, status: 'issued', actualPrepared: '2026-01-06' }), doc('d3', { weight: 1, status: 'restricted', actualPrepared: '2026-01-05', actualApproved: '2026-01-10' }), doc('d4', { weight: 0, status: 'approved', actualApproved: '2026-01-01', actualPrepared: '2026-01-01' }), doc('d5', { weight: 4, status: 'required', plannedPrepared: '2026-03-01', plannedApproved: '2026-03-10' })]
 let ep = engProgress(edocs, '2026-01-20')
 // weights 2+1+1+4 = 8 (d4 has weight 0 and is ignored); planned prepared by 01-20: d1,d2,d3 = 4/8; actual prepared: d1,d2,d3 = 4/8; approved: d1,d3 = 3/8; ready = (2 + .5)/8
-near(ep.plannedPrepared, 0.5); near(ep.actualPrepared, 0.5); near(ep.plannedApproved, 0.5); near(ep.actualApproved, 3 / 8); near(ep.ready, 2.5 / 8); near(ep.actualScore, 0.6 * 0.5 + 0.4 * 3 / 8); assert.equal(ep.docs, 4)
+near(ep.plannedPrepared, 0.5); near(ep.actualPrepared, 0.5); near(ep.plannedApproved, 0.5); near(ep.actualApproved, 3 / 8); near(ep.ready, 2.5 / 8); near(ep.actualScore, (2 * 1 + 1 * 0.6 + 1 * 0.8) / 8); assert.equal(ep.docs, 4) // approved 100 %, issued 60 %, approved with restriction (as noted) 80 %
 near(engProgress(edocs, '2026-01-03').actualPrepared, 0) // before anything happened (string date compare)
 assert.equal(engProgressBy([doc('a', { discipline: 'civil' }), doc('b', { discipline: 'mech', weight: 3 })], '2026-02-01', 'discipline')[0].key, 'mech')
 // forecast of a late document: discipline slip learned from completed ones
@@ -204,3 +204,53 @@ assert.equal(execReadiness({ docs: [{ impact: { state: 'open' }, docCode: 'D2', 
 const fut = execReadiness({ docs: [{ impact: { state: 'open' }, docCode: 'D2', needDate: '2026-03-01' }], others: [], today: '2026-01-25' }); assert.equal(fut.state, 'ready_with_restrictions'); assert.deepEqual(fut.open, ['مدرک D2'])
 assert.equal(execReadiness({ docs: [{ impact: { state: 'restricted' }, docCode: 'D3', needDate: null }], others: [], today: '2026-01-25' }).state, 'ready_with_restrictions')
 console.log('engineering tests ok')
+
+// ── issue / review cycle credits and the curve forecast
+import { creditAt, engRulesOf, forecastEngCurve } from './engineering.ts'
+{
+  const C = (seq, submittedOn, result = 'pending', resultOn = null) => ({ seq, rev: String.fromCharCode(64 + seq), purpose: 'IFA', submittedOn, result, resultOn })
+  const cd = (cycles, o = {}) => doc('c', { cycles, status: 'issued', ...o })
+  // Rev A sent → 60; commented → still 60; Rev B sent → 70; approved as noted → 80; approved → 100
+  const d = cd([C(1, '2026-02-01', 'commented', '2026-02-10'), C(2, '2026-02-20', 'approved_as_noted', '2026-03-01'), C(3, '2026-03-10', 'approved', '2026-03-15')])
+  near(creditAt(d, '2026-01-31'), 0); near(creditAt(d, '2026-02-05'), 0.6); near(creditAt(d, '2026-02-15'), 0.6)
+  near(creditAt(d, '2026-02-25'), 0.7); near(creditAt(d, '2026-03-05'), 0.8); near(creditAt(d, '2026-03-12'), 0.8); near(creditAt(d, '2026-03-20'), 1)
+  // rejected withdraws that submission's credit; the next accepted submission is the first that counts
+  const rj = cd([C(1, '2026-02-01', 'rejected', '2026-02-10'), C(2, '2026-02-20')])
+  near(creditAt(rj, '2026-02-05'), 0.6); near(creditAt(rj, '2026-02-12'), 0); near(creditAt(rj, '2026-02-21'), 0.6)
+  // a withdrawn submission is ignored
+  near(creditAt(cd([C(1, '2026-02-01', 'withdrawn', '2026-02-01')]), '2026-03-01'), 0)
+  // the project's own credits (percent in settings)
+  const r = engRulesOf({ engCredits: { first: 50, later: 65, noted: 85, approved: 100 } })
+  near(creditAt(d, '2026-02-05', r.credits), 0.5); near(creditAt(d, '2026-03-05', r.credits), 0.85)
+  near(engRulesOf({ engCredits: { first: 'x', later: 150 } }).credits.first, 0.6) // invalid values fall back
+  near(engRulesOf(null).credits.noted, 0.8)
+  // plan: 60 % at the planned issue, 100 % at the planned approval
+  near(engProgress([doc('p', { plannedPrepared: '2026-01-05', plannedApproved: '2026-02-05' })], '2026-01-20').plannedScore, 0.6)
+
+  // forecast: 10 docs of weight 1; 4 submitted in the last 6 weeks (2 approved 20 days after their submission), 6 to go
+  const today = '2026-06-30'
+  const fdocs = [
+    doc('f1', { status: 'approved', actualPrepared: '2026-05-20', actualApproved: '2026-06-09', cycles: [C(1, '2026-05-20', 'approved', '2026-06-09')], plannedPrepared: '2026-05-15', plannedApproved: '2026-06-05' }),
+    doc('f2', { status: 'approved', actualPrepared: '2026-05-25', actualApproved: '2026-06-14', cycles: [C(1, '2026-05-25', 'approved', '2026-06-14')], plannedPrepared: '2026-05-20', plannedApproved: '2026-06-10' }),
+    doc('f3', { status: 'approved', actualPrepared: '2026-06-01', actualApproved: '2026-06-21', cycles: [C(1, '2026-06-01', 'approved', '2026-06-21')], plannedPrepared: '2026-05-25', plannedApproved: '2026-06-15' }),
+    doc('f4', { status: 'issued', actualPrepared: '2026-06-20', cycles: [C(1, '2026-06-20')], plannedPrepared: '2026-06-01', plannedApproved: '2026-06-25' }),
+    ...[5, 6, 7, 8, 9, 10].map((i) => doc(`f${i}`, { plannedPrepared: `2026-07-${String(i).padStart(2, '0')}`, plannedApproved: `2026-08-${String(i).padStart(2, '0')}` })),
+  ]
+  const fc = forecastEngCurve(fdocs, today)
+  assert.ok(!('reason' in fc))
+  assert.equal(fc.turnaroundDays, 20) // median of 20, 20, 20
+  near(fc.productionPerWeek, (4 / 42) * 7) // 4 first submissions in 42 days
+  near(fc.points[0].value, (3 * 1 + 0.6) / 10) // today: three approved, one at Rev A
+  assert.ok(fc.points.every((p, i) => i === 0 || p.value >= fc.points[i - 1].value - 1e-9)) // never goes down
+  near(fc.points[fc.points.length - 1].value, 1) // ends complete
+  // 6 remaining weights at 4/42 per day → the last one is sent 63 days from today and approved 20 days later
+  assert.equal(fc.endDate, '2026-09-21')
+  assert.equal(fc.plannedEnd, '2026-08-10')
+  assert.equal(fc.slipDays, 42)
+  // a document planned far ahead is not forecast to be sent before its planned date
+  const late = forecastEngCurve([...fdocs, doc('far', { plannedPrepared: '2027-03-01', plannedApproved: '2027-04-01' })], today)
+  assert.equal(late.endDate, '2027-03-21') // sent 2027-03-01 + 20 days turnaround
+  // nothing sent yet: no rate, no forecast
+  assert.ok('reason' in forecastEngCurve([doc('x'), doc('y')], today))
+}
+console.log('engineering cycles & forecast ok')

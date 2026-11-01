@@ -15,6 +15,7 @@ import { EpcGate } from '../../execution/components/epc/EpcBanner'
 import { ActivityPicker } from '../components/ActivityPicker'
 import { EngDash } from './EngDash'
 import { EngMyTasks } from './EngMyTasks'
+import { EngSettings } from './EngSettings'
 import { isMdlLayout, parseMdl, type MdlResult } from '../lib/mdlImport'
 import { readSheetRows } from '../lib/readRows'
 import { COURT_LABEL_FA, courtOf } from '../lib/roles'
@@ -36,6 +37,7 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
   if (sub === 'links') return <Links m={m} projectId={projectId} can={can} />
   if (sub === 'impact') return <ImpactView m={m} projectId={projectId} />
   if (sub === 'my') return <EngMyTasks m={m} projectId={projectId} />
+  if (sub === 'settings') return <EngSettings m={m} projectId={projectId} />
   return <EngDash m={m} projectId={projectId} />
 }
 

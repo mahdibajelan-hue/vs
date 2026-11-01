@@ -57,7 +57,7 @@ export function epcWeightsOf(projectId: string, fallback?: EpcWeights | null): {
  * (see epcWeightsOf; `fallback` = the client report's weights when values are missing). Call after ensureEpcStores. */
 export function epcProgressOf(projectId: string, fallback?: EpcWeights | null, today = new Date().toISOString().slice(0, 10)): EpcProgress {
   const ex = useExecutionStore.getState(), epc = useEpcStore.getState(), ms = useMaterialStore.getState(), cs = useMaterialControlStore.getState()
-  const eng = engCore(epc.engDocs, projectId, today)
+  const eng = engCore(epc.engDocs, projectId, today, ex.settings(projectId))
   const mat = materialCore(ms, cs, projectId, today)
   const exe = executionCore(ex, epc, projectId, today)
   const pct = (v: number) => Math.round(v * 1000) / 10

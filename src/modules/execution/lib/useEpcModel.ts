@@ -8,7 +8,7 @@ import { engDocsOf } from './engCore'
 import { cumulative } from './progress'
 import { productivity, resourceElasticity, type CrewLog, type ProductivityParams, type ProductivityResult } from './engine/productivity'
 import { forecastActivity, type ActivityForecast } from './engine/forecast'
-import { engProgress, engProgressBy, forecastDoc, forecastCompletion, docImpact, execReadiness, totalFloat, DEFAULT_ENG_RULES, type Doc, type DocLink, type DocForecast, type Impact, type ReadyOut } from './engine/engineering'
+import { engProgress, engProgressBy, forecastDoc, forecastCompletion, docImpact, execReadiness, totalFloat, engRulesOf, type Doc, type DocLink, type DocForecast, type Impact, type ReadyOut } from './engine/engineering'
 import { activityReadiness, type ActivityReadiness, type EngDoc, type Prereq, type SupplyState } from './engine/readiness'
 import { reconcile, type Ledger } from './engine/reconcile'
 import { buildAlerts, type Alert } from './engine/alerts'
@@ -43,7 +43,7 @@ export function useEpcModel(projectId: string | null) {
     const supply = new Map<string, SupplyState>()
     for (const [id, p] of mat.positions) supply.set(id, { id, onSite: p.onHand, required: Math.max(0, p.requiredQty - p.netConsumed) })
     const prereqs: Prereq[] = epc.prereqs.filter((p) => p.projectId === pid).map((p) => ({ id: p.id, activityId: p.activityId, kind: p.kind, title: p.title, refType: p.refType, refId: p.refId, status: p.status, neededDate: p.neededDate, readyDate: p.readyDate }))
-    const rules = DEFAULT_ENG_RULES
+    const rules = engRulesOf(ex.settings as { engCredits?: { first: number; later: number; noted: number; approved: number } })
     const engDocs: Doc[] = engDocsOf(epc.engDocs, pid)
     const docById = new Map(engDocs.map((d) => [d.id, d]))
     const docFc = new Map<string, DocForecast>(engDocs.map((d) => [d.id, forecastDoc(d, engDocs, today, rules)]))
@@ -112,7 +112,7 @@ export function useEpcModel(projectId: string | null) {
       for (const k of Object.keys(composition)) { const e = resourceElasticity(i.logs, k, set.productivity.assumedElasticity); elas[k] = e.elasticity; if (e.basis === 'observed') observed++ }
       return { basis: observed > 0 && observed === Object.keys(composition).length ? 'observed' : 'assumed', state: { activityId, title: a.title, unit: a.unit, remainingQty: i.remaining, plannedEnd: a.plannedEnd, rate: i.prod.rates.perCrewDay, rateSd: i.prod.rates.sd, composition, elasticity: elas, constraints: o.constraints ?? [], blockers: i.capBlockers, frontsAvailable: o.frontsAvailable ?? 1 } }
     }
-    return { ex, set, today, eng, engDocs, docById, docFc, dlinks, impacts, floats, insights, ledger, alerts, metrics, spi, ppcLast, scenarioParams, stateFor, docs, supply, prereqs, cum, tick: emp.length }
+    return { ex, set, today, rules, eng, engDocs, docById, docFc, dlinks, impacts, floats, insights, ledger, alerts, metrics, spi, ppcLast, scenarioParams, stateFor, docs, supply, prereqs, cum, tick: emp.length }
   }, [ex, epc.crewLogs, epc.engDocs, epc.docLinks, epc.deps, epc.prereqs, epc.lookahead, epc.measurements, mat.positions, projectId, emp.length])
 }
 export type EpcModel = ReturnType<typeof useEpcModel>

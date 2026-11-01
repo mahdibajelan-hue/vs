@@ -1,13 +1,14 @@
 import { useMemo } from 'react'
 import { addDays, daysBetween, jalaliText } from '../../execution/lib/periods'
-import { engProgress, DEFAULT_ENG_RULES } from '../../execution/lib/engine/engineering'
+import { engProgress, forecastEngCurve } from '../../execution/lib/engine/engineering'
+import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
+import { EngCurve, CURVE_COLORS, ENG_FC_CSS } from '../components/EngCurve'
 import type { EpcModel } from '../../execution/lib/useEpcModel'
 import { useEpcStore } from '../../execution/store/useEpcStore'
 import { ENG_STATUS_LABEL_FA } from '../../execution/epcTypes'
 import { Chip, DataTable, KpiCard, Section, type Col } from '../../finance/components/fn'
 import { Donut, HBars, PB, Ring, Tile } from '../../finance/components/charts'
 import { Empty, fa, pct } from '../../execution/components/common'
-import { ProgressCurve } from '../../execution/components/ProgressCurve'
 import { COURT_COLOR, COURT_LABEL_FA, courtCounts, courtOf, type EngLens } from '../lib/roles'
 import { LensBar, useLens } from '../components/LensBar'
 
@@ -19,6 +20,8 @@ export function EngDash({ m, projectId }: { m: EpcModel; projectId: string }) {
   const { eng } = m
   const rows = useEpcStore((s) => s.engDocs).filter((x) => x.projectId === projectId)
   const { lens, setLens, canSwitch, real } = useLens(projectId)
+  const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
+  const fcRaw = useMemo(() => forecastEngCurve(m.engDocs, m.today, m.rules), [m.engDocs, m.today, m.rules])
   const live = rows.filter((x) => x.status !== 'superseded')
   const blocking = useMemo(() => new Set(m.impacts.filter((i) => i.state !== 'ok' && i.state !== 'restricted' && (!i.needDate || i.needDate <= addDays(m.today, 21))).map((i) => i.docId)), [m.impacts, m.today])
   if (!live.length) return <Empty><b style={{ display: 'block', marginBottom: 6 }}>فهرست مدارک مهندسی خالی است</b>در «فهرست مدارک» فهرست MDL را وارد کنید (ورود از اکسل) یا مدارک را دستی ثبت کنید.</Empty>
@@ -27,8 +30,12 @@ export function EngDash({ m, projectId }: { m: EpcModel; projectId: string }) {
   const from = m.engDocs.flatMap((x) => [x.plannedPrepared, x.actualPrepared]).filter((x): x is string => !!x).sort()[0] ?? today
   const to = [...m.engDocs.flatMap((x) => [x.plannedApproved, x.actualApproved]).filter((x): x is string => !!x), today].sort().slice(-1)[0]
   const span = Math.max(14, daysBetween(from, to)), step = Math.max(7, Math.ceil(span / 24 / 7) * 7)
-  const curve: { date: string; planned: number; actual: number; registered: number }[] = []
-  for (let t = from; t <= to; t = addDays(t, step)) { const s = engProgress(m.engDocs, t, DEFAULT_ENG_RULES); curve.push({ date: t, planned: s.plannedScore, actual: t <= today ? s.actualScore : 0, registered: t <= today ? s.actualPrepared : 0 }) }
+  const curve: { date: string; actual: number; registered: number }[] = []
+  for (let t = from; t <= to && t <= today; t = addDays(t, step)) { const s = engProgress(m.engDocs, t, m.rules); curve.push({ date: t, actual: s.actualScore, registered: s.actualPrepared }) }
+  const fc = 'reason' in fcRaw ? null : fcRaw
+  // the project's completion moved by the engineering slip (engineering assumed to drive the end — stated on the page)
+  const projEnd = project?.revisedCompletionDate || project?.contractualCompletionDate || null
+  const projFc = projEnd && fc?.slipDays != null ? addDays(projEnd, Math.max(0, fc.slipDays)) : null
   const sparkA = curve.filter((c) => c.date <= today).map((c) => c.actual * 100)
   const courts = courtCounts(live)
   const totalW = live.reduce((s, x) => s + x.weight, 0) || 1
@@ -39,7 +46,7 @@ export function EngDash({ m, projectId }: { m: EpcModel; projectId: string }) {
   const aging = buckets.map(([name, lo, hi], i) => ({ name, value: overdueRows.filter((x) => x.days >= lo && x.days <= hi).length, color: [PB.yellow, PB.orange, PB.coral, '#b91c1c'][i] }))
   const statusFunnel = (['required', 'in_preparation', 'issued', 'pending_approval', 'restricted', 'approved'] as const).map((s, i) => ({ name: ENG_STATUS_LABEL_FA[s], value: live.filter((x) => x.status === s).reduce((n, x) => n + x.weight, 0) / totalW * 100, color: [PB.slate, PB.sky, PB.blue, PB.violet, PB.yellow, PB.green][i] }))
   const donut = (Object.keys(courts) as (keyof typeof courts)[]).map((c) => ({ name: COURT_LABEL_FA[c], value: courts[c].w / totalW * 100, color: COURT_COLOR[c] }))
-  const phaseP = (ph: string) => { const ids = new Set(live.filter((x) => x.phase === ph).map((x) => x.id)); return ids.size ? engProgress(m.engDocs.filter((x) => ids.has(x.id)), today, DEFAULT_ENG_RULES) : null }
+  const phaseP = (ph: string) => { const ids = new Set(live.filter((x) => x.phase === ph).map((x) => x.id)); return ids.size ? engProgress(m.engDocs.filter((x) => ids.has(x.id)), today, m.rules) : null }
   const dp = phaseP('DP1'), pp = phaseP('PP1')
   const disc = eng.byDiscipline.slice(0, 12).map((x, i) => ({ name: x.key || '—', value: x.p.actualScore * 100, color: x.p.actualScore + 0.03 >= x.p.plannedScore ? PB.green : x.p.actualScore + 0.15 >= x.p.plannedScore ? PB.yellow : PB.coral, i }))
   const typeBars = Object.entries(live.reduce<Record<string, { n: number; done: number }>>((a, x) => { const k = x.category || '—'; const e = a[k] ?? { n: 0, done: 0 }; e.n++; if (x.status === 'approved' || x.status === 'restricted') e.done++; a[k] = e; return a }, {})).sort((a, b) => b[1].n - a[1].n).slice(0, 10).map(([k, v]) => ({ name: `${k} (${fa(v.n)})`, value: v.n ? v.done / v.n * 100 : 0, color: PB.teal }))
@@ -65,7 +72,7 @@ export function EngDash({ m, projectId }: { m: EpcModel; projectId: string }) {
       <KpiCard key="d" i={3} label="بیشترین اثر بر تکمیل" value={eng.slipMax == null ? 'نامشخص' : `${fa(eng.slipMax)} روز`} tone={eng.slipMax ? 'bad' : 'neutral'} />,
     ]
     return [
-      <KpiCard key="a" i={0} label="پیش‌بینی تکمیل مدارک" value={eng.completion.date ? jalaliText(eng.completion.date) : '—'} sub={eng.completion.reason} />,
+      <KpiCard key="a" i={0} label="پایان پیش‌بینی مهندسی" value={fc ? jalaliText(fc.endDate) : '—'} tone={fc && (fc.slipDays ?? 0) > 0 ? 'bad' : 'neutral'} sub={fc ? (fc.slipDays == null ? 'تاریخ برنامه‌ای پایان ثبت نشده' : fc.slipDays > 0 ? `${fa(fc.slipDays)} روز دیرتر از برنامه` : fc.slipDays < 0 ? `${fa(-fc.slipDays)} روز زودتر از برنامه` : 'مطابق برنامه') : 'reason' in fcRaw ? fcRaw.reason : ''} />,
       <KpiCard key="b" i={1} label="مدارک بحرانی باز" value={fa(eng.criticalOpen.length)} tone={eng.criticalOpen.some((c) => c.fc.overdue) ? 'bad' : 'neutral'} sub={`${fa(eng.criticalOpen.filter((c) => c.fc.overdue).length)} عقب‌افتاده`} />,
       <KpiCard key="c" i={2} label="فعالیت غیرآمادهٔ اجرا" value={fa(eng.notReady.length)} tone={eng.notReady.length ? 'bad' : 'good'} />,
       <KpiCard key="d" i={3} label="بیشترین اثر بر تکمیل" value={eng.slipMax == null ? 'نامشخص' : `${fa(eng.slipMax)} روز`} tone={eng.slipMax ? 'bad' : 'neutral'} />,
@@ -93,7 +100,16 @@ export function EngDash({ m, projectId }: { m: EpcModel; projectId: string }) {
       </div>
       <div className="fn-kpis">{kpiRole(lens)}</div>
       <div className="fn-tiles">
-        <Tile title="روند پیشرفت مهندسی" hint="برنامه در برابر واقعی؛ خط آبی: پیشرفت تهیه" span={2}><ProgressCurve data={curve} h={230} /></Tile>
+        <Tile title="منحنی S پیشرفت مهندسی" hint="برنامه، واقعی تا امروز و پیش‌بینی با روند فعلی (نقطه‌چین)" span={3}>
+          <EngCurve docs={m.engDocs} today={today} rules={m.rules} fc={fc} />
+          <style>{ENG_FC_CSS}</style>
+          <div className="eng-fc">
+            <div style={{ ['--c' as string]: CURVE_COLORS.forecast }}><small>پایان پیش‌بینی مهندسی</small><b>{fc ? jalaliText(fc.endDate) : '—'}</b><span>{fc ? (fc.plannedEnd ? `برنامه: ${jalaliText(fc.plannedEnd)}${fc.slipDays ? ` · ${fc.slipDays > 0 ? `${fa(fc.slipDays)} روز تأخیر` : `${fa(-fc.slipDays)} روز زودتر`}` : ''}` : 'تاریخ برنامه‌ای پایان ثبت نشده') : ('reason' in fcRaw ? fcRaw.reason : '')}</span></div>
+            <div style={{ ['--c' as string]: '#ef4444' }}><small>پایان پیش‌بینی پروژه</small><b>{projFc ? jalaliText(projFc) : '—'}</b><span>{!projEnd ? 'تاریخ پایان قراردادی پروژه در داده‌های پایه ثبت نشده' : !fc ? 'پیش‌بینی مهندسی در دسترس نیست' : `پایان قراردادی ${jalaliText(projEnd)}${(fc.slipDays ?? 0) > 0 ? ` + ${fa(fc.slipDays as number)} روز تأخیر مهندسی` : ' (تأخیر مهندسی ندارد)'}`}</span></div>
+            <div style={{ ['--c' as string]: CURVE_COLORS.actual }}><small>نرخ تولید مدارک</small><b>{fc ? `${fa(fc.productionSharePerWeek * 100, 1)}٪ در هفته` : '—'}</b><span>{fc ? `از وزن کل مدارک · فاصلهٔ ارسال تا تأیید نهایی ${fa(fc.turnaroundDays)} روز` : ''}</span></div>
+          </div>
+          {fc && <p className="im-helper" style={{ margin: '6px 4px 0', lineHeight: 1.9 }}>مبنای پیش‌بینی: {fc.basis.join('؛ ').replace(/\d/g, (x) => '۰۱۲۳۴۵۶۷۸۹'[+x])}. پایان پروژه با فرض این برآورد شده است که تأخیر مهندسی به همان اندازه به پایان پروژه منتقل شود (مهندسی روی مسیر بحرانی). اگر بخشی از آن با شناوری یا موازی‌کاری جبران شود، تأخیر پروژه کمتر خواهد بود.</p>}
+        </Tile>
         <Tile title="توپ دست کیست؟" hint="سهم وزنی مدارک باز نزد هر طرف"><Donut data={donut} fmt={(v) => `${fa(v, 1)}٪`} center={{ v: fa(live.length), l: 'مدرک فعال' }} /></Tile>
         <Tile title="قیف وضعیت مدارک" hint="سهم وزنی در هر وضعیت"><HBars data={statusFunnel} fmt={(v) => `${fa(v, 1)}٪`} /></Tile>
         <Tile title="مراحل پروژه" hint="طراحی تفصیلی (DP1) و مهندسی تدارکات (PP1)">
@@ -117,7 +133,7 @@ export function EngDash({ m, projectId }: { m: EpcModel; projectId: string }) {
         </Section>
       )}
       <div className="im-card" style={{ padding: 12, fontSize: 12.5, lineHeight: 1.9 }}>
-        <b>روش محاسبه:</b> هر مدرک با وزن خودش (سهم W.F در فهرست MDL) در پیشرفت شرکت می‌کند. «تهیه» از وضعیت «ارسال‌شده» به بعد و «تأیید» با تأیید نهایی یا تأیید با محدودیت شمرده می‌شود؛ مدارک منسوخ و بدون وزن حذف می‌شوند. «توپ دست کیست» از وضعیت مدرک برمی‌آید: شروع‌نشده/در حال تهیه ← پیمانکار، ارسال‌شده ← مشاور، در انتظار تأیید/با محدودیت ← کارفرما.
+        <b>روش محاسبه:</b> هر مدرک با وزن خود (سهم W.F در فهرست MDL) در پیشرفت شرکت می‌کند و سهم آن به مرحلهٔ گردش مدرک بستگی دارد: ارسال اول {fa(Math.round(m.rules.credits.first * 100))}٪، ارسال‌های بعدی {fa(Math.round(m.rules.credits.later * 100))}٪، تأیید با ملاحظات {fa(Math.round(m.rules.credits.noted * 100))}٪ و تأیید نهایی {fa(Math.round(m.rules.credits.approved * 100))}٪ (قابل تغییر در «تنظیمات»). پاسخ «کامنت‌دار» مدرک را برای ارسال دوباره به پیمانکار برمی‌گرداند و پاسخ «ردشده» سهم همان ارسال را حذف می‌کند. مدارک منسوخ و بدون وزن حذف می‌شوند. خط نقطه‌چین با نرخ ارسال مدارک در شش هفتهٔ اخیر و میانهٔ فاصلهٔ ارسال تا تأیید نهایی رسم می‌شود. «توپ دست کیست» از آخرین گردش مدرک برمی‌آید: شروع‌نشده، در حال تهیه یا تأییدشده با ملاحظات ← پیمانکار؛ ارسال‌شده و منتظر پاسخ ← مشاور.
       </div>
     </div>
   )

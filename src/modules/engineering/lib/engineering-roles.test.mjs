@@ -3,7 +3,7 @@ import { courtOf, lensOf, nextMoves, buildEngTasks, courtCounts } from './roles.
 import { canonDiscipline } from './disciplines.ts'
 import { parseMdl, isMdlLayout } from './mdlImport.ts'
 
-assert.equal(courtOf('required'), 'contractor'); assert.equal(courtOf('issued'), 'consultant'); assert.equal(courtOf('pending_approval'), 'consultant'); assert.equal(courtOf('restricted'), 'consultant'); assert.equal(courtOf('approved'), 'done')
+assert.equal(courtOf('required'), 'contractor'); assert.equal(courtOf('issued'), 'consultant'); assert.equal(courtOf('pending_approval'), 'consultant'); assert.equal(courtOf('restricted'), 'contractor') /* approved as noted: the contractor sends the final revision */; assert.equal(courtOf('approved'), 'done')
 assert.equal(lensOf(['contractor']), 'contractor'); assert.equal(lensOf(['supervision']), 'consultant'); assert.equal(lensOf(['employer', 'contractor']), 'employer'); assert.equal(lensOf(['manager', 'employer']), 'manager')
 assert.deepEqual(nextMoves('issued', 'contractor'), []); assert.equal(nextMoves('issued', 'consultant').length, 3); assert.ok(nextMoves('issued', 'consultant').some((m) => m.to === 'restricted')); assert.deepEqual(nextMoves('issued', 'employer'), []); assert.deepEqual(nextMoves('restricted', 'employer'), [])
 const d = (id, status, o = {}) => ({ id, docNo: id, title: 't', discipline: 'Civil', category: 'DWG', status, weight: 1, critical: false, plannedPrepared: '2026-10-01', plannedApproved: '2026-10-05', ...o })
@@ -16,6 +16,9 @@ assert.equal(buildEngTasks(docs, 'contractor', today, new Set(['f']))[0].id, 'f'
 assert.deepEqual(buildEngTasks(docs, 'manager', today).map((t) => t.id).sort(), ['a', 'b'])
 assert.equal(courtCounts(docs).consultant.n, 2)
 assert.equal(courtCounts(docs).contractor.n, 2)
+const an = buildEngTasks([d('g', 'restricted')], 'contractor', today)
+assert.equal(an.length, 1); assert.equal(an[0].kind, 'lift') // «ارسال ویرایش نهایی»
+assert.deepEqual(buildEngTasks([d('g', 'restricted')], 'consultant', today), [])
 
 const rows = [[], ['Row', 'Discipline', 'Project No.', 'Phase No.', 'Scope', 'Discipline ID', 'Category\n(Doc Type)', 'Serial No.', 'Document No.', 'Action', 'Document Title', 'Final Status\nor\n POI', 'Rev', 'x', 'x', 'x', 'x', 'x', 'x', 'Price Rial', 'W.F'],
   [null, null, null, null, null, null, null, null, null, null, 'Detail Design'],

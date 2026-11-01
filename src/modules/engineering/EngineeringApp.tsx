@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { Gauge, Link2, ListChecks, Loader2, Ruler, ShieldCheck, FileStack } from 'lucide-react'
+import { Gauge, Link2, ListChecks, Loader2, Ruler, Settings2, ShieldCheck, FileStack } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -16,13 +16,14 @@ import { ErrorBoundary } from '../../components/common/ErrorBoundary'
 import { useAuthStore } from '../../store/useAuthStore'
 
 export const ENGINEERING_ACCENT = '#6366f1'
-type Tab = 'dash' | 'my' | 'register' | 'links' | 'impact'
+type Tab = 'dash' | 'my' | 'register' | 'links' | 'impact' | 'settings'
 const NAV: { id: Tab; label: string; icon: LucideIcon; color: string }[] = [
   { id: 'dash', label: 'داشبورد مهندسی', icon: Gauge, color: '#6366f1' },
   { id: 'my', label: 'کارهای من', icon: ListChecks, color: '#ec4899' },
   { id: 'register', label: 'فهرست مدارک', icon: FileStack, color: '#0ea5e9' },
   { id: 'links', label: 'ارتباط مدارک و فعالیت‌ها', icon: Link2, color: '#14b8a6' },
   { id: 'impact', label: 'آمادگی و اثر تأخیر', icon: ShieldCheck, color: '#f97316' },
+  { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#94a3b8' },
 ]
 const EngPage = lazy(() => import('./pages/EngPage').then((m) => ({ default: m.EngPage })))
 

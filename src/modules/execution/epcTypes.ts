@@ -22,7 +22,15 @@ export interface EngDocRow {
   plannedPrepared: string | null; plannedApproved: string | null; actualPrepared: string | null; actualApproved: string | null; note: string
   /** MDL register fields: document type (REP/DWG/…), phase (DP1 detail design / PP1 procurement), target issue purpose (IFA/IFI/POI), price the weight derives from */
   category: string; phase: string; targetIssue: string; price: number
+  /** the issue / review history (ex_eng_doc_cycles), oldest first */
+  cycles: EngCycleRow[]
 }
+export type EngCycleResult = 'pending' | 'commented' | 'rejected' | 'approved_as_noted' | 'approved' | 'withdrawn'
+export type EngPurpose = 'IFI' | 'IFR' | 'IFA' | 'IFC'
+export interface EngCycleRow { id: string; seq: number; rev: string; purpose: EngPurpose; submittedOn: string; result: EngCycleResult; resultOn: string | null }
+export const PURPOSE_FA: Record<EngPurpose, string> = { IFI: 'برای اطلاع (IFI)', IFR: 'برای بررسی (IFR)', IFA: 'برای تأیید (IFA)', IFC: 'برای ساخت (IFC)' }
+export const RESULT_FA: Record<EngCycleResult, string> = { pending: 'در انتظار بررسی مشاور', commented: 'کامنت‌دار (Commented)', rejected: 'ردشده (Rejected)', approved_as_noted: 'تأیید با ملاحظات (Approved as Noted)', approved: 'تأییدشده (Approved)', withdrawn: 'پس‌گرفته‌شده' }
+export const RESULT_COLOR: Record<EngCycleResult, string> = { pending: '#0ea5e9', commented: '#f59e0b', rejected: '#ef4444', approved_as_noted: '#84cc16', approved: '#22c55e', withdrawn: '#94a3b8' }
 export const ENG_STATUS_LABEL_FA: Record<EngStatus, string> = { required: 'شروع‌نشده', in_preparation: 'در حال تهیه', issued: 'تهیه‌شده/صادرشده', pending_approval: 'در انتظار تأیید', approved: 'تأییدشده', restricted: 'تأیید با محدودیت اجرایی', superseded: 'منسوخ' }
 export interface DocLinkRow { id: string; projectId: string; docId: string; activityId: string; front: string; contract: string; needKind: 'start' | 'continue'; needDate: string | null; minStatus: 'issued' | 'approved'; allowRestricted: boolean; altActivityId: string | null; note: string }
 export interface PrereqRow { id: string; projectId: string; activityId: string; kind: PrereqKind; title: string; refType: string; refId: string | null; status: PrereqStatus; neededDate: string | null; readyDate: string | null; note: string }

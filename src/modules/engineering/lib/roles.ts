@@ -1,5 +1,6 @@
 import type { EngDocRow, EngStatus } from '../../execution/epcTypes'
 import type { ExRole } from '../../execution/types'
+import { jalaliText } from '../../execution/lib/periods'
 
 /** Who the document is waiting for — the party that must act next. Documents circulate only between the contractor and the supervision consultant: the ball is never with the employer (who may only comment). */
 export type Court = 'contractor' | 'consultant' | 'done'
@@ -9,9 +10,11 @@ export const COURT_LABEL_FA: Record<Court, string> = { contractor: 'پیمانک
 export const COURT_COLOR: Record<Court, string> = { contractor: '#f97316', consultant: '#0ea5e9', done: '#22c55e' }
 export const LENS_LABEL_FA: Record<EngLens, string> = { contractor: 'پیمانکار', consultant: 'مشاور', employer: 'کارفرما', manager: 'مدیر / نظارت کل' }
 
+/** not started, in preparation, returned (Commented / Rejected) and Approved as Noted (the final revision is due) are
+ *  the contractor's; a submission waiting for review is the consultant's */
 export function courtOf(status: EngStatus): Court {
-  if (status === 'required' || status === 'in_preparation') return 'contractor'
-  if (status === 'issued' || status === 'pending_approval' || status === 'restricted') return 'consultant'
+  if (status === 'required' || status === 'in_preparation' || status === 'restricted') return 'contractor'
+  if (status === 'issued' || status === 'pending_approval') return 'consultant'
   return 'done'
 }
 
@@ -40,7 +43,7 @@ export function nextMoves(status: EngStatus, lens: EngLens): { to: EngStatus; la
 }
 
 export type TaskKind = 'prepare' | 'review' | 'approve' | 'lift' | 'escalate'
-export const TASK_KIND_LABEL_FA: Record<TaskKind, string> = { prepare: 'تهیه مدرک', review: 'بررسی مشاور', approve: 'تأیید مشاور', lift: 'رفع محدودیت', escalate: 'پیگیری معوق' }
+export const TASK_KIND_LABEL_FA: Record<TaskKind, string> = { prepare: 'تهیه و ارسال مدرک', review: 'بررسی مشاور', approve: 'تأیید مشاور', lift: 'ارسال ویرایش نهایی', escalate: 'پیگیری معوق' }
 export interface EngTask { id: string; docId: string; kind: TaskKind; title: string; sub: string; urgent: boolean; overdueDays: number; blocking: boolean; critical: boolean }
 
 const diff = (a: string, b: string) => Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86400000)
@@ -56,11 +59,11 @@ export function buildEngTasks(docs: EngDocRow[], lens: EngLens, today: string, b
     if (!mine) continue
     const due = court === 'contractor' ? d.plannedPrepared : d.plannedApproved
     const overdue = due && due < today ? diff(today, due) : 0
-    const kind: TaskKind = lens === 'manager' ? 'escalate' : court === 'contractor' ? 'prepare' : d.status === 'restricted' ? 'lift' : 'review'
+    const kind: TaskKind = lens === 'manager' ? 'escalate' : court === 'contractor' ? (d.status === 'restricted' ? 'lift' : 'prepare') : 'review'
     if (lens === 'manager' && !overdue && !d.critical && !blockedDocIds.has(d.id)) continue
     if (lens === 'contractor' && !overdue && (!due || diff(due, today) > 14) && !d.critical && !blockedDocIds.has(d.id)) continue
     const blocking = blockedDocIds.has(d.id)
-    out.push({ id: d.id, docId: d.id, kind, title: `${d.docNo} — ${d.title}`, sub: `${d.discipline}${d.category ? ` · ${d.category}` : ''} · ${COURT_LABEL_FA[court]}${due ? ` · موعد ${due}` : ''}`, urgent: overdue > 0 || blocking || d.critical, overdueDays: overdue, blocking, critical: d.critical })
+    out.push({ id: d.id, docId: d.id, kind, title: `${d.docNo} — ${d.title}`, sub: `${d.discipline}${d.category ? ` · ${d.category}` : ''} · ${COURT_LABEL_FA[court]}${due ? ` · موعد ${jalaliText(due)}` : ''}`, urgent: overdue > 0 || blocking || d.critical, overdueDays: overdue, blocking, critical: d.critical })
   }
   return out.sort((a, b) => Number(b.blocking) - Number(a.blocking) || b.overdueDays - a.overdueDays || Number(b.critical) - Number(a.critical))
 }

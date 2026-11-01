@@ -8,7 +8,7 @@ import { DEFAULT_ACTIONS, type ActionField, type ActionRule, type WorkAction } f
 import { mapPipe } from '../lib/registers'
 import type { Welder, WelderQual, Pipe } from '../lib/registers'
 import { WELDER_COLS, QUAL_COLS, mapWelder, mapQual } from '../../competency/lib/personnel'
-import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, WeldHistoryRow, ArchiveRow, StatementRow0, StatementLine, SignSlot, ReportSignature, SignParty, NcrRow, NcrEventRow, NcrLinkRow, RequiredFormRow, MappingApprovalRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
+import type { FormTemplateRow, ReportLinkRow, QcFindingRow, FormEntryRow, WeldRow, LineWeldRow, WeldConflictRow, WeldSuspectRow, WeldMergeRow, WeldHistoryRow, ArchiveRow, StatementRow0, StatementLine, SignSlot, ReportSignature, SignParty, NcrRow, NcrEventRow, NcrLinkRow, RequiredFormRow, MappingApprovalRow, NcrStatus, CrewLogRow, DepRow, DocLinkRow, EngCycleRow, EngDocRow, EngStatus, FormProposalRow, LegalText, LookaheadRow, MeasurementRow, PrereqRow, ScheduleImportRow, VersionRow } from '../epcTypes'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const n = (x: unknown) => Number(x ?? 0)
@@ -100,6 +100,10 @@ interface State {
   saveEngDoc: (d: Partial<EngDocRow> & { projectId: string; docNo: string }) => Promise<boolean>
   saveEngDocsBulk: (rows: (Partial<EngDocRow> & { projectId: string; docNo: string })[]) => Promise<number>
   transitionDoc: (docId: string, to: EngStatus, note?: string) => Promise<boolean>
+  /** contractor: submit a document (revision, purpose of issue, date) · consultant: answer the submission · either: take back the last step */
+  submitDoc: (docId: string, rev: string, purpose: string, date: string) => Promise<string | null>
+  reviewDoc: (docId: string, result: string, date: string) => Promise<string | null>
+  undoDoc: (docId: string) => Promise<string | null>
   saveDocLink: (l: Partial<DocLinkRow> & { projectId: string; docId: string; activityId: string }) => Promise<boolean>
   removeDocLink: (id: string) => Promise<boolean>
   raiseDoc: (a: { projectId: string; docId: string; target: 'issue' | 'risk'; title: string; description: string; severity: string; impactDays?: number | null; front?: string }) => Promise<{ id: string; existing: boolean } | null>
@@ -114,6 +118,16 @@ interface State {
   setLegal: (projectId: string | null, body: string, status: 'draft' | 'legal_approved', note: string) => Promise<boolean>
   proposeForm: (p: { projectId: string; formKey: string; title: string; definition: Record<string, unknown>; reason: string }) => Promise<boolean>
   decideProposal: (id: string, approve: boolean, note: string) => Promise<boolean>
+}
+
+/** the issue / review cycle's refusals in plain words */
+function cycleError(m: string): string {
+  const map: Record<string, string> = {
+    not_allowed: 'این اقدام با نقش شما در این پروژه مجاز نیست (ارسال با پیمانکار، نتیجهٔ بررسی با مشاور).', pending_review: 'ارسال قبلی هنوز منتظر نتیجهٔ بررسی مشاور است.',
+    already_approved: 'این مدرک تأیید نهایی شده است.', superseded: 'مدرک منسوخ است.', nothing_pending: 'ارسالی منتظر بررسی نیست.', before_submission: 'تاریخ نتیجه نمی‌تواند پیش از تاریخ ارسال باشد.',
+    future_date: 'تاریخ نمی‌تواند بعد از امروز باشد.', invalid_purpose: 'هدف صدور معتبر نیست.', invalid_result: 'نتیجهٔ بررسی معتبر نیست.', nothing_to_undo: 'مرحله‌ای برای بازگرداندن نیست.',
+  }
+  return Object.entries(map).find(([k]) => m.includes(k))?.[1] ?? m
 }
 
 export const useEpcStore = create<State>((set, get) => ({
@@ -177,14 +191,17 @@ export const useEpcStore = create<State>((set, get) => ({
     ]
     await Promise.all(groups.map((run) => run()))
     const t = (name: string) => supabase.from(name).select('*')
-    const [crew, docs, dlinks, pre, deps, look, meas, props, imps] = await Promise.all([t('ex_crew_logs'), t('ex_eng_docs').order('doc_no'), t('ex_doc_links'), t('ex_prereqs'), t('ex_activity_deps'), t('ex_lookahead').order('week_start'), t('ex_measurements'), t('ex_form_proposals'), t('ex_schedule_imports').order('imported_at', { ascending: false }).limit(50)])
+    const [crew, docs, dlinks, pre, deps, look, meas, props, imps, cyc] = await Promise.all([t('ex_crew_logs'), t('ex_eng_docs').order('doc_no'), t('ex_doc_links'), t('ex_prereqs'), t('ex_activity_deps'), t('ex_lookahead').order('week_start'), t('ex_measurements'), t('ex_form_proposals'), t('ex_schedule_imports').order('imported_at', { ascending: false }).limit(50), t('ex_eng_doc_cycles').order('seq')])
     // a missing table (migration not applied) is not an error the user can act on screen by screen: remember it once
     if (crew.error && /does not exist|schema cache|relation/i.test(crew.error.message)) { set({ available: false, loaded: true }); return }
     const ok = <T,>(r: { data: T[] | null; error: unknown }): T[] => (r.error ? [] : r.data ?? [])
+    // each document's issue / review history (ex_eng_doc_cycles), oldest first
+    const cyclesByDoc = new Map<string, EngCycleRow[]>()
+    for (const r of ok<Row>(cyc)) { const c: EngCycleRow = { id: r.id, seq: Number(r.seq), rev: r.rev ?? '', purpose: r.purpose, submittedOn: r.submitted_on, result: r.result, resultOn: r.result_on ?? null }; cyclesByDoc.set(r.doc_id, [...(cyclesByDoc.get(r.doc_id) ?? []), c]) }
     set({
       available: true, loaded: true,
       crewLogs: ok<Row>(crew).map(crewRow),
-      engDocs: ok<Row>(docs).map((r): EngDocRow => ({ id: r.id, projectId: r.project_id, docNo: r.doc_no, title: r.title ?? '', discipline: r.discipline ?? '', rev: r.rev ?? '', contract: r.contract ?? '', preparer: r.preparer ?? '', approver: r.approver ?? '', weight: n(r.weight ?? 1), critical: !!r.critical, status: r.status, restrictionNote: r.restriction_note ?? '', dueDate: r.due_date, issuedDate: r.issued_date, plannedPrepared: r.planned_prepared, plannedApproved: r.planned_approved, actualPrepared: r.actual_prepared, actualApproved: r.actual_approved, note: r.note ?? '', category: r.category ?? '', phase: r.phase ?? '', targetIssue: r.target_issue ?? '', price: n(r.price ?? 0) })),
+      engDocs: ok<Row>(docs).map((r): EngDocRow => ({ id: r.id, projectId: r.project_id, docNo: r.doc_no, title: r.title ?? '', discipline: r.discipline ?? '', rev: r.rev ?? '', contract: r.contract ?? '', preparer: r.preparer ?? '', approver: r.approver ?? '', weight: n(r.weight ?? 1), critical: !!r.critical, status: r.status, restrictionNote: r.restriction_note ?? '', dueDate: r.due_date, issuedDate: r.issued_date, plannedPrepared: r.planned_prepared, plannedApproved: r.planned_approved, actualPrepared: r.actual_prepared, actualApproved: r.actual_approved, note: r.note ?? '', category: r.category ?? '', phase: r.phase ?? '', targetIssue: r.target_issue ?? '', price: n(r.price ?? 0), cycles: cyclesByDoc.get(r.id) ?? [] })),
       docLinks: ok<Row>(dlinks).map((r): DocLinkRow => ({ id: r.id, projectId: r.project_id, docId: r.doc_id, activityId: r.activity_id, front: r.front ?? '', contract: r.contract ?? '', needKind: r.need_kind, needDate: r.need_date, minStatus: r.min_status, allowRestricted: !!r.allow_restricted, altActivityId: r.alt_activity_id, note: r.note ?? '' })),
       prereqs: ok<Row>(pre).map((r): PrereqRow => ({ id: r.id, projectId: r.project_id, activityId: r.activity_id, kind: r.kind, title: r.title ?? '', refType: r.ref_type ?? '', refId: r.ref_id, status: r.status, neededDate: r.needed_date, readyDate: r.ready_date, note: r.note ?? '' })),
       deps: ok<Row>(deps).map((r): DepRow => ({ id: r.id, projectId: r.project_id, predId: r.pred_id, succId: r.succ_id, type: r.dep_type, lag: n(r.lag_days) })),
@@ -468,6 +485,21 @@ export const useEpcStore = create<State>((set, get) => ({
       ok += chunk.length
     }
     await get().fetchAll(); return ok
+  },
+  submitDoc: async (docId, rev, purpose, date) => {
+    const { error } = await supabase.rpc('ex_doc_submit', { p_doc: docId, p_rev: rev, p_purpose: purpose, p_date: date || null })
+    if (error) return cycleError(error.message)
+    await get().fetchAll(); return null
+  },
+  reviewDoc: async (docId, result, date) => {
+    const { error } = await supabase.rpc('ex_doc_review', { p_doc: docId, p_result: result, p_date: date || null })
+    if (error) return cycleError(error.message)
+    await get().fetchAll(); return null
+  },
+  undoDoc: async (docId) => {
+    const { error } = await supabase.rpc('ex_doc_undo', { p_doc: docId })
+    if (error) return cycleError(error.message)
+    await get().fetchAll(); return null
   },
   transitionDoc: async (docId, to, note = '') => {
     const { error } = await supabase.rpc('ex_doc_transition', { p_doc: docId, p_to: to, p_note: note })
