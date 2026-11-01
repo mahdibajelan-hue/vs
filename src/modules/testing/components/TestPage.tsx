@@ -7,11 +7,17 @@ import { formatJalali } from '../../../lib/jalali'
 import { useTestingStore } from '../store/useTestingStore'
 import { advanceBlocker, evaluateHold, HT_FAILED_COLOR, HT_STAGE_COLOR, HT_STAGE_FA, HT_STAGES, overlapKm, type HtStage } from '../lib/htCore'
 import type { HtPack, HtReading, HtSection, TargetKind } from '../repo'
+import { HtMinutes, useSectionIgs } from './HtMinutes'
+import { LOC_UI, PvChart, SectionHydraulic, TimeChart } from './HtCharts'
+import { elevAt } from '../lib/htCore'
+import { PSI_PER_BAR } from '../lib/igs'
 
 const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
 const tm = (d: string) => new Date(d).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
-const PHASES: { key: string; label: string }[] = [{ key: 'filling', label: 'آبگیری' }, { key: 'stabilization', label: 'تثبیت' }, { key: 'strength', label: 'آزمون مقاومت' }, { key: 'leak', label: 'آزمون نشتی' }]
+const PHASES: { key: string; label: string }[] = [{ key: 'filling', label: 'آبگیری' }, { key: 'air', label: 'عدم وجود هوا' }, { key: 'strength', label: 'آزمون مقاومت' }, { key: 'stabilization', label: 'دورهٔ یکنواختی' }, { key: 'leak', label: 'آزمون نشتی' }, { key: 'drying', label: 'خشک‌کنی' }]
+const SEC_LOCS = ['head', 'start', 'end', 'low', 'high', 'km'] as const
+const PACK_LOCS = ['g1', 'g2'] as const
 const NEXT_LABEL: Partial<Record<HtStage, string>> = { planned: 'شروع پیگ‌رانی و گیجینگ', cleaning: 'شروع آبگیری', filling: 'شروع تثبیت', stabilization: 'شروع آزمون مقاومت', strength: 'پایان مقاومت — شروع نشتی', leak: 'پایان نشتی — تخلیه', dewatering: 'پذیرش نهایی' }
 const localNow = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16) }
 
@@ -24,7 +30,9 @@ export function TestPage({ kind, id, onBack }: { kind: TargetKind; id: string; o
   const readings = useMemo(() => st.readings.filter((r) => r.targetId === id), [st.readings, id])
   const events = st.events.filter((e) => e.targetId === id)
   const [failNote, setFailNote] = useState('')
-  const [f, setF] = useState({ phase: 'strength', at: localNow(), p: '', temp: '', note: '' })
+  const [f, setF] = useState({ phase: 'strength', at: localNow(), p: '', temp: '', note: '', loc: kind === 'section' ? 'head' : 'g1', km: '', vol: '', unit: (st.settings.method === 'igs' ? 'psi' : 'bar') as 'psi' | 'bar' })
+  const secForIgs = kind === 'section' ? (st.sections.find((x) => x.id === id) ?? null) : null
+  const figIgs = useSectionIgs(secForIgs)
   if (!t) return <p className="ps-hint">یافت نشد.</p>
   const sec = kind === 'section' ? (t as HtSection) : null
   const pack = kind === 'pack' ? (t as HtPack) : null
@@ -41,10 +49,14 @@ export function TestPage({ kind, id, onBack }: { kind: TargetKind; id: string; o
   const leak = evaluateHold(readings, 'leak', cfg.leakHoldH, cfg.allowedDropBar)
   const title = sec ? `قطعهٔ ${sec.code} — کیلومتر ${fa(sec.kmFrom, 3)} تا ${fa(sec.kmTo, 3)}` : `${pack!.code} — ${pack!.title || pack!.station}`
 
+  // where the reading was taken: a point of the section (its km and elevation follow) or a station gauge
+  const locKm = sec ? (f.loc === 'start' ? sec.kmFrom : f.loc === 'end' ? sec.kmTo : f.loc === 'low' ? sec.elevMinKm : f.loc === 'high' ? sec.elevMaxKm : f.loc === 'head' ? sec.headKm : f.km === '' ? null : Number(f.km)) : null
+  const locElev = sec ? (f.loc === 'start' ? sec.elevStart : f.loc === 'end' ? sec.elevEnd : f.loc === 'low' ? sec.elevMin : f.loc === 'high' ? sec.elevMax : f.loc === 'head' ? sec.headElev : locKm != null && st.profile.length >= 2 ? elevAt(st.profile, locKm) : null) : null
   const addReading = async () => {
     const p = Number(f.p)
     if (!(p > 0)) return
-    if (await st.addReading(kind, id, { phase: f.phase, at: new Date(f.at).toISOString(), pressureBar: p, tempC: f.temp === '' ? null : Number(f.temp), note: f.note }, email)) setF({ ...f, at: localNow(), p: '', note: '' })
+    const bar = f.unit === 'psi' ? p / PSI_PER_BAR : p
+    if (await st.addReading(kind, id, { phase: f.phase, at: new Date(f.at).toISOString(), pressureBar: bar, tempC: f.temp === '' ? null : Number(f.temp), note: f.note, location: f.loc, km: locKm, elev: locElev, volumeM3: f.vol === '' ? null : Number(f.vol) }, email)) setF({ ...f, at: localNow(), p: '', note: '', vol: '' })
   }
 
   return (
@@ -74,6 +86,13 @@ export function TestPage({ kind, id, onBack }: { kind: TargetKind; id: string; o
         {t.failed && <p className="ps-hint is-warn"><XCircle size={14} /> مردود: {t.failedNote}</p>}
       </header>
 
+      {sec && figIgs && st.profile.length >= 2 && (
+        <section className="ps-card">
+          <header className="ps-card-head"><b><Gauge size={15} /> فشار آزمون در طول قطعه، بر حسب محل و ارتفاع</b><small className="ps-meta">قرائت‌ها در محل ثبتشان نشان داده می‌شوند</small></header>
+          <SectionHydraulic sec={sec} profile={st.profile} pr={figIgs.pr} igs={figIgs.igs} readings={readings} minPsiHigh={figIgs.pr.pMin} />
+        </section>
+      )}
+      {sec && <HtMinutes sec={sec} />}
       <section className="ps-card">
         <header className="ps-card-head"><b>اقدام بعدی</b></header>
         {t.stage === 'accepted' ? (
@@ -101,17 +120,24 @@ export function TestPage({ kind, id, onBack }: { kind: TargetKind; id: string; o
         {t.stage !== 'planned' && t.stage !== 'accepted' && !t.failed && (
           <div className="ps-inline-form">
             <label className="ps-field"><span>مرحله</span><select value={f.phase} onChange={(e) => setF({ ...f, phase: e.target.value })}>{PHASES.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label>
+            <label className="ps-field"><span>محل قرائت</span><select value={f.loc} onChange={(e) => setF({ ...f, loc: e.target.value })}>{(sec ? SEC_LOCS : PACK_LOCS).map((l) => <option key={l} value={l}>{LOC_UI[l].label}</option>)}</select></label>
+            {sec && f.loc === 'km' && <label className="ps-field"><span>کیلومتر</span><input type="number" step="0.001" value={f.km} onChange={(e) => setF({ ...f, km: e.target.value })} dir="ltr" /></label>}
+            {sec && locKm != null && <div className="ps-field"><span>کیلومتر / ارتفاع</span><b style={{ fontSize: 12.5 }}>{fa(locKm, 3)} · {locElev == null ? '—' : `${fa(locElev, 1)} m`}</b></div>}
             <div className="ps-field"><span>زمان</span><ShamsiDateTime value={f.at} onChange={(v) => setF({ ...f, at: v })} label="زمان قرائت" /></div>
-            <label className="ps-field"><span>فشار (bar) *</span><input type="number" inputMode="decimal" step="0.1" value={f.p} onChange={(e) => setF({ ...f, p: e.target.value })} dir="ltr" /></label>
+            <label className="ps-field"><span>فشار *</span><span style={{ display: 'flex', gap: 4 }}><input type="number" inputMode="decimal" step="0.1" value={f.p} onChange={(e) => setF({ ...f, p: e.target.value })} dir="ltr" style={{ flex: 1 }} /><select value={f.unit} onChange={(e) => setF({ ...f, unit: e.target.value as 'psi' | 'bar' })} aria-label="واحد فشار"><option value="psi">psi</option><option value="bar">bar</option></select></span></label>
+            {(f.phase === 'strength' || f.phase === 'air') && <label className="ps-field"><span>حجم آب تزریق‌شده، تجمعی (m³)</span><input type="number" step="0.001" value={f.vol} onChange={(e) => setF({ ...f, vol: e.target.value })} dir="ltr" /></label>}
             <label className="ps-field"><span>دما (°C)</span><input type="number" inputMode="decimal" step="0.1" value={f.temp} onChange={(e) => setF({ ...f, temp: e.target.value })} dir="ltr" /></label>
             <label className="ps-field is-wide"><span>توضیح</span><input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
             <button type="button" className="ps-btn is-primary" disabled={!(Number(f.p) > 0)} onClick={addReading}><Plus size={14} /> ثبت قرائت</button>
           </div>
         )}
-        {readings.length >= 2 && <PressureChart readings={readings} minTest={minTest} />}
+        {readings.length >= 2 && <TimeChart readings={readings}
+          required={sec && figIgs ? [{ label: 'فشار لازم مقاومت در کابین', psi: figIgs.pr.strength.head, color: '#f59e0b' }, { label: 'فشار لازم نشتی در کابین', psi: figIgs.pr.leak.head, color: '#f97316' }] : [{ label: 'فشار آزمون', psi: minTest * PSI_PER_BAR, color: '#f59e0b' }]}
+          verdicts={sec ? (['strength', 'leak'] as const).map((k) => ({ label: k === 'strength' ? 'آزمون مقاومت' : 'آزمون نشتی', result: st.forms.find((x) => x.targetId === id && x.kind === k)?.result ?? null })) : [{ label: 'آزمون ایستگاه', result: t.stage === 'accepted' ? 'pass' : t.failed ? 'fail' : 'pending' }]} />}
+        {sec && figIgs && readings.some((r) => r.phase === 'strength' && r.volumeM3 != null) && <PvChart readings={readings} volumeM3={figIgs.mix.volumeM3} igs={figIgs.igs} />}
         {readings.length > 0 ? (
-          <div className="ps-table-wrap"><table className="ps-table"><thead><tr><th>زمان</th><th>مرحله</th><th>فشار (bar)</th><th>دما (°C)</th><th>توضیح</th><th>ثبت‌کننده</th></tr></thead>
-            <tbody>{[...readings].reverse().map((r) => <tr key={r.id}><td className="ps-nowrap">{jd(r.at)} {tm(r.at)}</td><td>{PHASES.find((p) => p.key === r.phase)?.label ?? r.phase}</td><td className={r.phase === 'strength' && r.pressureBar < minTest ? 'is-late' : ''}>{fa(r.pressureBar, 2)}</td><td>{r.tempC == null ? '—' : fa(r.tempC, 1)}</td><td>{r.note}</td><td>{r.by}</td></tr>)}</tbody></table></div>
+          <div className="ps-table-wrap"><table className="ps-table"><thead><tr><th>زمان</th><th>مرحله</th><th>محل</th><th>فشار (psi / bar)</th><th>دما (°C)</th><th>توضیح</th><th>ثبت‌کننده</th></tr></thead>
+            <tbody>{[...readings].reverse().map((r) => <tr key={r.id}><td className="ps-nowrap">{jd(r.at)} {tm(r.at)}</td><td>{PHASES.find((p) => p.key === r.phase)?.label ?? r.phase}</td><td className="ps-nowrap">{(LOC_UI[r.location] ?? LOC_UI['']).label}{r.km != null ? ` · km ${fa(r.km, 3)}` : ''}</td><td className={sec ? '' : r.phase === 'strength' && r.pressureBar < minTest ? 'is-late' : ''}>{fa(r.pressureBar * PSI_PER_BAR, 1)} / {fa(r.pressureBar, 2)}</td><td>{r.tempC == null ? '—' : fa(r.tempC, 1)}</td><td>{r.note}</td><td>{r.by}</td></tr>)}</tbody></table></div>
         ) : <p className="ps-hint">هنوز قرائتی ثبت نشده است.</p>}
       </section>
 
@@ -137,36 +163,6 @@ function Hold({ label, need, h, allowed }: { label: string; need: number; h: Ret
       <span>افت فشار: {fa(h.drop, 2)} bar (مجاز {fa(allowed, 2)})</span>
       {h.tempChange != null && <span>تغییر دما: {fa(h.tempChange, 1)} °C</span>}
       <em>{h.readings < 2 ? 'قرائت کافی ثبت نشده' : h.ok ? 'قابل قبول' : h.longEnough ? 'افت بیش از حد مجاز' : 'هنوز کامل نشده'}</em>
-    </div>
-  )
-}
-
-/** pressure (and temperature) against time, with the minimum test pressure as a reference */
-function PressureChart({ readings, minTest }: { readings: HtReading[]; minTest: number }) {
-  const W = 900, H = 200, L = 50, R = 46, T = 14, B = 26
-  const ts = readings.map((r) => Date.parse(r.at)), t0 = Math.min(...ts), t1 = Math.max(...ts)
-  const ps = readings.map((r) => r.pressureBar).concat(minTest)
-  const p0 = Math.min(...ps) * 0.98, p1 = Math.max(...ps) * 1.02
-  const temps = readings.filter((r) => r.tempC != null).map((r) => r.tempC!)
-  const q0 = temps.length ? Math.min(...temps) - 1 : 0, q1 = temps.length ? Math.max(...temps) + 1 : 1
-  const x = (t: number) => L + ((t - t0) / (t1 - t0 || 1)) * (W - L - R)
-  const y = (p: number) => T + (1 - (p - p0) / (p1 - p0 || 1)) * (H - T - B)
-  const yt = (q: number) => T + (1 - (q - q0) / (q1 - q0 || 1)) * (H - T - B)
-  const line = readings.map((r, i) => `${i ? 'L' : 'M'}${x(Date.parse(r.at)).toFixed(1)},${y(r.pressureBar).toFixed(1)}`).join('')
-  const tline = readings.filter((r) => r.tempC != null).map((r, i) => `${i ? 'L' : 'M'}${x(Date.parse(r.at)).toFixed(1)},${yt(r.tempC!).toFixed(1)}`).join('')
-  return (
-    <div className="ht-chart-scroll">
-      <svg viewBox={`0 0 ${W} ${H}`} className="ht-chart" style={{ direction: 'ltr' }} role="img" aria-label="نمودار فشار و دما در طول آزمون">
-        <line x1={L} x2={W - R} y1={y(minTest)} y2={y(minTest)} className="ht-min" />
-        <text x={L + 4} y={y(minTest) - 4} className="ht-ax">min {minTest.toFixed(1)} bar</text>
-        {[p0, (p0 + p1) / 2, p1].map((p) => <text key={p} x={L - 6} y={y(p) + 4} textAnchor="end" className="ht-ax">{p.toFixed(1)}</text>)}
-        {temps.length > 0 && [q0, q1].map((q) => <text key={q} x={W - R + 6} y={yt(q) + 4} className="ht-ax is-temp">{q.toFixed(0)}°</text>)}
-        {tline && <path d={tline} className="ht-tline" />}
-        <path d={line} className="ht-pline" />
-        {readings.map((r) => <circle key={r.id} cx={x(Date.parse(r.at))} cy={y(r.pressureBar)} r={3} className="ht-pt" />)}
-        <text x={L} y={H - 6} className="ht-ax">{new Date(t0).toLocaleString('fa-IR-u-ca-persian', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</text>
-        <text x={W - R} y={H - 6} textAnchor="end" className="ht-ax">{new Date(t1).toLocaleString('fa-IR-u-ca-persian', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</text>
-      </svg>
     </div>
   )
 }

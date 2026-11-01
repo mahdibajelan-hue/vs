@@ -23,6 +23,9 @@ export interface HtParams {
   minSectionKm: number
   /** kg/m³ of the test medium (water ≈ 1000) */
   density: number
+  /** IGS-C-PL-100 yield method: the LOW point is set to `strengthPct` % SMYS and the HIGH point must keep `minHighPct` %
+   *  (instead of `testFactor` × design pressure at the high point); `gBarPerM` overrides the water column (1.42 psi/m) */
+  igs?: { strengthPct: number; minHighPct: number; gBarPerM: number }
 }
 export const DEFAULT_HT: Omit<HtParams, 'odMm' | 'wtMm' | 'smysMpa' | 'designPressureBar'> = { testFactor: 1.25, maxHoopPct: 95, maxSectionKm: 20, minSectionKm: 1, density: 1000 }
 
@@ -83,6 +86,8 @@ export interface SectionPlan {
   hoopLowPct: number; hoopHighPct: number
   /** the end of the section where the test head sits (the lower end: the gauge then reads the highest pressure) */
   headKm: number; pHead: number
+  /** elevations of the section's start and end and of the test head */
+  elevStart: number; elevEnd: number; headElev: number
   volumeM3: number
   /** why the section ends here */
   cut: 'elevation' | 'length' | 'preferred' | 'end'
@@ -93,9 +98,10 @@ export function sectionFigures(p: ProfilePoint[], a: number, b: number, x: HtPar
   const pts = [{ km: a, elev: elevAt(p, a) }, ...p.filter((q) => q.km > a && q.km < b), { km: b, elev: elevAt(p, b) }]
   let lo = pts[0], hi = pts[0]
   for (const q of pts) { if (q.elev < lo.elev) lo = q; if (q.elev > hi.elev) hi = q }
-  const g = barPerM(x.density)
-  const pHigh = x.testFactor * x.designPressureBar
-  const pLow = pHigh + g * (hi.elev - lo.elev)
+  const g = x.igs ? x.igs.gBarPerM : barPerM(x.density)
+  // IGS: the low point at the strength limit, everything above it lower by the water column; otherwise the high point at the minimum
+  const pLow = x.igs ? pressureAtPct(x.igs.strengthPct, x.smysMpa, x.odMm, x.wtMm) : x.testFactor * x.designPressureBar + g * (hi.elev - lo.elev)
+  const pHigh = pLow - g * (hi.elev - lo.elev)
   const pSmys = pressureAtPct(100, x.smysMpa, x.odMm, x.wtMm)
   const ea = elevAt(p, a), eb = elevAt(p, b)
   const headKm = eb < ea ? b : a
@@ -104,7 +110,7 @@ export function sectionFigures(p: ProfilePoint[], a: number, b: number, x: HtPar
     kmFrom: a, kmTo: b, lengthKm: b - a,
     elevMin: lo.elev, elevMinKm: lo.km, elevMax: hi.elev, elevMaxKm: hi.km,
     pHigh, pLow, hoopLowPct: (pLow / pSmys) * 100, hoopHighPct: (pHigh / pSmys) * 100,
-    headKm, pHead: pHigh + g * (hi.elev - Math.min(ea, eb)),
+    headKm, pHead: pLow - g * (Math.min(ea, eb) - lo.elev), elevStart: ea, elevEnd: eb, headElev: Math.min(ea, eb),
     volumeM3: Math.PI / 4 * idM * idM * (b - a) * 1000,
   }
 }
@@ -113,9 +119,9 @@ export interface SectionResult { sections: SectionPlan[]; maxDeltaH: number; pMi
 
 /** Cuts the profile into hydrotest sections (see the file header). */
 export function sectionize(profile: ProfilePoint[], x: HtParams, preferredKm: number[] = []): SectionResult {
-  const g = barPerM(x.density)
-  const pMin = x.testFactor * x.designPressureBar
-  const pMax = pressureAtPct(x.maxHoopPct, x.smysMpa, x.odMm, x.wtMm)
+  const g = x.igs ? x.igs.gBarPerM : barPerM(x.density)
+  const pMin = x.igs ? pressureAtPct(x.igs.minHighPct, x.smysMpa, x.odMm, x.wtMm) : x.testFactor * x.designPressureBar
+  const pMax = pressureAtPct(x.igs ? x.igs.strengthPct : x.maxHoopPct, x.smysMpa, x.odMm, x.wtMm)
   const maxDeltaH = (pMax - pMin) / g
   const empty = { sections: [], maxDeltaH, pMin, pMax }
   if (profile.length < 2) return { ...empty, error: 'پروفیل ارتفاعی خط در دسترس نیست.' }
@@ -153,7 +159,8 @@ export function sectionize(profile: ProfilePoint[], x: HtParams, preferredKm: nu
 
 // ── test record ─────────────────────────────────────────────────────────────
 export type HtStage = 'planned' | 'cleaning' | 'filling' | 'stabilization' | 'strength' | 'leak' | 'dewatering' | 'accepted'
-export const HT_STAGES: HtStage[] = ['planned', 'cleaning', 'filling', 'stabilization', 'strength', 'leak', 'dewatering', 'accepted']
+// IGS-C-PL-100 order: cleaning & gauge plate → filling (and the air test) → strength → stabilization at the leak pressure → leak → drying
+export const HT_STAGES: HtStage[] = ['planned', 'cleaning', 'filling', 'strength', 'stabilization', 'leak', 'dewatering', 'accepted']
 export const HT_STAGE_FA: Record<HtStage, string> = { planned: 'برنامه‌ریزی‌شده', cleaning: 'پیگ‌رانی و گیجینگ', filling: 'آبگیری', stabilization: 'تثبیت دما و فشار', strength: 'آزمون مقاومت', leak: 'آزمون نشتی', dewatering: 'تخلیه و خشک‌کردن', accepted: 'پذیرفته‌شده' }
 export const HT_STAGE_COLOR: Record<HtStage, string> = { planned: '#64748b', cleaning: '#a78bfa', filling: '#38bdf8', stabilization: '#06b6d4', strength: '#f59e0b', leak: '#f97316', dewatering: '#84cc16', accepted: '#22c55e' }
 export const HT_FAILED_COLOR = '#ef4444'

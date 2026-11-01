@@ -56,4 +56,15 @@ near(coveredKm([[0, 5], [4, 8], [10, 12], [11.5, 11.8]]), 10, 1e-9)
 const rg = rangesOfJoints([1, 2, 3, 10], 12, 100)
 assert.equal(rg.length, 2); near(rg[0][0], 100, 1e-9); near(rg[0][1], 100.036, 1e-9); near(rg[1][0], 100.108, 1e-9)
 near(overlapKm(100.02, 100.2, rg), 0.016 + 0.012, 1e-9)
+// IGS yield method: low point at 110 % SMYS, high point not below 95 %, water column 1.42 psi/m
+{
+  const g = 1.42 / 14.5038
+  const x = { odMm: 42 * 25.4, wtMm: 0.688 * 25.4, smysMpa: 448.159, designPressureBar: 96.5, testFactor: 1.25, maxHoopPct: 95, maxSectionKm: 20, minSectionKm: 1, density: 1000, igs: { strengthPct: 110, minHighPct: 95, gBarPerM: g } }
+  const prof = [{ km: 0, elev: 10.37 }, { km: 3, elev: 44.31 }, { km: 9.98, elev: 21.48 }]
+  const f = sectionFigures(prof, 0, 9.98, x)
+  near(f.pLow * 14.5038, 2342.48, 0.5); near(f.pHigh * 14.5038, 2294.28, 0.5); near(f.hoopLowPct, 110, 0.01)
+  near(f.pHead * 14.5038, 2342.48, 0.5); near(f.headElev, 10.37, 0.01) // the head at the lower end (here the low point)
+  const r = sectionize([{ km: 0, elev: 0 }, { km: 30, elev: 0 }, { km: 31, elev: 600 }], x)
+  near(r.maxDeltaH, 224.95, 0.2) // (2342.48 − 2023.05) / 1.42
+}
 console.log('testing/htCore: all assertions passed')

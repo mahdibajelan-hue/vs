@@ -14,6 +14,9 @@ import { DEFAULT_HT_SETTINGS, type CtDefect, type HtSettings, type TargetKind } 
 import { ProfileChart, type Band } from './components/ProfileChart'
 import { TestPage } from './components/TestPage'
 import { TestingGuide } from './components/TestingGuide'
+import { ProcedureSettings } from './components/ProcedureSettings'
+import { LineHydraulic } from './components/HtCharts'
+import { PSI_PER_BAR, sectionIgs, smysPsiOf } from './lib/igs'
 import '../pssr/pssr.css'
 import './testing.css'
 import { todayTehran } from '../../lib/today'
@@ -80,6 +83,19 @@ export function TestingApp({ onExitToHub }: { onExitToHub: () => void; onBackToR
 
 const bandsOf = (sections: ReturnType<typeof useTestingStore.getState>['sections']): Band[] => sections.map((s) => ({ key: s.id, from: s.kmFrom, to: s.kmTo, color: s.failed ? HT_FAILED_COLOR : HT_STAGE_COLOR[s.stage], label: `${s.code} · ${s.failed ? 'مردود' : HT_STAGE_FA[s.stage]}`, hiKm: s.elevMaxKm, loKm: s.elevMinKm }))
 
+/** every section with its strength pressure at the low point (psi): the IGS figure from its own pipe mix, else the stored one */
+function useLineSections() {
+  const st = useTestingStore()
+  return useMemo(() => {
+    const pipe = st.pipe, igs = st.igs()
+    const smys = st.settings.smysOverride ? st.settings.smysOverride * 145.038 : pipe ? smysPsiOf(pipe.material) : null
+    return st.sections.map((s) => {
+      const r = pipe && smys && st.settings.method === 'igs' ? sectionIgs({ odIn: pipe.diameterIn, smysPsi: smys, defaultWallIn: pipe.wallMm / 25.4, lengthM: (s.kmTo - s.kmFrom) * 1000, wallMix: s.wallMix, elev: { low: s.elevMin, high: s.elevMax, start: s.elevStart, end: s.elevEnd, head: s.headElev } }, igs) : null
+      return { ...s, pLowPsi: r ? r.pr.strength.low : s.pLow * PSI_PER_BAR, color: s.failed ? HT_FAILED_COLOR : HT_STAGE_COLOR[s.stage], status: s.failed ? 'مردود' : HT_STAGE_FA[s.stage] }
+    })
+  }, [st])
+}
+
 // ── dashboard ────────────────────────────────────────────────────────────────
 function Dashboard({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t: Tab) => void }) {
   const st = useTestingStore()
@@ -112,6 +128,10 @@ function Dashboard({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t:
         </> : <p className="ps-hint">{st.profile.length < 2 ? 'پروفیل ارتفاعی خط در دسترس نیست؛ راهنمای بخش «هیدروتست خط» را ببینید.' : 'هنوز قطعه‌بندی ذخیره نشده است.'}</p>}
         <button type="button" className="ps-btn" onClick={() => useModuleStore.getState().enterModule('pipelinedigitaltwin', undefined, 'hydro')}>نمایش روی دوقلوی دیجیتال</button>
       </section>
+      {st.profile.length >= 2 && st.sections.length > 0 && <section className="ps-card">
+        <header className="ps-card-head"><b><Waves size={15} /> فشار آزمون مقاومت در طول خط</b><small className="ps-meta">{st.settings.method === 'igs' ? 'روش تسلیمی IGS' : 'ضریب فشار طراحی'}</small></header>
+        <LineHydraulicCard onPick={onOpen} />
+      </section>}
     </div>
   )
 }
@@ -223,8 +243,18 @@ function LineTab({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t: T
           </table></div>
         </section>
       )}
+      {st.sections.length > 0 && <section className="ps-card">
+        <header className="ps-card-head"><b><Waves size={15} /> فشار آزمون مقاومت در طول خط</b><small className="ps-meta">روی هر قطعه بزنید</small></header>
+        <LineHydraulicCard onPick={onOpen} />
+      </section>}
     </div>
   )
+}
+
+function LineHydraulicCard({ onPick }: { onPick: (id: string) => void }) {
+  const st = useTestingStore()
+  const secs = useLineSections()
+  return <LineHydraulic profile={st.profile} sections={secs} psiPerM={st.settings.method === 'igs' ? st.igs().psiPerM : 0.0980665 * st.settings.density / 1000 * PSI_PER_BAR} onPick={onPick} />
 }
 
 function PlanTable({ rows }: { rows: SectionPlan[] }) {
@@ -383,8 +413,9 @@ function SettingsTab() {
   }
   return (
     <div className="ps-stack">
+      <ProcedureSettings key={st.settings.method + JSON.stringify(st.settings.igs ?? {})} />
       <section className="ps-card">
-        <header className="ps-card-head"><b><Settings2 size={15} /> پارامترهای آزمون</b></header>
+        <header className="ps-card-head"><b><Settings2 size={15} /> {st.settings.method === 'igs' ? 'پارامترهای عمومی (ضریب، چگالی، SMYS دستی، حد افت)' : 'پارامترهای آزمون'}</b></header>
         <p className="ps-hint">قطر، ضخامت، گرید و فشار طراحی لوله از تنظیمات دوقلوی دیجیتال خوانده می‌شود ({st.pipe ? `Ø${st.pipe.diameterIn}″ × ${st.pipe.wallMm} mm، ${st.pipe.material}، ${st.pipe.designPressureBar} bar` : '—'}) تا در همهٔ ماژول‌ها یکی باشد.</p>
         <div className="ps-grid">
           <Field label="ضریب فشار آزمون مقاومت" hint="× فشار طراحی در نقطهٔ بالا (مثلاً ۱٫۲۵ یا ۱٫۵)"><input type="number" step="0.05" value={x.testFactor} onChange={num('testFactor')} /></Field>
@@ -398,7 +429,7 @@ function SettingsTab() {
           <Field label="حداکثر افت فشار مجاز (bar)"><input type="number" step="0.1" value={x.allowedDropBar} onChange={num('allowedDropBar')} /></Field>
         </div>
         <div className="ps-actions">
-          <button type="button" className="ps-btn is-primary" disabled={!isAdmin} onClick={() => st.saveSettings(x, email)}><CheckCircle2 size={15} /> ذخیره</button>
+          <button type="button" className="ps-btn is-primary" disabled={!isAdmin} onClick={() => st.saveSettings({ ...x, method: st.settings.method, igs: st.settings.igs, equipment: st.settings.equipment, parties: st.settings.parties }, email)}><CheckCircle2 size={15} /> ذخیره</button>
           <button type="button" className="ps-btn is-ghost" onClick={() => setX({ ...DEFAULT_HT_SETTINGS, profile: x.profile, profileName: x.profileName })}>مقادیر پیش‌فرض</button>
           {!isAdmin && <small className="ps-meta">فقط مدیر سامانه پارامترها را تغییر می‌دهد.</small>}
         </div>
