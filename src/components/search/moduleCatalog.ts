@@ -12,6 +12,7 @@ export const MODULE_CATALOG: { key: ModuleKey | 'radar'; fa: string; en: string;
   { key: 'statements', fa: 'تولید صورت‌وضعیت (E·P·C)', en: 'Payment statements', words: 'صورت وضعیت صورتوضعیت مهندسی کالا اجرا ماهانه کارکرد پرداخت مرحله ای توالی پرداخت کسور پیش پرداخت حسن انجام کار سقف پیمان' },
   { key: 'testing', fa: 'آزمایش‌ها (هیدروتست و پوشش)', en: 'Hydrotest / Coating test', words: 'هیدروتست هیدرواستاتیک تست فشار قطعه بندی پروفیل پوشش هالیدی DCVG CIPS ایستگاه بسته آزمون' },
   { key: 'pssr', fa: 'آمادگی راه‌اندازی (PSSR)', en: 'PSSR / RFSU', words: 'PSSR RFSU ایمنی راه اندازی پیش راه اندازی پانچ لیست تزریق گاز گواهی آمادگی' },
+  { key: 'stakeholders', fa: 'مدیریت ذینفعان', en: 'Stakeholder Management', words: 'ذینفع ذی نفع ذینفعان stakeholder قدرت علاقه تعامل جلسه نامه نگرانی انتظارات جامعه محلی مالکان فرمانداری مجوز ارتباطات' },
   { key: 'stagegate', fa: 'چرخه عمر پروژه (Stage-Gate)', en: 'Stage-Gate', words: 'گیت مرحله چرخه عمر فاز تصویب' },
   { key: 'taskissue', fa: 'مدیریت موانع و اقدامات', en: 'Issue & Task', words: 'مانع مسئله اقدام پیگیری issue' },
   { key: 'supervision', fa: 'حضور و غیاب دستگاه نظارت', en: 'Supervision Attendance', words: 'ناظر نظارت نماینده کارفرما حضور غیاب اضافه کار ساعت کار صبحانه ناهار شام خودرو استیجاری کارت ساعت' },

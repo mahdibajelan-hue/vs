@@ -142,6 +142,13 @@ export const KINDS: Record<InboxKind, KindDef> = {
   ht_failed: { ...M.ht_failed, ask: 'آزمون این مقطع یا پکیج ناموفق ثبت شده است. پس از تعمیر، آزمون مجدد را در ماژول «آزمایش‌ها» ثبت کنید.', actions: () => [] },
   ht_accept: { ...M.ht_accept, ask: 'آزمون به مرحلهٔ تخلیه رسیده و برای پذیرش نهایی آماده است.', actions: () => [] },
   ht_late: { ...M.ht_late, ask: 'تاریخ برنامه‌ریزی‌شدهٔ شروع این آزمون گذشته و آزمون هنوز شروع نشده است.', actions: () => [] },
+  sh_followup: { ...M.sh_followup, ask: 'این اقدام پس از تعامل با ذینفع به شما سپرده شده و مهلت آن رسیده یا نزدیک است. پس از انجام، آن را «انجام شد» ثبت کنید؛ سوابق در ماژول «مدیریت ذینفعان» است.', actions: () => [
+    A('done', 'انجام شد', 'good', 'none', (i) => upd('sh_engagements', i.refId, { next_done: true, next_done_at: new Date().toISOString() })),
+  ] },
+  sh_concern: { ...M.sh_concern, ask: 'پیگیری این نگرانی ذینفع با شماست. پاسخ یا اقدام انجام‌شده را بنویسید و آن را رفع‌شده ثبت کنید، یا وضعیت را «در حال پیگیری» کنید.', actions: () => [
+    A('progress', 'در حال پیگیری', 'plain', 'none', (i) => upd('sh_concerns', i.refId, { status: 'in_progress', updated_at: new Date().toISOString() })),
+    A('resolve', 'رفع شد', 'good', 'req', (i, x) => upd('sh_concerns', i.refId, { status: 'resolved', resolution: x.note, resolved_on: today(), updated_at: new Date().toISOString() })),
+  ] },
   mission_mine: { ...M.mission_mine, ask: 'مأموریت شما منتظر اقدام شماست؛ ادامهٔ کار در ماژول مأموریت‌ها است.', actions: () => [] },
 }
 

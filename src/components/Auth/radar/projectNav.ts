@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  BadgeDollarSign, CalendarClock, Droplets, HeartPulse, LayoutDashboard, ShieldCheck, ClipboardList, Cpu, GitPullRequestArrow, HardHat, PackageCheck,
+  BadgeDollarSign, CalendarClock, Droplets, Handshake, HeartPulse, LayoutDashboard, ShieldCheck, ClipboardList, Cpu, GitPullRequestArrow, HardHat, PackageCheck,
   PencilRuler, Radar, ReceiptText, Route, ShieldAlert, Sparkles, Sprout,
 } from 'lucide-react'
 import { PROJECT_SCOPED_MODULES, type ModuleKey } from '../../../store/useModuleStore'
@@ -44,6 +44,7 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
   { id: 'risk', label: 'ریسک و مسائل', items: [
     { id: 'risk', module: 'risk', label: 'مدیریت ریسک', icon: ShieldAlert, accent: '#f43f5e' },
     { id: 'taskissue', module: 'taskissue', label: 'موانع و اقدامات', icon: ClipboardList, accent: '#f97316' },
+    { id: 'stakeholders', module: 'stakeholders', label: 'مدیریت ذینفعان', icon: Handshake, accent: '#a78bfa' },
   ] },
   { id: 'assets', label: 'زمین و دارایی', items: [
     { id: 'landacq', module: 'landacq', label: 'تملک و آزادسازی اراضی', icon: Sprout, accent: '#84cc16' },

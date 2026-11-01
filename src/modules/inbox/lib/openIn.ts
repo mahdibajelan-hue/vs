@@ -29,6 +29,6 @@ export function openInModule(item: InboxItem): void {
     if (item.projectId) window.sessionStorage.setItem('sch.openProject', item.projectId)
   } else if (item.source === 'missions') link({ module: 'missions', recordId: item.refId })
   // project modules without a deep link of their own open on the item's project
-  else if ((item.source === 'statements' || item.source === 'pssr' || item.source === 'testing') && item.projectId) useProjectContextStore.getState().setProject(item.projectId)
+  else if ((item.source === 'statements' || item.source === 'pssr' || item.source === 'testing' || item.source === 'stakeholders') && item.projectId) useProjectContextStore.getState().setProject(item.projectId)
   useModuleStore.getState().enterModule(SOURCE_MODULE[item.source])
 }
