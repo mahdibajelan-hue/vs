@@ -17,6 +17,7 @@ import {
   ATTITUDE_COLOR, ATTITUDE_FA, CATEGORY_FA, CONCERN_CAT_FA, CONCERN_STATUS_FA, ENGAGEMENT_FA, ENGAGEMENT_ORDER, KIND_FA, PRIORITY_COLOR, PRIORITY_FA, QUADRANT_FA, SENTIMENT_COLOR, SENTIMENT_FA,
   type Attitude, type Category, type Concern, type ConcernCategory, type ConcernPriority, type ConcernStatus, type Engagement, type EngagementKind, type Quadrant, type Sentiment, type Stakeholder,
 } from './types'
+import { StakeholderOrbit } from './components/StakeholderOrbit'
 import './stakeholders.css'
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
@@ -80,7 +81,7 @@ export function StakeholdersApp({ onExitToHub }: { onExitToHub: () => void; onBa
           : st.loading ? <p className="sh-loading"><Loader2 size={16} className="sh-spin" aria-hidden /> در حال بارگذاری…</p>
           : open ? <Detail id={open} views={views} today={today} onBack={() => setOpen(null)} onDialog={setDialog} />
           : !st.stakeholders.length ? <Empty icon={<Handshake size={30} />} title="هنوز ذینفعی ثبت نشده است" text="ذینفعان پروژه را ثبت کنید: کارفرما، مشاور، پیمانکاران، نهادهای صدور مجوز، مدیریت محلی، مالکان اراضی و جامعهٔ محلی. برای هر ذینفع میزان قدرت و علاقه، نگرش و سطح تعامل فعلی و مطلوب را مشخص کنید." action={<button type="button" className="sh-btn is-primary" onClick={() => setDialog({ kind: 'stakeholder' })}><Plus size={15} aria-hidden /> ثبت اولین ذینفع</button>} />
-          : tab === 'dash' ? <Dashboard views={views} summary={summary} onOpen={setOpen} onTab={nav} />
+          : tab === 'dash' ? <Dashboard views={views} summary={summary} onOpen={setOpen} onTab={nav} projectLabel={project?.shortName || project?.officialName || ''} />
           : tab === 'register' ? <Register views={views} onOpen={setOpen} />
           : tab === 'grid' ? <PowerGrid views={views} onOpen={setOpen} />
           : tab === 'engagement' ? <EngagementMatrix views={views} onOpen={setOpen} />
@@ -105,13 +106,36 @@ const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((w) 
 
 /* ── dashboard ──────────────────────────────────────────────────────── */
 
-function Dashboard({ views, summary, onOpen, onTab }: { views: StakeholderView[]; summary: ReturnType<typeof summarise>; onOpen: (id: string) => void; onTab: (t: Tab) => void }) {
+function Dashboard({ views, summary, onOpen, onTab, projectLabel }: { views: StakeholderView[]; summary: ReturnType<typeof summarise>; onOpen: (id: string) => void; onTab: (t: Tab) => void; projectLabel: string }) {
   const urgent = views.filter((v) => v.s.active && v.alerts.length).sort((a, b) => b.attention - a.attention).slice(0, 8)
   const months = summary.months.map((m) => ({ ...m, label: formatJalali(`${m.month}-15`).slice(0, 7) }))
   const cats = Object.entries(views.filter((v) => v.s.active).reduce<Record<string, number>>((a, v) => { a[v.s.category] = (a[v.s.category] ?? 0) + 1; return a }, {})).sort((a, b) => b[1] - a[1])
   const catMax = Math.max(1, ...cats.map((c) => c[1]))
+  const al = summary.alignment
+  const tone = al == null ? { c: '#64748b', t: 'بدون داده', I: Target } : al >= 75 ? { c: '#22c55e', t: 'هم‌راستا', I: CheckCircle2 } : al >= 50 ? { c: '#eab308', t: 'نیازمند تقویت', I: TriangleAlert } : { c: '#f97316', t: 'شکاف جدی تعامل', I: TriangleAlert }
+  const StatusIco = tone.I
   return (
     <>
+      <section className="sh-hero-dash" style={{ '--c': tone.c } as CSSProperties}>
+        <div className="sh-hd-info">
+          <span className="sh-eyebrow" dir="ltr">STAKEHOLDER ORBIT <i>·</i> Map <i>|</i> Engage <i>|</i> Align</span>
+          <h1>نقشهٔ ذینفعان پروژه</h1>
+          <p>جایگاه هر ذینفع بر پایهٔ قدرت، علاقه و نگرش او و فاصله‌اش از سطح تعامل مطلوب. روی هر ذینفع بزنید تا پرونده‌اش باز شود.</p>
+          <div className="sh-hd-gauge">
+            <AlignRing value={al} color={tone.c} />
+            <span className="sh-pill"><small>وضعیت تعامل ذینفعان</small><b><StatusIco size={16} aria-hidden />{tone.t}</b></span>
+          </div>
+          <div className="sh-hd-stats">
+            {(Object.keys(QUADRANT_FA) as Quadrant[]).map((q) => (
+              <button key={q} type="button" onClick={() => onTab('grid')} style={{ '--c': QUADRANT_FA[q].color } as CSSProperties}>
+                <b>{fa(summary.byQuadrant[q])}</b><small>{QUADRANT_FA[q].name}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+        <StakeholderOrbit views={views} onOpen={onOpen} projectLabel={projectLabel} />
+      </section>
+
       <section className="sh-kpis">
         <Kpi icon={<UsersRound size={18} />} label="ذینفعان فعال" value={fa(summary.active)} sub={`${fa(summary.byQuadrant.manage)} نفر در گروه «مدیریت نزدیک»`} color="#8b5cf6" onClick={() => onTab('register')} />
         <Kpi icon={<Target size={18} />} label="هم‌راستایی تعامل" value={summary.alignment == null ? '—' : `${fa(summary.alignment)}٪`} sub={summary.belowDesired ? `${fa(summary.belowDesired)} ذینفع پایین‌تر از سطح مطلوب` : 'همه در سطح مطلوب یا بالاتر'} color={summary.alignment != null && summary.alignment < 60 ? '#f59e0b' : '#10b981'} onClick={() => onTab('engagement')} />
@@ -136,13 +160,6 @@ function Dashboard({ views, summary, onOpen, onTab }: { views: StakeholderView[]
             </ul>
           ) : <p className="sh-hint"><CheckCircle2 size={15} aria-hidden /> ذینفعی که اکنون نیاز به اقدام داشته باشد دیده نمی‌شود.</p>}
         </section>
-        <section className="sh-card">
-          <CardHead icon={<Grid3x3 size={16} />} title="نقشهٔ قدرت و علاقه" sub="برای دیدن جزئیات روی یک نام بزنید" />
-          <PowerGrid views={views} onOpen={onOpen} compact />
-        </section>
-      </div>
-
-      <div className="sh-cols">
         <section className="sh-card">
           <CardHead icon={<MessagesSquare size={16} />} title="تعاملات شش ماه اخیر" sub="تعداد تعاملات ثبت‌شده در هر ماه به تفکیک نتیجه" />
           <div className="sh-chart">
@@ -170,8 +187,27 @@ function Dashboard({ views, summary, onOpen, onTab }: { views: StakeholderView[]
             <span style={{ '--c': '#ef4444' } as CSSProperties}><b>{fa(summary.resistant)}</b> مقاوم یا مخالف جدی</span>
           </div>
         </section>
+        <section className="sh-card">
+          <CardHead icon={<Grid3x3 size={16} />} title="نقشهٔ قدرت و علاقه" sub="برای دیدن جزئیات روی یک نام بزنید" />
+          <PowerGrid views={views} onOpen={onOpen} compact />
+        </section>
       </div>
     </>
+  )
+}
+
+/** engagement alignment as a holographic ring on a pedestal */
+function AlignRing({ value, color }: { value: number | null; color: string }) {
+  const R = 64, Cc = 2 * Math.PI * R
+  return (
+    <span className="sh-aring" role="img" aria-label={`هم‌راستایی تعامل ${value == null ? 'بدون داده' : `${fa(value)} درصد`}`}>
+      <svg viewBox="0 0 160 160" aria-hidden>
+        {Array.from({ length: 48 }, (_, i) => { const a = (i / 48) * Math.PI * 2 - Math.PI / 2; return <line key={i} x1={80 + 76 * Math.cos(a)} y1={80 + 76 * Math.sin(a)} x2={80 + (i % 4 ? 73 : 70) * Math.cos(a)} y2={80 + (i % 4 ? 73 : 70) * Math.sin(a)} className={value != null && i / 48 <= value / 100 ? 'on' : ''} /> })}
+        <circle cx="80" cy="80" r={R} className="t" />
+        <circle cx="80" cy="80" r={R} className="v" strokeDasharray={`${(Cc * (value ?? 0)) / 100} ${Cc}`} transform="rotate(-90 80 80)" style={{ stroke: color }} />
+      </svg>
+      <span className="sh-aring-t"><b>{value == null ? '—' : `${fa(value)}٪`}</b><small>هم‌راستایی تعامل</small></span>
+    </span>
   )
 }
 
