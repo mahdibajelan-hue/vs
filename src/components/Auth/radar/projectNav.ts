@@ -57,11 +57,19 @@ export const PROJECT_MODULES = PROJECT_SCOPED_MODULES
 /** 'issues' and 'taskissue' are the same module (مدیریت موانع و اقدامات): one menu entry, one badge. */
 export const navModule = (key: ModuleKey): ModuleKey => (key === 'issues' ? 'taskissue' : key)
 
-/** Menu badge inside a project: only that project's items of the module (the bell itself still shows everything). */
-export function projectBadges(items: { id: string; module: ModuleKey }[], projectOf: Record<string, string>, projectId: string | null): (key: ModuleKey) => number {
-  const counts = new Map<ModuleKey, number>()
-  if (projectId) for (const n of items) if (projectOf[n.id] === projectId) counts.set(navModule(n.module), (counts.get(navModule(n.module)) ?? 0) + 1)
-  return (key) => counts.get(key) ?? 0
+/**
+ * Menu badge inside a project: only that project's items of the module (the bell itself still shows everything).
+ * `work` is the person's waiting work from «کارتابل من»; a module shows the larger of its alerts and its work, since
+ * some of the same things reach both lists and must not be counted twice.
+ */
+export function projectBadges(items: { id: string; module: ModuleKey }[], projectOf: Record<string, string>, projectId: string | null, work: { module: ModuleKey; projectId: string | null }[] = []): (key: ModuleKey) => number {
+  const bell = new Map<ModuleKey, number>(), mine = new Map<ModuleKey, number>()
+  const add = (m: Map<ModuleKey, number>, k: ModuleKey) => m.set(navModule(k), (m.get(navModule(k)) ?? 0) + 1)
+  if (projectId) {
+    for (const n of items) if (projectOf[n.id] === projectId) add(bell, n.module)
+    for (const w of work) if (w.projectId === projectId) add(mine, w.module)
+  }
+  return (key) => Math.max(bell.get(key) ?? 0, mine.get(key) ?? 0)
 }
 
 // ── recently opened projects (per browser) ──────────────────────────────────

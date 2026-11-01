@@ -4,6 +4,7 @@ import { useModuleStore } from '../../../store/useModuleStore'
 import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { hasModuleAccess, useModuleAccessStore } from '../../../store/useModuleAccessStore'
 import { useNotificationStore } from '../../../store/useNotificationStore'
+import { useInboxWork } from '../../../modules/inbox/store/useInboxWork'
 import { useMasterDataStore } from '../../../modules/masterdata/store/useMasterDataStore'
 import { RadarSidebar } from './RadarSidebar'
 import { PROJECT_NAV, navModule, projectBadges, type ProjectNavItem } from './projectNav'
@@ -23,6 +24,7 @@ export function ProjectWorkspace({ children }: { children: ReactNode }) {
   const access = useModuleAccessStore((s) => s.accessibleModules)
   const notifications = useNotificationStore((s) => s.items)
   const projectOf = useNotificationStore((s) => s.projectOf)
+  const work = useInboxWork()
   const [desktop, setDesktop] = useState(wide)
   const [open, setOpen] = useState(() => {
     if (!wide()) return false
@@ -60,7 +62,7 @@ export function ProjectWorkspace({ children }: { children: ReactNode }) {
         project={project}
         active={activeId}
         canSee={(k) => hasModuleAccess(access, k)}
-        badgeFor={projectBadges(notifications, projectOf, projectId)}
+        badgeFor={projectBadges(notifications, projectOf, projectId, work)}
         open={open}
         overlay={!desktop}
         onItem={onItem}

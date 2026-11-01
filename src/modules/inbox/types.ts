@@ -1,6 +1,6 @@
 import type { ModuleKey } from '../../store/useModuleStore'
 
-export type InboxSource = 'execution' | 'material' | 'issues' | 'risk' | 'change' | 'missions' | 'finance' | 'scheduling'
+export type InboxSource = 'execution' | 'material' | 'issues' | 'risk' | 'change' | 'missions' | 'finance' | 'scheduling' | 'statements' | 'pssr' | 'testing'
 export type InboxKind =
   | 'review' | 'fix' | 'gap' | 'delay_assess' | 'delay_notice'
   | 'sign' | 'discrepancy' | 'change' | 'txn' | 'stage' | 'stage_fix'
@@ -10,6 +10,9 @@ export type InboxKind =
   | 'mission_decide' | 'mission_mine'
   | 'fin_certify' | 'fin_claim' | 'fin_retention' | 'fin_guarantee' | 'fin_pay'
   | 'sch_review' | 'sch_approve' | 'sch_fix' | 'sch_eot'
+  | 'pst_approve' | 'pst_post' | 'pst_fix'
+  | 'pssr_sign' | 'pssr_verify' | 'pssr_punch' | 'pssr_gasin'
+  | 'ht_failed' | 'ht_accept' | 'ht_late'
 
 /** One thing that waits for the signed-in person, as computed by the database function inbox_my_items(). */
 export interface InboxItem {
@@ -29,8 +32,8 @@ export interface InboxItem {
 
 export type InboxGroup = 'decide' | 'do' | 'fix'
 export const GROUP_LABEL_FA: Record<InboxGroup, string> = { decide: 'تصمیم و تأیید', do: 'کار من', fix: 'اصلاح و پیگیری' }
-export const SOURCE_LABEL_FA: Record<InboxSource, string> = { execution: 'مدیریت اجرا', material: 'کنترل متریال', issues: 'موانع و اقدامات', risk: 'مدیریت ریسک', change: 'مدیریت تغییرات', missions: 'مأموریت‌ها', finance: 'مالی و قرارداد', scheduling: 'برنامه‌ریزی و کنترل زمان' }
-export const SOURCE_MODULE: Record<InboxSource, ModuleKey> = { execution: 'execution', material: 'material', issues: 'issues', risk: 'risk', change: 'change', missions: 'missions', finance: 'finance', scheduling: 'scheduling' }
+export const SOURCE_LABEL_FA: Record<InboxSource, string> = { execution: 'مدیریت اجرا', material: 'کنترل متریال', issues: 'موانع و اقدامات', risk: 'مدیریت ریسک', change: 'مدیریت تغییرات', missions: 'مأموریت‌ها', finance: 'مالی و قرارداد', scheduling: 'برنامه‌ریزی و کنترل زمان', statements: 'تولید صورت‌وضعیت', pssr: 'آمادگی راه‌اندازی (PSSR)', testing: 'آزمایش‌ها' }
+export const SOURCE_MODULE: Record<InboxSource, ModuleKey> = { execution: 'execution', material: 'material', issues: 'issues', risk: 'risk', change: 'change', missions: 'missions', finance: 'finance', scheduling: 'scheduling', statements: 'statements', pssr: 'pssr', testing: 'testing' }
 
 export type ActionTone = 'good' | 'bad' | 'warn' | 'plain'
 export interface ActionInput { note: string; progress?: number; refNo?: string; refDate?: string }
@@ -75,6 +78,16 @@ export const KIND_META: Record<InboxKind, { label: string; group: InboxGroup }> 
   sch_approve: { label: 'تأیید نسخهٔ برنامه', group: 'decide' },
   sch_fix: { label: 'برنامهٔ برگشتی', group: 'fix' },
   sch_eot: { label: 'تصمیم دربارهٔ تمدید زمان', group: 'decide' },
+  pst_approve: { label: 'تأیید صورت‌وضعیت تولیدشده', group: 'decide' },
+  pst_post: { label: 'ارسال صورت‌وضعیت به مالی', group: 'do' },
+  pst_fix: { label: 'صورت‌وضعیت ردشده', group: 'fix' },
+  pssr_sign: { label: 'امضای PSSR', group: 'decide' },
+  pssr_verify: { label: 'تأیید رفع پانچ', group: 'decide' },
+  pssr_punch: { label: 'پانچ باز', group: 'do' },
+  pssr_gasin: { label: 'تأیید مجوز گازدهی', group: 'decide' },
+  ht_failed: { label: 'آزمون ناموفق', group: 'fix' },
+  ht_accept: { label: 'پذیرش آزمون', group: 'decide' },
+  ht_late: { label: 'آزمون عقب‌افتاده', group: 'do' },
 }
 
 export interface KindDef {

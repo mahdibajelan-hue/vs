@@ -127,6 +127,21 @@ export const KINDS: Record<InboxKind, KindDef> = {
     A('approve', 'تأیید به‌اندازهٔ ادعا', 'good', 'opt', (i, x) => upd('sch_delay_events', i.refId, { status: 'approved', approved_days: num(i.extra.days), note: x.note || undefined })),
     A('reject', 'رد تمدید', 'bad', 'req', (i, x) => upd('sch_delay_events', i.refId, { status: 'rejected', approved_days: 0, note: x.note })),
   ] },
+  pst_approve: { ...M.pst_approve, ask: 'صورت‌وضعیت تولیدشده برای تأیید ارسال شده است. با تأیید، صورت‌وضعیت در ماژول مالی به‌عنوان کارکرد تأییدشده ثبت می‌شود؛ جزئیات ردیف‌ها در «تولید صورت‌وضعیت» است.', actions: () => [
+    A('approve', 'تأیید', 'good', 'none', (i) => rpc('pst_set_status', { p_stmt: i.refId, p_status: 'approved', p_reason: '' })),
+    A('reject', 'رد', 'bad', 'req', (i, x) => rpc('pst_set_status', { p_stmt: i.refId, p_status: 'rejected', p_reason: x.note })),
+  ] },
+  pst_post: { ...M.pst_post, ask: 'صورت‌وضعیت تأیید شده اما هنوز به ماژول مالی ارسال نشده است. با ارسال، یک صورت‌وضعیت در قرارداد مربوط ثبت می‌شود.', actions: () => [
+    A('post', 'ارسال به مالی', 'good', 'none', (i) => rpc('pst_post', { p_stmt: i.refId })),
+  ] },
+  pst_fix: { ...M.pst_fix, ask: 'صورت‌وضعیت رد شده است. دلیل را بخوانید و آن را در «تولید صورت‌وضعیت» اصلاح و دوباره ارسال کنید.', actions: () => [] },
+  pssr_sign: { ...M.pssr_sign, ask: 'همهٔ بندهای الزامی چک‌لیست تکمیل و پانچ‌های A بسته شده‌اند و نوبت امضای شما در زنجیرهٔ تأیید PSSR رسیده است. امضا در ماژول «آمادگی راه‌اندازی» انجام می‌شود.', actions: () => [] },
+  pssr_verify: { ...M.pssr_verify, ask: 'رفع این پانچ اعلام شده است. پس از بازدید، تأیید یا بازگشایی آن را در ماژول «آمادگی راه‌اندازی» ثبت کنید.', actions: () => [] },
+  pssr_punch: { ...M.pssr_punch, ask: 'این پانچ هنوز باز است: پانچ A مانع راه‌اندازی است و پانچ‌های دیگر به مهلت رفع نزدیک شده یا از آن گذشته‌اند.', actions: () => [] },
+  pssr_gasin: { ...M.pssr_gasin, ask: 'مجوز گازدهی در وضعیت پیش‌نویس است و برای شروع عملیات به تأیید نیاز دارد.', actions: () => [] },
+  ht_failed: { ...M.ht_failed, ask: 'آزمون این مقطع یا پکیج ناموفق ثبت شده است. پس از تعمیر، آزمون مجدد را در ماژول «آزمایش‌ها» ثبت کنید.', actions: () => [] },
+  ht_accept: { ...M.ht_accept, ask: 'آزمون به مرحلهٔ تخلیه رسیده و برای پذیرش نهایی آماده است.', actions: () => [] },
+  ht_late: { ...M.ht_late, ask: 'تاریخ برنامه‌ریزی‌شدهٔ شروع این آزمون گذشته و آزمون هنوز شروع نشده است.', actions: () => [] },
   mission_mine: { ...M.mission_mine, ask: 'مأموریت شما منتظر اقدام شماست؛ ادامهٔ کار در ماژول مأموریت‌ها است.', actions: () => [] },
 }
 

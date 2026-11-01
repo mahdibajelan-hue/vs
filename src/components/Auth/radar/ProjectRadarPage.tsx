@@ -14,6 +14,7 @@ import { RadarProjectPicker } from './RadarProjectPicker'
 import { RadarSidebar } from './RadarSidebar'
 import { MobileRadar } from './MobileRadar'
 import { projectBadges, rememberProject, type ProjectNavItem } from './projectNav'
+import { useInboxWork } from '../../../modules/inbox/store/useInboxWork'
 import { recordVisit } from './projectVisits'
 import { ModuleHeaderActions } from '../../common/ModuleHeaderActions'
 import './radarShell.css'
@@ -54,7 +55,8 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
   }
   const notifications = useNotificationStore((s) => s.items)
   const projectOf = useNotificationStore((s) => s.projectOf)
-  const badgeFor = useMemo(() => projectBadges(notifications, projectOf, contextProjectId), [notifications, projectOf, contextProjectId])
+  const work = useInboxWork()
+  const badgeFor = useMemo(() => projectBadges(notifications, projectOf, contextProjectId, work), [notifications, projectOf, contextProjectId, work])
 
   useEffect(() => {
     if (!mdLoaded) fetchMasterData()

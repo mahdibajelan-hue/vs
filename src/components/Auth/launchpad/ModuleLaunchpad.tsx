@@ -15,6 +15,7 @@ import { InboxHubCard } from '../../../modules/inbox/components/InboxHubCard'
 import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { useMasterDataStore } from '../../../modules/masterdata/store/useMasterDataStore'
 import { PROJECT_MODULES } from '../radar/projectNav'
+import { useInboxWork } from '../../../modules/inbox/store/useInboxWork'
 
 type CardComponent = (props: { onSelect: () => void; locked?: boolean; badge?: number }) => ReactElement
 
@@ -45,8 +46,10 @@ export function ModuleLaunchpad({ onSelect, embedded }: { onSelect: (key: 'radar
   const locked = !isAuthed
   // The bell's items, counted per module so every tile shows its own share of the bell's total.
   const notifications = useNotificationStore((s) => s.items)
-  const countFor = (key: ModuleKey) => notifications.filter((n) => n.module === key).length
-  const projectCount = notifications.filter((n) => PROJECT_MODULES.has(n.module)).length
+  // …and the waiting work of «کارتابل من»: a module shows the larger of the two (some things reach both lists)
+  const work = useInboxWork()
+  const countFor = (key: ModuleKey) => Math.max(notifications.filter((n) => n.module === key).length, work.filter((w) => w.module === key).length)
+  const projectCount = [...PROJECT_MODULES].reduce((n, k) => n + countFor(k), 0)
   const mdLoaded = useMasterDataStore((s) => s.loaded)
   useEffect(() => {
     if (isAuthed && !mdLoaded) useMasterDataStore.getState().fetchAll()
