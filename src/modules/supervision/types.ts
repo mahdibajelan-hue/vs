@@ -20,6 +20,8 @@ export interface SvSettings {
   entryGraceDays: number
   /** largest error (m) of a cell / Wi-Fi position still accepted when GPS is not precise */
   networkMaxM: number
+  /** check-ins only with the person's own registered phone (Passkey) */
+  requireDevice: boolean
 }
 
 export interface SvPerson {
@@ -184,4 +186,28 @@ export interface SvPunch {
   /** gps = satellite fix; network = cell / Wi-Fi position (less precise) */
   quality: 'gps' | 'network'
   siteId: string | null
+  lat: number | null
+  lng: number | null
+  /** browser user-agent, the browser's install id and the client address, as recorded by the server */
+  device: string
+  installId: string
+  ip: string
+  /** the registered phone that signed this check-in (null: no phone signature) */
+  deviceId: string | null
+  verified: boolean
+}
+
+/** A phone registered as a person's key (Passkey). */
+export interface SvDevice {
+  id: string
+  personId: string
+  label: string
+  userAgent: string
+  installId: string
+  ip: string
+  status: 'pending' | 'active' | 'revoked'
+  createdAt: string
+  decidedAt: string | null
+  decideNote: string
+  lastUsedAt: string | null
 }

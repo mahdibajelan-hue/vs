@@ -3,6 +3,7 @@ import { Eraser, UserCheck } from 'lucide-react'
 import { formatJalali } from '../../../lib/jalali'
 import { useSupervisionStore, attKey, LOCKED_MSG, FUTURE_MSG, HEAD_MSG } from '../store/useSupervisionStore'
 import { STATUS_FA, STATUS_MARK, STATUS_ORDER, VSTATUS_FA, VSTATUS_MARK, VSTATUS_ORDER, activeDays, dayDefaults, dayHours, isWorking, mealsOf, personMonth, vehicleMonth } from '../lib/svCalc'
+import { SuspiciousPanel } from '../components/SuspiciousPanel'
 import { fa, faNum, monthDays, recordedUpTo, todayLocal, weekdayFa, type Ym } from '../lib/svMonth'
 import type { SvAttendance, SvPerson, SvSettings, SvStatus, SvVehicle, SvVehicleStatus } from '../types'
 import { Empty, Flash, LockNote, MonthNav, StatusSeg, useLockedIn } from '../components/common'
@@ -78,6 +79,7 @@ export function MonthPage({ month, onMonth, onGoRoster, onGoReport }: { month: Y
   const list = view === 'people' ? ppl : cars
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+      <SuspiciousPanel from={days[0].iso} to={days[days.length - 1].iso} compact />
       <div className="im-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: 12 }}>
         <MonthNav value={month} onChange={onMonth} />
         <div className="im-seg" role="tablist" aria-label="نوع">

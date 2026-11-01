@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, LogIn, LogOut, MapPin, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { Fingerprint, Loader2, LogIn, LogOut, MapPin, RefreshCw, ShieldCheck, Smartphone, TriangleAlert } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { formatJalali } from '../../../lib/jalali'
 import { STATUS_FA } from '../lib/svCalc'
@@ -9,11 +9,13 @@ import type { SvStatus } from '../types'
 import { FACES, FACE_FA, MEAL_FA } from '../lib/svMenu'
 import { myMenu, rateMeal, type MyMeal } from '../lib/menuApi'
 import { mealNutrition } from '../lib/svNutrition'
+import { installId, passkeyError, passkeySupported, phoneLabel, punchToken, registerPhone } from '../lib/passkey'
 
-export interface MyLink { person_id: string; project_id: string; project_name: string; full_name: string; role_title: string; shift_start: string | null; shift_end: string | null; sites: number }
+export type DeviceStatus = 'none' | 'pending' | 'active' | 'revoked'
+export interface MyLink { person_id: string; project_id: string; project_name: string; full_name: string; role_title: string; shift_start: string | null; shift_end: string | null; sites: number; require_device?: boolean; device_status?: DeviceStatus }
 type Day = { day: string; status: SvStatus; check_in: string | null; check_out: string | null; hours: number; overtime: number; source: string }
 type Punch = { kind: 'in' | 'out'; at: string; day: string; accepted: boolean; reason: string; distance_m: number | null; site: string | null }
-type Result = { accepted: boolean; reason: string; quality: 'gps' | 'network'; distance_m: number; radius_m: number; site: string; day: string; accuracy_m: number; network_max_m: number; check_in: string | null; check_out: string | null }
+type Result = { accepted: boolean; reason: string; quality: 'gps' | 'network'; verified?: boolean; distance_m: number; radius_m: number; site: string; day: string; accuracy_m: number; network_max_m: number; check_in: string | null; check_out: string | null }
 
 export async function loadMyLinks(): Promise<MyLink[]> {
   const { data, error } = await supabase.rpc('sv_my_links')
@@ -22,7 +24,7 @@ export async function loadMyLinks(): Promise<MyLink[]> {
 
 const dist = (m: number) => (m >= 1000 ? `${faNum(Math.round(m / 100) / 10)} کیلومتر` : `${fa(Math.round(m))} متر`)
 const clock = (iso: string) => { const d = new Date(iso); return fa(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`) }
-const REASON: Record<string, string> = { outside: 'خارج از محدوده', low_accuracy: 'دقت کم', no_check_in: 'بدون ورود', locked: 'ماه بسته', '': '' }
+const REASON: Record<string, string> = { outside: 'خارج از محدوده', low_accuracy: 'دقت کم', no_check_in: 'بدون ورود', locked: 'ماه بسته', device_required: 'بدون تأیید گوشی', device_pending: 'گوشی در انتظار تأیید', no_device: 'گوشی ثبت نشده', '': '' }
 
 const IOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent)
 function geoError(e: unknown): string {
@@ -42,6 +44,7 @@ function rpcError(m: string): string {
   if (/no_site/.test(m)) return 'هنوز محدودهٔ کارگاه برای این پروژه تعریف نشده است؛ به سرپرست دستگاه نظارت اطلاع دهید.'
   if (/not_linked/.test(m)) return 'حساب شما به نفری در این پروژه وصل نیست یا غیرفعال شده است.'
   if (/no_location/.test(m)) return 'موقعیت گوشی خوانده نشد.'
+  if (/bad_token/.test(m)) return 'تأیید گوشی منقضی شد یا معتبر نبود. دوباره بزنید.'
   return 'ثبت انجام نشد. اتصال اینترنت را بررسی کنید و دوباره بزنید.'
 }
 
@@ -59,6 +62,17 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
   const [acc, setAcc] = useState<number | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const today = todayLocal()
+  // the phone's state, read again whenever the page opens (an approval by the head shows without leaving the module)
+  const [devLocal, setDevLocal] = useState<Record<string, DeviceStatus>>({})
+  const devStatus: DeviceStatus = (link && (devLocal[link.person_id] ?? link.device_status)) || 'none'
+  const readDevice = useCallback(async () => {
+    if (!link) return
+    const { data } = await supabase.from('sv_devices').select('status').eq('person_id', link.person_id)
+    const st = ((data ?? []) as { status: string }[]).map((d) => d.status)
+    const v: DeviceStatus = st.includes('active') ? 'active' : st.includes('pending') ? 'pending' : st.length ? 'revoked' : 'none'
+    setDevLocal((x) => ({ ...x, [link.person_id]: v }))
+  }, [link])
+  useEffect(() => { void readDevice() }, [readDevice])
 
   const refresh = useCallback(async () => {
     if (!link) return
@@ -71,17 +85,28 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
   const punch = async (kind: 'in' | 'out') => {
     if (!link) return
     setBusy(kind); setMsg(null)
+    // the phone signs first (fingerprint / face / screen lock), then the location is read
+    let token: string | null = null
+    if (devStatus === 'active') {
+      try { token = await punchToken(link.person_id) } catch (e) {
+        if (link.require_device) { setBusy(null); setMsg({ ok: false, text: passkeyError(e) }); return }
+      }
+    } else if (link.require_device) {
+      setBusy(null)
+      setMsg({ ok: false, text: devStatus === 'pending' ? 'گوشی شما ثبت شده و در انتظار تأیید سرپرست نظارت است؛ پس از تأیید می‌توانید ورود و خروج را ثبت کنید.' : 'در این پروژه ورود و خروج فقط با گوشی ثبت‌شدهٔ خود شما ممکن است. ابتدا از کارت «گوشی من» گوشی خود را ثبت کنید.' })
+      return
+    }
     let pos: GeolocationPosition
     setAcc(null)
     try { pos = await fixWithNetworkFallback({ target: 50, maxMs: 15000, onProgress: setAcc }) } catch (e) { setBusy(null); setMsg({ ok: false, text: geoError(e) }); return }
     // every reading goes to the server, which decides (GPS, or a cell/Wi-Fi position within the project's limit) and keeps the attempt
-    const { data, error } = await supabase.rpc('sv_self_punch', { p_person: link.person_id, p_kind: kind, p_lat: pos.coords.latitude, p_lng: pos.coords.longitude, p_accuracy: pos.coords.accuracy, p_device: navigator.userAgent })
+    const { data, error } = await supabase.rpc('sv_punch', { p_person: link.person_id, p_kind: kind, p_lat: pos.coords.latitude, p_lng: pos.coords.longitude, p_accuracy: pos.coords.accuracy, p_device: navigator.userAgent, p_install: installId(), p_token: token })
     setBusy(null)
     if (error) { setMsg({ ok: false, text: rpcError(error.message) }); return }
     const r = data as Result
     if (r.accepted) {
       const t = kind === 'in' ? r.check_in : r.check_out
-      setMsg({ ok: true, text: `${kind === 'in' ? 'ورود' : 'خروج'} ثبت شد${t ? ` — ساعت ${fa(t)}` : ''}؛ «${r.site}»، ${dist(r.distance_m)} از مرکز${r.quality === 'network' ? `، با موقعیت آنتن/شبکهٔ گوشی (±${dist(r.accuracy_m)})؛ برای دقت بیشتر GPS را روشن نگه دارید` : ''}.${r.day !== today ? ` (برای روز ${fa(formatJalali(r.day))})` : ''}` })
+      setMsg({ ok: true, text: `${kind === 'in' ? 'ورود' : 'خروج'} ثبت شد${t ? ` — ساعت ${fa(t)}` : ''}${r.verified ? '، با تأیید گوشی' : ''}؛ «${r.site}»، ${dist(r.distance_m)} از مرکز${r.quality === 'network' ? `، با موقعیت آنتن/شبکهٔ گوشی (±${dist(r.accuracy_m)})؛ برای دقت بیشتر GPS را روشن نگه دارید` : ''}.${r.day !== today ? ` (برای روز ${fa(formatJalali(r.day))})` : ''}` })
     } else if (r.reason === 'outside') {
       setMsg({ ok: false, text: `خارج از محدودهٔ کارگاه هستید: ${dist(r.distance_m)} تا «${r.site}» (شعاع مجاز ${fa(r.radius_m)} متر). ثبت نشد؛ این تلاش در سابقه می‌ماند.` })
     } else if (r.reason === 'low_accuracy') {
@@ -92,6 +117,8 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
       setMsg({ ok: false, text: 'امروز «ورود» ثبت نشده است؛ اول ورود را بزنید.' })
     } else if (r.reason === 'locked') {
       setMsg({ ok: false, text: 'گزارش این ماه امضا شده و بسته است؛ به سرپرست نظارت اطلاع دهید.' })
+    } else if (r.reason === 'device_required' || r.reason === 'device_pending' || r.reason === 'no_device') {
+      setMsg({ ok: false, text: r.reason === 'device_pending' ? 'گوشی شما هنوز تأیید نشده است؛ ثبت نشد.' : r.reason === 'no_device' ? 'گوشی شما ثبت نشده است؛ ابتدا گوشی خود را ثبت کنید.' : 'ثبت بدون تأیید گوشی (اثر انگشت یا قفل گوشی) پذیرفته نمی‌شود.' })
     }
     await refresh()
   }
@@ -140,6 +167,8 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
         <p className="sv-note sv-me-privacy"><MapPin size={12} /> موقعیت فقط هنگام زدن دکمه یک بار خوانده می‌شود و با محدودهٔ کارگاه مقایسه می‌شود؛ ساعت ثبت، ساعت سرور است نه ساعت گوشی.</p>
       </section>
 
+      <PhoneCard link={link} status={devStatus} onRegistered={() => void readDevice()} />
+
       <MealRating personId={link.person_id} />
 
       <section className="sv-me-card">
@@ -165,6 +194,39 @@ export function MyCheckinPage({ links }: { links: MyLink[] }) {
         )}
       </section>
     </div>
+  )
+}
+
+/** گوشی من — registering this phone as the person's key, and its state */
+function PhoneCard({ link, status, onRegistered }: { link: MyLink; status: DeviceStatus; onRegistered: () => void }) {
+  const [ok, setOk] = useState<boolean | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  useEffect(() => { void passkeySupported().then(setOk) }, [])
+  const register = async () => {
+    setBusy(true); setMsg(null)
+    try {
+      await registerPhone(link.person_id, phoneLabel())
+      onRegistered()
+      setMsg({ ok: true, text: 'گوشی شما ثبت شد و پس از تأیید سرپرست نظارت فعال می‌شود.' })
+    } catch (e) { setMsg({ ok: false, text: passkeyError(e) }) }
+    setBusy(false)
+  }
+  const STATE: Record<DeviceStatus, { t: string; c: string }> = {
+    active: { t: 'گوشی شما ثبت و تأیید شده است. هر ورود و خروج با اثر انگشت، تشخیص چهره یا قفل همین گوشی تأیید می‌شود.', c: 'ok' },
+    pending: { t: 'گوشی شما ثبت شده و در انتظار تأیید سرپرست نظارت است.', c: 'wait' },
+    revoked: { t: 'گوشی قبلی شما غیرفعال شده است. اگر گوشی جدید دارید، آن را ثبت کنید.', c: 'bad' },
+    none: { t: link.require_device ? 'در این پروژه ورود و خروج فقط با گوشی ثبت‌شدهٔ خود شما ممکن است. گوشی خود را ثبت کنید.' : 'گوشی خود را ثبت کنید تا ورود و خروج شما با اثر انگشت یا قفل گوشی تأیید شود و کسی نتواند به‌جای شما ثبت کند.', c: link.require_device ? 'bad' : 'wait' },
+  }
+  return (
+    <section className="sv-me-card sv-phone">
+      <div className="sv-me-head"><b><Smartphone size={16} style={{ display: 'inline', verticalAlign: -3 }} /> گوشی من</b><span className={`sv-phone-state is-${STATE[status].c}`}>{status === 'active' ? 'تأییدشده' : status === 'pending' ? 'در انتظار تأیید' : status === 'revoked' ? 'غیرفعال' : 'ثبت نشده'}</span></div>
+      <p className="sv-note" style={{ margin: 0, lineHeight: 1.9 }}>{STATE[status].t}</p>
+      {(status === 'none' || status === 'revoked') && (ok === false
+        ? <p className="sv-me-msg bad"><TriangleAlert size={16} /> این مرورگر یا گوشی از تأیید با اثر انگشت یا قفل صفحه پشتیبانی نمی‌کند. سامانه را با Chrome (اندروید) یا Safari (آیفون) و با قفل صفحهٔ فعال باز کنید.</p>
+        : <button className="im-btn im-btn-primary" onClick={register} disabled={busy || ok === null}>{busy ? <Loader2 size={15} className="animate-spin" /> : <Fingerprint size={15} />} ثبت این گوشی</button>)}
+      {msg && <p className={`sv-me-msg ${msg.ok ? 'ok' : 'bad'}`} role="status">{msg.ok ? <ShieldCheck size={16} /> : <TriangleAlert size={16} />}{msg.text}</p>}
+    </section>
   )
 }
 

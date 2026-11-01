@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { fetchPages } from '../lib/fetchPages'
 import { useAuthStore } from '../../../store/useAuthStore'
-import type { SvAttendance, SvGuestMeal, SvPerson, SvPunch, SvSettings, SvSite, SvSignature, SvSignoff, SvSignStep, SvSnapshot, SvVehicle, SvVehicleDay } from '../types'
+import type { SvAttendance, SvDevice, SvGuestMeal, SvPerson, SvPunch, SvSettings, SvSite, SvSignature, SvSignoff, SvSignStep, SvSnapshot, SvVehicle, SvVehicleDay } from '../types'
 import { DEFAULT_SETTINGS } from '../lib/svCalc'
 import { addDays, todayLocal } from '../lib/svMonth'
 
@@ -42,10 +42,11 @@ const toAtt = (r: Row): SvAttendance => ({
   lateReason: s(r.late_reason), createdAt: s(r.created_at), updatedAt: s(r.updated_at),
 })
 const toVDay = (r: Row): SvVehicleDay => ({ vehicleId: s(r.vehicle_id), day: s(r.day), status: r.status as SvVehicleDay['status'], hours: n(r.hours), km: r.km == null ? null : n(r.km), source: (r.source as SvVehicleDay['source']) ?? 'manual', note: s(r.note), lateReason: s(r.late_reason), createdAt: s(r.created_at), updatedAt: s(r.updated_at) })
-const toSettings = (r: Row | null): SvSettings => r ? { dutyDays: n(r.duty_days), standardHours: n(r.standard_hours), overtimeMin: n(r.overtime_min), overtimeMax: n(r.overtime_max), vehicleHours: n(r.vehicle_hours), entryGraceDays: r.entry_grace_days == null ? 2 : n(r.entry_grace_days), networkMaxM: r.network_max_m == null ? 2000 : n(r.network_max_m) } : DEFAULT_SETTINGS
+const toSettings = (r: Row | null): SvSettings => r ? { dutyDays: n(r.duty_days), standardHours: n(r.standard_hours), overtimeMin: n(r.overtime_min), overtimeMax: n(r.overtime_max), vehicleHours: n(r.vehicle_hours), entryGraceDays: r.entry_grace_days == null ? 2 : n(r.entry_grace_days), networkMaxM: r.network_max_m == null ? 2000 : n(r.network_max_m), requireDevice: !!r.require_device } : DEFAULT_SETTINGS
 
 const toSite = (r: Row): SvSite => ({ id: s(r.id), name: s(r.name), lat: n(r.lat), lng: n(r.lng), radiusM: n(r.radius_m), active: !!r.active })
-const toPunch = (r: Row): SvPunch => ({ id: s(r.id), personId: s(r.person_id), kind: r.kind as SvPunch['kind'], at: s(r.at), day: s(r.day), accepted: !!r.accepted, reason: s(r.reason), distanceM: r.distance_m == null ? null : n(r.distance_m), accuracyM: r.accuracy_m == null ? null : n(r.accuracy_m), siteId: (r.site_id as string) ?? null, quality: (r.quality as SvPunch['quality']) ?? 'gps' })
+const toPunch = (r: Row): SvPunch => ({ id: s(r.id), personId: s(r.person_id), kind: r.kind as SvPunch['kind'], at: s(r.at), day: s(r.day), accepted: !!r.accepted, reason: s(r.reason), distanceM: r.distance_m == null ? null : n(r.distance_m), accuracyM: r.accuracy_m == null ? null : n(r.accuracy_m), siteId: (r.site_id as string) ?? null, quality: (r.quality as SvPunch['quality']) ?? 'gps', lat: r.lat == null ? null : n(r.lat), lng: r.lng == null ? null : n(r.lng), device: s(r.device), installId: s(r.install_id), ip: s(r.ip), deviceId: (r.device_id as string) ?? null, verified: !!r.verified })
+const toDevice = (r: Row): SvDevice => ({ id: s(r.id), personId: s(r.person_id), label: s(r.label), userAgent: s(r.user_agent), installId: s(r.install_id), ip: s(r.ip), status: r.status as SvDevice['status'], createdAt: s(r.created_at), decidedAt: (r.decided_at as string) ?? null, decideNote: s(r.decide_note), lastUsedAt: (r.last_used_at as string) ?? null })
 const toSignoff = (r: Row): SvSignoff => ({ month: s(r.month), status: r.status as SvSignoff['status'], from: s(r.from_day), to: s(r.to_day) })
 const toSignature = (r: Row): SvSignature => ({
   id: s(r.id), month: s(r.month), step: r.step as SvSignStep, userId: s(r.user_id), signerName: s(r.signer_name), signerTitle: s(r.signer_title), image: s(r.image),
@@ -89,6 +90,10 @@ interface State {
   sites: SvSite[]
   /** phone check-in attempts of the loaded range */
   punches: SvPunch[]
+  /** registered phones of the project's people */
+  devices: SvDevice[]
+  loadDevices: () => Promise<void>
+  decideDevice: (id: string, status: 'active' | 'revoked', note: string) => Promise<Result>
   saveSite: (x: Omit<SvSite, 'id'> & { id?: string }) => Promise<Result>
   deleteSite: (id: string) => Promise<Result>
   range: { from: string; to: string } | null
@@ -133,7 +138,7 @@ async function fetchRange(pid: string, from: string, to: string) {
     fetchPages<Row>((a, b) => supabase.from('sv_attendance').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to).order('day').order('id').range(a, b)),
     fetchPages<Row>((a, b) => supabase.from('sv_vehicle_days').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to).order('day').order('id').range(a, b)),
     fetchPages<Row>((a, b) => supabase.from('sv_guest_meals').select('*').eq('master_project_id', pid).gte('day', from).lte('day', to).order('day').order('created_at').order('id').range(a, b)),
-    fetchPages<Row>((a, b) => supabase.from('sv_self_punches').select('id,person_id,kind,at,day,accepted,reason,distance_m,accuracy_m,site_id,quality').eq('master_project_id', pid).gte('day', from).lte('day', to).order('at').order('id').range(a, b)),
+    fetchPages<Row>((a, b) => supabase.from('sv_self_punches').select('id,person_id,kind,at,day,accepted,reason,distance_m,accuracy_m,site_id,quality,lat,lng,device,install_id,ip,device_id,verified').eq('master_project_id', pid).gte('day', from).lte('day', to).order('at').order('id').range(a, b)),
   ])
   if (store.getState().projectId !== pid) return
   const att: Record<string, SvAttendance> = {}, vdays: Record<string, SvVehicleDay> = {}
@@ -143,11 +148,11 @@ async function fetchRange(pid: string, from: string, to: string) {
 }
 
 export const useSupervisionStore = create<State>()((set, get) => ({
-  projectId: null, loading: false, error: '', settings: DEFAULT_SETTINGS, people: [], vehicles: [], att: {}, vdays: {}, guests: [], sites: [], punches: [], range: null, rangeLoading: false, signoffs: {}, signatures: {},
+  projectId: null, loading: false, error: '', settings: DEFAULT_SETTINGS, people: [], vehicles: [], att: {}, vdays: {}, guests: [], sites: [], punches: [], devices: [], range: null, rangeLoading: false, signoffs: {}, signatures: {},
 
   load: async (projectId) => {
     const fresh = get().projectId !== projectId
-    set({ projectId, loading: fresh || !get().people.length, error: '', ...(fresh ? { people: [], vehicles: [], att: {}, vdays: {}, guests: [], range: null, settings: DEFAULT_SETTINGS, signoffs: {}, signatures: {}, sites: [], punches: [] } : {}) })
+    set({ projectId, loading: fresh || !get().people.length, error: '', ...(fresh ? { people: [], vehicles: [], att: {}, vdays: {}, guests: [], range: null, settings: DEFAULT_SETTINGS, signoffs: {}, signatures: {}, sites: [], punches: [], devices: [] } : {}) })
     const [st, pp, vv, so, si] = await Promise.all([
       supabase.from('sv_settings').select('*').eq('master_project_id', projectId).maybeSingle(),
       supabase.from('sv_people').select('*').eq('master_project_id', projectId).order('active', { ascending: false }).order('full_name'),
@@ -157,6 +162,7 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     ])
     if (get().projectId !== projectId) return
     set({ sites: ((si.data ?? []) as Row[]).map(toSite) })
+    void get().loadDevices()
     set({ signoffs: Object.fromEntries(((so.data ?? []) as Row[]).map(toSignoff).map((x) => [x.month, x])) })
     const e = pp.error ?? vv.error ?? st.error
     set({ loading: false, error: e ? err(e) ?? '' : '', settings: toSettings(st.data as Row | null), people: ((pp.data ?? []) as Row[]).map(toPerson), vehicles: ((vv.data ?? []) as Row[]).map(toVehicle) })
@@ -171,6 +177,19 @@ export const useSupervisionStore = create<State>()((set, get) => ({
     const promise = fetchRange(pid, from, to)
     inflight = { key: k, promise }
     try { await promise } finally { if (inflight?.promise === promise) inflight = null }
+  },
+
+  loadDevices: async () => {
+    const pid = get().projectId
+    if (!pid) return
+    const { data } = await supabase.from('sv_devices').select('id,person_id,label,user_agent,install_id,ip,status,created_at,decided_at,decide_note,last_used_at').eq('master_project_id', pid).order('created_at', { ascending: false })
+    if (get().projectId === pid) set({ devices: ((data ?? []) as Row[]).map(toDevice) })
+  },
+  decideDevice: async (id, status, note) => {
+    const { error } = await supabase.rpc('sv_decide_device', { p_device: id, p_status: status, p_note: note })
+    if (error) return { ok: false, error: /not_allowed/.test(error.message) ? 'فقط سرپرست نظارت این پروژه یا مدیر سامانه می‌تواند گوشی را تأیید یا غیرفعال کند.' : err(error) }
+    await get().loadDevices()
+    return { ok: true }
   },
 
   canHand: () => {
@@ -291,7 +310,7 @@ export const useSupervisionStore = create<State>()((set, get) => ({
   },
   saveSettings: async (x) => {
     const pid = get().projectId!
-    const { error } = await supabase.from('sv_settings').upsert({ master_project_id: pid, duty_days: x.dutyDays, standard_hours: x.standardHours, overtime_min: x.overtimeMin, overtime_max: x.overtimeMax, vehicle_hours: x.vehicleHours, entry_grace_days: x.entryGraceDays, network_max_m: x.networkMaxM, ...stamp() }, { onConflict: 'master_project_id' })
+    const { error } = await supabase.from('sv_settings').upsert({ master_project_id: pid, duty_days: x.dutyDays, standard_hours: x.standardHours, overtime_min: x.overtimeMin, overtime_max: x.overtimeMax, vehicle_hours: x.vehicleHours, entry_grace_days: x.entryGraceDays, network_max_m: x.networkMaxM, require_device: x.requireDevice, ...stamp() }, { onConflict: 'master_project_id' })
     if (error) return { ok: false, error: err(error) }
     set({ settings: x })
     return { ok: true }

@@ -8,6 +8,7 @@ import { fa, faNum, monthDays, monthLabel, recordedUpTo, ymKey, type Ym } from '
 import { SignoffPanel } from '../components/SignoffPanel'
 import { ORIENTATION, PagedDoc, PagedPreview, buildDoc, type DocKind, type SheetData } from '../components/ReportSheets'
 import { personCheck, projectCheck } from '../lib/svIntegrity'
+import { SuspiciousPanel } from '../components/SuspiciousPanel'
 import type { SvSnapshot } from '../types'
 import { Empty, MonthNav } from '../components/common'
 
@@ -202,6 +203,7 @@ export function ReportPage({ month, onMonth, projectName }: { month: Ym; onMonth
         </table></div>
       </section>
       <IntegrityCard pcheck={pcheck} checks={checks} grace={settings.entryGraceDays} />
+      <SuspiciousPanel from={days[0]} to={days[days.length - 1]} />
       <SignoffPanel monthKey={ymKey(month)} from={days[0]} to={days[days.length - 1]} snapshot={snapshot} unmarked={tot.unmarked} />
       <p className="sv-note">کارکرد = حاضر + مأموریت. استعلاجی کسری حساب نمی‌شود. وعده‌ها از روی روزهای حضور حساب شده‌اند (هر روز حاضر = صبحانه، ناهار و شام) و وعده‌های مهمانان از بخش «تسهیلات» آمده است. موظفی برای کسی که بخشی از ماه در پروژه بوده به نسبت ۲۳ روز از ۳۰ روز حساب می‌شود. سقف اضافه‌کار هر نفر در «نفرات و خودروها» قابل تغییر است؛ خط کوچک روی نوار، کف ماهانه ({fa(settings.overtimeMin)} ساعت) را نشان می‌دهد.</p>
       </>}

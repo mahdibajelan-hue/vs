@@ -5,8 +5,9 @@ import { fa, monthDays, monthLabel, type Ym } from '../lib/svMonth'
 import type { SvSettings } from '../types'
 import { Flash, MonthNav, TeamLink } from '../components/common'
 import { SitesCard } from '../components/SitesCard'
+import { DevicesCard } from '../components/DevicesCard'
 
-const FIELDS: { k: keyof SvSettings; label: string; hint: string; step?: number }[] = [
+const FIELDS: { k: Exclude<keyof SvSettings, 'requireDevice'>; label: string; hint: string; step?: number }[] = [
   { k: 'dutyDays', label: 'روز موظفی در ماه', hint: 'از ۳۰ روز؛ بقیه روز استراحت است (پنجشنبه و جمعه هم روز کاری‌اند).' },
   { k: 'standardHours', label: 'ساعت موظفی روزانه', hint: 'از ساعت ورود تا خروج، تا این مقدار کارکرد عادی و بیشتر از آن اضافه‌کار است.', step: 0.5 },
   { k: 'overtimeMin', label: 'کف اضافه‌کار ماهانه (ساعت)', hint: 'در گزارش، کمتر از این مقدار با رنگ زرد نشان داده می‌شود.' },
@@ -63,6 +64,8 @@ export function SettingsPage({ month, onMonth }: { month: Ym; onMonth: (m: Ym) =
       <TeamLink />
 
       <SitesCard />
+
+      <DevicesCard />
 
       <div className="im-card">
         <h2 style={{ fontSize: 16, fontWeight: 900, margin: '0 0 6px' }}><Fingerprint size={17} style={{ display: 'inline', verticalAlign: -3 }} /> کارت ساعت و دستگاه حضور و غیاب</h2>
