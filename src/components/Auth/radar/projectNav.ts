@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import {
+  Factory,
   BadgeDollarSign, CalendarClock, Droplets, Handshake, HeartPulse, LayoutDashboard, ShieldCheck, ClipboardList, Cpu, GitPullRequestArrow, HardHat, PackageCheck,
   PencilRuler, Radar, ReceiptText, Route, ShieldAlert, Sparkles, Sprout,
 } from 'lucide-react'
@@ -34,6 +35,7 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
     { id: 'material', module: 'material', label: 'کنترل و تأمین کالا', icon: PackageCheck, accent: '#f59e0b' },
     { id: 'execution', module: 'execution', label: 'مدیریت اجرا', icon: HardHat, accent: '#fb923c' },
     { id: 'testing', module: 'testing', label: 'آزمایش‌ها (هیدروتست و پوشش)', icon: Droplets, accent: '#0ea5e9' },
+    { id: 'stationpiping', module: 'stationpiping', label: 'ایستگاه‌ها (پایپینگ و جوشکاری)', icon: Factory, accent: '#6366f1' },
     { id: 'pssr', module: 'pssr', label: 'آمادگی راه‌اندازی (PSSR)', icon: ShieldCheck, accent: '#f97316' },
   ] },
   { id: 'money', label: 'قرارداد و هزینه', items: [
