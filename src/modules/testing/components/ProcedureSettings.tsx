@@ -3,7 +3,7 @@ import { BookOpenCheck, CheckCircle2, ClipboardList, Droplets, FlaskConical, Gau
 import { ShamsiDate } from '../../../components/common/ShamsiField'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useTestingStore } from '../store/useTestingStore'
-import { DEFAULT_IGS, IGS_PROCEDURE, igsOf, psiAtPct, smysPsiOf, type IgsParams } from '../lib/igs'
+import { DEFAULT_IGS, IGS_PROCEDURE, igsOf, SEAM_FA, smysPsiOf, testLimits, PSI_PER_BAR, type IgsParams, type Seam } from '../lib/igs'
 import { EMPTY_PARTIES, type HtEquip, type HtParties } from '../repo'
 import { todayTehran } from '../../../lib/today'
 import { formatJalali } from '../../../lib/jalali'
@@ -15,24 +15,36 @@ const STEP_UI: Record<string, { icon: typeof Gauge; color: string }> = {
   drying: { icon: Wind, color: '#84cc16' }, stations: { icon: Factory, color: '#0ea5e9' },
 }
 /** the parameters, grouped as the procedure groups them */
-const GROUPS: { title: string; fields: { k: keyof IgsParams; label: string; unit?: string; step?: number }[] }[] = [
-  { title: 'قطعه‌بندی و فشار مقاومت', fields: [
+const GROUPS: { title: string; seam?: Seam; fields: { k: keyof IgsParams; label: string; unit?: string; step?: number; nullable?: string }[] }[] = [
+  { title: 'روش تسلیمی (DSAW) — قطعه‌بندی، مقاومت و نشتی', seam: 'SAW', fields: [
     { k: 'strengthPct', label: 'فشار نقطهٔ پایین در آزمون مقاومت', unit: '٪ SMYS' }, { k: 'minHighPct', label: 'حداقل فشار نقطهٔ بالا', unit: '٪ SMYS' },
-    { k: 'psiPerM', label: 'فشار ستون آب', unit: 'psi/m', step: 0.001 }, { k: 'maxSectionKm', label: 'حداکثر طول قطعه', unit: 'km' },
-    { k: 'strengthHoldH', label: 'مدت نگهداری فشار مقاومت', unit: 'ساعت' }, { k: 'pvOffsetPct', label: 'حداکثر انحراف P–V از خط راست', unit: '٪ حجم', step: 0.01 },
+    { k: 'leakPct', label: 'فشار نقطهٔ پایین در آزمون نشتی', unit: '٪ SMYS' }, { k: 'leakMinPct', label: 'حداقل فشار نقطهٔ بالا در نشتی', unit: '٪ SMYS' },
+    { k: 'strengthHoldH', label: 'مدت نگهداری فشار مقاومت', unit: 'ساعت' }, { k: 'holdAdjustBar', label: 'تغییر فشار مجاز پیش از جبران', unit: 'bar', step: 0.1 },
+    { k: 'pvOffsetPct', label: 'خط Offset نمودار P–V', unit: '٪ حجم', step: 0.01 }, { k: 'slopeChangeMax', label: 'حداکثر تغییر شیب نمودار', unit: 'برابر', step: 0.1 },
   ] },
-  { title: 'یکنواختی و نشتی', fields: [
-    { k: 'leakPct', label: 'فشار نقطهٔ پایین در آزمون نشتی', unit: '٪ SMYS' }, { k: 'leakMinPct', label: 'حداقل فشار آزمون نشتی', unit: '٪ SMYS' },
-    { k: 'stabilizationDays', label: 'حداقل دورهٔ یکنواختی', unit: 'روز' }, { k: 'stabilizationGapH', label: 'حداکثر فاصلهٔ ثبت فشار و دما', unit: 'ساعت' },
-    { k: 'leakHoldH', label: 'مدت آزمون نشتی', unit: 'ساعت' }, { k: 'leakMaxPsi', label: 'حداکثر افت فشار مجاز', unit: 'psi', step: 0.1 }, { k: 'leakBigDiaIn', label: 'شرط ۱٫۵ psi برای قطرهای بزرگ‌تر از', unit: 'اینچ' },
+  { title: 'روش سیکلی (HFW) — قطعه‌بندی و مقاومت', seam: 'HFW', fields: [
+    { k: 'cyclicSmysPct', label: 'سقف فشار نقطهٔ پایین', unit: '٪ SMYS' }, { k: 'cyclicDpFactor', label: 'سقف فشار نقطهٔ پایین', unit: '× فشار طراحی', step: 0.05 },
+    { k: 'cyclicHighDpFactor', label: 'حداقل فشار نقطهٔ بالا', unit: '× فشار طراحی', step: 0.05 }, { k: 'cyclicHoldMin', label: 'نگهداری هر سیکل', unit: 'دقیقه' }, { k: 'cyclicCycles', label: 'تعداد سیکل' },
+  ] },
+  { title: 'عمومی', fields: [
+    { k: 'psiPerM', label: 'فشار ستون آب', unit: 'psi/m', step: 0.001 }, { k: 'maxSectionKm', label: 'حداکثر طول قطعه', unit: 'km' },
+    { k: 'stabilizationDays', label: 'دورهٔ یکنواختی', unit: 'روز', nullable: 'بر اساس قطر' }, { k: 'stabilizationGapH', label: 'حداکثر فاصلهٔ ثبت فشار و دما', unit: 'ساعت' },
+    { k: 'leakHoldH', label: 'مدت آزمون نشتی', unit: 'ساعت' }, { k: 'minPipeTempC', label: 'حداقل دمای توصیه‌شدهٔ خط در نشتی', unit: '°C' }, { k: 'minFillTempC', label: 'حداقل دمای آب بدون ضدیخ', unit: '°C' },
+  ] },
+  { title: 'آزمون نشتی — معیارهای قبولی', fields: [
+    { k: 'leakBigDiaIn', label: 'مرز دو روش محاسبه', unit: 'اینچ' }, { k: 'leakMaxPsi', label: 'حداکثر افت فشار (قطر بزرگ)', unit: 'psi', step: 0.1 },
+    { k: 'leakFailFactor', label: 'مرز «ΔP ≫ H» (مردود)', unit: '× H', step: 0.1 },
   ] },
   { title: 'عدم وجود هوا، صفحهٔ اندازه و خشک‌کنی', fields: [
-    { k: 'airRatioMax', label: 'حداکثر نسبت ΔV واقعی به محاسبه‌ای', step: 0.01 }, { k: 'gaugePlatePct', label: 'قطر صفحهٔ اندازه', unit: '٪ قطر داخلی' },
-    { k: 'gaugePlateMm', label: 'ضخامت صفحهٔ اندازه', unit: 'mm' }, { k: 'dewPointMaxC', label: 'حداکثر نقطهٔ شبنم (خالی = فقط مقایسه با محیط)', unit: '°C' },
+    { k: 'airHfwMinSmall', label: 'HFW: حداقل ΔPa/ΔPth تا مرز قطر', unit: '٪' }, { k: 'airHfwMinBig', label: 'HFW: حداقل ΔPa/ΔPth قطرهای بزرگ‌تر', unit: '٪' }, { k: 'airSmallMaxIn', label: 'مرز قطر', unit: 'اینچ' },
+    { k: 'airMaxPct', label: 'DSAW: حداکثر هوای موجود', unit: '٪ حجم', step: 0.01 }, { k: 'airRatioMax', label: 'DSAW: حداکثر نسبت شیب واقعی به نظری', step: 0.01 }, { k: 'airPvMaxBar', label: 'DSAW: حداکثر فشار نمودار P/V', unit: 'bar' },
+    { k: 'gaugePlatePct', label: 'قطر صفحهٔ اندازه', unit: '٪ قطر داخلی' }, { k: 'gaugePlateMm', label: 'ضخامت صفحهٔ اندازه', unit: 'mm', nullable: 'بر اساس قطر' },
+    { k: 'dewPointDiffC', label: 'حداکثر اختلاف نقطهٔ شبنم خروجی با محیط', unit: '°C', step: 0.5 },
   ] },
   { title: 'خواص فولاد و آب', fields: [
-    { k: 'eGpa', label: 'مدول الاستیسیتهٔ فولاد', unit: 'GPa' }, { k: 'poisson', label: 'ضریب پواسون', step: 0.01 },
-    { k: 'bulkBar', label: 'مدول حجمی آب (K)', unit: 'bar' }, { k: 'steelAlpha', label: 'ضریب انبساط طولی فولاد', unit: '1/°C', step: 0.000001 },
+    { k: 'eBar', label: 'مدول الاستیسیته (روابط bar)', unit: 'bar', step: 1000 }, { k: 'eKgCm2', label: 'مدول الاستیسیته (روابط kg/cm²)', unit: 'kg/cm²', step: 1000 },
+    { k: 'poisson', label: 'ضریب پواسون', step: 0.01 }, { k: 'steelAlpha', label: 'ضریب انبساط طولی فولاد', unit: '1/°C', step: 0.000001 },
+    { k: 'bulkBar', label: 'مدول بالک آب', unit: 'bar', nullable: 'از شکل ۲ دستورالعمل' },
   ] },
   { title: 'ایستگاه‌ها و Pre-test', fields: [{ k: 'stationFactor', label: 'ضریب فشار آزمون', unit: '× فشار طراحی', step: 0.05 }, { k: 'stationHoldH', label: 'مدت آزمون', unit: 'ساعت' }] },
 ]
@@ -65,20 +77,24 @@ export function ProcedureSettings() {
   const pipe = st.pipe
   const smys = st.settings.smysOverride ? st.settings.smysOverride * 145.038 : pipe ? smysPsiOf(pipe.material) : null
   const odIn = pipe?.diameterIn ?? 0, wtIn = pipe ? pipe.wallMm / 25.4 : 0
+  const lim = pipe && smys ? testLimits(odIn, smys, wtIn, pipe.designPressureBar * PSI_PER_BAR, p) : null
   const today = todayTehran(), soon = new Date(Date.parse(`${today}T00:00:00Z`) + 30 * 86400000).toISOString().slice(0, 10)
   return (
     <div className="ps-stack"><style>{CSS}</style>
       <section className="ps-card">
         <header className="ps-card-head"><b><BookOpenCheck size={15} /> روش آزمایش هیدرواستاتیک</b><small className="ps-meta">{parties.procedureRef || 'IGS-C-PL-100(3)'}{parties.procedureRev ? ` · ${parties.procedureRev}` : ''}</small></header>
         <div className="pr-method" role="group" aria-label="روش محاسبهٔ قطعه‌بندی">
-          <button type="button" aria-pressed={method === 'igs'} onClick={() => setMethod('igs')} disabled={!isAdmin}>روش تسلیمی IGS (پیشنهادی)</button>
+          <button type="button" aria-pressed={method === 'igs'} onClick={() => setMethod('igs')} disabled={!isAdmin}>روش IGS-C-PL-100(3) (پیشنهادی)</button>
           <button type="button" aria-pressed={method === 'factor'} onClick={() => setMethod('factor')} disabled={!isAdmin}>ضریب فشار طراحی (روش قبلی)</button>
         </div>
-        {method === 'igs' && pipe && smys && <div className="pr-fig">
-          <Fig k={`فشار ${fa(p.strengthPct, 0)}٪ SMYS (نقطهٔ پایین)`} v={`${fa(psiAtPct(p.strengthPct, smys, odIn, wtIn), 1)} psi`} sub={`لولهٔ ${fa(odIn, 0)}″ × ${fa(wtIn, 3)}″ ${pipe.material}`} />
-          <Fig k={`حداقل فشار ${fa(p.minHighPct, 0)}٪ SMYS (نقطهٔ بالا)`} v={`${fa(psiAtPct(p.minHighPct, smys, odIn, wtIn), 1)} psi`} />
-          <Fig k="اختلاف ارتفاع مجاز هر قطعه" v={`${fa((psiAtPct(p.strengthPct, smys, odIn, wtIn) - psiAtPct(p.minHighPct, smys, odIn, wtIn)) / p.psiPerM, 2)} m`} sub={`حداکثر طول ${fa(p.maxSectionKm, 0)} km`} />
-          <Fig k={`فشار آزمون نشتی (${fa(p.leakPct, 0)}٪ / حداقل ${fa(p.leakMinPct, 0)}٪)`} v={`${fa(psiAtPct(p.leakPct, smys, odIn, wtIn), 1)} psi`} sub={`حداقل ${fa(psiAtPct(p.leakMinPct, smys, odIn, wtIn), 1)} psi`} />
+        {method === 'igs' && <div className="pr-method" role="group" aria-label="نوع درزجوش لوله" style={{ marginTop: '.5rem' }}>
+          {(['SAW', 'HFW'] as Seam[]).map((k) => <button key={k} type="button" aria-pressed={p.seam === k} onClick={() => setP({ ...p, seam: k })} disabled={!isAdmin}>{SEAM_FA[k]}</button>)}
+        </div>}
+        {method === 'igs' && lim && pipe && <div className="pr-fig">
+          <Fig k="فشار نقطهٔ پایین (TP)" v={`${fa(lim.lowPsi, 1)} psi`} sub={`${fa(lim.lowPct, 1)}٪ SMYS · لولهٔ ${fa(odIn, 0)}″ × ${fa(wtIn, 3)}″ ${pipe.material}`} />
+          <Fig k="حداقل فشار نقطهٔ بالا" v={`${fa(lim.highMinPsi, 1)} psi`} sub={`${fa(lim.highMinPct, 1)}٪ SMYS${p.seam === 'HFW' ? ` · ${fa(p.cyclicHighDpFactor, 2)} × ${fa(pipe.designPressureBar, 1)} bar` : ''}`} />
+          <Fig k="اختلاف ارتفاع مجاز هر قطعه" v={`${fa((lim.lowPsi - lim.highMinPsi) / p.psiPerM, 2)} m`} sub={`حداکثر طول ${fa(p.maxSectionKm, 0)} km`} />
+          <Fig k="فشار آزمون نشتی (نقطهٔ پایین)" v={`${fa(lim.leakLowPsi, 1)} psi`} sub={`حداقل نقطهٔ بالا ${fa(lim.leakMinPsi, 1)} psi`} />
         </div>}
         <p className="ps-hint">لوله از تنظیمات دوقلوی دیجیتال خوانده می‌شود (ضخامت پیش‌فرض: کمترین ضخامت). ضخامت‌ها و طول‌های واقعی هر قطعه در صفحهٔ همان قطعه وارد می‌شود و محاسبه با کمترین ضخامت قطعه انجام می‌شود.</p>
       </section>
@@ -97,11 +113,11 @@ export function ProcedureSettings() {
 
       <section className="ps-card">
         <header className="ps-card-head"><b><Wrench size={15} /> پارامترهای روش</b><button type="button" className="ps-btn is-ghost" disabled={!isAdmin} onClick={() => setP(DEFAULT_IGS)}>مقادیر دستورالعمل</button></header>
-        {GROUPS.map((g) => (
+        {GROUPS.filter((g) => !g.seam || g.seam === p.seam).map((g) => (
           <div key={g.title} className="pr-grp"><b>{g.title}</b>
             <div className="ps-grid">{g.fields.map((f) => (
               <label key={f.k} className="ps-field"><span>{f.label}{f.unit ? ` (${f.unit})` : ''}</span>
-                <input type="number" step={f.step ?? 1} dir="ltr" disabled={!isAdmin} value={p[f.k] ?? ''} onChange={(e) => setP({ ...p, [f.k]: e.target.value === '' ? (f.k === 'dewPointMaxC' ? null : DEFAULT_IGS[f.k]) : Number(e.target.value) })} />
+                <input type="number" step={f.step ?? 1} dir="ltr" disabled={!isAdmin} value={String(p[f.k] ?? '')} placeholder={f.nullable} onChange={(e) => setP({ ...p, [f.k]: e.target.value === '' ? (f.nullable ? null : DEFAULT_IGS[f.k]) : Number(e.target.value) })} />
               </label>
             ))}</div>
           </div>

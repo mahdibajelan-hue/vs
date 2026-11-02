@@ -2,8 +2,8 @@ import { create } from 'zustand'
 import { loadTwin, type TwinSettings } from '../../pipelinedigitaltwin/repo'
 import { elevAt, hasRealProfile, profileOf, rangesOfJoints, smysOf, type HtParams, type HtStage, type ProfilePoint, type SectionPlan } from '../lib/htCore'
 import * as repo from '../repo'
-import { DEFAULT_HT_SETTINGS, type CtDefect, type CtRecord, type FormKind, type HtEvent, type HtForm, type HtPack, type HtReading, type HtSection, type HtSettings, type ReadingInput, type TargetKind } from '../repo'
-import { igsOf, PSI_PER_BAR, type IgsParams, type WallPart } from '../lib/igs'
+import { DEFAULT_HT_SETTINGS, type CtDefect, type CtRecord, type CtTest, type FormKind, type HtEvent, type HtForm, type HtPack, type HtReading, type HtSection, type HtSettings, type ReadingInput, type TargetKind } from '../repo'
+import { igsOf, PSI_PER_BAR, testLimits, type IgsParams, type WallPart } from '../lib/igs'
 
 /** where the elevation profile came from */
 export type ProfileSource = 'land' | 'twin' | 'table' | null
@@ -38,6 +38,7 @@ interface State {
   records: CtRecord[]
   defects: CtDefect[]
   forms: HtForm[]
+  ctTests: CtTest[]
 
   load: (pid: string) => Promise<void>
   params: () => HtParams | null
@@ -54,6 +55,7 @@ interface State {
   addRecord: (x: Omit<CtRecord, 'id' | 'by'>, by: string) => Promise<CtRecord | null>
   addDefect: (x: Omit<CtDefect, 'id' | 'by' | 'status' | 'repairedAt'>, by: string) => Promise<boolean>
   setDefect: (id: string, status: CtDefect['status']) => Promise<boolean>
+  saveCtTest: (x: Omit<CtTest, 'id' | 'by' | 'updatedAt'> & { id?: string }, by: string) => Promise<CtTest | null>
 }
 
 const msg = (e: unknown) => (e as { message?: string })?.message ?? 'خطای نامشخص'
@@ -65,7 +67,7 @@ export const useTestingStore = create<State>()((set, get) => {
   return {
     projectId: null, loading: false, error: null, flash: null,
     pipe: null, startKm: 0, routeKm: 0, profile: [], profileSource: null, profileName: null, preferredKm: [], backfilled: [], coated: [], stations: [],
-    settings: DEFAULT_HT_SETTINGS, sections: [], packs: [], readings: [], events: [], records: [], defects: [], forms: [],
+    settings: DEFAULT_HT_SETTINGS, sections: [], packs: [], readings: [], events: [], records: [], defects: [], forms: [], ctTests: [],
 
     load: async (pid) => {
       set({ loading: get().projectId !== pid, projectId: pid, error: null })
@@ -106,7 +108,7 @@ export const useTestingStore = create<State>()((set, get) => {
       const smys = x.smysOverride ?? smysOf(p.material)
       if (!smys) return null
       const g = get().igs()
-      return { odMm: p.diameterIn * 25.4, wtMm: p.wallMm, smysMpa: smys, designPressureBar: p.designPressureBar, testFactor: x.testFactor, maxHoopPct: x.maxHoopPct, maxSectionKm: x.method === 'igs' ? g.maxSectionKm : x.maxSectionKm, minSectionKm: x.minSectionKm, density: x.density, igs: x.method === 'igs' ? { strengthPct: g.strengthPct, minHighPct: g.minHighPct, gBarPerM: g.psiPerM / PSI_PER_BAR } : undefined }
+      return { odMm: p.diameterIn * 25.4, wtMm: p.wallMm, smysMpa: smys, designPressureBar: p.designPressureBar, testFactor: x.testFactor, maxHoopPct: x.maxHoopPct, maxSectionKm: x.method === 'igs' ? g.maxSectionKm : x.maxSectionKm, minSectionKm: x.minSectionKm, density: x.density, igs: x.method === 'igs' ? (() => { const l = testLimits(p.diameterIn, smys * 145.038, p.wallMm / 25.4, p.designPressureBar * PSI_PER_BAR, g); return { strengthPct: l.lowPct, minHighPct: l.highMinPct, gBarPerM: g.psiPerM / PSI_PER_BAR } })() : undefined }
     },
     saveSettings: async (x, by) => {
       const pid = get().projectId
@@ -153,6 +155,10 @@ export const useTestingStore = create<State>()((set, get) => {
       catch (e) { set({ error: msg(e) }); return null }
     },
     addDefect: (x, by) => run(async () => { const d = await repo.addDefect(get().projectId!, x, by); set({ defects: [...get().defects, d].sort((a, b) => a.km - b.km) }) }, 'عیب ثبت شد'),
+    saveCtTest: async (x, by) => {
+      try { const r = await repo.saveCtTest(get().projectId!, x, by); set({ ctTests: [r, ...get().ctTests.filter((t) => t.id !== r.id)], flash: r.result === 'pass' ? 'بازرسی پوشش ذخیره شد — قبول' : r.result === 'fail' ? 'بازرسی پوشش ذخیره شد — مردود' : 'بازرسی پوشش ذخیره شد' }); return r }
+      catch (e) { set({ error: /ct_tests|relation|schema cache/i.test(msg(e)) ? 'جدول بازرسی پوشش ساخته نشده است (supabase/testing/004_coating_qc.sql).' : msg(e) }); return null }
+    },
     setDefect: (id, status) => run(async () => { const d = await repo.setDefect(id, status); set({ defects: get().defects.map((x) => (x.id === id ? d : x)) }) }),
   }
 })

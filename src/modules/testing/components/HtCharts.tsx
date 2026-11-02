@@ -2,7 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react'
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceDot, ReferenceLine, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis } from 'recharts'
 import { formatJalali } from '../../../lib/jalali'
 import { elevAt, type ProfilePoint } from '../lib/htCore'
-import { PSI_PER_BAR, pvOffset, type IgsParams, type SectionPressures } from '../lib/igs'
+import { PSI_PER_BAR, pvOffset, type AirSaw, type IgsParams, type SectionPressures } from '../lib/igs'
 import type { HtReading, HtSection } from '../repo'
 
 /**
@@ -126,25 +126,36 @@ export function TimeChart({ readings, required, verdicts }: { readings: HtReadin
 }
 
 // ── 3. strength test: pressure–volume ─────────────────────────────────────────
-export function PvChart({ readings, volumeM3, igs }: { readings: HtReading[]; volumeM3: number; igs: IgsParams }) {
-  const pts = readings.filter((r) => r.phase === 'strength' && r.volumeM3 != null).map((r) => ({ v: r.volumeM3!, p: r.pressureBar * PSI_PER_BAR })).sort((a, b) => a.p - b.p)
-  const fit = pvOffset(pts, volumeM3, igs)
-  if (pts.length < 4 || !fit) return <p className="ps-hint">برای نمودار فشار–حجم، در قرائت‌های آزمون مقاومت «حجم آب تزریق‌شدهٔ تجمعی» را هم ثبت کنید (دست‌کم ۴ قرائت).</p>
-  const line = [{ v: fit.intercept + fit.slope * pts[0].p, p: pts[0].p }, { v: fit.intercept + fit.slope * pts[pts.length - 1].p, p: pts[pts.length - 1].p }]
+/** P–V plot. Strength (yield method): the straight part, the 0.2 % offset line and the step-slope check. Air (DSAW): the
+ *  tangent of the straight part back to the static head (the air volume) and the theoretical slope. */
+export function PvChart({ points, volumeM3, igs, mode = 'strength', air }: { points: { p: number; v: number }[]; volumeM3: number; igs: IgsParams; mode?: 'strength' | 'air'; air?: AirSaw | null }) {
+  const pts = [...points].filter((x) => Number.isFinite(x.p) && Number.isFinite(x.v)).sort((a, b) => a.p - b.p)
+  const fit = mode === 'strength' ? pvOffset(pts, volumeM3, igs) : null
+  const unit = mode === 'air' ? 'bar' : 'psi'
+  if (pts.length < (mode === 'air' ? 3 : 4) || (mode === 'strength' ? !fit : !air)) return <p className="ps-hint">{mode === 'air' ? 'برای نمودار P/V دست‌کم سه قرائت فشار–حجم ثبت کنید.' : 'برای نمودار فشار–حجم دست‌کم چهار قرائت فشار و حجم آب تزریقی تجمعی لازم است (جدول فرم ۵-۴ یا قرائت‌های آزمون مقاومت).'}</p>
+  const lines: { data: { p: number; v: number }[]; color: string; label: string }[] = []
+  if (fit) lines.push({ data: fit.line, color: '#6366f1', label: 'خط راست برازش‌شده (بخش خطی)' }, { data: fit.offsetLine, color: '#ef4444', label: `خط ${fa(igs.pvOffsetPct, 1)}٪ Offset (+${fa(fit.offsetM3, 2)} m³)` })
+  if (air) {
+    lines.push({ data: air.line, color: '#6366f1', label: 'مماس بر بخش خطی تا فشار استاتیک' })
+    const p0 = air.line[0].p, v0 = air.line[0].v
+    lines.push({ data: [{ p: p0, v: v0 }, { p: pts[pts.length - 1].p, v: v0 + air.theorSlope * (pts[pts.length - 1].p - p0) }], color: '#22c55e', label: 'شیب نظری V[D(1−ν²)/(E·t) + 1/B]' })
+  }
+  const ok = fit ? fit.pass : air!.pass
   return (
     <div className="hc"><style>{CSS}</style>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Verdict label="خطی بودن P–V" result={fit.pass ? 'pass' : 'fail'} />
-        <span className="ps-meta">بیشترین انحراف {fa(fit.maxOffsetM3, 3)} m³ = {fa(fit.maxOffsetPct, 3)}٪ حجم قطعه (حد {fa(igs.pvOffsetPct, 2)}٪){fit.atP != null ? ` در ${fa(fit.atP, 0)} psi` : ''}</span>
+        <Verdict label={mode === 'air' ? 'عدم وجود هوا (P/V)' : 'نمودار فشار–حجم'} result={ok ? 'pass' : 'fail'} />
+        <span className="ps-meta">{fit ? `بیشترین فاصله از خط راست ${fa(fit.maxOffsetM3, 3)} m³${fit.atP != null ? ` در ${fa(fit.atP, 0)} psi` : ''} · ${fit.crossed ? 'خط Offset قطع شده' : 'خط Offset قطع نشده'} · تغییر شیب ${fa(fit.slopeRatio, 2)} برابر`
+          : `هوا ${fa(air!.airM3, 3)} m³ = ${fa(air!.airPct, 3)}٪ (حد ${fa(igs.airMaxPct, 2)}٪) · نسبت شیب ${fa(air!.slopeRatio, 3)} (حد ${fa(igs.airRatioMax, 2)})`}</span>
       </div>
-      <Legend items={[{ label: 'قرائت‌ها', color: '#f59e0b', kind: 'dot' }, { label: 'خط راست برازش‌شده (بخش خطی)', color: '#6366f1', kind: 'dash' }]} />
+      <Legend items={[{ label: 'قرائت‌ها', color: '#f59e0b', kind: 'dot' }, ...lines.map((l) => ({ label: l.label, color: l.color, kind: 'dash' as const }))]} />
       <div style={{ height: 260 }} dir="ltr"><ResponsiveContainer width="100%" height="100%">
         <ComposedChart margin={{ top: 10, right: 10, left: 4, bottom: 14 }}>
           <CartesianGrid stroke="var(--border-soft, rgba(148,163,184,.2))" strokeDasharray="2 5" />
-          <XAxis dataKey="v" type="number" domain={['dataMin', 'dataMax']} tick={axis} tickFormatter={(v) => fa(Number(v), 2)} label={{ value: 'حجم تزریقی m³', position: 'insideBottom', offset: -8, fill: 'var(--text-muted)', fontSize: 10 }} />
-          <YAxis dataKey="p" type="number" domain={['dataMin', 'dataMax']} tick={axis} width={52} tickFormatter={(v) => fa(Number(v), 0)} />
-          <Tooltip contentStyle={tip} formatter={(v, k) => (k === 'v' ? [`${fa(Number(v), 3)} m³`, 'حجم'] : [`${fa(Number(v), 1)} psi`, 'فشار'])} />
-          <Line data={line} dataKey="p" stroke="#6366f1" strokeDasharray="6 4" strokeWidth={2} dot={false} isAnimationActive={false} />
+          <XAxis dataKey="v" type="number" domain={['dataMin', 'dataMax']} tick={axis} tickFormatter={(v) => fa(Number(v), 2)} label={{ value: 'حجم آب تزریقی تجمعی m³', position: 'insideBottom', offset: -8, fill: 'var(--text-muted)', fontSize: 10 }} />
+          <YAxis dataKey="p" type="number" domain={['dataMin', 'dataMax']} tick={axis} width={52} tickFormatter={(v) => fa(Number(v), mode === 'air' ? 1 : 0)} />
+          <Tooltip contentStyle={tip} formatter={(v, k) => (k === 'v' ? [`${fa(Number(v), 3)} m³`, 'حجم'] : [`${fa(Number(v), 1)} ${unit}`, 'فشار'])} />
+          {lines.map((l, i) => <Line key={i} data={l.data} dataKey="p" stroke={l.color} strokeDasharray="6 4" strokeWidth={2} dot={false} isAnimationActive={false} />)}
           <Scatter data={pts} dataKey="p" fill="#f59e0b" isAnimationActive animationDuration={700} />
         </ComposedChart>
       </ResponsiveContainer></div>

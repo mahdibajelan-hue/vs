@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { DEFAULT_IGS, mixFigures, sectionPressures, psiAtPct, airTest, leakTest, waterBeta, pvOffset, smysPsiOf, holdFigures } from './igs.ts'
+import { DEFAULT_IGS, mixFigures, sectionPressures, psiAtPct, airTest, leakTest, waterBeta, pvOffset, smysPsiOf, holdFigures, testLimits, gaugePlateOf, stabilizationDaysOf, bulkModulusBar, waterDelta, waterX, airTestHfw, airTestSaw, leakTestSmall, holdDrift, waterCheck, igsOf, airHfwMinOf, pumpRateOf } from './igs.ts'
 const near = (a, b, e = 0.05) => assert.ok(Math.abs(a - b) <= e, `${a} ≈ ${b}`)
 
 // the project's calculation sheet: 42″ X65, section 1, walls 0.688 / 0.812 / 0.938″
@@ -54,4 +54,61 @@ const pb = pvOffset(bent, 1000); assert.equal(pb.pass, false); near(pb.maxOffset
 const h = holdFigures([{ at: '2026-01-01T00:00:00Z', psi: 10, tempC: null }, { at: '2026-01-01T04:30:00Z', psi: 9, tempC: null }])
 near(h.hours, 4.5); assert.equal(h.minPsi, 9)
 assert.equal(DEFAULT_IGS.strengthPct, 110)
+
+// ── IGS-C-PL-100(3) ch. 12 ──
+const HFW = { ...DEFAULT_IGS, seam: 'HFW' }
+// cyclic: TP = min(95 % SMYS, 1.5 DP), high ≥ 1.1 DP; the DP governs a thick pipe, the SMYS a thin one
+const l1 = testLimits(12, 52000, 0.25, 1015, HFW)
+near(l1.lowPsi, 1522.5, 1e-6); near(l1.highMinPsi, 1116.5, 1e-6); assert.equal(l1.governs, 'dp'); near(l1.leakLowPsi, l1.lowPsi, 1e-9)
+const l2 = testLimits(12, 52000, 0.156, 1015, HFW)
+near(l2.lowPsi, psiAtPct(95, 52000, 12, 0.156), 1e-6); assert.equal(l2.governs, 'smys')
+// the yield method is unchanged by a design pressure
+near(testLimits(42, 65000, 0.688, 1000).lowPsi, 2342.476, 0.001)
+const spH = sectionPressures(12, 52000, 0.25, { low: 0, high: 100, start: 0, end: 50, head: 50 }, HFW, 1015)
+near(spH.allowedDh, (1522.5 - 1116.5) / 1.42, 1e-6); assert.equal(spH.dhOk, true)
+// by diameter: plate, stabilization, pump, air limit
+assert.deepEqual(gaugePlateOf(10), { mm: 4, material: 'آلومینیوم' }); assert.deepEqual(gaugePlateOf(16), { mm: 6, material: 'آلومینیوم' })
+assert.deepEqual(gaugePlateOf(24), { mm: 6, material: 'فولاد' }); assert.deepEqual(gaugePlateOf(42), { mm: 8, material: 'فولاد' })
+assert.equal(stabilizationDaysOf(12), 1); assert.equal(stabilizationDaysOf(24), 2); assert.equal(stabilizationDaysOf(30), 3); assert.equal(stabilizationDaysOf(42, { ...DEFAULT_IGS, stabilizationDays: 2 }), 2)
+assert.equal(pumpRateOf(24), 120); assert.equal(pumpRateOf(36), 160); assert.equal(pumpRateOf(56), 200)
+assert.equal(airHfwMinOf(14), 90); assert.equal(airHfwMinOf(16), 95)
+// water: Figure 2 at its own points and between, Figure 3, X = 1/B per kg/cm²
+assert.equal(bulkModulusBar(10, 1), 21000); assert.equal(bulkModulusBar(40, 100), 23200); near(bulkModulusBar(17.5, 1), 21550, 1e-6)
+near(waterDelta(25), 258e-6, 2e-6); near(waterDelta(45), 421.5e-6, 1e-9); near(waterX(25, 1) * 1e6, 44.37, 0.01)
+// HFW air test: ΔPth = M·14.22 / (V·(X + D/(E·te)))
+const V12 = mixFigures(12, [{ wtIn: 0.25, lengthM: 10000 }]).volumeM3
+const ah = airTestHfw({ p1: 1500, p2: 1471, mM3: 0.1, volumeM3: V12, odIn: 12, teIn: 0.25, tC: 15 }, HFW)
+near(ah.dpthPsi, (0.1 * 14.22) / (V12 * (waterX(15, 1500 / 14.5038) + 12 / (2.11e6 * 0.25))), 1e-9)
+assert.equal(ah.minPct, 90); assert.equal(ah.pass, ah.ratioPct >= 90)
+assert.equal(airTestHfw({ p1: 1500, p2: 1490, mM3: 0.1, volumeM3: V12, odIn: 12, teIn: 0.25, tC: 15 }, HFW).pass, false) // too little drop: air
+// DSAW air test: tangent of the straight part back to the static head, slope against the theory
+const V42 = mixFigures(42, [{ wtIn: 0.688, lengthM: 10000 }]).volumeM3
+const th42 = V42 * ((42 * 0.91) / (2.07e6 * 0.688) + 1 / bulkModulusBar(15, 35))
+const straight = Array.from({ length: 10 }, (_, i) => ({ p: 2 + i, v: i * th42 * 1.02 + (i ? 0.5 : 0) }))
+const as = airTestSaw(straight, { volumeM3: V42, odIn: 42, teIn: 0.688, tC: 15 })
+near(as.slopeRatio, 1.02, 1e-6); near(as.airM3, 0.5, 1e-6); assert.equal(as.pass, true)
+const airy = airTestSaw(straight.map((x, i) => ({ ...x, v: x.v + (i ? 0.004 * V42 : 0) })), { volumeM3: V42, odIn: 42, teIn: 0.688, tC: 15 })
+assert.equal(airy.okAir, false); assert.equal(airy.okSlope, true)
+assert.equal(airTestSaw(straight.map((x) => ({ ...x, v: x.v * 1.2 })), { volumeM3: V42, odIn: 42, teIn: 0.688, tC: 15 }).okSlope, false)
+// leak ≤ 30″: K·F·(T₁ − T₂), H, three verdicts
+const ls = leakTestSmall({ p1: 1500, p2: 1499, t1: 15, t2: 14.8, odIn: 12, teIn: 0.25, F: 1, dFF: 0.1 }, HFW)
+near(ls.dpthPsi, ls.K * 0.2, 1e-9); near(ls.H, 0.1 * Math.abs(ls.dpthPsi) + 0.2 * ls.K, 1e-9); near(ls.dpPsi, 1 - ls.dpthPsi, 1e-9); assert.equal(ls.verdict, 'pass')
+const K = ls.K
+assert.equal(leakTestSmall({ p1: 1500, p2: 1500 - (0.2 * K + 0.25 * K), t1: 15, t2: 14.8, odIn: 12, teIn: 0.25, F: 1, dFF: 0.1 }, HFW).verdict, 'extend')
+assert.equal(leakTestSmall({ p1: 1500, p2: 1500 - 3 * K, t1: 15, t2: 14.8, odIn: 12, teIn: 0.25, F: 1, dFF: 0.1 }, HFW).verdict, 'fail')
+// leak > 30″: δ − 2(1+ν)α, ΔT = T₁ − T₂
+const lb = leakTest({ p1: 2000, p2: 1999, t1: 20, t2: 19.9, odIn: 42, tIn: 0.688 })
+near(lb.ratePsiPerC, ((waterDelta(19.95) - 2.6 * 1.17e-5) / ((42 * 0.91) / (2.07e6 * 0.688) + 1 / bulkModulusBar(19.95, 2000 / 14.5038))) * 14.5038, 1e-9)
+assert.equal(lb.pass, true)
+// yield hold: a drift over 1 bar must be corrected and its water recorded
+const hd = holdDrift([{ at: '2026-01-01T00:00:00Z', psi: 2300, adjustM3: null }, { at: '2026-01-01T02:00:00Z', psi: 2284, adjustM3: null }, { at: '2026-01-01T04:00:00Z', psi: 2300, adjustM3: 0.8 }])
+assert.equal(hd.unadjusted, 0); near(hd.injectedM3, 0.8); near(hd.hours, 4)
+assert.equal(holdDrift([{ at: '2026-01-01T00:00:00Z', psi: 2300, adjustM3: null }, { at: '2026-01-01T02:00:00Z', psi: 2284, adjustM3: null }, { at: '2026-01-01T04:00:00Z', psi: 2284, adjustM3: null }]).unadjusted, 2)
+// P–V: the step slope doubling stops the test even below the offset line
+const kink = Array.from({ length: 10 }, (_, i) => ({ p: 100 * i, v: i < 8 ? i : 7 + (i - 7) * 2.5 }))
+const pk = pvOffset(kink, 1e6); assert.equal(pk.crossed, false); assert.equal(pk.slopeOk, false); assert.equal(pk.pass, false)
+// water analysis and the stored-parameter migration
+assert.equal(waterCheck({ ph: 7.5, tds: 900, cl: 200, so4: 100, th: 300, ph2: 200 }).ok, true)
+assert.equal(waterCheck({ ph: 9.5 }).ok, false); assert.equal(waterCheck({ ph: 8 }).ok, null)
+assert.equal(igsOf({ eGpa: 207 }).eBar, 2.07e6); assert.equal(igsOf(null).seam, 'SAW')
 console.log('testing/igs: all assertions passed')

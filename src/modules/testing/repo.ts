@@ -20,6 +20,8 @@ export interface HtPack { id: string; code: string; station: string; title: stri
 export interface HtReading extends Reading { id: number; targetId: string; note: string; by: string; /** where it was read: head / start / end / high / low / a km, or a station gauge */ location: string; km: number | null; elev: number | null; /** cumulative water injected, m³ (air and strength tests) */ volumeM3: number | null }
 export type FormKind = 'permit' | 'gauge' | 'air' | 'strength' | 'leak' | 'drying'
 export interface HtForm { id: string; targetKind: TargetKind; targetId: string; kind: FormKind; data: Record<string, unknown>; result: 'pending' | 'pass' | 'fail'; at: string | null; by: string; updatedAt: string }
+/** a coating inspection record: a field joint's QC or an electrical (I/S) test of a stretch */
+export interface CtTest { id: string; kind: 'joint' | 'electrical'; ref: string; kmFrom: number | null; kmTo: number | null; at: string | null; data: Record<string, unknown>; result: 'pending' | 'pass' | 'fail'; by: string; updatedAt: string }
 export interface HtEvent { id: number; targetId: string; stage: HtStage; failed: boolean; note: string; by: string; at: string }
 export interface CtRecord { id: string; kind: CoatingKind; kmFrom: number; kmTo: number; at: string; voltageKv: number | null; result: 'pass' | 'fail'; defects: number; reportNo: string; contractor: string; note: string; by: string }
 export interface CtDefect { id: string; recordId: string | null; km: number; kind: string; severity: 'minor' | 'moderate' | 'severe'; status: 'open' | 'repaired' | 'verified'; note: string; repairedAt: string | null; by: string }
@@ -29,12 +31,13 @@ export const sectionOf = (r: Row): HtSection => ({ id: r.id, seq: Number(r.seq),
 const packOf = (r: Row): HtPack => ({ id: r.id, code: s(r.code), station: s(r.station), title: s(r.title), designPressureBar: Number(r.design_pressure_bar), testPressureBar: Number(r.test_pressure_bar), medium: r.medium, stage: r.stage, failed: !!r.failed, failedNote: s(r.failed_note), plannedDate: r.planned_date ?? null, note: s(r.note) })
 const readingOf = (r: Row): HtReading => ({ id: Number(r.id), targetId: r.target_id, phase: s(r.phase), at: s(r.at), pressureBar: Number(r.pressure_bar), tempC: n(r.temp_c), note: s(r.note), by: s(r.by_user), location: s(r.location), km: n(r.km), elev: n(r.elev), volumeM3: n(r.volume_m3) })
 const formOf = (r: Row): HtForm => ({ id: r.id, targetKind: r.target_kind, targetId: r.target_id, kind: r.kind, data: (r.data as Record<string, unknown>) ?? {}, result: r.result, at: r.at ?? null, by: s(r.by_user), updatedAt: s(r.updated_at) })
+const ctTestOf = (r: Row): CtTest => ({ id: r.id, kind: r.kind, ref: s(r.ref), kmFrom: n(r.km_from), kmTo: n(r.km_to), at: r.at ?? null, data: (r.data as Record<string, unknown>) ?? {}, result: r.result, by: s(r.by_user), updatedAt: s(r.updated_at) })
 const eventOf = (r: Row): HtEvent => ({ id: Number(r.id), targetId: r.target_id, stage: r.stage, failed: !!r.failed, note: s(r.note), by: s(r.by_user), at: s(r.at) })
 const recordOf = (r: Row): CtRecord => ({ id: r.id, kind: r.kind, kmFrom: Number(r.km_from), kmTo: Number(r.km_to), at: s(r.at), voltageKv: n(r.voltage_kv), result: r.result, defects: Number(r.defects), reportNo: s(r.report_no), contractor: s(r.contractor), note: s(r.note), by: s(r.by_user) })
 const defectOf = (r: Row): CtDefect => ({ id: r.id, recordId: r.record_id ?? null, km: Number(r.km), kind: s(r.kind), severity: r.severity, status: r.status, note: s(r.note), repairedAt: r.repaired_at ?? null, by: s(r.by_user) })
 
 export async function loadTesting(pid: string) {
-  const [st, se, pk, rd, ev, cr, cd, fm] = await Promise.all([
+  const [st, se, pk, rd, ev, cr, cd, fm, ct] = await Promise.all([
     supabase.from('ht_settings').select('*').eq('master_project_id', pid).maybeSingle(),
     supabase.from('ht_sections').select('*').eq('master_project_id', pid).order('seq'),
     supabase.from('ht_packs').select('*').eq('master_project_id', pid).order('code'),
@@ -43,10 +46,11 @@ export async function loadTesting(pid: string) {
     supabase.from('ct_records').select('*').eq('master_project_id', pid).order('at', { ascending: false }),
     supabase.from('ct_defects').select('*').eq('master_project_id', pid).order('km'),
     supabase.from('ht_forms').select('*').eq('master_project_id', pid),
+    supabase.from('ct_tests').select('*').eq('master_project_id', pid).order('at', { ascending: false }),
   ])
   const err = st.error ?? se.error
   if (err) throw err
-  return { settings: settingsOf(st.data as Row | null), sections: (se.data ?? []).map(sectionOf), packs: (pk.data ?? []).map(packOf), readings: (rd.data ?? []).map(readingOf), events: (ev.data ?? []).map(eventOf), records: (cr.data ?? []).map(recordOf), defects: (cd.data ?? []).map(defectOf), forms: fm.error ? [] : (fm.data ?? []).map(formOf) }
+  return { settings: settingsOf(st.data as Row | null), sections: (se.data ?? []).map(sectionOf), packs: (pk.data ?? []).map(packOf), readings: (rd.data ?? []).map(readingOf), events: (ev.data ?? []).map(eventOf), records: (cr.data ?? []).map(recordOf), defects: (cd.data ?? []).map(defectOf), forms: fm.error ? [] : (fm.data ?? []).map(formOf), ctTests: ct.error ? [] : (ct.data ?? []).map(ctTestOf) }
 }
 
 const chk = (r: { error: unknown }) => { if (r.error) throw r.error }
@@ -95,4 +99,11 @@ export async function setDefect(id: string, status: CtDefect['status']) {
 export async function saveForm(pid: string, kind: TargetKind, id: string, f: { kind: FormKind; data: Record<string, unknown>; result: HtForm['result']; at: string | null }, by: string) {
   const r = await supabase.from('ht_forms').upsert({ master_project_id: pid, target_kind: kind, target_id: id, kind: f.kind, data: f.data, result: f.result, at: f.at, by_user: by, updated_at: new Date().toISOString() }, { onConflict: 'target_id,kind' }).select('*').single()
   chk(r); return formOf(r.data)
+}
+
+/** inserts or updates a coating inspection record */
+export async function saveCtTest(pid: string, x: Omit<CtTest, 'id' | 'by' | 'updatedAt'> & { id?: string }, by: string) {
+  const row = { master_project_id: pid, kind: x.kind, ref: x.ref, km_from: x.kmFrom, km_to: x.kmTo, at: x.at, data: x.data, result: x.result, by_user: by, updated_at: new Date().toISOString() }
+  const r = x.id ? await supabase.from('ct_tests').update(row).eq('id', x.id).select('*').single() : await supabase.from('ct_tests').insert(row).select('*').single()
+  chk(r); return ctTestOf(r.data)
 }

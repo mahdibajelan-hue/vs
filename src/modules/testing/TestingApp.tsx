@@ -14,6 +14,7 @@ import { DEFAULT_HT_SETTINGS, type CtDefect, type HtSettings, type TargetKind } 
 import { ProfileChart, type Band } from './components/ProfileChart'
 import { TestPage } from './components/TestPage'
 import { TestingGuide } from './components/TestingGuide'
+import { CoatingCriteria, ElectricalTest, HolidayCalc, JointQc } from './components/CoatingQc'
 import { ProcedureSettings } from './components/ProcedureSettings'
 import { LineHydraulic } from './components/HtCharts'
 import { PSI_PER_BAR, sectionIgs, smysPsiOf } from './lib/igs'
@@ -90,7 +91,7 @@ function useLineSections() {
     const pipe = st.pipe, igs = st.igs()
     const smys = st.settings.smysOverride ? st.settings.smysOverride * 145.038 : pipe ? smysPsiOf(pipe.material) : null
     return st.sections.map((s) => {
-      const r = pipe && smys && st.settings.method === 'igs' ? sectionIgs({ odIn: pipe.diameterIn, smysPsi: smys, defaultWallIn: pipe.wallMm / 25.4, lengthM: (s.kmTo - s.kmFrom) * 1000, wallMix: s.wallMix, elev: { low: s.elevMin, high: s.elevMax, start: s.elevStart, end: s.elevEnd, head: s.headElev } }, igs) : null
+      const r = pipe && smys && st.settings.method === 'igs' ? sectionIgs({ odIn: pipe.diameterIn, smysPsi: smys, defaultWallIn: pipe.wallMm / 25.4, lengthM: (s.kmTo - s.kmFrom) * 1000, wallMix: s.wallMix, dpPsi: pipe.designPressureBar * PSI_PER_BAR, elev: { low: s.elevMin, high: s.elevMax, start: s.elevStart, end: s.elevEnd, head: s.headElev } }, igs) : null
       return { ...s, pLowPsi: r ? r.pr.strength.low : s.pLow * PSI_PER_BAR, color: s.failed ? HT_FAILED_COLOR : HT_STAGE_COLOR[s.stage], status: s.failed ? 'مردود' : HT_STAGE_FA[s.stage] }
     })
   }, [st])
@@ -330,7 +331,17 @@ function Stations({ onOpen }: { onOpen: (id: string) => void }) {
 const SEV_FA = { minor: 'جزئی', moderate: 'متوسط', severe: 'شدید' } as const
 const SEV_COLOR = { minor: '#eab308', moderate: '#f97316', severe: '#ef4444' } as const
 const DEF_STATUS_FA = { open: 'باز', repaired: 'تعمیرشده', verified: 'تأییدشده' } as const
+type CoatSub = 'records' | 'joint' | 'electrical' | 'criteria'
 function Coating() {
+  const [sub, setSub] = useRemembered<CoatSub>('coatSub', 'records', (v) => typeof v === 'string')
+  return (
+    <div className="ps-stack">
+      <div className="ht-seg" role="group" aria-label="بخش پوشش">{([['records', 'آزمون‌ها و عیوب'], ['joint', 'بازرسی سرجوش'], ['electrical', 'آزمون الکتریکی (I/S)'], ['criteria', 'معیارهای پذیرش']] as const).map(([k, l]) => <button key={k} type="button" aria-pressed={sub === k} onClick={() => setSub(k)}>{l}</button>)}</div>
+      {sub === 'records' ? <CoatingRecords /> : sub === 'joint' ? <JointQc /> : sub === 'electrical' ? <ElectricalTest /> : <><CoatingCriteria /><HolidayCalc /></>}
+    </div>
+  )
+}
+function CoatingRecords() {
   const st = useTestingStore()
   const email = useAuthStore((s) => s.profile?.email ?? '')
   const [f, setF] = useState({ kind: 'holiday' as CoatingKind, from: '', to: '', at: today(), kv: '25', result: 'pass' as 'pass' | 'fail', defects: '0', report: '', contractor: '', note: '' })
@@ -367,7 +378,7 @@ function Coating() {
           <label className="ps-field"><span>انجام‌دهنده</span><input value={f.contractor} onChange={(e) => setF({ ...f, contractor: e.target.value })} /></label>
           <button type="button" className="ps-btn is-primary" disabled={!ok} onClick={save}><Plus size={14} /> ثبت</button>
         </div>
-        {f.kind === 'holiday' && <p className="ps-hint">ولتاژ آزمون هالیدی بر اساس ضخامت پوشش تعیین می‌شود (برای پوشش سه‌لایهٔ پلی‌اتیلن معمولاً حدود ۲۵ کیلوولت).</p>}
+        {f.kind === 'holiday' && <p className="ps-hint">ولتاژ آزمون هالیدی از ضخامت پوشش و جدول‌های دستورالعمل محاسبه می‌شود (بخش «معیارهای پذیرش»)؛ مثلاً پوشش سه‌لایهٔ پلی‌اتیلن: ۵ kV + ۵ kV بر هر میلی‌متر، حداکثر ۲۵ kV.</p>}
       </section>
 
       {st.records.length > 0 && (
