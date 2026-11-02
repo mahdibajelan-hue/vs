@@ -13,6 +13,8 @@ import {
 } from '../lib/minutes'
 import type { FormKind, HtForm, HtSection } from '../repo'
 import { PvChart } from './HtCharts'
+import { ESign } from './ESign'
+import { ESIGN_PRINT_CSS, fingerprint, SIGN_ROLES, signTableHtml, type SignRole } from '../lib/esign'
 
 const fa = (v: number, d = 2) => v.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const RES_UI: Record<HtForm['result'], { label: string; color: string }> = { pass: { label: 'قبول', color: '#22c55e' }, fail: { label: 'مردود', color: '#ef4444' }, pending: { label: 'در انتظار', color: '#94a3b8' } }
@@ -243,6 +245,8 @@ function FormEditor({ kind, ctx, fig, form, onSave, onPrint }: { kind: FormKind;
       <div className="ps-actions"><button type="button" className="ps-btn is-primary" onClick={() => void onSave(d, at || null)}><CheckCircle2 size={14} /> ذخیرهٔ صورتجلسه</button>
         <button type="button" className="ps-btn" onClick={onPrint} disabled={!form}><Printer size={14} /> چاپ فرم</button>
         {form ? <small className="ps-meta">آخرین ثبت: {form.by} · {formatJalali(form.updatedAt.slice(0, 10))}</small> : <small className="ps-meta">برای چاپ، ابتدا صورتجلسه را ذخیره کنید.</small>}</div>
+      <ESign roles={kind === 'permit' ? SIGN_ROLES.permit : SIGN_ROLES.hydro} saved={form?.data ?? null} ctx={form ? computeForm(kind, form.data, ctx).result : ''}
+        dirty={!!form && fingerprint(d) !== fingerprint(form.data)} onSave={(data) => onSave(data, form?.at ?? (at || null))} />
     </div>
   )
 }
@@ -262,6 +266,10 @@ function printSection({ sec, fig, ctx, forms, settings, projectName, profile, on
   const SIG_REP = ['رئیس دستگاه نظارت (مشاور)', 'نمایندهٔ پیمانکار — الف) مجری آزمایش هیدرواستاتیک', 'نمایندهٔ پیمانکار — ب) رئیس کارگاه پیمانکار']
   const SIG_PERMIT = ['نمایندهٔ پیمانکار', 'نمایندهٔ مشاور', 'نمایندهٔ کارفرما', 'نمایندهٔ امور بازرسی فنی']
   const sign = (names: string[]) => `<table class="sg"><tr>${names.map((n) => `<td>${n}<br><small>نام و امضاء</small></td>`).join('')}</tr><tr class="sp">${names.map(() => '<td></td>').join('')}</tr></table>`
+  const fmtAt = (iso: string) => new Date(iso).toLocaleString('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  /** the signature block of a stored minute: its electronic signatures under the form's own role labels */
+  const esig = (k: FormKind, labels: string[]) => { const f = forms.find((x) => x.kind === k); const keys = k === 'permit' ? SIGN_ROLES.permit : SIGN_ROLES.hydro
+    const roles: SignRole[] = keys.map((r, i) => ({ k: r.k, label: labels[i] ?? r.label })); return f ? signTableHtml(roles, f.data, computeForm(k, f.data, ctx).result, fmtAt) : sign(labels) }
   const head = (no: string, title: string, at: string | null) => `<div class="fh"><div class="org">شرکت ملی گاز ایران — پروژهٔ احداث خط انتقال گاز ${e(projectName)}</div><h2>${no ? `<small>${no}</small> ` : ''}${title}</h2>
     <table class="hd"><tr><th>شمارهٔ قرارداد</th><td>${e(p.contractNo)}</td><th>کارفرما</th><td>${e(p.employer)}</td></tr><tr><th>تاریخ</th><td>${formatJalali(at ?? today)}</td><th>مشاور</th><td>${e(p.consultant)}</td></tr><tr><th>پیمانکار</th><td colspan="3">${e(p.contractor)}</td></tr></table></div>`
   const secRow = `<table><tr><th>شمارهٔ قطعه</th><td>${e(sec.code)}</td><th>از کیلومتر</th><td>${fa(sec.kmFrom, 3)}</td><th>تا کیلومتر</th><td>${fa(sec.kmTo, 3)}</td></tr>
@@ -305,7 +313,7 @@ function printSection({ sec, fig, ctx, forms, settings, projectName, profile, on
     if (k === 'permit') {
       pages.push(`<section>${head('', 'صورتجلسهٔ مجوز شروع آزمایشات هیدرواستاتیک', f?.at ?? null)}${secRow}
         <p>با توجه به انجام و تأیید کلیهٔ عملیات اجرایی شامل ${PERMIT_ITEMS.map((t, i) => `${box(d[`c${i}`] === true)} ${t}`).join('، ')}، قطعهٔ مزبور آمادهٔ انجام آزمایشات هیدرواستاتیک است. از زمان شروع آزمایشات، مسئولیت انجام هرگونه عملیات اجرایی که نیازمند انجام مجدد آزمایشات گردد به عهدهٔ پیمانکار است.</p>
-        <h4>آنالیز آب مصرفی${p.waterSource ? ` — منبع: ${e(p.waterSource)}` : ''}</h4>${kv(cc.rows.slice(1))}${verdictP(k)}${sign(SIG_PERMIT)}</section>`)
+        <h4>آنالیز آب مصرفی${p.waterSource ? ` — منبع: ${e(p.waterSource)}` : ''}</h4>${kv(cc.rows.slice(1))}${verdictP(k)}${esig(k, SIG_PERMIT)}</section>`)
     } else if (k === 'gauge') {
       pages.push(`<section>${head('فرم ۵-۲', 'صورتجلسهٔ ارسال صفحهٔ اندازه', f?.at ?? null)}
         <table><tr><th>شمارهٔ قطعه</th><td>${e(sec.code)}</td><th>قطر لوله (inch)</th><td>${fa(fig.odIn, 0)}</td><th>جنس لوله</th><td>${e(fig.material)}</td></tr></table>${wallTable}
@@ -313,7 +321,7 @@ function printSection({ sec, fig, ctx, forms, settings, projectName, profile, on
         ${endpoints(d)}
         <p>${box(d.condition === 'ok')} نظر به اینکه صفحهٔ اندازه به‌طور سالم دریافت گردید، لذا سلامت لوله از نظر لهیدگی (OVAL, DENT) در قطعهٔ فوق مورد تأیید می‌باشد.</p>
         <p>${box(d.condition === 'damaged')} نظر به اینکه صفحهٔ اندازه به‌طور سالم دریافت نگردید، لذا سلامت لوله از نظر لهیدگی (OVAL, DENT) در قطعهٔ فوق مورد تأیید نمی‌باشد.</p>
-        ${d.note ? `<p>توضیحات: ${e(d.note)}</p>` : ''}${sign(SIG_REP)}</section>`)
+        ${d.note ? `<p>توضیحات: ${e(d.note)}</p>` : ''}${esig(k, SIG_REP)}</section>`)
     } else if (k === 'air') {
       const body = igs.seam === 'HFW'
         ? `<table><tr><th>قطر خارجی لوله D</th><td>${fa(fig.odIn, 0)} inch</td><th rowspan="4">فرمول محاسبه</th><td rowspan="4" dir="ltr" style="text-align:center">ΔP₀ = M × 14.22 / ( V × (X + D / (E × te)) )<br>1/te = (1/Vt) Σ Vi/ti<br>E = 2.11 × 10⁶ kg/cm²</td></tr>
@@ -322,29 +330,29 @@ function printSection({ sec, fig, ctx, forms, settings, projectName, profile, on
             <tr><th>حجم آب برداشته‌شده M</th><td>${nv(d.m, 3)} m³</td></tr><tr><th>فشار خط بعد از برداشت آب P₂</th><td colspan="3">${nv(d.p2, 1)} psi</td></tr><tr><th>دمای آب خط T</th><td colspan="3">${nv(d.waterC, 1)} °C</td></tr></table>${kv(cc.rows.slice(2))}`
         : `<table><tr><th>ردیف</th><th>فشار (bar)</th><th>حجم آب تزریقی تجمعی (m³)</th></tr>${rowsOf<PvRow>(d, 'pv').map((r, i) => `<tr><td>${fa(i + 1, 0)}</td><td>${nv(r.p, 2)}</td><td>${nv(r.v, 3)}</td></tr>`).join('')}</table>${kv(cc.rows)}`
       pages.push(`<section>${head('فرم ۵-۵', 'جدول ثبت ارقام آزمایش عدم وجود هوا', f?.at ?? null)}${secRow}${body}
-        <p>نتیجه: ${box(cc.result === 'pass')} آزمایش عدم وجود هوا مورد تأیید می‌باشد &nbsp;&nbsp; ${box(cc.result === 'fail')} آزمایش عدم وجود هوا مورد تأیید نمی‌باشد</p>${verdictP(k)}${sign(SIG3)}</section>`)
+        <p>نتیجه: ${box(cc.result === 'pass')} آزمایش عدم وجود هوا مورد تأیید می‌باشد &nbsp;&nbsp; ${box(cc.result === 'fail')} آزمایش عدم وجود هوا مورد تأیید نمی‌باشد</p>${verdictP(k)}${esig(k, SIG3)}</section>`)
     } else if (k === 'strength') {
       const tab = (rs: RiseRow[], cumulative: boolean) => { const cm = riseCumulative(rs); return `<table><tr><th>تاریخ و ساعت</th><th>فشار خط (psi)</th><th>تغییرات فشار (psi)</th><th>عدد کنتور (m³)</th><th>${cumulative ? 'مقدار آب تزریق‌شده' : 'آب تزریقی / تخلیه'} (m³)</th>${cumulative ? '<th>مجموع آب تزریق‌شده (m³)</th>' : ''}<th>ملاحظات</th></tr>${rs.map((r, i) => { const a = num(r.psi), b = i ? num(rs[i - 1].psi) : null; return `<tr><td>${dt(r.at)}</td><td>${nv(r.psi, 1)}</td><td>${a != null && b != null ? fa(a - b, 1) : '—'}</td><td>${nv(r.meter, 3)}</td><td>${nv(r.vol, 3)}</td>${cumulative ? `<td>${fa(cm[i].cum, 3)}</td>` : ''}<td>${e(r.note)}</td></tr>` }).join('') || '<tr><td colspan="7">ثبت نشده</td></tr>'}</table>` }
       const body = igs.seam === 'HFW' ? kv(cc.rows) : `<h4>جدول تغییرات فشار نسبت به حجم آب تزریقی تا مرحلهٔ رسیدن فشار خط به حد فشار آزمایش مقاومت</h4>${tab(rowsOf<RiseRow>(d, 'rise'), true)}
         <h4>آزمایش ${fa(igs.strengthHoldH, 0)} ساعتهٔ مقاومت</h4>${tab(rowsOf<RiseRow>(d, 'hold'), false)}${kv(cc.rows)}`
       pages.push(`<section>${head('فرم ۵-۴', 'گزارش آزمایش مقاومت', f?.at ?? null)}
-        <table><tr><th>شمارهٔ قطعه</th><td>${e(sec.code)}</td><th>از کیلومتر</th><td>${fa(sec.kmFrom, 3)}</td><th>تا کیلومتر</th><td>${fa(sec.kmTo, 3)}</td></tr><tr><th>طول (m)</th><td>${fa(mix.lengthM, 2)}</td><th>حجم آزمایش (m³)</th><td>${fa(mix.volumeM3, 2)}</td><th>روش</th><td>${SEAM_FA[igs.seam]}</td></tr></table>${body}${verdictP(k)}${sign(SIG3)}</section>`)
+        <table><tr><th>شمارهٔ قطعه</th><td>${e(sec.code)}</td><th>از کیلومتر</th><td>${fa(sec.kmFrom, 3)}</td><th>تا کیلومتر</th><td>${fa(sec.kmTo, 3)}</td></tr><tr><th>طول (m)</th><td>${fa(mix.lengthM, 2)}</td><th>حجم آزمایش (m³)</th><td>${fa(mix.volumeM3, 2)}</td><th>روش</th><td>${SEAM_FA[igs.seam]}</td></tr></table>${body}${verdictP(k)}${esig(k, SIG3)}</section>`)
     } else if (k === 'leak') {
       const log = leakLog(d, ctx.readings)
       const small = fig.odIn <= igs.leakBigDiaIn
       pages.push(`<section>${head('فرم ۵-۳', 'جدول ثبت ارقام آزمایش نشتی', f?.at ?? null)}${secRow}
         <table><tr><th rowspan="2">تاریخ — ساعت</th><th rowspan="2">فشارسنج وزنه‌ای (psi)</th><th rowspan="2">دمای محیط (°C)</th><th colspan="7">درجه حرارت ${small ? 'زمین' : 'سطح لوله'} (°C)</th><th rowspan="2">ملاحظات</th></tr><tr>${LEAK_T.map((_, i) => `<th>T${fa(i + 1, 0)}</th>`).join('')}<th>Tm</th></tr>
-        ${log.map((r) => { const t = tmOf(r); return `<tr><td>${dt(r.at)}</td><td>${nv(r.psi, 1)}</td><td>${nv(r.amb, 1)}</td>${LEAK_T.map((tk) => `<td>${nv(r[tk], 3)}</td>`).join('')}<td>${t == null ? '—' : fa(t, 3)}</td><td>${e(r.note)}</td></tr>` }).join('') || '<tr><td colspan="11">ثبت نشده</td></tr>'}</table>${sign(SIG3)}</section>`)
+        ${log.map((r) => { const t = tmOf(r); return `<tr><td>${dt(r.at)}</td><td>${nv(r.psi, 1)}</td><td>${nv(r.amb, 1)}</td>${LEAK_T.map((tk) => `<td>${nv(r[tk], 3)}</td>`).join('')}<td>${t == null ? '—' : fa(t, 3)}</td><td>${e(r.note)}</td></tr>` }).join('') || '<tr><td colspan="11">ثبت نشده</td></tr>'}</table>${esig(k, SIG3)}</section>`)
       const formula = small ? 'K = 14.22 (μ − γ) / (X + D/(E·te))<br>ΔP₀ = K·F·(T₁ − T₂)<br>H = ΔF/F × ΔP₀ + 0.2·K·F<br>ΔP = (P₁ − P₂) − ΔP₀<br>E = 2.11 × 10⁶ kg/cm²' : 'ΔPth/ΔT = (δ − 2(1+ν)α) / (D(1−ν²)/(E·t) + 1/B)<br>ΔT = T₁ − T₂, ΔPa = P₁ − P₂<br>E = 2.07 × 10⁶ bar, α = 1.17 × 10⁻⁵'
       const res = small ? `<p>نتیجه: ${box(cc.result === 'pass')} ΔP ≤ H قابل قبول است &nbsp; ${box(!!cc.extend)} ΔP > H تمدید &nbsp; ${box(cc.result === 'fail')} ΔP ≫ H قابل قبول نمی‌باشد</p>`
         : `<p>نتیجه: ${box(cc.result === 'pass')} ΔPa ≤ ΔPth و ΔPa ≤ ${fa(igs.leakMaxPsi, 1)} psi — قابل قبول است &nbsp; ${box(!!cc.extend)} تمدید ۲۴ ساعته &nbsp; ${box(cc.result === 'fail')} قابل قبول نمی‌باشد</p>`
       pages.push(`<section>${head('فرم ۵-۶', 'صورتجلسهٔ آزمایش نشتی', f?.at ?? null)}${secRow}<h4>شرح صورتجلسهٔ آزمایش نشتی</h4>${wallTable}
-        <table><tr><td style="width:62%;vertical-align:top;padding:0;border:0">${kv(cc.rows)}</td><td style="vertical-align:top" dir="ltr"><b>فرمول‌های محاسبه</b><br>${formula}</td></tr></table>${res}${verdictP(k)}${sign(SIG_REP)}</section>`)
+        <table><tr><td style="width:62%;vertical-align:top;padding:0;border:0">${kv(cc.rows)}</td><td style="vertical-align:top" dir="ltr"><b>فرمول‌های محاسبه</b><br>${formula}</td></tr></table>${res}${verdictP(k)}${esig(k, SIG_REP)}</section>`)
     } else {
       pages.push(`<section>${head('فرم ۵-۷', 'صورتجلسهٔ تخلیه و خشک‌کنی خط', f?.at ?? null)}
         <table><tr><th>شمارهٔ قطعه</th><td>${e(sec.code)}</td><th>قطر لوله (inch)</th><td>${fa(fig.odIn, 0)}</td><th>جنس لوله</th><td>${e(fig.material)}</td><th>طول لوله (m)</th><td>${fa(mix.lengthM, 2)}</td></tr>
           <tr><th>دمای هوا (°C)</th><td>${nv(d.airC, 1)}</td><th>وضعیت هوا</th><td colspan="5">${box(d.weather === 'sunny')} آفتابی &nbsp; ${box(d.weather === 'cloudy')} ابری &nbsp; ${box(d.weather === 'rainy')} بارانی</td></tr></table>
-        ${endpoints(d)}${kv(cc.rows)}${d.n2 === true ? '<p>☑ خط برای توقف طولانی با نیتروژن به فشار ۱ kg/cm² پر شد.</p>' : ''}${verdictP(k)}${sign(SIG_REP)}</section>`)
+        ${endpoints(d)}${kv(cc.rows)}${d.n2 === true ? '<p>☑ خط برای توقف طولانی با نیتروژن به فشار ۱ kg/cm² پر شد.</p>' : ''}${verdictP(k)}${esig(k, SIG_REP)}</section>`)
     }
   }
   const expired = settings.equipment.filter((x) => x.calibExpiry && x.calibExpiry < today)
@@ -356,7 +364,7 @@ section{page-break-after:always;border:1.6px solid #1e293b;border-radius:6px;pad
 .fh .org{text-align:center;font-weight:900;font-size:12px}.fh h2{text-align:center;font-size:14px;margin:4px 0 6px}.fh h2 small{font-size:10.5px;color:#475569;font-weight:700}
 h2{font-size:13px}h4{font-size:11.5px;margin:8px 0 3px}table{width:100%;border-collapse:collapse;margin:5px 0;font-variant-numeric:tabular-nums}th,td{border:1px solid #94a3b8;padding:3px 5px;text-align:right}th{background:#e2e8f0;font-weight:700}
 .hd th{width:16%}.sg{margin-top:10px}.sg td{text-align:center;font-weight:700;background:#f8fafc}.sg td small{font-weight:400;color:#64748b}.sg .sp td{height:46px;background:#fff}
-.v{padding:4px 8px;border-radius:4px;border:1px solid}.v-pass{border-color:#16a34a;color:#166534}.v-fail{border-color:#dc2626;color:#991b1b}.v-pending{border-color:#94a3b8;color:#334155}.warn{color:#b91c1c;font-weight:700}p{line-height:1.9;margin:4px 0}</style></head><body>
+.v{padding:4px 8px;border-radius:4px;border:1px solid}.v-pass{border-color:#16a34a;color:#166534}.v-fail{border-color:#dc2626;color:#991b1b}.v-pending{border-color:#94a3b8;color:#334155}.warn{color:#b91c1c;font-weight:700}p{line-height:1.9;margin:4px 0}${ESIGN_PRINT_CSS}</style></head><body>
 ${pages.join('') || '<p>صورتجلسه‌ای ثبت نشده است.</p>'}${eq}
 <script>document.fonts&&document.fonts.ready.then(()=>setTimeout(()=>print(),250))</script></body></html>`)
   w.document.close()

@@ -11,6 +11,8 @@ import {
   type Check, type Cleanliness, type CpCriterion, type JointSystem, type MainCoating, type PotentialRow,
 } from '../lib/coatingCore'
 import type { CtTest } from '../repo'
+import { ESign } from './ESign'
+import { ESIGN_PRINT_CSS, fingerprint, SIGN_ROLES, signsOf, signTableHtml, signValid } from '../lib/esign'
 
 const fa = (v: number, d = 2) => v.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const RES: Record<CtTest['result'], { label: string; color: string }> = { pass: { label: 'قبول', color: '#22c55e' }, fail: { label: 'مردود', color: '#ef4444' }, pending: { label: 'ناقص', color: '#94a3b8' } }
@@ -92,6 +94,8 @@ export function JointQc() {
       <Checks cs={calc.checks} />
       <div className="ps-actions"><button type="button" className="ps-btn is-primary" disabled={!edit.ref.trim()} onClick={() => void save()}><CheckCircle2 size={14} /> {edit.id ? 'به‌روزرسانی' : 'ثبت'} بازرسی سرجوش</button><Badge r={calc.result} />
         {edit.id && <button type="button" className="ps-btn is-ghost" onClick={() => setEdit({ ref: '', km: '', at: todayTehran(), d: blankJoint() })}>انصراف</button>}</div>
+      {edit.id && (() => { const t = st.ctTests.find((x) => x.id === edit.id); return t ? <ESign roles={SIGN_ROLES.coating.filter((r) => r.k === 'qc' || r.k === 'supervisor')} saved={t.data} ctx={t.result} dirty={fingerprint(d) !== fingerprint(t.data)}
+        onSave={async (data) => { const r = await st.saveCtTest({ id: t.id, kind: 'joint', ref: t.ref, kmFrom: t.kmFrom, kmTo: t.kmTo, at: t.at, data, result: t.result }, email); if (r) setEdit({ ...edit, d: r.data }); return !!r }} /> : null })()}
       {list.length > 0 && <div className="ps-table-wrap"><table className="ps-table"><thead><tr><th>سرجوش</th><th>کیلومتر</th><th>تاریخ</th><th>سیستم</th><th>ضخامت کمینه</th><th>هالیدی</th><th>نتیجه</th><th>مورد مردود</th><th /></tr></thead>
         <tbody>{list.map((t) => { const c = jointChecks({ ...(t.data as object), system: (t.data.system as JointSystem) ?? 'hss80', odIn } as Parameters<typeof jointChecks>[0]); const th = c.checks.find((x) => x.k === 'thick'); return <tr key={t.id}>
           <td dir="ltr">{t.ref}</td><td>{t.kmFrom != null ? fa(t.kmFrom, 3) : '—'}</td><td>{t.at ? formatJalali(t.at) : '—'}</td><td>{c.spec.label}</td><td>{th?.value}</td><td>{c.checks.find((x) => x.k === 'kv')?.value}</td><td><Badge r={c.result} /></td>
@@ -149,6 +153,8 @@ export function ElectricalTest() {
       <Checks cs={r.checks} />
       <div className="ps-actions"><button type="button" className="ps-btn is-primary" disabled={!ok} onClick={() => void save()}><CheckCircle2 size={14} /> {edit.id ? 'به‌روزرسانی' : 'ثبت'} آزمون الکتریکی</button><Badge r={r.result} />
         {edit.id && <button type="button" className="ps-btn is-ghost" onClick={() => setEdit({ from: edit.to, to: '', at: todayTehran(), d: blankElec(od) })}>آزمون جدید</button>}</div>
+      {edit.id && (() => { const t = st.ctTests.find((x) => x.id === edit.id); return t ? <ESign roles={SIGN_ROLES.coating} saved={t.data} ctx={t.result} dirty={fingerprint(d) !== fingerprint(t.data)}
+        onSave={async (data) => { const x = await st.saveCtTest({ id: t.id, kind: 'electrical', ref: t.ref, kmFrom: t.kmFrom, kmTo: t.kmTo, at: t.at, data, result: t.result }, email); if (x) setEdit({ ...edit, d: x.data }); return !!x }} /> : null })()}
       {list.length > 0 && <div className="ps-table-wrap"><table className="ps-table"><thead><tr><th>محدوده</th><th>تاریخ</th><th>پوشش</th><th>I/S</th><th>نتیجه</th><th /></tr></thead>
         <tbody>{list.map((t) => { const x = electricalTest({ ...(t.data as object), coating: (t.data.coating as MainCoating) ?? '3lpe', pipes: (t.data.pipes as []) ?? [], potentials: (t.data.potentials as []) ?? [] } as Parameters<typeof electricalTest>[0]); return <tr key={t.id}>
           <td className="ps-nowrap">{t.kmFrom != null ? fa(t.kmFrom, 3) : '—'} – {t.kmTo != null ? fa(t.kmTo, 3) : '—'}</td><td>{t.at ? formatJalali(t.at) : '—'}</td><td>{x.coating.label}</td><td>{x.isUa == null ? '—' : `${fa(x.isUa, 2)} µA/m² (حد ${fa(x.limitUa, 0)})`}</td><td><Badge r={x.result} /></td>
@@ -190,13 +196,14 @@ function openPrint(title: string, body: string) {
   w.document.write(`<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>${esc(title)}</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700;900&display=swap">
 <style>@page{size:A4;margin:11mm}body{font-family:Vazirmatn,Tahoma,sans-serif;color:#0f172a;font-size:10.5px;margin:0}section{page-break-after:always;border:1.6px solid #1e293b;border-radius:6px;padding:8px 10px}section:last-of-type{page-break-after:auto}
 h2{text-align:center;font-size:14px;margin:4px 0 6px}.org{text-align:center;font-weight:900;font-size:12px}h4{font-size:11.5px;margin:8px 0 3px}table{width:100%;border-collapse:collapse;margin:5px 0;font-variant-numeric:tabular-nums}th,td{border:1px solid #94a3b8;padding:3px 5px;text-align:right}th{background:#e2e8f0}
-.sg td{text-align:center;font-weight:700;background:#f8fafc;width:25%}.sg .sp td{height:46px;background:#fff}ol{line-height:1.9;margin:4px 0}p{line-height:1.9;margin:4px 0}.ok{color:#166534;font-weight:700}.bad{color:#991b1b;font-weight:700}</style></head><body>${body}
+.sg td{text-align:center;font-weight:700;background:#f8fafc;width:25%}.sg .sp td{height:46px;background:#fff}ol{line-height:1.9;margin:4px 0}p{line-height:1.9;margin:4px 0}.ok{color:#166534;font-weight:700}.bad{color:#991b1b;font-weight:700}${ESIGN_PRINT_CSS}</style></head><body>${body}
 <script>document.fonts&&document.fonts.ready.then(()=>setTimeout(()=>print(),250))</script></body></html>`)
   w.document.close()
 }
-const SIG_ELEC = `<table class="sg"><tr><td>رئیس کارگاه پیمانکار</td><td>مسئول کنترل کیفی پیمانکار</td><td>سرپرست دستگاه نظارت</td><td>ناظر مقیم مشاور</td></tr><tr class="sp"><td></td><td></td><td></td><td></td></tr></table>`
+const fmtAt = (iso: string) => new Date(iso).toLocaleString('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 function printElectrical(t: CtTest, projectName: string, p: Parties) {
   const d = t.data
+  const SIG_ELEC = signTableHtml(SIGN_ROLES.coating, t.data, t.result, fmtAt)
   const r = electricalTest({ ...(d as object), coating: (d.coating as MainCoating) ?? '3lpe', pipes: (d.pipes as []) ?? [], potentials: (d.potentials as []) ?? [] } as Parameters<typeof electricalTest>[0])
   const pipes = (d.pipes as { dIn: string; lengthM: string }[]) ?? []
   const pots = (d.potentials as PotentialRow[]) ?? []
@@ -223,10 +230,10 @@ function printJoints(list: CtTest[], odIn: number, projectName: string, p: Parti
   const rows = list.map((t) => { const c = jointChecks({ ...(t.data as object), system: (t.data.system as JointSystem) ?? 'hss80', odIn } as Parameters<typeof jointChecks>[0]); return { t, c } })
   const body = `<section><div class="org">شرکت ملی گاز ایران — پروژهٔ احداث خط انتقال گاز ${esc(projectName)}</div><h2>گزارش بازرسی پوشش سرجوش‌ها</h2>
     <table><tr><th>کارفرما</th><td>${esc(p.employer)}</td><th>پیمانکار</th><td>${esc(p.contractor)}</td><th>مشاور</th><td>${esc(p.consultant)}</td></tr></table>
-    <table><tr><th>سرجوش</th><th>کیلومتر</th><th>تاریخ</th><th>سیستم</th><th>دمای لوله / شبنم / RH</th><th>تمیزی / زبری</th><th>ضخامت کمینه</th><th>هالیدی</th><th>چسبندگی</th><th>نتیجه</th></tr>
+    <table><tr><th>سرجوش</th><th>کیلومتر</th><th>تاریخ</th><th>سیستم</th><th>دمای لوله / شبنم / RH</th><th>تمیزی / زبری</th><th>ضخامت کمینه</th><th>هالیدی</th><th>چسبندگی</th><th>نتیجه</th><th>امضای الکترونیک</th></tr>
     ${rows.map(({ t, c }) => { const g = (k: string) => c.checks.find((x) => x.k === k); const d = t.data; return `<tr><td>${esc(t.ref)}</td><td>${nv(t.kmFrom)}</td><td>${t.at ? formatJalali(t.at) : '—'}</td><td>${esc(c.spec.label)}</td>
       <td>${nv(d.pipeTempC, 1)} / ${nv(d.dewC, 1)} / ${nv(d.rh, 0)}٪</td><td>${esc(g('clean')?.value)} / ${esc(g('profile')?.value)}</td><td>${esc(g('thick')?.value)}</td><td>${esc(g('kv')?.value)} — ${esc(g('holiday')?.value)}</td>
-      <td>${c.checks.filter((x) => x.k.startsWith('peel') || x.k === 'pull').map((x) => esc(x.value)).join(' / ') || '—'}</td><td class="${c.result === 'pass' ? 'ok' : c.result === 'fail' ? 'bad' : ''}">${RES[c.result].label}${c.result === 'fail' ? `<br><small>${c.checks.filter((x) => x.ok === false).map((x) => esc(x.label)).join('، ')}</small>` : ''}</td></tr>` }).join('')}</table>
+      <td>${c.checks.filter((x) => x.k.startsWith('peel') || x.k === 'pull').map((x) => esc(x.value)).join(' / ') || '—'}</td><td class="${c.result === 'pass' ? 'ok' : c.result === 'fail' ? 'bad' : ''}">${RES[c.result].label}${c.result === 'fail' ? `<br><small>${c.checks.filter((x) => x.ok === false).map((x) => esc(x.label)).join('، ')}</small>` : ''}</td><td style="font-size:9.5px">${Object.values(signsOf(t.data)).map((x) => `${esc(x.name || x.email)}${signValid(x, t.data, t.result) ? ` <span dir="ltr">${x.fp}</span>` : ' (باطل)'}`).join('<br>') || '—'}</td></tr>` }).join('')}</table>
     <table class="sg"><tr><td>مسئول کنترل کیفی پیمانکار</td><td>رئیس کارگاه پیمانکار</td><td>سرپرست دستگاه نظارت</td><td>ناظر مقیم مشاور</td></tr><tr class="sp"><td></td><td></td><td></td><td></td></tr></table></section>`
   openPrint('Field joint coating inspection', body)
 }

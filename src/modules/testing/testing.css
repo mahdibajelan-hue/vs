@@ -43,3 +43,33 @@
 .ht-seg button[aria-pressed='true'] { background: #0ea5e9; border-color: #0ea5e9; color: #fff; }
 .ht-warn { display: grid; gap: .35rem; font-size: 12px; line-height: 1.8; color: var(--text-secondary); list-style: disc; padding-inline-start: 1.1rem; }
 .ht-flash { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); z-index: 80; padding: .55rem 1rem; border-radius: 99px; font-size: 12px; font-weight: 800; color: #052e16; background: #4ade80; box-shadow: 0 10px 30px -10px rgba(0,0,0,.5); }
+
+/* ── phones: nothing may be wider than the screen; wide tables scroll inside their own box ── */
+.ht .ps-stack { grid-template-columns: minmax(0, 1fr); }
+.ht .ps-stack > *, .ht .ps-card, .ht .ps-card > *, .ht .mn, .ht .mn > *, .ht .mn-sub, .ht .cq-sub { min-width: 0; }
+.ht .ht-figs, .ht .ht-basis { grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr)); }
+@media (max-width: 640px) { .ht .ht-figs, .ht .ht-basis, .ht .mn-pt, .ht .pr-fig { grid-template-columns: repeat(auto-fit, minmax(min(8.5rem, 100%), 1fr)); } .ht .ht-fig b { font-size: 1rem; } }
+.ht .mn-pt, .ht .pr-fig { grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr)); }
+.ht .mn-pair { grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)); }
+.ht .mn-checks { grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); }
+.ht .pr-steps { grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); }
+.ht .ps-grid { grid-template-columns: repeat(auto-fill, minmax(min(12rem, 100%), 1fr)); }
+.ht .ps-card-head { flex-wrap: wrap; row-gap: .4rem; }
+.ht .ps-card-head > b { min-width: 0; overflow-wrap: anywhere; }
+.ht .ps-table-wrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.ht .ps-hint, .ht .mn-verdict, .ht .mn-calc { overflow-wrap: anywhere; }
+.ht .mn-calc div { flex-wrap: wrap; }
+.ht .ps-inline-form { flex-wrap: wrap; }
+.ht .ps-inline-form > .ps-field { min-width: min(10rem, 100%); }
+@media (max-width: 640px) {
+  .ht .ps-sysnav { position: static; }
+  .ht .ps-stepper { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: .1rem; }
+  .ht .ps-stepper li { flex: none; }
+  .ht .ps-card { padding-inline: .75rem; }
+  .ht .ht-seg { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .ht .ht-seg button { flex: none; }
+  .ht .mn-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .ht .mn-tab { flex: none; }
+  .ht .cq-checks div { grid-template-columns: 1.2rem minmax(0, 1fr); }
+  .ht .cq-checks div b { grid-column: 2; }
+}

@@ -177,7 +177,9 @@ export function computeForm(kind: FormKind, d: FormData, c: Ctx): Computed {
     rows.push(['T₁ / T₂ (میانگین دمای لوله)', `${f(t1, 3)} / ${f(t2, 3)} °C`], ['P₁ / P₂', `${f(p1, 1)} / ${f(p2, 1)} psi`])
     if (Math.min(t1, t2) < igs.minPipeTempC) rows.push(['هشدار', `دمای خط کمتر از ${f(igs.minPipeTempC, 0)} درجه است (توصیهٔ دستورالعمل)`])
     const durOk = holdH >= igs.leakHoldH - 1e-6, stabOk = stab.hours >= stabDays * 24 - 1e-6 || bool(d.stabWaived)
-    const tail = (good: boolean, extend: boolean, bad: boolean, failWhy: string): Computed => {
+    // the verdict is made at the end of the test period: until then the test simply continues
+    const tail = (good: boolean, extendIn: boolean, badIn: boolean, failWhy: string): Computed => {
+      const extend = extendIn && durOk, bad = badIn && durOk
       const pass = good && durOk && stabOk
       return { rows, extend, result: bad ? 'fail' : pass ? 'pass' : 'pending',
         why: bad ? failWhy : extend ? `آزمون باید ${f(igs.leakHoldH, 0)} ساعت دیگر تمدید شود (بند ۲-۱۲) و پس از تمدید دوباره ارزیابی گردد.` : pass ? 'نتیجهٔ آزمایش نشتی قابل قبول است.'

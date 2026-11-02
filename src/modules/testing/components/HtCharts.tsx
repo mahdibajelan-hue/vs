@@ -163,37 +163,63 @@ export function PvChart({ points, volumeM3, igs, mode = 'strength', air }: { poi
   )
 }
 
-// ── 4. the whole line: each section's strength pressure over the profile ───────
-export function LineHydraulic({ profile, sections, psiPerM, onPick }: { profile: ProfilePoint[]; sections: (HtSection & { pLowPsi: number; color: string; status: string })[]; psiPerM: number; onPick?: (id: string) => void }) {
-  const data = useMemo(() => {
-    const step = Math.max(1, Math.ceil(profile.length / 600))
-    const pts = profile.filter((_, i) => i % step === 0 || i === profile.length - 1)
-    return pts.map((p) => {
-      const row: Record<string, number | null> = { km: p.km, elev: p.elev }
-      for (const s of sections) row[s.id] = p.km >= s.kmFrom && p.km <= s.kmTo ? s.pLowPsi - (p.elev - s.elevMin) * psiPerM : null
-      return row
-    })
-  }, [profile, sections, psiPerM])
-  if (data.length < 2 || !sections.length) return null
-  const ps = sections.flatMap((s) => [s.pLowPsi, s.pLowPsi - (s.elevMax - s.elevMin) * psiPerM])
-  const eMin = Math.min(...profile.map((p) => p.elev)), eMax = Math.max(...profile.map((p) => p.elev))
+// ── 4. the whole line: where each section lies, its stage, and how much of its pressure window it uses ──────
+export interface LineSection extends HtSection { pLowPsi: number; pHighPsi: number; pMinPsi: number; allowedDh: number; color: string; status: string }
+export function LineHydraulic({ profile, sections, onPick }: { profile: ProfilePoint[]; sections: LineSection[]; onPick?: (id: string) => void }) {
+  const k0 = sections.length ? Math.min(...sections.map((s) => s.kmFrom)) : 0
+  const k1 = sections.length ? Math.max(...sections.map((s) => s.kmTo)) : 0
+  const prof = useMemo(() => { const p = profile.filter((x) => x.km >= k0 && x.km <= k1); const step = Math.max(1, Math.ceil(p.length / 400)); return p.filter((_, i) => i % step === 0 || i === p.length - 1) }, [profile, k0, k1])
+  const [hover, setHover] = useState<string | null>(null)
+  const [all, setAll] = useState(false)
+  if (!sections.length || k1 <= k0) return null
+  const X = (km: number) => ((km - k0) / (k1 - k0)) * 100
+  const eMin = prof.length ? Math.min(...prof.map((p) => p.elev)) : 0, eMax = prof.length ? Math.max(...prof.map((p) => p.elev)) : 1
+  const Y = (e: number) => 56 - ((e - eMin) / Math.max(1, eMax - eMin)) * 50
+  const area = prof.length > 1 ? `M0,60 ${prof.map((p) => `L${X(p.km).toFixed(2)},${Y(p.elev).toFixed(2)}`).join(' ')} L100,60 Z` : ''
+  const ticks = Array.from({ length: 5 }, (_, i) => k0 + ((k1 - k0) * i) / 4)
+  const stages = sections.filter((s, i, arr) => arr.findIndex((y) => y.status === s.status) === i)
   return (
-    <div className="hc"><style>{CSS}</style>
-      <Legend items={[{ label: 'پروفیل ارتفاعی خط (محور راست، متر)', color: '#64748b' }, ...sections.slice(0, 12).map((s) => ({ label: `${s.code} — ${s.status}`, color: s.color }))]} />
-      <div style={{ height: 300 }} dir="ltr"><ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 10, right: 6, left: 4, bottom: 4 }} onClick={(e) => { const km = Number((e as { activeLabel?: number } | null)?.activeLabel); const s = sections.find((x) => km >= x.kmFrom && km <= x.kmTo); if (s && onPick) onPick(s.id) }}>
-          <defs><linearGradient id="hc-line-el" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#64748b" stopOpacity={0.3} /><stop offset="1" stopColor="#64748b" stopOpacity={0.02} /></linearGradient></defs>
-          <CartesianGrid stroke="var(--border-soft, rgba(148,163,184,.2))" strokeDasharray="2 5" vertical={false} />
-          <XAxis dataKey="km" type="number" domain={['dataMin', 'dataMax']} tick={axis} tickFormatter={(v) => fa(Number(v), 0)} />
-          <YAxis yAxisId="p" domain={[Math.min(...ps) * 0.98, Math.max(...ps) * 1.01]} tick={axis} width={52} tickFormatter={(v) => fa(Number(v), 0)} />
-          <YAxis yAxisId="e" orientation="right" domain={[eMin - (eMax - eMin) * 0.6, eMax + 10]} tick={axis} width={44} tickFormatter={(v) => fa(Number(v), 0)} />
-          <Tooltip contentStyle={tip} labelFormatter={(v) => `کیلومتر ${fa(Number(v), 2)}`} formatter={(v, k) => k === 'elev' ? [`${fa(Number(v), 1)} m`, 'ارتفاع'] : [`${fa(Number(v), 0)} psi`, `فشار مقاومت ${sections.find((s) => s.id === k)?.code ?? ''}`]} />
-          <Area yAxisId="e" type="linear" dataKey="elev" stroke="#64748b" strokeWidth={1.4} fill="url(#hc-line-el)" isAnimationActive animationDuration={700} />
-          {sections.map((s) => { const idle = s.stage === 'planned' && !s.failed; return <Line key={s.id} yAxisId="p" type="linear" dataKey={s.id} stroke={s.color} strokeWidth={idle ? 1.4 : 2.8} strokeOpacity={idle ? 0.55 : 1} dot={false} connectNulls={false} isAnimationActive animationDuration={1000} style={{ cursor: onPick ? 'pointer' : undefined }} /> })}
-          {sections.map((s) => <ReferenceLine key={`c${s.id}`} yAxisId="p" x={s.kmTo} stroke="var(--border-soft, #475569)" strokeDasharray="2 4" />)}
-        </ComposedChart>
-      </ResponsiveContainer></div>
-      <p className="ps-hint">هر خط رنگی، فشار آزمون مقاومت در طول یک قطعه است: بیشترین فشار در پایین‌ترین نقطه و کمترین در بالاترین نقطه. روی هر قطعه بزنید تا صفحهٔ آن باز شود.</p>
+    <div className="hc lh"><style>{CSS + LH_CSS}</style>
+      <Legend items={stages.map((s) => ({ label: `${s.status} (${fa(sections.filter((y) => y.status === s.status).length, 0)})`, color: s.color, kind: 'dot' as const }))} />
+      <div className="lh-map" dir="ltr">
+        {area && <svg viewBox="0 0 100 60" preserveAspectRatio="none" className="lh-prof" aria-hidden><path d={area} /></svg>}
+        <div className="lh-strip" role="list">
+          {sections.map((s) => <button key={s.id} type="button" role="listitem" className={`lh-seg${hover === s.id ? ' is-hot' : ''}`} style={{ left: `${X(s.kmFrom)}%`, width: `${Math.max(0.4, X(s.kmTo) - X(s.kmFrom))}%`, '--c': s.color } as CSSProperties}
+            title={`${s.code} — ${s.status} — کیلومتر ${fa(s.kmFrom, 1)} تا ${fa(s.kmTo, 1)}`} onMouseEnter={() => setHover(s.id)} onMouseLeave={() => setHover(null)} onClick={() => onPick?.(s.id)}>
+            {X(s.kmTo) - X(s.kmFrom) > 7 && <span>{s.code.replace('HT-', '')}</span>}</button>)}
+        </div>
+        <div className="lh-ticks">{ticks.map((t, i) => <span key={i} style={{ left: `${X(t)}%` }}>{fa(t, 0)}</span>)}</div>
+      </div>
+      <div className="lh-rows">
+        {(all ? sections : sections.slice(0, 10)).map((s) => {
+          const dh = s.elevMax - s.elevMin, use = s.allowedDh > 0 ? dh / s.allowedDh : 0, ok = s.pHighPsi >= s.pMinPsi - 0.5
+          return (
+            <button key={s.id} type="button" className={`lh-row${hover === s.id ? ' is-hot' : ''}`} style={{ '--c': s.color } as CSSProperties} onMouseEnter={() => setHover(s.id)} onMouseLeave={() => setHover(null)} onClick={() => onPick?.(s.id)}>
+              <span className="lh-code"><i />{s.code}<small>{s.status}</small></span>
+              <span className="lh-km">کیلومتر {fa(s.kmFrom, 1)} تا {fa(s.kmTo, 1)}<small>طول {fa(s.kmTo - s.kmFrom, 1)} کیلومتر · اختلاف ارتفاع {fa(dh, 0)} متر</small></span>
+              <span className="lh-gauge" aria-label={`استفاده از اختلاف ارتفاع مجاز ${fa(use * 100, 0)} درصد`}>
+                <span className="lh-track"><span className="lh-fill" style={{ width: `${Math.min(100, use * 100)}%`, background: use > 1 ? '#ef4444' : use > 0.9 ? '#f59e0b' : '#22c55e' }} /></span>
+                <small>{fa(use * 100, 0)}٪ اختلاف ارتفاع مجاز</small>
+              </span>
+              <span className="lh-p"><b>{fa(s.pLowPsi, 0)}</b><small>نقطهٔ پایین psi</small></span>
+              <span className="lh-p" style={{ color: ok ? undefined : '#ef4444' }}><b>{fa(s.pHighPsi, 0)}</b><small>نقطهٔ بالا (حداقل {fa(s.pMinPsi, 0)})</small></span>
+            </button>
+          )
+        })}
+      </div>
+      {sections.length > 10 && <button type="button" className="ps-btn is-ghost" style={{ justifySelf: 'start', marginTop: '.4rem' }} onClick={() => setAll(!all)}>{all ? 'نمایش ۱۰ قطعهٔ اول' : `نمایش همهٔ ${fa(sections.length, 0)} قطعه`}</button>}
+      <p className="ps-hint">نوار بالا محل هر قطعه روی خط را با رنگ مرحلهٔ آزمون نشان می‌دهد. در هر ردیف، فشار آزمون مقاومت در پایین‌ترین و بالاترین نقطهٔ قطعه آمده و نوار سبز نشان می‌دهد قطعه چه سهمی از اختلاف ارتفاع مجاز را مصرف کرده است (بیش از ۱۰۰٪ یعنی نقطهٔ بالا به حداقل فشار نمی‌رسد). برای باز کردن قطعه روی آن بزنید.</p>
     </div>
   )
 }
+const LH_CSS = `.lh-map{position:relative;padding-bottom:1.1rem}.lh-prof{display:block;width:100%;height:64px}.lh-prof path{fill:color-mix(in srgb,var(--text-muted) 22%,transparent);stroke:var(--text-muted);stroke-width:.6;vector-effect:non-scaling-stroke}
+.lh-strip{position:relative;height:30px;margin-top:-2px;border-radius:.5rem;background:color-mix(in srgb,var(--text-primary) 5%,transparent);overflow:hidden}
+.lh-seg{position:absolute;top:0;bottom:0;border:0;padding:0;background:var(--c);opacity:.82;border-inline-end:1.5px solid var(--bg-panel-solid,#fff);cursor:pointer;color:#fff;font-size:10.5px;font-weight:800;transition:opacity .15s ease,transform .15s ease}
+.lh-seg:hover,.lh-seg.is-hot{opacity:1;transform:scaleY(1.08)}.lh-ticks{position:absolute;inset-inline:0;bottom:0;height:1rem}.lh-ticks span{position:absolute;transform:translateX(-50%);font-size:10px;color:var(--text-muted)}.lh-ticks span:first-child{transform:none}.lh-ticks span:last-child{transform:translateX(-100%)}
+.lh-rows{display:grid;gap:.35rem;margin-top:.7rem}
+.lh-row{display:grid;grid-template-columns:7.5rem 9rem minmax(8rem,1fr) 5.5rem 7.5rem;gap:.6rem;align-items:center;text-align:start;padding:.5rem .7rem;border-radius:.8rem;border:1px solid var(--border-soft);border-inline-start:4px solid var(--c);background:transparent;color:var(--text-primary);cursor:pointer;font:inherit;transition:background .15s ease,transform .12s ease}
+.lh-row:hover,.lh-row.is-hot{background:color-mix(in srgb,var(--c) 9%,transparent)}.lh-row:active{transform:scale(.99)}
+.lh-row small{display:block;font-size:10.5px;color:var(--text-muted);font-weight:500}.lh-code{font-weight:900;font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:.3rem}.lh-code i{width:.55rem;height:.55rem;border-radius:99px;background:var(--c)}.lh-code small{width:100%}
+.lh-km{font-size:12px;font-variant-numeric:tabular-nums}.lh-p{font-variant-numeric:tabular-nums}.lh-p b{font-size:14px}
+.lh-gauge{display:grid;gap:.2rem}.lh-track{height:.5rem;border-radius:99px;background:color-mix(in srgb,var(--text-primary) 9%,transparent);overflow:hidden}.lh-fill{display:block;height:100%;border-radius:99px}
+@media (max-width:760px){.lh-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.lh-gauge{grid-column:1/-1}}`

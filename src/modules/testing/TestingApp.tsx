@@ -17,7 +17,7 @@ import { TestingGuide } from './components/TestingGuide'
 import { CoatingCriteria, ElectricalTest, HolidayCalc, JointQc } from './components/CoatingQc'
 import { ProcedureSettings } from './components/ProcedureSettings'
 import { LineHydraulic } from './components/HtCharts'
-import { PSI_PER_BAR, sectionIgs, smysPsiOf } from './lib/igs'
+import { PSI_PER_BAR, SEAM_FA, sectionIgs, smysPsiOf } from './lib/igs'
 import '../pssr/pssr.css'
 import './testing.css'
 import { todayTehran } from '../../lib/today'
@@ -92,7 +92,7 @@ function useLineSections() {
     const smys = st.settings.smysOverride ? st.settings.smysOverride * 145.038 : pipe ? smysPsiOf(pipe.material) : null
     return st.sections.map((s) => {
       const r = pipe && smys && st.settings.method === 'igs' ? sectionIgs({ odIn: pipe.diameterIn, smysPsi: smys, defaultWallIn: pipe.wallMm / 25.4, lengthM: (s.kmTo - s.kmFrom) * 1000, wallMix: s.wallMix, dpPsi: pipe.designPressureBar * PSI_PER_BAR, elev: { low: s.elevMin, high: s.elevMax, start: s.elevStart, end: s.elevEnd, head: s.headElev } }, igs) : null
-      return { ...s, pLowPsi: r ? r.pr.strength.low : s.pLow * PSI_PER_BAR, color: s.failed ? HT_FAILED_COLOR : HT_STAGE_COLOR[s.stage], status: s.failed ? 'مردود' : HT_STAGE_FA[s.stage] }
+      return { ...s, pLowPsi: r ? r.pr.strength.low : s.pLow * PSI_PER_BAR, pHighPsi: r ? r.pr.strength.high : (s.pLow - (s.elevMax - s.elevMin) * 0.0980665 * st.settings.density / 1000) * PSI_PER_BAR, pMinPsi: r ? r.pr.pMin : s.pHigh * PSI_PER_BAR, allowedDh: r ? r.pr.allowedDh : (s.elevMax - s.elevMin) || 1, color: s.failed ? HT_FAILED_COLOR : HT_STAGE_COLOR[s.stage], status: s.failed ? 'مردود' : HT_STAGE_FA[s.stage] }
     })
   }, [st])
 }
@@ -130,7 +130,7 @@ function Dashboard({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t:
         <button type="button" className="ps-btn" onClick={() => useModuleStore.getState().enterModule('pipelinedigitaltwin', undefined, 'hydro')}>نمایش روی دوقلوی دیجیتال</button>
       </section>
       {st.profile.length >= 2 && st.sections.length > 0 && <section className="ps-card">
-        <header className="ps-card-head"><b><Waves size={15} /> فشار آزمون مقاومت در طول خط</b><small className="ps-meta">{st.settings.method === 'igs' ? 'روش تسلیمی IGS' : 'ضریب فشار طراحی'}</small></header>
+        <header className="ps-card-head"><b><Waves size={15} /> قطعه‌های آزمون در طول خط و فشار مقاومت آن‌ها</b><small className="ps-meta">{st.settings.method === 'igs' ? SEAM_FA[st.igs().seam] : 'ضریب فشار طراحی'}</small></header>
         <LineHydraulicCard onPick={onOpen} />
       </section>}
     </div>
@@ -245,7 +245,7 @@ function LineTab({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t: T
         </section>
       )}
       {st.sections.length > 0 && <section className="ps-card">
-        <header className="ps-card-head"><b><Waves size={15} /> فشار آزمون مقاومت در طول خط</b><small className="ps-meta">روی هر قطعه بزنید</small></header>
+        <header className="ps-card-head"><b><Waves size={15} /> قطعه‌های آزمون در طول خط و فشار مقاومت آن‌ها</b><small className="ps-meta">روی هر قطعه بزنید</small></header>
         <LineHydraulicCard onPick={onOpen} />
       </section>}
     </div>
@@ -255,7 +255,7 @@ function LineTab({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t: T
 function LineHydraulicCard({ onPick }: { onPick: (id: string) => void }) {
   const st = useTestingStore()
   const secs = useLineSections()
-  return <LineHydraulic profile={st.profile} sections={secs} psiPerM={st.settings.method === 'igs' ? st.igs().psiPerM : 0.0980665 * st.settings.density / 1000 * PSI_PER_BAR} onPick={onPick} />
+  return <LineHydraulic profile={st.profile} sections={secs} onPick={onPick} />
 }
 
 function PlanTable({ rows }: { rows: SectionPlan[] }) {
