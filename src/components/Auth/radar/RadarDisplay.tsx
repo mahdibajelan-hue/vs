@@ -65,8 +65,10 @@ function polarToPercent(angle: number, radius: number) {
 }
 
 export function RadarDisplay({
-  signals, dimmed, onOpenDetail,
+  signals, dimmed, onOpenDetail, hideCallout,
 }: {
+  /** the details are shown elsewhere (the cockpit's signal list): no floating callout */
+  hideCallout?: boolean
   signals: RadarSignal[]
   /** true while a rescan is in progress — dims signals so the "scanning" state reads clearly. */
   dimmed?: boolean
@@ -197,7 +199,7 @@ export function RadarDisplay({
       })}
 
       {/* Detail callout for the selected signal */}
-      {selected && selectedPoint && (
+      {!hideCallout && selected && selectedPoint && (
         <div
           dir="rtl"
           className="radar-callout absolute z-30 w-60 max-w-[85vw] rounded-2xl border p-3.5 text-right"
@@ -237,7 +239,7 @@ export function RadarDisplay({
       {/* Very small severity legend, tucked in a corner — the marker's distance from center is
           what actually encodes severity (see the radius bands in radarTypes.ts), this is just a
           reminder of what each color means. */}
-      <div
+      {!hideCallout && <div
         dir="rtl"
         className="pointer-events-none absolute bottom-2 left-2 z-10 flex flex-col gap-0.5 rounded-md border px-1.5 py-1"
         style={{ borderColor: 'var(--radar-grid)', background: 'color-mix(in srgb, var(--radar-bg) 75%, transparent)' }}
@@ -248,7 +250,7 @@ export function RadarDisplay({
             {SEVERITY_LABEL_FA[sev]}
           </span>
         ))}
-      </div>
+      </div>}
     </div>
   )
 }

@@ -144,6 +144,8 @@ export interface EpcDimension {
 }
 
 export interface ContractSummary {
+  title?: string
+  number?: string
   currency: string
   contractValue: number
   approvedChanges: number
@@ -171,7 +173,12 @@ export interface RadarData {
   currentStageLabel: string
   nextGate: RadarGate
   epc: EpcDimension[] | null
-  contract: ContractSummary
+  /** null = no contract recorded for the project in the finance module */
+  contract: ContractSummary | null
+  /** true once every section was read from the modules (false = still the instant placeholder) */
+  live?: boolean
+  /** the schedule module's forecast against the baseline and the contract (null = no approved schedule) */
+  schedule?: import('../../../modules/scheduling/lib/summary').ScheduleSummary | null
   /** the project's health — score, verdict (worst dimension) and the ten dimensions behind it (projectMetrics) */
   healthDetail?: import('../../../modules/projectMetrics/projectMetricsLoader').ProjectHealth | null
 }

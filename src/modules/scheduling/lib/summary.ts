@@ -10,6 +10,8 @@ export interface ScheduleSummary {
   contractFinish: string | null; revisedFinish: string | null; contractorDelay: number | null; ldAmount: number
   criticalOverdue: number; overdue: number; noticesLost: number; pendingEvents: number; activities: number
   dataDate: string
+  /** milestones due in the next 30 days from the data date and not yet achieved */
+  milestones: { code: string; name: string; date: string; critical: boolean }[]
 }
 
 export function summarize(o: { sched: ScheduleInput; activities: SchActivity[]; baselineFinish: string | null; contract: Contract | null; events: DelayEvent[]; today: string }): ScheduleSummary {
@@ -24,5 +26,17 @@ export function summarize(o: { sched: ScheduleInput; activities: SchActivity[]; 
     contractFinish: c?.contractFinish ?? null, revisedFinish: rec?.revisedFinish ?? null, contractorDelay: rec?.contractorDelay ?? null, ldAmount: rec?.ldAmount ?? 0,
     criticalOverdue: od.filter((x) => x.critical).length, overdue: od.length, noticesLost: classified.filter((x) => noticeState(x, o.today).state === 'lost').length,
     pendingEvents: classified.filter((x) => x.cls === 'pending').length, activities: o.activities.filter((a) => a.type === 'task').length, dataDate,
+    milestones: upcomingMilestones(o.activities, dataDate, new Set(fc.criticalPath)),
   }
+}
+
+/** milestones not yet achieved, due within `days` of the data date (planned finish), soonest first */
+export function upcomingMilestones(acts: SchActivity[], dataDate: string, critical: Set<string> = new Set(), days = 30) {
+  const end = new Date(Date.parse(dataDate + 'T00:00:00Z') + days * 86400000).toISOString().slice(0, 10)
+  return acts
+    .filter((a) => a.type === 'milestone' && !a.actualFinish && (a.pctComplete ?? 0) < 100)
+    .map((a) => ({ a, date: (a.plannedFinish ?? a.plannedStart ?? '').slice(0, 10) }))
+    .filter((x) => x.date && x.date >= dataDate && x.date <= end)
+    .sort((x, y) => x.date.localeCompare(y.date))
+    .map(({ a, date }) => ({ code: a.code, name: a.name, date, critical: critical.has(a.uid) || critical.has(a.id) }))
 }

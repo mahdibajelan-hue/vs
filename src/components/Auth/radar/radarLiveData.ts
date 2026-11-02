@@ -263,6 +263,7 @@ async function fetchContractSummary(masterProjectId: string): Promise<ContractSu
   const paidPct = contractValueTotal > 0 ? Math.round((paidTotal / contractValueTotal) * 100) : 0
 
   return {
+    title: contract.title, number: contract.contractNumber,
     currency: contract.currency === 'IRR' ? 'ریال ' : `${contract.currency} `,
     contractValue: Math.round(contractValueTotal / RIAL_TO_DISPLAY_UNIT),
     approvedChanges: Math.round(approvedChangesTotal / RIAL_TO_DISPLAY_UNIT),
@@ -299,10 +300,10 @@ async function applyRiskIssueSection(base: RadarData, masterProjectId: string): 
 
     const riskSignals = riskMapped
       ? risks.map((r, i) => riskToSignal(r, assessmentsByRisk.get(r.id) ?? [], i, risks.length))
-      : base.signals.filter((s) => s.category === 'risk')
+      : []
     const issueSignals = issueMapped
       ? issues.map((iss, i) => issueToSignal(iss, i, issues.length))
-      : base.signals.filter((s) => s.category === 'issue')
+      : []
     const otherMockSignals = base.signals.filter((s) => s.category !== 'risk' && s.category !== 'issue')
 
     const activeRisks = riskMapped ? risks.filter((r) => ACTIVE_RISK_STATUSES.has(r.status)).length : base.kpi.activeRisks
@@ -363,9 +364,19 @@ function applyScheduleSection(base: RadarData, s: ScheduleSummary): RadarData {
  * wherever the project actually has it. Falls back to the pure mock on any fetch error so a live-
  * data problem never blanks the page.
  */
+/** the radar with nothing in it yet: what is shown while the modules are read, and the start of the live picture */
+export function blankRadarData(from: RadarData): RadarData {
+  return {
+    ...from, live: false, status: 'nominal', signals: [], lifecycle: [], lifecycleOverallPct: 0, currentStageLabel: '—', nextGate: NO_GATE, epc: null, contract: null, schedule: null, healthDetail: null,
+    kpi: { health: 0, progressPlanned: 0, progressActual: 0, cpi: 0, spi: 0, qualityPct: 0, costPerformancePct: 0, costVariancePct: 0, activeRisks: 0, activeRisksHigh: 0, openIssues: 0, openIssuesHigh: 0, delayedActivities: 0, pendingChanges: 0, upcomingMilestones: 0 },
+  }
+}
+
 export async function buildRadarData(masterProjectId: string, projectName: string, projectIdCode: string): Promise<RadarData> {
-  const base = buildMockRadarData(masterProjectId, projectName, projectIdCode)
-  if (!isSupabaseConfigured) return base
+  const mock = buildMockRadarData(masterProjectId, projectName, projectIdCode)
+  if (!isSupabaseConfigured) return { ...mock, live: true }
+  // every figure below comes from a module; anything a module does not report stays empty / zero, never the mock's
+  const base: RadarData = blankRadarData(mock)
   // the report is as of now (when the live data is read), not the mock's fixed date
   const now = new Date()
   const iso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -375,6 +386,19 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   // the status starts neutral (never the mock's random one); live health / signals set it below
   base.status = 'nominal'
 
+  // every module is read at once; the sections below then fold the answers in, in order
+  type Settled<T> = { ok: true; v: T } | { ok: false; e: unknown }
+  const settle = <T,>(p: Promise<T>): Promise<Settled<T>> => p.then((v) => ({ ok: true as const, v }), (e) => ({ ok: false as const, e }))
+  const val = async <T,>(p: Promise<Settled<T>>): Promise<T> => { const r = await p; if (!r.ok) throw r.e; return r.v }
+  const pPlc = settle((async () => (await loadStageGateBundle(masterProjectId)) ?? (await fetchLifecycleBundle(masterProjectId)))())
+  const pSg = settle(loadStageGateRadar(masterProjectId))
+  const pEpc = settle(loadEpcProgress(masterProjectId))
+  const pSnap = settle(loadProjectMetrics(masterProjectId))
+  const pPssr = settle(loadPssrSummary(masterProjectId))
+  const pContract = settle(fetchContractSummary(masterProjectId))
+  const pSched = settle(loadScheduleSummary(masterProjectId))
+  const pCr = settle(Promise.resolve(supabase.from('chg_change_requests').select('id, cr_number, title, status, priority, proposed_schedule_impact_days, proposed_change_amount').eq('master_project_id', masterProjectId).in('status', ['submitted', 'evaluating', 'awaiting_approval', 'returned'])))
+
   const { data: afterRiskIssue, criticalCounts } = await applyRiskIssueSection(base, masterProjectId)
   let result = afterRiskIssue
 
@@ -382,7 +406,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   let plcLive = false
   try {
     // the control tower's engines run on Stage-Gate (G1…G9) for linked projects; the former lifecycle rows only otherwise
-    const plcBundle = (await loadStageGateBundle(masterProjectId)) ?? (await fetchLifecycleBundle(masterProjectId))
+    const plcBundle = await val(pPlc)
     if (plcBundle && plcBundle.lifecycle) {
       plcLive = true
       const analysis = analyseProject(plcBundle, {
@@ -418,7 +442,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   let epc: EpcProgress | null = null
   let lifecycleLive = false
   try {
-    const sg = await loadStageGateRadar(masterProjectId)
+    const sg = await val(pSg)
     if (sg) {
       epc = sg.epc
       lifecycleLive = true
@@ -432,7 +456,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
 
   // --- EPC (engineering / procurement / construction modules) -------------------
   try {
-    epc ??= await loadEpcProgress(masterProjectId)
+    epc ??= await val(pEpc)
     const dims = epcDimensions(epc)
     if (dims) result = { ...result, epc: dims }
     // a project outside Stage-Gate: its lifecycle picture is the EPC modules' own progress, never the mock
@@ -461,7 +485,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
 
   // --- One snapshot: health, lifecycle progress, EPC — exactly what the project dashboard shows -------------
   try {
-    const snap = await loadProjectMetrics(masterProjectId)
+    const snap = await val(pSnap)
     if (snap) {
       // cost variance = the EPC contract's CPI − 1 (0 when nothing has been certified yet), never the mock figure
       result = { ...result, kpi: { ...result.kpi, progressActual: Math.round(snap.lifecycle.actual), progressPlanned: Math.round(snap.lifecycle.planned), cpi: snap.evm.cpi ?? 0, spi: snap.evm.spi ?? 0, costVariancePct: snap.evm.cpi == null ? 0 : Math.round((snap.evm.cpi - 1) * 100) } }
@@ -486,7 +510,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
 
   // --- PSSR: every open category-A punch blocks a system's start-up — a critical gate signal --------------
   try {
-    const ps = await loadPssrSummary(masterProjectId)
+    const ps = await val(pPssr)
     if (ps && ps.openA.length) {
       const [rMin, rMax] = SEVERITY_RADIUS_RANGE.critical
       const pssrSignals: RadarSignal[] = ps.openA.slice(0, 12).map((p, i, arr) => ({
@@ -504,7 +528,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
 
   // --- Contract ---------------------------------------------------------------
   try {
-    const contract = await fetchContractSummary(masterProjectId)
+    const contract = await val(pContract)
     if (contract) result = { ...result, contract }
   } catch (err) {
     console.warn('[radar] live contract fetch failed, showing mock contract instead', err)
@@ -512,11 +536,54 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
 
   // --- Schedule (time control) -----------------------------------------------
   try {
-    const sum = await loadScheduleSummary(masterProjectId)
-    if (sum) result = applyScheduleSection(result, sum)
+    const sum = await val(pSched)
+    if (sum) {
+      result = applyScheduleSection(result, sum)
+      const [rMin, rMax] = SEVERITY_RADIUS_RANGE.low
+      const ms: RadarSignal[] = sum.milestones.slice(0, 8).map((m, i, arr) => ({
+        id: `ms-${i}`, category: 'milestone', severity: m.critical ? 'medium' : 'low', title: m.name, subject: `سررسید ${formatJalali(m.date)}`, detail: m.code,
+        impact: m.critical ? 'روی مسیر بحرانی است؛ تأخیر آن پایان پروژه را جابه‌جا می‌کند' : 'نقطهٔ عطف برنامهٔ زمان‌بندی', rootCause: '—', recommendedAction: 'پیگیری پیش‌نیازها در «برنامه‌ریزی و کنترل زمان»',
+        titleEn: m.name, subjectEn: m.date, detailEn: m.code, impactEn: '', rootCauseEn: '—', recommendedActionEn: '',
+        angle: Math.round(300 + (i / Math.max(1, arr.length)) * 50), radius: spreadRadius(rMin, rMax, i),
+      }))
+      result = { ...result, schedule: sum, signals: [...result.signals.filter((x) => x.category !== 'milestone'), ...ms], kpi: { ...result.kpi, delayedActivities: sum.overdue, upcomingMilestones: sum.milestones.length } }
+    }
   } catch (err) {
-    console.warn('[radar] live schedule fetch failed, showing mock delay signals instead', err)
+    console.warn('[radar] live schedule fetch failed', err)
   }
 
+  // --- Change requests awaiting a decision (the change-management module) ------------------------------
+  try {
+    const { data: crs } = await val(pCr)
+    const open = (crs ?? []) as { id: string; cr_number: string; title: string | null; status: string; priority: string | null; proposed_schedule_impact_days: number | null }[]
+    const sevOf = (p: string | null): SignalSeverity => (p === 'critical' ? 'critical' : p === 'high' ? 'high' : p === 'low' ? 'low' : 'medium')
+    const STATUS: Record<string, string> = { submitted: 'ثبت‌شده', evaluating: 'در ارزیابی', awaiting_approval: 'در انتظار تصویب', returned: 'برگشت‌خورده' }
+    const sig: RadarSignal[] = open.slice(0, 12).map((c, i, arr) => {
+      const sev = sevOf(c.priority), [rMin, rMax] = SEVERITY_RADIUS_RANGE[sev]
+      return {
+        id: `cr-${c.id}`, category: 'change', severity: sev, title: c.title || c.cr_number, subject: `${c.cr_number} · ${STATUS[c.status] ?? c.status}`,
+        detail: c.proposed_schedule_impact_days ? `اثر زمانی پیشنهادی ${new Intl.NumberFormat('fa-IR').format(c.proposed_schedule_impact_days)} روز` : 'اثر زمانی ثبت نشده',
+        impact: 'تا تصمیم‌گیری، دامنه، هزینه یا زمان مربوط باز می‌ماند', rootCause: '—', recommendedAction: 'تصمیم‌گیری در «مدیریت تغییرات»',
+        titleEn: c.cr_number, subjectEn: c.status, detailEn: '', impactEn: '', rootCauseEn: '—', recommendedActionEn: '',
+        angle: Math.round(120 + (i / Math.max(1, arr.length)) * 60), radius: spreadRadius(rMin, rMax, i),
+      }
+    })
+    result = { ...result, signals: [...result.signals.filter((x) => x.category !== 'change'), ...sig], kpi: { ...result.kpi, pendingChanges: open.length } }
+  } catch (err) {
+    console.warn('[radar] change requests failed', err)
+  }
+
+  // --- Contract claims open in the finance module --------------------------------------------------------
+  if (result.contract && result.contract.claims > 0) {
+    const [rMin, rMax] = SEVERITY_RADIUS_RANGE.medium
+    result = { ...result, signals: [...result.signals.filter((x) => x.category !== 'contract'), {
+      id: 'contract-claims', category: 'contract', severity: 'medium', title: 'ادعاهای باز قراردادی', subject: `${new Intl.NumberFormat('fa-IR').format(result.contract.claims)} میلیون ریال`,
+      detail: result.contract.eotClaimsDays ? `${new Intl.NumberFormat('fa-IR').format(result.contract.eotClaimsDays)} ادعای تمدید زمان` : '', impact: 'ریسک افزایش هزینه یا زمان قرارداد', rootCause: '—', recommendedAction: 'بررسی و تعیین تکلیف در «قراردادها و مالی»',
+      titleEn: 'Open claims', subjectEn: '', detailEn: '', impactEn: '', rootCauseEn: '—', recommendedActionEn: '', angle: 160, radius: (rMin + rMax) / 2,
+    }] }
+  }
+
+  // the status follows the health verdict when known, otherwise the signals
+  result = { ...result, live: true, status: result.healthDetail ? result.status : escalateStatus('nominal', result.signals) }
   return result
 }
