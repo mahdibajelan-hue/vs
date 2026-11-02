@@ -1,12 +1,12 @@
 import { HealthGuideButton, healthColor as healthColorOf } from '../../../modules/projectMetrics/HealthGuide'
 import { useEffect, type CSSProperties } from 'react'
-import { Activity, ArrowLeftRight, ArrowRight, ChevronLeft, Clock3, Flag, RefreshCw, ShieldAlert } from 'lucide-react'
+import { Activity, ArrowLeftRight, ArrowRight, ChevronLeft, Clock3, RefreshCw, ShieldAlert } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { MasterProject } from '../../../modules/masterdata/types'
 import { PROJECT_STATUS_LABEL_FA } from '../../../modules/masterdata/types'
 import type { ModuleKey } from '../../../store/useModuleStore'
 import { PROJECT_NAV, type ProjectNavItem } from './projectNav'
-import { SEVERITY_COLOR, SEVERITY_LABEL_FA, SIGNAL_CATEGORY_LABEL_FA, STATUS_COLOR, STATUS_LABEL_FA, type RadarData } from './radarTypes'
+import { STATUS_COLOR, STATUS_LABEL_FA, type RadarData } from './radarTypes'
 
 const fa = (n: number) => Math.round(n).toLocaleString('fa-IR')
 
@@ -29,10 +29,8 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
   // colour = the health verdict (worst dimension) when known, so the ring and the status always agree
   const statusColor = data.healthDetail ? healthColorOf(data.healthDetail) : STATUS_COLOR[data.status]
   const code = project.projectIdCode || project.projectCode
-  const critical = [...data.signals].sort((a, b) => sevRank(a.severity) - sevRank(b.severity)).slice(0, 3)
   const items = PROJECT_NAV.flatMap((g) => g.items)
   const open = (module: ModuleKey) => { const it = items.find((i) => i.module === module); if (it && canSee(module)) onItem(it) }
-  const gate = data.nextGate
   const groups = PROJECT_NAV.map((g) => ({ ...g, items: g.items.filter((i) => i.id !== 'overview' && (!i.module || canSee(i.module))) })).filter((g) => g.items.length)
 
   return (
@@ -69,36 +67,6 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
         <Kpi icon={RefreshCw} label="تغییر در انتظار" value={k.pendingChanges} color="#38bdf8" onClick={() => open('change')} />
       </section>
 
-      {critical.length > 0 && (
-        <section className="mr-card">
-          <h2 className="mr-h">نیازمند توجه</h2>
-          <ul className="mr-signals">
-            {critical.map((s) => (
-              <li key={s.id} style={{ '--sev': SEVERITY_COLOR[s.severity] } as CSSProperties}>
-                <span className="mr-sev">{SEVERITY_LABEL_FA[s.severity]}</span>
-                <span className="mr-sig-body">
-                  <b>{s.title}</b>
-                  <small>{SIGNAL_CATEGORY_LABEL_FA[s.category]}{s.subject ? ` · ${s.subject}` : ''}</small>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section className="mr-card mr-gate">
-        <div className="mr-gate-row">
-          <span className="mr-gate-ico"><Flag size={16} aria-hidden /></span>
-          <span className="mr-gate-text">
-            <small>گیت بعدی</small>
-            <b>{gate.name}</b>
-          </span>
-          <span className="mr-gate-pct">{fa(gate.readinessPct)}٪<small>آمادگی</small></span>
-        </div>
-        <span className="mr-track"><span style={{ width: `${Math.max(0, Math.min(100, gate.readinessPct))}%`, background: '#22c55e' }} /></span>
-        <p className="mr-gate-foot">{gate.prerequisites ? `${fa(gate.passed)} از ${fa(gate.prerequisites)} پیش‌نیاز تأیید شده${gate.failed ? ` · ${fa(gate.failed)} رد شده` : ''}` : 'هنوز پیش‌نیازی برای این گیت ثبت نشده است.'}</p>
-      </section>
-
       <section className="mr-mods" aria-label="ماژول‌های پروژه">
         {groups.map((g) => (
           <div key={g.id} className="mr-group">
@@ -125,7 +93,6 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
   )
 }
 
-const sevRank = (s: string) => ({ critical: 0, high: 1, medium: 2, low: 3 } as Record<string, number>)[s] ?? 4
 
 function Ring({ value, color }: { value: number; color: string }) {
   const r = 40, c = 2 * Math.PI * r, v = Math.max(0, Math.min(100, value))

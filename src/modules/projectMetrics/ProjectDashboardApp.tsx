@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Area, Bar, BarChart, CartesianGrid, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Cell } from 'recharts'
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarDays, Calculator, Clock3, Coins, Gauge, HelpCircle, LayoutDashboard, Loader2, PieChart as PieIcon, Wallet } from 'lucide-react'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -70,9 +70,6 @@ export function ProjectDashboardApp({ onExitToHub }: { onExitToHub: () => void; 
 
 function Body({ m }: { m: ProjectSnapshot }) {
   const e = m.evm
-  const spark = useMemo(() => m.curve.filter((c) => c.earned != null), [m.curve])
-  const spiSeries = spark.map((c) => (c.planned > 0 ? (c.earned as number) / c.planned : null))
-  const cpiSeries = spark.map((c) => (c.cost && c.cost > 0 ? (c.earned as number) / c.cost : null))
   const noPlan = !m.phases.some((p) => p.start && p.finish)
   return (
     <main className="pdb-main">
@@ -110,9 +107,12 @@ function Body({ m }: { m: ProjectSnapshot }) {
         <Kpi label="برنامه‌ای EPC" en="Planned %" value={pct(m.planned, 2)} color={C.planned} help="پیشرفت برنامه‌ای پیمان EPC: برنامهٔ ماژول‌های مهندسی، کالا و اجرا با وزن ارزش هر بخش" visual={<Ring v={m.planned} color={C.planned} />} />
         <Kpi label="کسب‌شدهٔ EPC" en="Earned %" value={pct(m.earned, 2)} color={C.earned} help="پیشرفت واقعی پیمان EPC (همان پیشرفت فاز اجرای پروژه در چرخهٔ عمر)" visual={<Ring v={m.earned} color={C.earned} />} />
         <Kpi label="هزینهٔ واقعی EPC" en="Actual cost %" value={pct(m.costPct, 2)} color={C.cost} help="کارکرد تأییدشدهٔ قرارداد(های) EPC تا امروز ÷ BAC" visual={<Ring v={m.costPct ?? 0} color={C.cost} />} />
-        <Kpi label="شاخص عملکرد زمانی" en="SPI" value={idx(e.spi)} color={C.spi} tone={tone(e.spi)} help="پیشرفت واقعی ÷ پیشرفت برنامه‌ای" visual={<Spark values={spiSeries} color={C.spi} />} />
-        <Kpi label="شاخص عملکرد هزینه" en="CPI" value={idx(e.cpi)} color={C.cpi} tone={tone(e.cpi)} help="ارزش کسب‌شده (BAC × پیشرفت EPC) ÷ هزینهٔ واقعی (کارکرد تأییدشدهٔ پیمان EPC)" visual={<Spark values={cpiSeries} color={C.cpi} />} />
-        <Kpi label="شاخص لازم برای تکمیل" en="TCPI" value={idx(e.tcpi)} color={C.tcpi} tone={e.tcpi == null ? undefined : e.tcpi <= 1 ? 'good' : e.tcpi <= 1.1 ? 'warn' : 'bad'} help="(BAC − EV) ÷ (BAC − AC): کارایی هزینه‌ای لازم برای ماندن در بودجه" visual={<Spark values={spark.map((c) => c.cost)} color={C.tcpi} />} />
+        <Kpi label="شاخص عملکرد زمانی" en="SPI" value={idx(e.spi)} color={C.spi} tone={tone(e.spi)} help="پیشرفت واقعی ÷ پیشرفت برنامه‌ای" visual={null}
+          foot={<IndexMeter v={e.spi} better="high" note={e.spi == null ? 'برنامه‌ای هنوز صفر است' : e.spi >= 1 ? `${fa((e.spi - 1) * 100, 0)}٪ جلوتر از برنامه` : `${fa((1 - e.spi) * 100, 0)}٪ عقب‌تر از برنامه`} />} />
+        <Kpi label="شاخص عملکرد هزینه" en="CPI" value={idx(e.cpi)} color={C.cpi} tone={tone(e.cpi)} help="ارزش کسب‌شده (BAC × پیشرفت EPC) ÷ هزینهٔ واقعی (کارکرد تأییدشدهٔ پیمان EPC)" visual={null}
+          foot={<IndexMeter v={e.cpi} better="high" note={e.cpi == null ? 'هزینهٔ واقعی ثبت نشده' : `هر ریال هزینه ${idx(e.cpi)} ریال ارزش کسب کرده`} />} />
+        <Kpi label="شاخص لازم برای تکمیل" en="TCPI" value={idx(e.tcpi)} color={C.tcpi} tone={e.tcpi == null ? undefined : e.tcpi <= 1 ? 'good' : e.tcpi <= 1.1 ? 'warn' : 'bad'} help="(BAC − EV) ÷ (BAC − AC): کارایی هزینه‌ای لازم برای ماندن در بودجه" visual={null}
+          foot={<IndexMeter v={e.tcpi} better="low" note={e.tcpi == null ? 'بودجه مصرف شده یا ثبت نشده' : e.tcpi <= 1 ? 'با کارایی فعلی در بودجه تمام می‌شود' : e.tcpi > 1.5 ? `کارایی باید ${idx(e.tcpi)} برابر شود؛ عملاً دست‌نیافتنی` : `کارایی باید ${idx(e.tcpi)} برابر شود`} />} />
       </section>
 
       <section className="pdb-row pdb-row-2">
@@ -169,16 +169,37 @@ function Body({ m }: { m: ProjectSnapshot }) {
 type Tone = 'good' | 'warn' | 'bad'
 const tone = (v: number | null): Tone | undefined => (v == null ? undefined : v >= 1 ? 'good' : v >= 0.9 ? 'warn' : 'bad')
 
-function Kpi({ label, en, value, color, visual, help, tone: t }: { label: string; en: string; value: string; color: string; visual: ReactNode; help: string; tone?: Tone }) {
+function Kpi({ label, en, value, color, visual, help, tone: t, foot }: { label: string; en: string; value: string; color: string; visual: ReactNode; help: string; tone?: Tone; foot?: ReactNode }) {
   return (
-    <article className={`pdb-kpi ${t ? `is-${t}` : ''}`} style={{ '--ac': color } as CSSProperties} title={help}>
+    <article className={`pdb-kpi ${t ? `is-${t}` : ''}${visual ? ' has-vis' : ''}`} style={{ '--ac': color } as CSSProperties} title={help}>
       <div className="pdb-kpi-text">
         <span className="pdb-kpi-en" dir="ltr">{en}</span>
         <span className="pdb-kpi-label">{label}</span>
         <b className="pdb-kpi-value">{value}</b>
+        {foot}
       </div>
-      <div className="pdb-kpi-vis" aria-hidden>{visual}</div>
+      {visual && <div className="pdb-kpi-vis" aria-hidden>{visual}</div>}
     </article>
+  )
+}
+
+/** where an index stands against 1.0: three zones (good / watch / bad) on a 0.5 – 1.5 scale and a marker at the value */
+function IndexMeter({ v, better, note }: { v: number | null; better: 'high' | 'low'; note: string }) {
+  const lo = 0.5, hi = 1.5, x = (n: number) => ((Math.max(lo, Math.min(hi, n)) - lo) / (hi - lo)) * 100
+  const zones = better === 'high'
+    ? [{ a: lo, b: 0.9, c: '#ef4444' }, { a: 0.9, b: 1, c: '#f59e0b' }, { a: 1, b: hi, c: '#22c55e' }]
+    : [{ a: lo, b: 1, c: '#22c55e' }, { a: 1, b: 1.1, c: '#f59e0b' }, { a: 1.1, b: hi, c: '#ef4444' }]
+  const out = v != null && (v < lo || v > hi)
+  return (
+    <div className="pdb-meter">
+      <div className="pdb-meter-bar" dir="ltr">
+        {zones.map((z) => <span key={z.a} style={{ left: `${x(z.a)}%`, width: `${x(z.b) - x(z.a)}%`, background: z.c }} />)}
+        <i className="pdb-meter-one" style={{ left: `${x(1)}%` }} />
+        {v != null && <b className={`pdb-meter-mark${out ? ' is-out' : ''}`} style={{ left: `${x(v)}%` }} />}
+      </div>
+      <div className="pdb-meter-scale" dir="ltr"><span>{fa(lo, 1)}</span><span>{fa(1)}</span><span>{v != null && v > hi ? `${fa(hi, 1)}+` : fa(hi, 1)}</span></div>
+      <small className="pdb-meter-note">{note}</small>
+    </div>
   )
 }
 
@@ -190,15 +211,6 @@ function Ring({ v, color }: { v: number; color: string }) {
       <circle cx="28" cy="28" r={r} stroke={color} strokeDasharray={`${c * f} ${c}`} transform="rotate(-90 28 28)" className="pdb-ring-fill" />
     </svg>
   )
-}
-
-function Spark({ values, color }: { values: (number | null)[]; color: string }) {
-  const pts = values.map((v, i) => [i, v] as const).filter((x): x is readonly [number, number] => x[1] != null && Number.isFinite(x[1]))
-  if (pts.length < 2) return <span className="pdb-spark-empty">—</span>
-  const ys = pts.map((p) => p[1]), lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || 1
-  const n = values.length - 1 || 1
-  const d = pts.map(([i, v], k) => `${k ? 'L' : 'M'}${(i / n) * 96 + 2},${38 - ((v - lo) / span) * 34}`).join(' ')
-  return <svg viewBox="0 0 100 40" className="pdb-spark" preserveAspectRatio="none"><path d={d} stroke={color} /></svg>
 }
 
 function Money({ label, en, value, sub, icon, signed }: { label: string; en: string; value: string; sub: string; icon?: ReactNode; signed?: number | null }) {
@@ -342,41 +354,57 @@ function Reasons({ data }: { data: Slice[] }) {
   )
 }
 
+const PHASE_STATE: Record<'done' | 'current' | 'upcoming', { label: string; color: string }> = { done: { label: 'گیت عبور کرده', color: '#22c55e' }, current: { label: 'فاز جاری', color: '#3b82f6' }, upcoming: { label: 'پیش رو', color: '#94a3b8' } }
 function Phases({ m }: { m: ProjectMetrics }) {
   const open = (k: ModuleKey) => useModuleStore.getState().enterModule(k, 'project')
+  const totDev = m.earned - m.planned
   return (
-    <div className="pdb-table-wrap">
-      <table className="pdb-table">
-        <thead>
-          <tr><th>فاز</th><th>منبع</th><th>وزن</th><th>بازهٔ برنامه</th><th>برنامه‌ای</th><th>واقعی</th><th>انحراف</th></tr>
-        </thead>
-        <tbody>
-          {m.phases.map((p) => {
-            const dev = p.actual - p.planned
-            return (
-              <tr key={p.code} className={`is-${p.state}`}>
-                <td><span className="pdb-code" dir="ltr">{p.code}</span> {p.title}</td>
-                <td>
+    <div className="pdb-ph">
+      <ol className="pdb-ph-list">
+        {m.phases.map((p, i) => {
+          const dev = p.actual - p.planned
+          const st = PHASE_STATE[p.state]
+          const devTone = dev < -0.5 ? 'is-bad' : dev > 0.5 ? 'is-good' : ''
+          return (
+            <li key={p.code} className={`pdb-ph-item is-${p.state}`} style={{ '--ph': st.color, animationDelay: `${i * 40}ms` } as CSSProperties}>
+              <span className="pdb-ph-node" aria-hidden>{p.state === 'done' ? '✓' : <span dir="ltr">{p.code}</span>}</span>
+              <div className="pdb-ph-card">
+                <div className="pdb-ph-head">
+                  <div className="pdb-ph-title">
+                    <b>{p.title}</b>
+                    <span className="pdb-ph-meta">
+                      <span className="pdb-ph-state">{st.label}</span>
+                      <span>وزن {fa(p.weight, 1)}٪</span>
+                      {p.start && p.finish && <span className="pdb-nowrap">{formatJalali(p.start)} ← {formatJalali(p.finish)}</span>}
+                    </span>
+                  </div>
+                  <div className="pdb-ph-nums">
+                    <b>{pct(p.actual)}</b>
+                    <span className={`pdb-ph-dev ${devTone}`}>{dev > 0 ? '+' : ''}{pct(dev)}</span>
+                  </div>
+                </div>
+                <div className="pdb-ph-track" dir="ltr" title={`برنامه‌ای ${pct(p.planned)} · واقعی ${pct(p.actual)}`}>
+                  <span className={`pdb-ph-fill ${devTone}`} style={{ width: `${Math.min(100, Math.max(0, p.actual))}%` }} />
+                  {p.planned > 0 && <i className="pdb-ph-plan" style={{ left: `${Math.min(100, p.planned)}%` }} />}
+                </div>
+                <div className="pdb-ph-foot">
+                  <span><i className="pdb-ph-key is-act" /> واقعی {pct(p.actual)}</span>
+                  <span><i className="pdb-ph-key is-plan" /> برنامه‌ای {pct(p.planned)}</span>
                   <button type="button" className="pdb-src" onClick={() => open(p.engine === 'epc' ? 'execution' : 'scheduling')}>
                     {p.engine === 'epc' ? 'ماژول‌های EPC' : p.engine === 'basic_design' ? 'مستر پلن (طراحی پایه)' : 'مستر پلن'}
                   </button>
-                </td>
-                <td>{fa(p.weight, 1)}٪</td>
-                <td className="pdb-nowrap">{p.start && p.finish ? `${formatJalali(p.start)} ← ${formatJalali(p.finish)}` : '—'}</td>
-                <td>{pct(p.planned)}</td>
-                <td>
-                  <span className="pdb-cell-bar"><span style={{ width: `${Math.min(100, p.actual)}%` }} /></span>
-                  {pct(p.actual)}
-                </td>
-                <td className={dev < -0.5 ? 'is-bad' : dev > 0.5 ? 'is-good' : ''}>{dev > 0 ? '+' : ''}{pct(dev)}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-        <tfoot>
-          <tr><td colSpan={4}>کل پروژه (وزنی)</td><td>{pct(m.planned)}</td><td>{pct(m.earned)}</td><td className={m.earned - m.planned < -0.5 ? 'is-bad' : 'is-good'}>{m.earned - m.planned > 0 ? '+' : ''}{pct(m.earned - m.planned)}</td></tr>
-        </tfoot>
-      </table>
+                </div>
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+      <div className="pdb-ph-total">
+        <span>کل پروژه (میانگین وزنی)</span>
+        <span>برنامه‌ای <b>{pct(m.planned)}</b></span>
+        <span>واقعی <b>{pct(m.earned)}</b></span>
+        <span className={`pdb-ph-dev ${totDev < -0.5 ? 'is-bad' : 'is-good'}`}>{totDev > 0 ? '+' : ''}{pct(totDev)}</span>
+      </div>
     </div>
   )
 }
