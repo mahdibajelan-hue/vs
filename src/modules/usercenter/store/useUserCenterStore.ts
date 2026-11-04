@@ -3,6 +3,8 @@ import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useAccessStore } from '../../masterdata/store/useAccessStore'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
+import { productRoleFor, teamPositionFor } from '../lib/access'
+import { PRODUCTS } from '../types'
 import type { AccountStatus, AuditCategory, AuditEntry, Membership, OverrideEffect, PermissionOverride, ProductKey, UcProject, UcUser, UserType } from '../types'
 
 const MEMBER_TABLE: Record<ProductKey, string> = { pipepulse: 'project_members', risk: 'rm_project_members', issues: 'im_project_members' }
@@ -115,6 +117,14 @@ interface UcState {
   sendResetEmail: (email: string) => Promise<Result>
   createUser: (args: { email: string; full_name: string; password?: string; mode?: 'password' | 'link' | 'email'; must_change?: boolean; position_title?: string; phone?: string; organization?: string; user_type?: UserType; is_admin?: boolean }) => Promise<Result & { id?: string; link?: string }>
 
+  /**
+   * Make the person a member of these master projects, so every module they may open shows them: the project role
+   * (rasta_project_role_assignments), their place in the project's team in master data (master_project_team) and — for
+   * the legacy products whose module is open to them — a membership with the product's own role in the mapped project.
+   */
+  joinProjects: (user: UcUser, projectIds: string[], projectRoleId: string) => Promise<Result & { count?: number }>
+  /** The reverse: the person's roles, team places, project-level scopes and product memberships in these projects are removed. */
+  leaveProjects: (user: UcUser, projectIds: string[]) => Promise<Result>
   setMemberships: (userId: string, product: ProductKey, projectIds: string[], role: string) => Promise<Result>
   removeMemberships: (userId: string, product: ProductKey, projectIds: string[]) => Promise<Result>
   setOverrides: (userId: string, permissionIds: string[], effect: OverrideEffect, note?: string) => Promise<Result>
@@ -245,6 +255,55 @@ export const useUserCenterStore = create<UcState>()((set, get) => {
         ],
       }))
       await get().loadAudit(userId)
+      return { ok: true }
+    },
+
+    joinProjects: async (user, projectIds, projectRoleId) => {
+      if (!projectIds.length) return { ok: true, count: 0 }
+      const acc = useAccessStore.getState(), md = useMasterDataStore.getState()
+      const roleName = acc.projectRoles.find((r) => r.id === projectRoleId)?.name
+      // 1 · the project role (membership itself)
+      const haveRole = new Set(acc.projectRoleAssignments.filter((a) => a.userId === user.id && a.projectRoleId === projectRoleId).map((a) => a.projectId))
+      const roleRows = projectIds.filter((p) => !haveRole.has(p)).map((project_id) => ({ project_id, user_id: user.id, project_role_id: projectRoleId }))
+      if (roleRows.length) { const { error } = await supabase.from('rasta_project_role_assignments').insert(roleRows); if (error) return fail(error) }
+      // 2 · the person in the project's team (master data «ساختار و تیم»)
+      const inTeam = new Set(md.team.filter((t) => t.userId === user.id).map((t) => t.projectId))
+      const pos = teamPositionFor(roleName, user.userType)
+      const orgId = md.organizations.find((o) => user.organization && (o.name === user.organization.trim() || o.shortName === user.organization.trim()))?.id ?? null
+      const teamRows = projectIds.filter((p) => !inTeam.has(p)).map((project_id) => ({
+        project_id, user_id: user.id, person_name: user.fullName || user.email, position_key: pos.positionKey, position_title: pos.positionTitle,
+        organization_id: orgId, email: user.email, phone: user.phone, sort: 100,
+      }))
+      let warning: string | undefined
+      if (teamRows.length) { const { error } = await supabase.from('master_project_team').insert(teamRows); if (error) warning = `عضویت ثبت شد ولی افزودن به تیم پروژه در داده‌های پایه انجام نشد: ${friendlyErrorMessage(error)}` }
+      // 3 · the legacy products (PipePulse / Risk / Issues keep their own project members)
+      const blocked = new Set(acc.moduleAccess.filter((a) => a.userId === user.id && !a.hasAccess).map((a) => a.moduleKey as string))
+      for (const product of PRODUCTS) {
+        if (!user.isAdmin && blocked.has(product)) continue
+        const sources = acc.projectMappings.filter((m) => m.status === 'confirmed' && m.sourceModule === product && projectIds.includes(m.masterProjectId)).map((m) => m.sourceProjectId)
+        const fresh = sources.filter((id) => !get().memberships.some((m) => m.userId === user.id && m.product === product && m.projectId === id))
+        if (fresh.length) await get().setMemberships(user.id, product, fresh, productRoleFor(product, user.userType))
+      }
+      await Promise.all([acc.fetchAll(), md.fetchAll()])
+      await get().loadAudit(user.id)
+      return { ok: true, count: projectIds.length, warning }
+    },
+
+    leaveProjects: async (user, projectIds) => {
+      if (!projectIds.length) return { ok: true }
+      const acc = useAccessStore.getState(), md = useMasterDataStore.getState()
+      const steps = [
+        supabase.from('rasta_project_role_assignments').delete().eq('user_id', user.id).in('project_id', projectIds),
+        supabase.from('master_project_team').delete().eq('user_id', user.id).in('project_id', projectIds),
+        supabase.from('rasta_user_project_scope').delete().eq('user_id', user.id).eq('scope_level', 'project').in('project_id', projectIds),
+      ]
+      for (const r of await Promise.all(steps)) if (r.error) return fail(r.error)
+      for (const product of PRODUCTS) {
+        const sources = acc.projectMappings.filter((m) => m.status === 'confirmed' && m.sourceModule === product && projectIds.includes(m.masterProjectId)).map((m) => m.sourceProjectId)
+        if (sources.length) await get().removeMemberships(user.id, product, sources)
+      }
+      await Promise.all([acc.fetchAll(), md.fetchAll()])
+      await get().loadAudit(user.id)
       return { ok: true }
     },
 

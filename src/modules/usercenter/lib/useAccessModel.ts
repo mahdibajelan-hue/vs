@@ -28,6 +28,8 @@ export function useAccessData() {
   const userScopes = useAccessStore((s) => s.userScopes)
   const moduleAccess = useAccessStore((s) => s.moduleAccess)
   const projectMappings = useAccessStore((s) => s.projectMappings)
+  const assignments = useAccessStore((s) => s.projectRoleAssignments)
+  const team = useMasterDataStore((s) => s.team)
   const products = useUserCenterStore((s) => s.products)
   const memberships = useUserCenterStore((s) => s.memberships)
   const overrides = useUserCenterStore((s) => s.overrides)
@@ -36,7 +38,12 @@ export function useAccessData() {
     () => projectMappings.map((m) => ({ masterProjectId: m.masterProjectId, sourceModule: m.sourceModule as ProductKey, sourceProjectId: m.sourceProjectId, status: m.status })),
     [projectMappings],
   )
-  return { masterProjects, portfolios, programs, organizations, modules, roles, permissions, rolePermissions, userRoles, userScopes, moduleAccess, mappings, products, memberships, overrides }
+  return { masterProjects, portfolios, programs, organizations, modules, roles, permissions, rolePermissions, userRoles, userScopes, moduleAccess, mappings, products, memberships, overrides, assignments, team }
+}
+
+/** a user's project roles and team places, for buildProjectRows */
+function memberOf(d: { assignments: { userId: string; projectId: string; projectRoleId: string }[]; team: { userId: string | null; projectId: string }[] }, userId: string) {
+  return { assignments: d.assignments.filter((a) => a.userId === userId), teamProjects: new Set(d.team.filter((t) => t.userId === userId).map((t) => t.projectId)) }
 }
 
 export function useUserAccess(userId: string) {
@@ -48,7 +55,7 @@ export function useUserAccess(userId: string) {
     const overrides: PermissionOverride[] = d.overrides.filter((o) => o.userId === userId)
     const blockedModules = new Set(d.moduleAccess.filter((a) => a.userId === userId && !a.hasAccess).map((a) => a.moduleKey as string))
     const permCtx: PermissionContext = { permissions: d.permissions, roles: d.roles, rolePermissions: d.rolePermissions, userRoleIds, overrides }
-    const rows: ProjectRow[] = buildProjectRows({ masterProjects: d.masterProjects, mappings: d.mappings, products: d.products, memberships, scopes })
+    const rows: ProjectRow[] = buildProjectRows({ masterProjects: d.masterProjects, mappings: d.mappings, products: d.products, memberships, scopes, ...memberOf(d, userId) })
     return { userRoleIds, scopes, memberships, overrides, blockedModules, permCtx, rows, accessibleProjects: rows.filter(rowHasAccess).length }
   }, [d, userId])
 }
@@ -61,7 +68,7 @@ export function useDirectoryStats(userIds: string[]) {
     for (const id of userIds) {
       const scopes = d.userScopes.filter((s) => s.userId === id)
       const memberships = d.memberships.filter((m) => m.userId === id)
-      const rows = buildProjectRows({ masterProjects: d.masterProjects, mappings: d.mappings, products: d.products, memberships, scopes })
+      const rows = buildProjectRows({ masterProjects: d.masterProjects, mappings: d.mappings, products: d.products, memberships, scopes, ...memberOf(d, id) })
       out.set(id, {
         projects: rows.filter(rowHasAccess).length,
         roleCount: (d.userRoles[id] ?? []).length,

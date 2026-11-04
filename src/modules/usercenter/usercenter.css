@@ -317,3 +317,9 @@ button.uc-kpi[aria-pressed='true'] { background: color-mix(in srgb, var(--k) 12%
   .uc-bubble, .uc-cover i { animation: none; }
   .uc-kpi, .uc-table tbody tr, .uc-list-item { animation: uc-fade 160ms ease both; animation-delay: 0ms; }
 }
+/* the user's projects: one row per project, wraps on a phone */
+.uc-plist { list-style: none; margin: 0; padding: 0; }
+.uc-prow { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--uc-line); }
+.uc-prow > input[type="checkbox"] { margin-top: 4px; flex-shrink: 0; }
+.uc-prow.is-dim b { color: var(--uc-ink-2); }
+@media (max-width: 640px) { .uc-prow { flex-wrap: wrap; } .uc-prow > div:last-child { width: 100%; justify-content: flex-end; } }

@@ -89,12 +89,18 @@ export interface ProjectRow {
   key: string
   masterId: string | null
   label: string
+  /** the official name, for search and the full title */
+  fullName: string
   code: string
   portfolioId: string | null
   programId: string | null
   cells: Record<ProductKey, MatrixCell>
   /** Scope rows that cover this project for the user (inherited access). */
   inheritedBy: UserProjectScope[]
+  /** the user's project roles here (rasta_project_role_assignments) — a project role makes the person a member */
+  roleIds: string[]
+  /** the user's place in the project's team (master_project_team) — also membership */
+  inTeam: boolean
 }
 
 export interface ProjectMapRef {
@@ -114,8 +120,12 @@ export function buildProjectRows(args: {
   products: UcProject[]
   memberships: Membership[]
   scopes: UserProjectScope[]
+  /** the user's project-role assignments and team places (any project) */
+  assignments?: { projectId: string; projectRoleId: string }[]
+  teamProjects?: Set<string>
 }): ProjectRow[] {
   const { masterProjects, mappings, products, memberships, scopes } = args
+  const assignments = args.assignments ?? [], teamProjects = args.teamProjects ?? new Set<string>()
   const confirmed = mappings.filter((m) => m.status === 'confirmed')
   const memberOf = (product: ProductKey, projectId: string | null) => (projectId ? memberships.find((m) => m.product === product && m.projectId === projectId) ?? null : null)
   const used = new Set<string>()
@@ -132,22 +142,52 @@ export function buildProjectRows(args: {
       key: `m:${mp.id}`,
       masterId: mp.id,
       label: mp.shortName || mp.officialName,
+      fullName: mp.officialName,
       code: mp.projectCode || mp.projectIdCode,
       portfolioId: mp.portfolioId,
       programId: mp.programId,
       cells,
       inheritedBy: scopes.filter((s) => scopeCovers(s, ref)),
+      roleIds: assignments.filter((a) => a.projectId === mp.id).map((a) => a.projectRoleId),
+      inTeam: teamProjects.has(mp.id),
     }
   })
   for (const p of products) {
     if (used.has(`${p.product}:${p.id}`)) continue
     const cells = {} as Record<ProductKey, MatrixCell>
     for (const product of PRODUCTS) cells[product] = product === p.product ? { sourceId: p.id, membership: memberOf(product, p.id) } : { sourceId: null, membership: null }
-    rows.push({ key: `u:${p.product}:${p.id}`, masterId: null, label: p.name, code: '', portfolioId: null, programId: null, cells, inheritedBy: scopes.filter((s) => s.scopeLevel === 'all') })
+    rows.push({ key: `u:${p.product}:${p.id}`, masterId: null, label: p.name, fullName: p.name, code: '', portfolioId: null, programId: null, cells, inheritedBy: scopes.filter((s) => s.scopeLevel === 'all'), roleIds: [], inTeam: false })
   }
   return rows
 }
 
+/** the same rule as the database (rasta_user_can_access_master_project): scope, project role, team place or a product membership */
 export function rowHasAccess(row: ProjectRow): boolean {
-  return row.inheritedBy.length > 0 || PRODUCTS.some((p) => !!row.cells[p].membership)
+  return row.inheritedBy.length > 0 || isMember(row) || PRODUCTS.some((p) => !!row.cells[p].membership)
+}
+/** a direct member of the project (role or team place), not only through a scope */
+export const isMember = (row: ProjectRow) => row.roleIds.length > 0 || row.inTeam
+
+// ------------------------------------------------------------------------------------------------ joining a project
+
+type UserTypeKey = 'project_manager' | 'owner' | 'consultant' | 'contractor' | 'supervisor' | 'other'
+/** the project role a person of this type usually holds (by the role's name in rasta_project_roles) */
+export const DEFAULT_PROJECT_ROLE: Record<UserTypeKey, string> = { project_manager: 'مدیر پروژه', owner: 'بازرس کارفرما', consultant: 'مشاور', contractor: 'پیمانکار', supervisor: 'بازرس کارفرما', other: 'پیمانکار' }
+/** where a project role sits in the project's team structure (master data «ساختار و تیم») */
+const POSITION_BY_ROLE: Record<string, string> = {
+  'مدیر پروژه': 'project_manager', 'مدیر ارشد پروژه': 'project_manager', 'مجری': 'executive', 'مدیر مهندسی': 'engineering_manager',
+  'مدیر کنترل پروژه': 'planning_manager', 'مدیر برنامه‌ریزی و کنترل پروژه': 'planning_manager', 'مدیر امور پیمان': 'contracts_manager',
+  'مشاور': 'consultant_rep', 'پیمانکار': 'contractor_rep', 'بازرس کارفرما': 'employer_rep',
+}
+const POSITION_BY_TYPE: Record<UserTypeKey, string> = { project_manager: 'project_manager', owner: 'employer_rep', consultant: 'consultant_rep', contractor: 'contractor_rep', supervisor: 'site_supervisor', other: 'other' }
+/** the team position for someone joining with this role: the role's own position, else the person's type; a role with no position keeps its name as the title */
+export function teamPositionFor(roleName: string | undefined, userType: string): { positionKey: string; positionTitle: string } {
+  const byRole = roleName ? POSITION_BY_ROLE[roleName] : undefined
+  if (byRole) return { positionKey: byRole, positionTitle: '' }
+  return { positionKey: POSITION_BY_TYPE[(userType as UserTypeKey)] ?? 'other', positionTitle: roleName ?? '' }
+}
+/** the legacy products' own role for this person (each product keeps its own project roles) */
+export function productRoleFor(product: ProductKey, userType: string): string {
+  if (product === 'pipepulse') return userType === 'owner' || userType === 'project_manager' ? 'owner' : userType === 'consultant' || userType === 'supervisor' ? 'consultant' : 'contractor'
+  return product === 'risk' ? 'team_member' : 'pursuer'
 }
