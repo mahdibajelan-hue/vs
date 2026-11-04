@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { ArrowRight, Ban, FolderKanban, KeyRound, LayoutGrid, MoreHorizontal, Pencil, Power, ScrollText, ShieldCheck, UserCog, UserRound } from 'lucide-react'
+import { ArrowRight, Ban, KeyRound, MoreHorizontal, Pencil, Power, ScrollText, ShieldCheck, UserCog, UserRound } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useUserCenterStore } from '../store/useUserCenterStore'
 import { useAccessData, useUserAccess } from '../lib/useAccessModel'
@@ -11,9 +11,8 @@ import { StatusDialog } from '../components/StatusDialog'
 import { PasswordDialog } from '../components/PasswordDialog'
 import { InfoTab } from '../tabs/InfoTab'
 import { RolesTab } from '../tabs/RolesTab'
-import { ProjectsTab } from '../tabs/ProjectsTab'
 import { ModulesTab } from '../tabs/ModulesTab'
-import { AccessTab } from '../tabs/AccessTab'
+import { AccessLevelTab } from '../tabs/AccessLevelTab'
 import { ActivityTab } from '../tabs/ActivityTab'
 import type { AccountStatus } from '../types'
 
@@ -26,17 +25,18 @@ const COVERS = [
   'linear-gradient(115deg, #0c2d57, #2563eb)',
 ]
 
-export type ProfileTab = 'info' | 'roles' | 'projects' | 'modules' | 'access' | 'activity'
+/** 'roles' / 'projects' / 'modules' are older addresses kept so saved links still open the right place */
+export type ProfileTab = 'info' | 'access' | 'advanced' | 'activity' | 'roles' | 'projects' | 'modules'
+const normalizeTab = (t: ProfileTab): ProfileTab => (t === 'projects' || t === 'modules' ? 'access' : t === 'roles' ? 'advanced' : t)
 const TABS: { id: ProfileTab; label: string; icon: typeof UserRound; color: string }[] = [
   { id: 'info', label: 'اطلاعات پایه', icon: UserRound, color: '#1d4ed8' },
-  { id: 'roles', label: 'نقش و نوع کاربر', icon: UserCog, color: '#6d28d9' },
-  { id: 'projects', label: 'پروژه‌ها', icon: FolderKanban, color: '#0369a1' },
-  { id: 'modules', label: 'ماژول‌ها', icon: LayoutGrid, color: '#15803d' },
-  { id: 'access', label: 'مدیریت دسترسی', icon: KeyRound, color: '#b45309' },
+  { id: 'access', label: 'دسترسی (ماژول‌ها و پروژه‌ها)', icon: KeyRound, color: '#0369a1' },
+  { id: 'advanced', label: 'تکمیلی', icon: UserCog, color: '#6d28d9' },
   { id: 'activity', label: 'تاریخچه', icon: ScrollText, color: '#b91c1c' },
 ]
 
-export function UserProfilePage({ userId, tab, edit, onTab, onBack }: { userId: string; tab: ProfileTab; edit: boolean; onTab: (t: ProfileTab, edit?: boolean) => void; onBack: () => void }) {
+export function UserProfilePage({ userId, tab: rawTab, edit, onTab, onBack }: { userId: string; tab: ProfileTab; edit: boolean; onTab: (t: ProfileTab, edit?: boolean) => void; onBack: () => void }) {
+  const tab = normalizeTab(rawTab)
   const user = useUserCenterStore((s) => s.users.find((u) => u.id === userId))
   const authInfoAvailable = useUserCenterStore((s) => s.authInfoAvailable)
   const loadAudit = useUserCenterStore((s) => s.loadAudit)
@@ -69,7 +69,7 @@ export function UserProfilePage({ userId, tab, edit, onTab, onBack }: { userId: 
   if (!user.profileCompleted) flags.push({ tone: 'info', text: 'پروفایل را تکمیل نکرده است' })
   if (user.accountStatus !== 'active') flags.push({ tone: user.accountStatus === 'blocked' ? 'bad' : 'warn', text: user.statusReason ? `${user.accountStatus === 'blocked' ? 'مسدود' : 'غیرفعال'}: ${user.statusReason}` : user.accountStatus === 'blocked' ? 'حساب مسدود است' : 'حساب غیرفعال است' })
 
-  const tabCount: Partial<Record<ProfileTab, number>> = { projects: access.accessibleProjects }
+  const tabCount: Partial<Record<ProfileTab, number>> = { access: access.accessibleProjects }
 
   return (
     <div className="uc-rise mx-auto flex w-full max-w-[1280px] flex-col gap-4">
@@ -151,10 +151,12 @@ export function UserProfilePage({ userId, tab, edit, onTab, onBack }: { userId: 
 
       <div id="uc-tabpanel" role="tabpanel" aria-labelledby={`uc-tab-${tab}`} key={tab} className="uc-rise">
         {tab === 'info' && <InfoTab user={user} editing={edit} setEditing={(v) => onTab('info', v)} onPassword={() => setPasswordDialog(true)} onStatus={() => setStatusDialog(user.accountStatus === 'active' ? 'disabled' : 'active')} />}
-        {tab === 'roles' && <RolesTab user={user} />}
-        {tab === 'projects' && <ProjectsTab user={user} />}
-        {tab === 'modules' && <ModulesTab user={user} />}
-        {tab === 'access' && <AccessTab user={user} />}
+        {tab === 'access' && <AccessLevelTab user={user} />}
+        {tab === 'advanced' && <div className="flex flex-col gap-4">
+          <p className="uc-card p-4 text-[12.5px] leading-7" style={{ color: 'var(--uc-ink-2)' }}>این بخش برای موارد خاص است: نوع کاربر، دسترسی مدیر سیستم، نقش‌های سامانه (مثل طراح ارزیابی یا مشاهده‌گر گزارش) و تنظیم تک‌تک مجوزهای یک ماژول. برای کار روزمره، سطح هر ماژول و پروژه‌ها را در تب «دسترسی» تعیین کنید.</p>
+          <RolesTab user={user} />
+          <ModulesTab user={user} />
+        </div>}
         {tab === 'activity' && <ActivityTab user={user} />}
       </div>
 

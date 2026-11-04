@@ -191,3 +191,38 @@ export function productRoleFor(product: ProductKey, userType: string): string {
   if (product === 'pipepulse') return userType === 'owner' || userType === 'project_manager' ? 'owner' : userType === 'consultant' || userType === 'supervisor' ? 'consultant' : 'contractor'
   return product === 'risk' ? 'team_member' : 'pursuer'
 }
+
+// ------------------------------------------------------------------------------------------------ module access levels
+
+/**
+ * One simple access level per module, instead of ten separate permissions. Opening a module lets the person see the data
+ * of their projects in it; the level adds what they may do (the modules' own database rules check these permissions).
+ */
+export type AccessLevel = 'closed' | 'view' | 'edit' | 'approve' | 'admin'
+export const ACCESS_LEVELS: { level: AccessLevel; label: string; hint: string }[] = [
+  { level: 'closed', label: 'بسته', hint: 'ماژول را نمی‌بیند' },
+  { level: 'view', label: 'مشاهده', hint: 'فقط می‌بیند و گزارش می‌گیرد' },
+  { level: 'edit', label: 'ثبت و ویرایش', hint: 'اطلاعات و کارکرد ثبت و ویرایش می‌کند' },
+  { level: 'approve', label: 'تأیید', hint: 'علاوه بر ثبت، بررسی و تأیید یا رد می‌کند' },
+  { level: 'admin', label: 'مدیریت', hint: 'همهٔ کارها، شامل حذف و تنظیمات ماژول' },
+]
+/** the permissions each level holds (cumulative) */
+export const LEVEL_ACTIONS: Record<Exclude<AccessLevel, 'closed'>, PermissionAction[]> = {
+  view: ['view', 'export'],
+  edit: ['view', 'export', 'create', 'edit', 'submit'],
+  approve: ['view', 'export', 'create', 'edit', 'submit', 'review', 'approve', 'reject'],
+  admin: ['view', 'export', 'create', 'edit', 'submit', 'review', 'approve', 'reject', 'delete', 'configure'],
+}
+/** the level a person effectively has in a module: the highest whose every permission they hold (roles or direct) */
+export function moduleLevel(ctx: PermissionContext, moduleKey: string, closed: boolean): AccessLevel {
+  if (closed) return 'closed'
+  const has = (a: PermissionAction) => permissionCell(ctx, moduleKey, a).granted || !findPermissionId(ctx.permissions, moduleKey, a)
+  for (const l of ['admin', 'approve', 'edit'] as const) if (LEVEL_ACTIONS[l].every(has)) return l
+  return 'view'
+}
+/** roles of the person that give more in this module than the chosen level (so the level alone does not limit them) */
+export function rolesAbove(ctx: PermissionContext, moduleKey: string, level: AccessLevel): string[] {
+  if (level === 'closed' || level === 'admin') return []
+  const extra = LEVEL_ACTIONS.admin.filter((a) => !LEVEL_ACTIONS[level].includes(a))
+  return [...new Set(extra.flatMap((a) => { const c = permissionCell(ctx, moduleKey, a); return c.source === 'role' ? c.roleNames : [] }))]
+}

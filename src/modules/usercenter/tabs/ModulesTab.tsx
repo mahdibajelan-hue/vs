@@ -3,12 +3,10 @@ import { Ban, Check, ChevronDown, Lock, MoreHorizontal, RotateCcw, ShieldCheck, 
 import type { PermissionAction } from '../../masterdata/rbacTypes'
 import { useUserCenterStore } from '../store/useUserCenterStore'
 import { useAccessData, useUserAccess } from '../lib/useAccessModel'
-import { useAccessActions } from '../lib/useAccessActions'
 import { ALL_ACTIONS, PRIMARY_ACTIONS, moduleGrantCount, permissionCell, type PermissionCell } from '../lib/access'
 import { faNum } from '../lib/format'
 import type { UcUser } from '../types'
-import { Badge, Popover, Switch, useToast } from '../components/ui'
-import type { ModuleKeyRef } from '../../masterdata/rbacTypes'
+import { Badge, Popover, useToast } from '../components/ui'
 
 const CELL_ICON = { role: Check, direct: UserCheck, denied: Ban, none: null } as const
 
@@ -17,7 +15,6 @@ export function ModulesTab({ user }: { user: UcUser }) {
   const clearOverrides = useUserCenterStore((s) => s.clearOverrides)
   const { modules } = useAccessData()
   const { permCtx, blockedModules, overrides } = useUserAccess(user.id)
-  const actions = useAccessActions(user.id)
   const notify = useToast()
   const [more, setMore] = useState(false)
   const list = modules.filter((m) => m.isActive)
@@ -59,7 +56,7 @@ export function ModulesTab({ user }: { user: UcUser }) {
       <section className="uc-card overflow-hidden">
         <header className="flex flex-wrap items-center justify-between gap-3 p-4">
           <div>
-            <h3 className="uc-section-title">ماتریس مجوزها</h3>
+            <h3 className="uc-section-title">ماتریس جزئی مجوزها</h3>
             <p className="uc-eyebrow mt-0.5">{faNum(totals.role)} مجوز ارثی از نقش‌ها · {faNum(totals.direct)} اختصاصی · {faNum(totals.denied)} ممنوع‌شده. روی هر خانه کلیک کنید.</p>
           </div>
           <button className="uc-btn uc-btn-sm" onClick={() => setMore((v) => !v)} aria-expanded={more}>
@@ -85,7 +82,6 @@ export function ModulesTab({ user }: { user: UcUser }) {
                   <tr key={m.key} className={closed ? 'is-blocked' : ''}>
                     <td>
                       <div className="flex items-center gap-3">
-                        <Switch checked={!closed} label={`دسترسی به ماژول ${m.labelFa}`} onChange={(on) => actions.setModule(m.key as ModuleKeyRef, on)} />
                         <div className="min-w-0">
                           <span className="block max-w-[200px] truncate text-[13px] font-bold">{m.labelFa}</span>
                           <span className="uc-eyebrow flex items-center gap-1.5">{closed ? <Badge tone="bad"><Lock size={10} /> دسترسی بسته</Badge> : `${faNum(grants)} از ${faNum(ALL_ACTIONS.length)} مجوز`}</span>
@@ -147,7 +143,7 @@ export function ModulesTab({ user }: { user: UcUser }) {
           <span><span className="uc-cell is-direct"><UserCheck size={11} strokeWidth={2.8} /></span> اختصاصی</span>
           <span><span className="uc-cell is-denied"><Ban size={11} strokeWidth={2.8} /></span> ممنوع‌شده</span>
           <span><span className="uc-cell is-none" /> ندارد</span>
-          <span><Lock size={12} /> کلید ابتدای ردیف، ورود به کل ماژول را باز یا بسته می‌کند</span>
+          <span><Lock size={12} /> باز و بسته کردن ماژول و سطح دسترسی آن در تب «دسترسی» است</span>
         </footer>
       </section>
     </div>

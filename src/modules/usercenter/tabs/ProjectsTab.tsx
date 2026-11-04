@@ -71,7 +71,7 @@ export function ProjectsTab({ user }: { user: UcUser }) {
   const leave = (ids: string[], label: string) =>
     setConfirm({
       title: 'حذف از پروژه',
-      description: `${user.fullName || user.email} از ${label} خارج می‌شود: سمت‌های پروژه، جایگاه در «ساختار و تیم» داده‌های پایه و عضویت در PipePulse / ریسک / مسائلِ همان پروژه حذف می‌شود. دسترسی‌ای که از «محدودهٔ دسترسی» (همه / پورتفولیو / طرح) می‌آید تغییری نمی‌کند.`,
+      description: `${user.fullName || user.email} از ${label} خارج می‌شود: سمت‌های پروژه، جایگاه در «ساختار و تیم» داده‌های پایه و نقش او در ماژول‌های ریسک، مسائل و PipePulse همان پروژه حذف می‌شود. دسترسی‌ای که از «محدودهٔ دسترسی» (همه / پورتفولیو / طرح) می‌آید تغییری نمی‌کند.`,
       run: async () => {
         const res = await leaveProjects(user, ids)
         notify(res.ok ? 'کاربر از پروژه خارج شد' : (res.error ?? 'انجام نشد'), res.ok ? 'ok' : 'bad')
@@ -201,12 +201,12 @@ export function ProjectsTab({ user }: { user: UcUser }) {
         <footer className="uc-legend border-t px-4 py-3" style={{ borderColor: 'var(--uc-line)' }}>
           <span><Badge tone="ok">عضو پروژه</Badge> سمت در پروژه یا جایگاه در تیم دارد</span>
           <span><Badge tone="info">از محدودهٔ دسترسی</Badge> از «همه / پورتفولیو / طرح» پایین</span>
-          <span><span className="uc-chip" style={{ padding: '1px 8px' }}>● PipePulse</span> نقش جداگانهٔ محصولات قدیمی؛ هنگام افزودن خودکار ثبت می‌شود</span>
+          <span><span className="uc-chip" style={{ padding: '1px 8px' }}>● مدیریت ریسک</span> ماژول‌های ریسک، مسائل و PipePulse برای هر پروژه نقش داخلی خودشان را دارند؛ هنگام افزودن به پروژه خودکار ثبت می‌شود و با کلیک قابل تغییر است</span>
         </footer>
       </section>
 
       {/* ------------------------------------------------------------------ scope */}
-      <Section title="محدودهٔ دسترسی گسترده" hint="برای مدیران و ناظرانی که باید همهٔ پروژه‌ها یا همهٔ پروژه‌های یک پورتفولیو یا طرح را ببینند (بدون عضویت تک‌به‌تک). پروژه‌های آینده‌ی همان محدوده هم خودکار دیده می‌شوند.">
+      <Section title="دسترسی به گروهی از پروژه‌ها (اختیاری)" hint="برای مدیران و ناظرانی که باید همهٔ پروژه‌ها یا همهٔ پروژه‌های یک پورتفولیو یا طرح را ببینند (بدون عضویت تک‌به‌تک). پروژه‌های آینده‌ی همان محدوده هم خودکار دیده می‌شوند.">
         <div className="flex max-w-[560px] flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: 'var(--uc-accent-soft)', color: 'var(--uc-accent)' }}><Globe2 size={17} /></span>
@@ -235,7 +235,7 @@ export function ProjectsTab({ user }: { user: UcUser }) {
       {legacyRows.length > 0 && (
         <section className="uc-card overflow-hidden">
           <button className="flex w-full items-center justify-between gap-3 p-4 text-right" onClick={() => setShowLegacy((v) => !v)} aria-expanded={showLegacy}>
-            <span><span className="uc-section-title">پروژه‌های محصولات قدیمی بدون پروژهٔ متناظر ({faNum(legacyRows.length)})</span><span className="uc-eyebrow mt-0.5 block">پروژه‌هایی از PipePulse، ریسک یا مسائل که هنوز به پروژه‌ای در داده‌های پایه نگاشت نشده‌اند؛ پس از نگاشت در «داده‌های پایه ← نگاشت پروژه‌ها» به فهرست بالا می‌آیند.</span></span>
+            <span><span className="uc-section-title">پروژه‌های ریسک، مسائل و PipePulse که به پروژه‌ای در داده‌های پایه وصل نیستند ({faNum(legacyRows.length)})</span><span className="uc-eyebrow mt-0.5 block">این پروژه‌ها فقط درون همان ماژول وجود دارند؛ پس از وصل کردن به پروژهٔ اصلی در «داده‌های پایه ← نگاشت پروژه‌ها» به فهرست بالا می‌آیند.</span></span>
             <span className="uc-eyebrow">{showLegacy ? 'بستن' : 'نمایش'}</span>
           </button>
           {showLegacy && <ul className="uc-plist">{legacyRows.map((r) => (

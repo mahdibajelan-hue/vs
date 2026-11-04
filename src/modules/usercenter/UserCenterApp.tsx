@@ -46,7 +46,7 @@ export function UserCenterApp() {
         ) : (
           <UserProfilePage userId={view.id} tab={view.tab} edit={view.edit} onTab={(tab, edit = false) => setView({ kind: 'user', id: view.id, tab, edit })} onBack={() => setView({ kind: 'list' })} />
         )}
-        {creating && <CreateUserDialog onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); if (id) open(id, 'projects') }} />}
+        {creating && <CreateUserDialog onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); if (id) open(id, 'access') }} />}
       </div>
     </ToastProvider>
   )

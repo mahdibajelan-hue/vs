@@ -108,7 +108,7 @@ export function CreateUserDialog({ onClose, onCreated }: { onClose: () => void; 
             </div>
             <AccessShare name={f.full_name.trim()} email={email} password={done.password} link={done.link} mustChange={mustChange} />
             <div className="mt-5 flex justify-end">
-              <button className="uc-btn uc-btn-primary" onClick={() => onCreated(done.id)}>ادامه: پروژه‌ها و دسترسی‌ها <ArrowLeft size={15} /></button>
+              <button className="uc-btn uc-btn-primary" onClick={() => onCreated(done.id)}>ادامه: سطح دسترسی و پروژه‌ها <ArrowLeft size={15} /></button>
             </div>
           </div>
         ) : (
@@ -172,7 +172,7 @@ export function CreateUserDialog({ onClose, onCreated }: { onClose: () => void; 
                 <div className="flex flex-wrap gap-1.5">
                   {choosable.map((m) => <button key={m.key} type="button" className="uc-chip" aria-pressed={mods.has(m.key)} onClick={() => toggleMod(m.key)} style={mods.has(m.key) ? { background: 'var(--uc-accent)', borderColor: 'var(--uc-accent)', color: '#fff', cursor: 'pointer' } : { cursor: 'pointer' }}>{mods.has(m.key) && <Check size={12} />}{m.labelFa}</button>)}
                 </div>
-                <p className="uc-hint">حساب تازه با همهٔ ماژول‌ها بسته شروع می‌شود؛ فقط ماژول‌هایی را که این فرد لازم دارد باز کنید. بعداً هم از تب «ماژول‌ها» قابل تغییر است.</p>
+                <p className="uc-hint">حساب تازه با همهٔ ماژول‌ها بسته شروع می‌شود؛ ماژول‌های انتخاب‌شده با سطح «مشاهده» باز می‌شوند. در مرحلهٔ بعد (تب «دسترسی») سطح هر ماژول، مثلاً «ثبت و ویرایش»، و پروژه‌ها را تعیین می‌کنید.</p>
               </div>
             )}
 

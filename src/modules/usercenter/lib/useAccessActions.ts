@@ -3,6 +3,7 @@ import { useAccessStore } from '../../masterdata/store/useAccessStore'
 import { useUserCenterStore } from '../store/useUserCenterStore'
 import { useToast } from '../components/ui'
 import type { ModuleKeyRef, ScopeLevel } from '../../masterdata/rbacTypes'
+import { LEVEL_ACTIONS, ACCESS_LEVELS, type AccessLevel } from './access'
 
 /**
  * The role / scope / module-access writes already live in the master-data access store. This wraps them so that every change
@@ -52,6 +53,19 @@ export function useAccessActions(userId: string) {
     removeProjectRole: async (assignmentId: string) => {
       await removeProjectRoleAssignment(assignmentId)
       await after('سمت پروژه حذف شد')
+    },
+    /** one access level for a module: closed, or open with the level's permissions as the person's own (direct) grants */
+    setLevel: async (moduleKey: ModuleKeyRef, level: AccessLevel) => {
+      const uc = useUserCenterStore.getState()
+      const perms = useAccessStore.getState().permissions.filter((p) => p.moduleKey === moduleKey)
+      const mine = uc.overrides.filter((o) => o.userId === userId && perms.some((p) => p.id === o.permissionId))
+      const want = level === 'closed' ? [] : perms.filter((p) => LEVEL_ACTIONS[level].includes(p.action)).map((p) => p.id)
+      const drop = mine.filter((o) => !(want.includes(o.permissionId) && o.effect === 'allow')).map((o) => o.permissionId)
+      await setUserModuleAccess(userId, moduleKey, level !== 'closed')
+      if (drop.length) await uc.clearOverrides(userId, drop)
+      const add = want.filter((id) => !mine.some((o) => o.permissionId === id && o.effect === 'allow'))
+      if (add.length) await uc.setOverrides(userId, add, 'allow')
+      await after(`دسترسی به «${useAccessStore.getState().modules.find((m) => m.key === moduleKey)?.labelFa ?? moduleKey}»: ${ACCESS_LEVELS.find((l) => l.level === level)?.label}`)
     },
     createRole,
   }

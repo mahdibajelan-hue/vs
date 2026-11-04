@@ -323,3 +323,13 @@ button.uc-kpi[aria-pressed='true'] { background: color-mix(in srgb, var(--k) 12%
 .uc-prow > input[type="checkbox"] { margin-top: 4px; flex-shrink: 0; }
 .uc-prow.is-dim b { color: var(--uc-ink-2); }
 @media (max-width: 640px) { .uc-prow { flex-wrap: wrap; } .uc-prow > div:last-child { width: 100%; justify-content: flex-end; } }
+/* one access level per module: a five-step segmented control */
+.uc-lvrow { align-items: center; }
+.uc-lv { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 12px; background: var(--uc-surface-2); border: 1px solid var(--uc-line); }
+.uc-lv button { min-height: 30px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: var(--uc-ink-2); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background-color 140ms ease, color 140ms ease, transform 120ms cubic-bezier(.23,1,.32,1); }
+.uc-lv button:active { transform: scale(.97); }
+.uc-lv button:disabled { cursor: progress; }
+.uc-lv button[aria-checked="true"] { color: #fff; background: var(--uc-accent); box-shadow: 0 2px 8px -3px var(--uc-accent); }
+.uc-lv button[aria-checked="true"][data-level="closed"] { background: var(--uc-muted); box-shadow: none; }
+.uc-lv button[aria-checked="true"][data-level="admin"] { background: var(--uc-warn); box-shadow: 0 2px 8px -3px var(--uc-warn); }
+@media (max-width: 640px) { .uc-lvrow { flex-direction: column; align-items: stretch; } .uc-lv { width: 100%; } .uc-lv button { flex: 1 1 auto; padding: 0 6px; } }
