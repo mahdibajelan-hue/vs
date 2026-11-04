@@ -127,7 +127,7 @@ export function createSupabaseRepo(): LandRepo {
 
     async addParcels(masterProjectId, drafts: ParcelDraft[]) {
       const withIds = drafts.map((d) => ({ ...d, id: d.id ?? uid() }))
-      await insertChunks('la_parcels', withIds.map((d) => ({ id: d.id, master_project_id: masterProjectId, is_demo: !!d.isDemo, legal: {}, next_deadline_label: '', kind: 'route', station_type: '', ...parcelRow(d) })))
+      await insertChunks('la_parcels', withIds.map((d) => ({ id: d.id, master_project_id: masterProjectId, is_demo: !!d.isDemo, legal: {}, next_deadline_label: '', kind: 'route', station_type: '', price_exception: {}, ...parcelRow(d) })))
       // the database trigger created the ten blank stages; overwrite those that came with data
       const stageRows = withIds.flatMap((d) => (d.stages ?? []).filter((s) => s.status !== 'not_started' || s.plannedDate).map((s) => stageRow(d.id, s)))
       for (let i = 0; i < stageRows.length; i += 400) chk(await supabase.from('la_stages').upsert(stageRows.slice(i, i + 400), { onConflict: 'parcel_id,stage_key' }))
