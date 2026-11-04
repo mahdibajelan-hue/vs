@@ -9,6 +9,7 @@ import { useAuthStore } from './store/useAuthStore'
 import { hasModuleAccess, useModuleAccessStore } from './store/useModuleAccessStore'
 import { ModuleHub } from './components/Auth/ModuleHub'
 import { Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
+import { SetOwnPassword, mustSetPassword } from './components/Auth/SetOwnPassword'
 import { ProfileForm } from './components/Auth/ProfileForm'
 import { createSupabaseRepo as createLandRepo } from './modules/landacq/repo/supabaseRepo'
 import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
@@ -102,6 +103,7 @@ export function RootApp() {
   const isAuthed = useAuthStore((s) => s.isAuthed)
   const profileLoading = useAuthStore((s) => s.profileLoading)
   const profile = useAuthStore((s) => s.profile)
+  const session = useAuthStore((s) => s.session)
   const activeModule = useModuleStore((s) => s.activeModule)
   const moduleResetKey = useModuleStore((s) => s.moduleResetKey)
   const enterModule = useModuleStore((s) => s.enterModule)
@@ -159,6 +161,15 @@ export function RootApp() {
   // screen — ModuleHub renders the same page either way, just with module cards locked until
   // isAuthed flips.
   if (!isAuthed) return <ModuleHub onEnterModule={enterModule} />
+
+  // an account an admin made with an initial password / invite / one-time link: the person sets a password of their own first
+  if (mustSetPassword(session?.user.user_metadata)) {
+    return (
+      <Shell title="تعیین رمز عبور" subtitle="پیش از ورود به سامانه، رمز عبور شخصی خود را انتخاب کنید">
+        <SetOwnPassword />
+      </Shell>
+    )
+  }
 
   if (profile && !profile.profileCompleted) {
     return (

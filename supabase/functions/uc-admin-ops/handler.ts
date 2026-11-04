@@ -1,6 +1,9 @@
 /**
  * Admin-only account operations that need the service-role key and therefore cannot run in the browser:
- * create a user, set a user's password, and block / unblock sign-in at the auth layer.
+ * create a user, set a user's password, make a one-time sign-in link, and block / unblock sign-in at the auth layer.
+ * None of it needs the project's e-mail service: an account is made with an initial password or with an invite link the
+ * admin copies and sends by any channel (SMS, messenger, e-mail). `must_change_password` in the user's metadata makes the
+ * app ask the person for a password of their own at the first sign-in.
  *
  * Kept free of Deno / Supabase imports (everything it touches arrives through `Deps`) so the same file can be
  * unit-tested in Node with fakes — see supabase/functions/uc-admin-ops/handler.test.mjs.
@@ -18,7 +21,11 @@ export interface Deps {
   isActiveAdmin(userId: string): Promise<boolean>
   createUser(args: { email: string; password: string; email_confirm: boolean; user_metadata: Record<string, unknown> }): Promise<AuthResult<{ user: { id: string } | null }>>
   inviteUserByEmail(email: string, data: Record<string, unknown>): Promise<AuthResult<{ user: { id: string } | null }>>
-  updateUserById(id: string, attrs: { password?: string; ban_duration?: string }): Promise<AuthResult<unknown>>
+  updateUserById(id: string, attrs: { password?: string; ban_duration?: string; user_metadata?: Record<string, unknown> }): Promise<AuthResult<unknown>>
+  /** an invite (new account) or recovery (existing account) link, created without sending any e-mail */
+  generateLink(args: { type: 'invite' | 'recovery'; email: string; data?: Record<string, unknown>; redirectTo?: string }): Promise<AuthResult<{ user: { id: string } | null; properties: { action_link: string } | null }>>
+  /** the e-mail of an account (for a recovery link) */
+  emailOf(id: string): Promise<string | null>
   updateProfile(id: string, patch: Record<string, unknown>): Promise<{ error: { message: string } | null }>
 }
 
@@ -38,6 +45,8 @@ function json(status: number, body: Record<string, unknown>): Response {
 }
 
 const str = (v: unknown, max = 200): string => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+/** where a sign-in link lands: the app's own address, as the admin's browser sees it (http/https only) */
+const redirectOf = (v: unknown): string | undefined => { const s = str(v, 500); return /^https?:\/\/[^\s]+$/i.test(s) ? s : undefined }
 
 export async function handle(req: Request, deps: Deps): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
@@ -66,15 +75,26 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
       if (!fullName) return json(400, { ok: false, error: 'نام و نام خانوادگی را وارد کنید' })
       if (!USER_TYPES.includes(userType)) return json(400, { ok: false, error: 'نوع کاربر نامعتبر است' })
       if (password && password.length < MIN_PASSWORD) return json(400, { ok: false, error: `رمز عبور باید حداقل ${MIN_PASSWORD} کاراکتر باشد` })
+      // password (default when one is given): usable at once · link: an invite link to copy and send · email: the invitation e-mail
+      const mode = password ? 'password' : body.mode === 'email' ? 'email' : 'link'
+      const mustChange = mode === 'link' || body.must_change !== false
+      const meta = { full_name: fullName, must_change_password: mustChange }
 
-      // With a password the account is usable immediately; without one the person gets an invitation e-mail.
-      const created = password
-        ? await deps.createUser({ email, password, email_confirm: true, user_metadata: { full_name: fullName } })
-        : await deps.inviteUserByEmail(email, { full_name: fullName })
+      let link: string | null = null
+      let created: AuthResult<{ user: { id: string } | null }>
+      if (mode === 'password') created = await deps.createUser({ email, password, email_confirm: true, user_metadata: meta })
+      else if (mode === 'email') created = await deps.inviteUserByEmail(email, meta)
+      else {
+        const g = await deps.generateLink({ type: 'invite', email, data: meta, redirectTo: redirectOf(body.redirect_to) })
+        created = { data: { user: g.data?.user ?? null }, error: g.error }
+        link = g.data?.properties?.action_link ?? null
+        if (!g.error && !link) created = { data: { user: null }, error: { message: 'لینک دعوت ساخته نشد' } }
+      }
       const id = created.data?.user?.id
       if (created.error || !id) {
         const dup = /already|registered|exists/i.test(created.error?.message ?? '')
-        return json(dup ? 409 : 500, { ok: false, error: dup ? 'برای این ایمیل قبلاً حساب ساخته شده است' : 'ساخت حساب انجام نشد — ' + (created.error?.message ?? 'خطای ناشناخته') })
+        const mail = /sending|smtp|email rate|rate limit/i.test(created.error?.message ?? '')
+        return json(dup ? 409 : 500, { ok: false, error: dup ? 'برای این ایمیل قبلاً حساب ساخته شده است' : mail ? 'سرویس ایمیل پروژه اجازهٔ ارسال دعوت‌نامه نداد؛ روش «رمز اولیه» یا «لینک دعوت» را به‌کار ببرید' : 'ساخت حساب انجام نشد — ' + (created.error?.message ?? 'خطای ناشناخته') })
       }
       const patch: Record<string, unknown> = {
         full_name: fullName,
@@ -86,7 +106,7 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
       if (body.is_admin === true) patch.is_admin = true
       const upd = await deps.updateProfile(id, patch)
       if (upd.error) return json(500, { ok: false, id, error: 'حساب ساخته شد ولی ثبت مشخصات انجام نشد — ' + upd.error.message })
-      return json(200, { ok: true, id, invited: !password })
+      return json(200, { ok: true, id, mode, invited: mode === 'email', link })
     }
 
     case 'set_password': {
@@ -94,9 +114,23 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
       const password = typeof body.password === 'string' ? body.password : ''
       if (!UUID_RE.test(userId)) return json(400, { ok: false, error: 'شناسه کاربر نامعتبر است' })
       if (password.length < MIN_PASSWORD) return json(400, { ok: false, error: `رمز عبور باید حداقل ${MIN_PASSWORD} کاراکتر باشد` })
-      const res = await deps.updateUserById(userId, { password })
+      const res = await deps.updateUserById(userId, { password, ...(body.must_change === true ? { user_metadata: { must_change_password: true } } : {}) })
       if (res.error) return json(500, { ok: false, error: 'تغییر رمز انجام نشد — ' + res.error.message })
       return json(200, { ok: true })
+    }
+
+    case 'access_link': {
+      // a one-time link that signs the person in and asks for a new password — "forgot password" without e-mail
+      const userId = str(body.user_id)
+      if (!UUID_RE.test(userId)) return json(400, { ok: false, error: 'شناسه کاربر نامعتبر است' })
+      const email = await deps.emailOf(userId).catch(() => null)
+      if (!email) return json(404, { ok: false, error: 'حساب کاربر پیدا نشد' })
+      const flag = await deps.updateUserById(userId, { user_metadata: { must_change_password: true } })
+      if (flag.error) return json(500, { ok: false, error: 'ساخت لینک انجام نشد — ' + flag.error.message })
+      const g = await deps.generateLink({ type: 'recovery', email, redirectTo: redirectOf(body.redirect_to) })
+      const link = g.data?.properties?.action_link
+      if (g.error || !link) return json(500, { ok: false, error: 'ساخت لینک انجام نشد — ' + (g.error?.message ?? 'خطای ناشناخته') })
+      return json(200, { ok: true, link })
     }
 
     case 'set_ban': {

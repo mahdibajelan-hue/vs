@@ -73,6 +73,9 @@ function userFromRow(r: ProfileRow, auth?: AuthInfoRow): UcUser {
   }
 }
 
+/** the app's own address: where a sign-in link brings the person back */
+export const appUrl = () => window.location.origin + window.location.pathname
+
 /** supabase-js wraps non-2xx edge-function replies; the useful Persian message is in the response body. */
 async function edgeCall(body: Record<string, unknown>): Promise<{ ok: boolean; error?: string; data?: Record<string, unknown> }> {
   const { data, error } = await supabase.functions.invoke('uc-admin-ops', { body })
@@ -106,9 +109,11 @@ interface UcState {
 
   updateProfile: (userId: string, patch: Partial<{ full_name: string; position_title: string; phone: string; organization: string; user_type: UserType; is_admin: boolean; avatar_url: string }>) => Promise<Result>
   setStatus: (userId: string, status: AccountStatus, reason: string) => Promise<Result>
-  setPassword: (userId: string, password: string) => Promise<Result>
+  setPassword: (userId: string, password: string, mustChange?: boolean) => Promise<Result>
+  /** a one-time sign-in link (no e-mail): the person opens it and chooses a new password */
+  accessLink: (userId: string) => Promise<Result & { link?: string }>
   sendResetEmail: (email: string) => Promise<Result>
-  createUser: (args: { email: string; full_name: string; password?: string; position_title?: string; phone?: string; organization?: string; user_type?: UserType; is_admin?: boolean }) => Promise<Result & { id?: string }>
+  createUser: (args: { email: string; full_name: string; password?: string; mode?: 'password' | 'link' | 'email'; must_change?: boolean; position_title?: string; phone?: string; organization?: string; user_type?: UserType; is_admin?: boolean }) => Promise<Result & { id?: string; link?: string }>
 
   setMemberships: (userId: string, product: ProductKey, projectIds: string[], role: string) => Promise<Result>
   removeMemberships: (userId: string, product: ProductKey, projectIds: string[]) => Promise<Result>
@@ -204,9 +209,16 @@ export const useUserCenterStore = create<UcState>()((set, get) => {
       return ban.ok ? { ok: true } : { ok: true, warning: `وضعیت حساب ثبت شد اما بستن ورود در سطح احراز هویت انجام نشد: ${ban.error}` }
     },
 
-    setPassword: async (userId, password) => {
-      const res = await edgeCall({ action: 'set_password', user_id: userId, password })
+    setPassword: async (userId, password, mustChange) => {
+      const res = await edgeCall({ action: 'set_password', user_id: userId, password, must_change: mustChange === true })
       return res.ok ? { ok: true } : { ok: false, error: res.error }
+    },
+
+    accessLink: async (userId) => {
+      const res = await edgeCall({ action: 'access_link', user_id: userId, redirect_to: appUrl() })
+      if (!res.ok) return { ok: false, error: res.error }
+      await get().loadAudit(userId)
+      return { ok: true, link: res.data?.link as string | undefined }
     },
 
     sendResetEmail: async (email) => {
@@ -215,10 +227,10 @@ export const useUserCenterStore = create<UcState>()((set, get) => {
     },
 
     createUser: async (args) => {
-      const res = await edgeCall({ action: 'create_user', ...args })
+      const res = await edgeCall({ action: 'create_user', ...args, redirect_to: appUrl() })
       if (!res.ok) return { ok: false, error: res.error }
       await get().load()
-      return { ok: true, id: res.data?.id as string | undefined }
+      return { ok: true, id: res.data?.id as string | undefined, link: (res.data?.link as string | null) ?? undefined }
     },
 
     setMemberships: async (userId, product, projectIds, role) => {

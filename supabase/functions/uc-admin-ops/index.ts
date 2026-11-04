@@ -17,6 +17,14 @@ Deno.serve((req: Request) => {
     createUser: (args) => admin.auth.admin.createUser(args) as never,
     inviteUserByEmail: (email, data) => admin.auth.admin.inviteUserByEmail(email, { data }) as never,
     updateUserById: (id, attrs) => admin.auth.admin.updateUserById(id, attrs) as never,
+    generateLink: ({ type, email, data, redirectTo }) =>
+      (type === 'invite'
+        ? admin.auth.admin.generateLink({ type: 'invite', email, options: { data, redirectTo } })
+        : admin.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo } })) as never,
+    emailOf: async (id) => {
+      const { data } = await admin.auth.admin.getUserById(id)
+      return data?.user?.email ?? null
+    },
     updateProfile: async (id, patch) => {
       const { error } = await admin.from('profiles').update(patch).eq('id', id)
       return { error }
