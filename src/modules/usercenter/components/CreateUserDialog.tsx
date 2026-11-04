@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { ArrowLeft, Check, Copy, KeyRound, Link2, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Check, Copy, KeyRound, LayoutGrid, Link2, ShieldCheck } from 'lucide-react'
+import { useAccessStore } from '../../masterdata/store/useAccessStore'
+import type { ModuleKeyRef } from '../../masterdata/rbacTypes'
 import { Modal } from '../../../components/common/Modal'
 import { appUrl, useUserCenterStore } from '../store/useUserCenterStore'
 import { USER_TYPES, USER_TYPE_LABEL, type UserType } from '../types'
@@ -56,7 +58,11 @@ export function AccessShare({ name, email, password, link, mustChange }: { name:
 export function CreateUserDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const createUser = useUserCenterStore((s) => s.createUser)
   const users = useUserCenterStore((s) => s.users)
-  const { organizations } = useAccessData()
+  const { organizations, modules } = useAccessData()
+  // a new account starts with every module closed; these are opened right after it is made
+  const choosable = modules.filter((m) => m.isActive && m.key !== 'admin')
+  const [mods, setMods] = useState<Set<ModuleKeyRef>>(new Set())
+  const toggleMod = (k: ModuleKeyRef) => setMods((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n })
   const notify = useToast()
   const [f, setF] = useState({ full_name: '', email: '', phone: '', position_title: '', organization: '', user_type: 'other' as UserType, is_admin: false })
   const [mode, setMode] = useState<'password' | 'link'>('password')
@@ -83,6 +89,9 @@ export function CreateUserDialog({ onClose, onCreated }: { onClose: () => void; 
     const res = await createUser({ ...f, email, mode, must_change: mustChange, password: mode === 'password' ? password : undefined })
     setBusy(false)
     if (!res.ok) { notify(res.error ?? 'ساخت حساب انجام نشد', 'bad'); return }
+    if (res.id && !f.is_admin) for (const k of mods) await useAccessStore.getState().setUserModuleAccess(res.id, k, true)
+    // the database closed every module for the new account; read that back so its profile shows the real state
+    await useAccessStore.getState().fetchAll()
     if (mode === 'link' && !res.link) { notify('حساب ساخته شد ولی لینک دعوت برنگشت؛ از پروفایل کاربر لینک ورود بسازید', 'bad'); onCreated(res.id ?? ''); return }
     notify('حساب ساخته شد')
     setDone({ id: res.id ?? '', password: mode === 'password' ? password : undefined, link: res.link })
@@ -95,7 +104,7 @@ export function CreateUserDialog({ onClose, onCreated }: { onClose: () => void; 
           <div className="uc-rise">
             <div className="mb-3 flex items-start gap-3 rounded-xl p-3.5" style={{ background: 'color-mix(in srgb, var(--uc-ok) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--uc-ok) 30%, transparent)' }}>
               <Check size={18} style={{ color: 'var(--uc-ok)', marginTop: 3 }} />
-              <p className="text-[13px] leading-7">حساب <b>{f.full_name.trim()}</b> فعال است{done.link ? ' و پس از باز کردن لینک دعوت قابل استفاده می‌شود' : mustChange ? '؛ کاربر در اولین ورود رمز تازه‌ای انتخاب می‌کند' : ''}.</p>
+              <p className="text-[13px] leading-7">حساب <b>{f.full_name.trim()}</b>{!f.is_admin ? ` با ${mods.size ? `${mods.size.toLocaleString('fa-IR')} ماژول باز` : 'همهٔ ماژول‌ها بسته'}` : ''} فعال است{done.link ? ' و پس از باز کردن لینک دعوت قابل استفاده می‌شود' : mustChange ? '؛ کاربر در اولین ورود رمز تازه‌ای انتخاب می‌کند' : ''}.</p>
             </div>
             <AccessShare name={f.full_name.trim()} email={email} password={done.password} link={done.link} mustChange={mustChange} />
             <div className="mt-5 flex justify-end">
@@ -153,6 +162,19 @@ export function CreateUserDialog({ onClose, onCreated }: { onClose: () => void; 
                 <p className="uc-hint">یک لینک یک‌بارمصرف ساخته می‌شود که خودتان (با پیامک، پیام‌رسان یا ایمیل) برای کاربر می‌فرستید؛ کاربر با باز کردن آن وارد می‌شود و رمز عبورش را خودش تعیین می‌کند. شما هیچ رمزی را نمی‌بینید.</p>
               )}
             </div>
+
+            {!f.is_admin && (
+              <div className="uc-card-flat mt-3 p-3.5">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="inline-flex items-center gap-1.5 text-[12.5px] font-bold"><LayoutGrid size={14} /> ماژول‌های کاربر</p>
+                  <span className="uc-eyebrow">{mods.size ? `${mods.size.toLocaleString('fa-IR')} ماژول باز می‌شود` : 'همه بسته'}</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {choosable.map((m) => <button key={m.key} type="button" className="uc-chip" aria-pressed={mods.has(m.key)} onClick={() => toggleMod(m.key)} style={mods.has(m.key) ? { background: 'var(--uc-accent)', borderColor: 'var(--uc-accent)', color: '#fff', cursor: 'pointer' } : { cursor: 'pointer' }}>{mods.has(m.key) && <Check size={12} />}{m.labelFa}</button>)}
+                </div>
+                <p className="uc-hint">حساب تازه با همهٔ ماژول‌ها بسته شروع می‌شود؛ فقط ماژول‌هایی را که این فرد لازم دارد باز کنید. بعداً هم از تب «ماژول‌ها» قابل تغییر است.</p>
+              </div>
+            )}
 
             <div className="mt-3 flex items-center justify-between gap-3 rounded-xl px-3.5 py-3" style={{ border: '1px solid var(--uc-line)' }}>
               <div className="flex min-w-0 items-start gap-2.5">

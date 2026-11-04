@@ -19,6 +19,11 @@ export type ModuleKeyRef =
   | 'stagegate'
   | 'taskissue'
   | 'supervision'
+  | 'statements'
+  | 'pssr'
+  | 'testing'
+  | 'stationpiping'
+  | 'stakeholders'
   | 'admin'
 
 export interface RastaModule {
