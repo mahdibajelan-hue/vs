@@ -10,6 +10,7 @@ import { ensureEpcStores, epcProgressOf, epcWindowOf } from './epcProgressLoader
 import { weightsFromReport, type EpcProgress } from './epcProgress'
 import { combineForecasts, epcCurves, esForecast, forecastFromPoints, type Curves, type DiscKey, type Forecast } from './epcCurves'
 import { todayTehran } from '../../lib/today'
+import { onSpEpcChange, spEpcVersion } from '../stationpiping/spEpc'
 
 export interface EpcLive {
   today: string
@@ -25,6 +26,8 @@ export function useEpcLive(projectId: string | null): EpcLive | null | 'loading'
   const [out, setOut] = useState<EpcLive | null | 'loading'>('loading')
   // recompute when any module's data changes
   const v1 = useEpcStore((s) => s.engDocs), v2 = useExecutionStore((s) => s.lines), v3 = useMaterialControlStore((s) => s.stages), v4 = useMaterialStore((s) => s.poLines), v5 = useExecutionStore((s) => s.settingsByProject)
+  const [v6, setV6] = useState(spEpcVersion())
+  useEffect(() => onSpEpcChange(() => setV6(spEpcVersion())), [])
   useEffect(() => {
     if (!projectId) { setOut(null); return }
     let live = true
@@ -60,6 +63,6 @@ export function useEpcLive(projectId: string | null): EpcLive | null | 'loading'
       setOut({ today, now, window, curves, forecasts })
     })()
     return () => { live = false }
-  }, [projectId, v1, v2, v3, v4, v5])
+  }, [projectId, v1, v2, v3, v4, v5, v6])
   return out
 }

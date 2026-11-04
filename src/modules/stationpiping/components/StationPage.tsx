@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties } from 'react'
-import { ArrowRight, CheckCircle2, ExternalLink, FileUp, Flame, Layers, ListChecks, Map as MapIcon, Pencil, Plus, Save, Trash2, Upload, XCircle } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Paintbrush, ShieldCheck, Sparkles, ExternalLink, FileUp, Flame, Layers, ListChecks, Map as MapIcon, Pencil, Plus, Save, Trash2, Upload, XCircle } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { ShamsiDate } from '../../../components/common/ShamsiField'
 import { SCurveChart } from '../../../components/charts/SCurveChart'
@@ -8,7 +8,7 @@ import { useRemembered } from '../../../lib/navMemory'
 import { tableFromSheet } from '../../landacq/lib/routeImport'
 import { useSpStore } from '../store/useSpStore'
 import {
-  AUTO_DISC, DEFAULT_WEIGHTS, DISC_COLOR, DISC_FA, DISCIPLINES, JOINT_FA, KIND_FA, NDT_FA, diOf, progressCurve, scopeTemplate, stationProgress, weldFromSheet,
+  AUTO_DISC, COAT_TYPES, DEFAULT_WEIGHTS, JOINT_DISC, DISC_COLOR, DISC_FA, DISCIPLINES, JOINT_FA, KIND_FA, NDT_FA, diOf, progressCurve, scopeTemplate, stationProgress, weldFromSheet,
   type Discipline, type Item, type JointType, type NdtResult, type StationKind, type Weld,
 } from '../lib/spCore'
 import { DRAWING_KIND_FA, DRAWING_STATUS_FA, drawingUrl, type DrawingKind, type DrawingStatus, type StationRec } from '../repo'
@@ -62,7 +62,7 @@ function Overview({ station, p }: { station: StationRec; p: ReturnType<typeof st
             <div key={d.discipline} className={`spx-disc-row${d.hasScope ? '' : ' is-none'}`} style={{ '--c': DISC_COLOR[d.discipline] } as CSSProperties}>
               <span className="spx-disc-name"><i />{DISC_FA[d.discipline]}<small>وزن {fa(d.weight)}</small></span>
               {d.hasScope ? <><Bar actual={d.actual} planned={d.planned} color={DISC_COLOR[d.discipline]} /><b>{pct(d.actual)}</b>
-                <small className="spx-disc-basis">{AUTO_DISC.includes(d.discipline) ? `${fa(d.basis.done, 1)} از ${fa(d.basis.total, 1)} ${d.basis.unit}` : `برنامه ${pct(d.planned)}`}</small></>
+                <small className="spx-disc-basis">{AUTO_DISC.includes(d.discipline) || (JOINT_DISC.includes(d.discipline) && d.basis.unit !== 'وزن') ? (d.basis.total === 100 ? `${d.basis.unit.replace(/^٪ /, '')} · برنامه ${pct(d.planned)}` : `${fa(d.basis.done, 1)} از ${fa(d.basis.total, 1)} ${d.basis.unit}`) : `برنامه ${pct(d.planned)}`}</small></>
                 : <small className="spx-disc-basis">بدون محدودهٔ کار</small>}
             </div>
           ))}
@@ -95,7 +95,7 @@ function Scope({ station, items }: { station: StationRec; items: Item[] }) {
   const save = () => st.saveItems(rows.filter((r) => r.title.trim()).map((r, i) => ({ id: r.id, stationId: station.id, discipline: r.discipline, code: r.code ?? '', title: r.title, unit: r.unit ?? '', qty: Number(r.qty) || 0, weight: Number(r.weight) || 0, plannedStart: r.plannedStart ?? null, plannedFinish: r.plannedFinish ?? null, sort: i })))
   return (
     <section className="ps-card">
-      <header className="ps-card-head"><b><ListChecks size={15} /> محدودهٔ کار ایستگاه</b><small className="ps-meta">مقدار کل و وزن هر آیتم؛ پیشرفت از کارکرد روزانه حساب می‌شود. جوشکاری و NDT از ثبت جوش‌ها می‌آیند.</small></header>
+      <header className="ps-card-head"><b><ListChecks size={15} /> محدودهٔ کار ایستگاه</b><small className="ps-meta">مقدار کل و وزن هر آیتم؛ پیشرفت از کارکرد روزانه حساب می‌شود. جوشکاری و رادیوگرافی از ثبت جوش‌ها می‌آیند؛ زنگ‌زدایی و عایق‌کاری سرجوش‌ها هم از ثبت جوش‌ها و سطح لوله‌ها از همین آیتم‌ها.</small></header>
       <div className="ps-table-wrap"><table className="ps-table spx-scope">
         <thead><tr><th>رشته</th><th>کد</th><th>شرح</th><th>واحد</th><th>مقدار کل</th><th>وزن</th><th>شروع</th><th>پایان</th><th>انجام‌شده</th><th /></tr></thead>
         <tbody>{rows.map((r) => { const d = r.id ? done.get(r.id) ?? 0 : 0; return <tr key={r.key}>
@@ -121,7 +121,10 @@ function Scope({ station, items }: { station: StationRec; items: Item[] }) {
 }
 
 // ── piping lines and the weld register ──────────────────────────────────────
-type Filter = 'all' | 'todo' | 'ndt' | 'rejected'
+type Filter = 'all' | 'todo' | 'ndt' | 'rejected' | 'blast' | 'coat'
+/** welds waiting for each stage of the chain: weld → radiography → blasting → field-joint coating (buried joints) */
+const inFilter = (w: Weld, k: Filter) => k === 'all' || (k === 'todo' ? !w.weldDate : k === 'ndt' ? !!w.weldDate && w.ndtResult === 'pending' : k === 'rejected' ? w.ndtResult === 'rejected'
+  : k === 'blast' ? !!w.weldDate && (w.ndtResult === 'accepted' || w.ndtResult === 'na') && !w.blastDate : w.buried && !!w.blastDate && !w.coatDate)
 function Welds({ station }: { station: StationRec }) {
   const st = useSpStore()
   const email = useAuthStore((s) => s.profile?.email ?? '')
@@ -130,9 +133,9 @@ function Welds({ station }: { station: StationRec }) {
   const [filter, setFilter] = useState<Filter>('all')
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [edit, setEdit] = useState<(Partial<Weld> & { weldNo: string }) | null>(null)
-  const [bulk, setBulk] = useState({ date: todayTehran(), welder: '' })
+  const [bulk, setBulk] = useState({ date: todayTehran(), welder: '', coatType: COAT_TYPES[0] })
   const [ln, setLn] = useState({ lineNo: '', isoNo: '', size: '', material: '', service: '', length: '', testPack: '' })
-  const shown = welds.filter((w) => filter === 'all' || (filter === 'todo' ? !w.weldDate : filter === 'ndt' ? !!w.weldDate && w.ndtResult === 'pending' : w.ndtResult === 'rejected'))
+  const shown = welds.filter((w) => inFilter(w, filter))
   const ids = [...sel].filter((id) => shown.some((w) => w.id === id))
   const importSheet = async (file: File) => {
     const t = await tableFromSheet(file); const [h, ...body] = t as unknown[][]
@@ -163,8 +166,8 @@ function Welds({ station }: { station: StationRec }) {
       <section className="ps-card">
         <header className="ps-card-head"><b><Flame size={15} /> ثبت جوش‌ها (Weld Log)</b><small className="ps-meta">{fa(welds.filter((w) => w.weldDate).length)} از {fa(welds.length)} جوش · {fa(welds.reduce((s, w) => s + (w.weldDate ? diOf(w) : 0), 0), 1)} از {fa(welds.reduce((s, w) => s + diOf(w), 0), 1)} اینچ‌قطر</small></header>
         <div className="spx-toolbar">
-          <div className="spx-seg" role="tablist">{([['all', 'همه'], ['todo', 'زده‌نشده'], ['ndt', 'در انتظار NDT'], ['rejected', 'مردود']] as const).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={filter === k} onClick={() => setFilter(k)}>{l} <i>{fa(welds.filter((w) => k === 'all' || (k === 'todo' ? !w.weldDate : k === 'ndt' ? !!w.weldDate && w.ndtResult === 'pending' : w.ndtResult === 'rejected')).length)}</i></button>)}</div>
-          <button type="button" className="ps-btn" onClick={() => setEdit({ weldNo: '', stationId: station.id, sizeIn: lines[0]?.sizeIn ?? 0, jointType: 'BW', ndtMethod: 'RT', ndtResult: 'pending', shopField: 'field' })}><Plus size={14} /> جوش جدید</button>
+          <div className="spx-seg" role="tablist">{([['all', 'همه'], ['todo', 'زده‌نشده'], ['ndt', 'در انتظار رادیوگرافی'], ['rejected', 'مردود'], ['blast', 'در انتظار زنگ‌زدایی'], ['coat', 'در انتظار عایق']] as const).map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={filter === k} onClick={() => setFilter(k)}>{l} <i>{fa(welds.filter((w) => inFilter(w, k)).length)}</i></button>)}</div>
+          <button type="button" className="ps-btn" onClick={() => setEdit({ weldNo: '', stationId: station.id, sizeIn: lines[0]?.sizeIn ?? 0, jointType: 'BW', ndtMethod: 'RT', ndtResult: 'pending', shopField: 'field', buried: true })}><Plus size={14} /> جوش جدید</button>
           <label className="ps-btn"><Upload size={14} /> ورود از اکسل<input type="file" accept=".xlsx,.xls,.csv" hidden onChange={(e) => { const fl = e.target.files?.[0]; e.target.value = ''; if (fl) void importSheet(fl) }} /></label>
         </div>
         {ids.length > 0 && (
@@ -175,16 +178,22 @@ function Welds({ station }: { station: StationRec }) {
             <button type="button" className="ps-btn is-primary" onClick={async () => { if (await st.patchWelds(ids, { weld_date: bulk.date, ...(bulk.welder ? { welder: bulk.welder } : {}) }, 'جوشکاری ثبت شد')) setSel(new Set()) }}><Flame size={13} /> ثبت جوشکاری</button>
             <button type="button" className="ps-btn" onClick={async () => { if (await st.patchWelds(ids, { ndt_date: bulk.date, ndt_result: 'accepted' }, 'NDT قبول ثبت شد')) setSel(new Set()) }}><CheckCircle2 size={13} /> NDT قبول</button>
             <button type="button" className="ps-btn" onClick={async () => { const ws = welds.filter((w) => ids.includes(w.id)); for (const w of ws) await st.patchWelds([w.id], { ndt_date: bulk.date, ndt_result: 'rejected', repairs: w.repairs + 1 }, 'NDT مردود ثبت شد'); setSel(new Set()) }}><XCircle size={13} /> NDT مردود</button>
+            <button type="button" className="ps-btn" onClick={async () => { if (await st.patchWelds(ids, { blast_date: bulk.date }, 'زنگ‌زدایی سرجوش ثبت شد')) setSel(new Set()) }}><Sparkles size={13} /> زنگ‌زدایی</button>
+            <select value={bulk.coatType} onChange={(e) => setBulk({ ...bulk, coatType: e.target.value })} aria-label="نوع عایق سرجوش">{COAT_TYPES.map((c) => <option key={c}>{c}</option>)}</select>
+            <button type="button" className="ps-btn" onClick={async () => { const buried = welds.filter((w) => ids.includes(w.id) && w.buried).map((w) => w.id); if (!buried.length) { useSpStore.setState({ error: 'جوش‌های انتخاب‌شده روزمینی‌اند؛ سرجوش روزمینی با رنگ‌آمیزی پوشش داده می‌شود.' }); return } if (await st.patchWelds(buried, { coat_date: bulk.date, coat_type: bulk.coatType }, 'عایق‌کاری سرجوش ثبت شد')) setSel(new Set()) }}><ShieldCheck size={13} /> عایق سرجوش</button>
+            <button type="button" className="ps-btn is-ghost" onClick={async () => { if (await st.patchWelds(ids, { buried: false }, 'جوش‌ها روزمینی شدند')) setSel(new Set()) }}><Paintbrush size={13} /> روزمینی</button>
+            <button type="button" className="ps-btn is-ghost" onClick={async () => { if (await st.patchWelds(ids, { buried: true }, 'جوش‌ها مدفون شدند')) setSel(new Set()) }}>مدفون</button>
           </div>
         )}
-        {shown.length === 0 ? <p className="ps-hint">{welds.length ? 'جوشی در این دسته نیست.' : 'هنوز جوشی ثبت نشده است. جوش‌ها را تک‌به‌تک یا از فایل اکسل (ستون‌ها: Weld No، Size، Type، Welder، Weld Date، NDT، NDT Date، NDT Result) وارد کنید.'}</p> : (
+        {shown.length === 0 ? <p className="ps-hint">{welds.length ? 'جوشی در این دسته نیست.' : 'هنوز جوشی ثبت نشده است. جوش‌ها را تک‌به‌تک یا از فایل اکسل (ستون‌ها: Weld No، Size، Type، Welder، Weld Date، NDT، NDT Date، NDT Result، Blast Date، Coat Date، Location) وارد کنید.'}</p> : (
           <div className="ps-table-wrap"><table className="ps-table spx-welds">
-            <thead><tr><th><input type="checkbox" aria-label="انتخاب همه" checked={ids.length === shown.length} onChange={(e) => setSel(e.target.checked ? new Set(shown.map((w) => w.id)) : new Set())} /></th><th>شمارهٔ جوش</th><th>خط</th><th>قطر</th><th>نوع</th><th>جوشکار</th><th>تاریخ جوش</th><th>NDT</th><th>نتیجه</th><th>تعمیر</th><th>روی نقشه</th><th /></tr></thead>
+            <thead><tr><th><input type="checkbox" aria-label="انتخاب همه" checked={ids.length === shown.length} onChange={(e) => setSel(e.target.checked ? new Set(shown.map((w) => w.id)) : new Set())} /></th><th>شمارهٔ جوش</th><th>خط</th><th>قطر</th><th>نوع</th><th>جوشکار</th><th>تاریخ جوش</th><th>رادیوگرافی / NDT</th><th>نتیجه</th><th>تعمیر</th><th>زنگ‌زدایی</th><th>عایق سرجوش</th><th>روی نقشه</th><th /></tr></thead>
             <tbody>{shown.map((w) => <tr key={w.id} className={w.ndtResult === 'rejected' ? 'is-bad' : ''}>
               <td><input type="checkbox" checked={sel.has(w.id)} onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(w.id); else n.delete(w.id); setSel(n) }} aria-label={`انتخاب ${w.weldNo}`} /></td>
               <td dir="ltr"><b>{w.weldNo}</b></td><td dir="ltr">{lines.find((l) => l.id === w.lineId)?.lineNo ?? '—'}</td><td>{fa(w.sizeIn, 2)}″</td><td>{w.jointType}{w.shopField === 'shop' ? ' · کارگاهی' : ''}</td>
               <td dir="ltr">{w.welder || '—'}</td><td>{jd(w.weldDate)}</td><td>{w.ndtMethod || '—'}{w.ndtDate ? <small className="ps-meta"> {jd(w.ndtDate)}</small> : null}</td>
-              <td><span className={`spx-ndt is-${w.ndtResult}`}>{NDT_FA[w.ndtResult]}</span></td><td>{w.repairs ? fa(w.repairs) : '—'}</td><td>{w.x != null ? '✓' : '—'}</td>
+              <td><span className={`spx-ndt is-${w.ndtResult}`}>{NDT_FA[w.ndtResult]}</span></td><td>{w.repairs ? fa(w.repairs) : '—'}</td><td>{jd(w.blastDate)}</td>
+              <td>{w.buried ? (w.coatDate ? <>{jd(w.coatDate)}{w.coatType && <small className="ps-meta"> {w.coatType.split(' (')[0]}</small>}</> : '—') : <span className="spx-chip">روزمینی</span>}</td><td>{w.x != null ? '✓' : '—'}</td>
               <td className="ps-nowrap"><button type="button" className="ps-btn is-ghost" aria-label="ویرایش" onClick={() => setEdit(w)}><Pencil size={13} /></button>
                 <button type="button" className="ps-btn is-ghost" aria-label="حذف" onClick={() => { if (window.confirm(`جوش ${w.weldNo} حذف شود؟`)) void st.archiveWeld(w.id) }}><Trash2 size={13} /></button></td>
             </tr>)}</tbody>
@@ -203,7 +212,7 @@ export function WeldForm({ station, w, onClose }: { station: StationRec; w: Part
   const set = (p: Partial<Weld>) => setF({ ...f, ...p })
   const N = (k: keyof Weld, label: string, step = 0.01) => <label className="ps-field"><span>{label}</span><input type="number" step={step} dir="ltr" value={f[k] == null ? '' : String(f[k])} onChange={(e) => set({ [k]: e.target.value === '' ? null : Number(e.target.value) } as Partial<Weld>)} /></label>
   const T = (k: keyof Weld, label: string) => <label className="ps-field"><span>{label}</span><input dir="ltr" value={String(f[k] ?? '')} onChange={(e) => set({ [k]: e.target.value } as Partial<Weld>)} /></label>
-  const D = (k: 'fitupDate' | 'weldDate' | 'ndtDate', label: string) => <div className="ps-field"><span>{label}</span><ShamsiDate value={f[k] ?? ''} onChange={(v) => set({ [k]: v || null })} label={label} clearable max={todayTehran()} /></div>
+  const D = (k: 'fitupDate' | 'weldDate' | 'ndtDate' | 'blastDate' | 'coatDate', label: string) => <div className="ps-field"><span>{label}</span><ShamsiDate value={f[k] ?? ''} onChange={(v) => set({ [k]: v || null })} label={label} clearable max={todayTehran()} /></div>
   return (
     <section className="ps-card spx-weld-form">
       <header className="ps-card-head"><b><Flame size={15} /> {w.id ? `ویرایش جوش ${w.weldNo}` : 'جوش جدید'}</b></header>
@@ -219,6 +228,10 @@ export function WeldForm({ station, w, onClose }: { station: StationRec; w: Part
         {D('ndtDate', 'تاریخ NDT')}
         <label className="ps-field"><span>نتیجهٔ NDT</span><select value={f.ndtResult ?? 'pending'} onChange={(e) => set({ ndtResult: e.target.value as NdtResult })}>{(Object.keys(NDT_FA) as NdtResult[]).map((k) => <option key={k} value={k}>{NDT_FA[k]}</option>)}</select></label>
         {N('repairs', 'تعداد تعمیر', 1)}
+        <label className="ps-field"><span>موقعیت سرجوش</span><select value={f.buried === false ? 'above' : 'buried'} onChange={(e) => set({ buried: e.target.value === 'buried' })}><option value="buried">مدفون — عایق سرجوش</option><option value="above">روزمینی — رنگ‌آمیزی</option></select></label>
+        {D('blastDate', 'تاریخ زنگ‌زدایی (سندبلاست)')}
+        {f.buried !== false && <>{D('coatDate', 'تاریخ عایق‌کاری سرجوش')}
+          <label className="ps-field"><span>نوع عایق</span><select value={f.coatType ?? ''} onChange={(e) => set({ coatType: e.target.value })}><option value="">—</option>{COAT_TYPES.map((c) => <option key={c}>{c}</option>)}</select></label></>}
         <label className="ps-field is-wide"><span>توضیح</span><input value={f.note ?? ''} onChange={(e) => set({ note: e.target.value })} /></label>
       </div>
       <div className="ps-actions">

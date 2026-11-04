@@ -1,13 +1,14 @@
 import { create } from 'zustand'
 import * as repo from '../repo'
-import type { Drawing, PipeLine, StationRec, TwinAsset } from '../repo'
+import { DEFAULT_SP_SETTINGS, type Drawing, type PipeLine, type SpSettings, type StationRec, type TwinAsset } from '../repo'
 import type { Item, Log, Weld } from '../lib/spCore'
 
 const msg = (e: unknown) => (e as { message?: string })?.message ?? 'خطای نامشخص'
 
 interface State {
   projectId: string | null; loading: boolean; error: string | null; flash: string | null
-  stations: StationRec[]; items: Item[]; logs: Log[]; drawings: Drawing[]; lines: PipeLine[]; welds: Weld[]
+  stations: StationRec[]; items: Item[]; logs: Log[]; drawings: Drawing[]; lines: PipeLine[]; welds: Weld[]; settings: SpSettings
+  saveSettings: (x: SpSettings, by: string) => Promise<boolean>
   load: (pid: string) => Promise<void>
   twinAssets: () => Promise<TwinAsset[]>
   saveStation: (x: Partial<StationRec> & { code: string }, by: string) => Promise<StationRec | null>
@@ -32,7 +33,8 @@ export const useSpStore = create<State>()((set, get) => {
   const run = async (f: () => Promise<void>, done?: string) => { try { await f(); if (done) set({ flash: done }); return true } catch (e) { set({ error: msg(e) }); return false } }
   const pid = () => get().projectId!
   return {
-    projectId: null, loading: false, error: null, flash: null, stations: [], items: [], logs: [], drawings: [], lines: [], welds: [],
+    projectId: null, loading: false, error: null, flash: null, stations: [], items: [], logs: [], drawings: [], lines: [], welds: [], settings: DEFAULT_SP_SETTINGS,
+    saveSettings: (x, by) => run(async () => { set({ settings: await repo.saveSettings(pid(), x, by) }) }, 'تنظیمات پیشرفت EPC ذخیره شد'),
     load: async (p) => {
       set({ loading: get().projectId !== p, projectId: p, error: null })
       try { set({ ...(await repo.loadAll(p)), loading: false }) }

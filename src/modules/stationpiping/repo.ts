@@ -25,6 +25,7 @@ const lineOf = (r: Row): PipeLine => ({ id: r.id, stationId: r.station_id, lineN
 export const weldOf = (r: Row): Weld => ({
   id: r.id, stationId: r.station_id, lineId: r.line_id ?? null, drawingId: r.drawing_id ?? null, weldNo: s(r.weld_no), sizeIn: Number(r.size_in) || 0, thkMm: n(r.thk_mm), jointType: r.joint_type as JointType, shopField: r.shop_field,
   material: s(r.material), wps: s(r.wps), welder: s(r.welder), fitupDate: r.fitup_date ?? null, weldDate: r.weld_date ?? null, ndtMethod: s(r.ndt_method), ndtDate: r.ndt_date ?? null, ndtResult: r.ndt_result as NdtResult, repairs: Number(r.repairs) || 0,
+  buried: r.buried !== false, blastDate: r.blast_date ?? null, coatDate: r.coat_date ?? null, coatType: s(r.coat_type),
   x: n(r.x), y: n(r.y), note: s(r.note),
 })
 
@@ -38,8 +39,47 @@ async function all(table: string, pid: string, order = 'created_at'): Promise<Ro
   }
 }
 export async function loadAll(pid: string) {
-  const [st, it, lg, dw, ln, wd] = await Promise.all([all('sp_stations', pid, 'km'), all('sp_items', pid, 'sort'), all('sp_logs', pid, 'at'), all('sp_drawings', pid), all('sp_lines', pid), all('sp_welds', pid, 'weld_no')])
-  return { stations: st.map(stationOf), items: it.map(itemOf), logs: lg.map(logOf), drawings: dw.map(drawingOf), lines: ln.map(lineOf), welds: wd.map(weldOf) }
+  const [st, it, lg, dw, ln, wd, cfg] = await Promise.all([all('sp_stations', pid, 'km'), all('sp_items', pid, 'sort'), all('sp_logs', pid, 'at'), all('sp_drawings', pid), all('sp_lines', pid), all('sp_welds', pid, 'weld_no'), loadSettings(pid)])
+  return { stations: st.map(stationOf), items: it.map(itemOf), logs: lg.map(logOf), drawings: dw.map(drawingOf), lines: ln.map(lineOf), welds: wd.map(weldOf), settings: cfg }
+}
+
+/** how the stations enter the project's EPC progress */
+export interface SpSettings { consShare: number; inEpc: boolean }
+export const DEFAULT_SP_SETTINGS: SpSettings = { consShare: 20, inEpc: true }
+const settingsOf = (r: Row | null | undefined): SpSettings => (r ? { consShare: Number(r.cons_share), inEpc: r.in_epc !== false } : DEFAULT_SP_SETTINGS)
+export async function loadSettings(pid: string): Promise<SpSettings> {
+  const r = await supabase.from('sp_settings').select('*').eq('master_project_id', pid).maybeSingle()
+  if (r.error) return DEFAULT_SP_SETTINGS // the table may not exist yet (migration 002)
+  return settingsOf(r.data as Row | null)
+}
+export async function saveSettings(pid: string, x: SpSettings, by: string): Promise<SpSettings> {
+  const r = await supabase.from('sp_settings').upsert({ master_project_id: pid, cons_share: x.consShare, in_epc: x.inEpc, updated_by: by, updated_at: now() }, { onConflict: 'master_project_id' }).select('*').single()
+  chk(r); return settingsOf(r.data as Row)
+}
+
+/** what the EPC progress needs of every project's stations (all the projects the user can read, in one pass) */
+export async function loadForEpc() {
+  const page = async (table: string, cols: string): Promise<Row[]> => {
+    const out: Row[] = []
+    for (let from = 0; ; from += 1000) {
+      const r = await supabase.from(table).select(cols).eq('archived', false).order('id').range(from, from + 999)
+      chk(r); out.push(...((r.data ?? []) as unknown as Row[]))
+      if ((r.data ?? []).length < 1000) return out
+    }
+  }
+  const [st, it, lg, wd, cfg] = await Promise.all([
+    page('sp_stations', '*'), page('sp_items', '*'), page('sp_logs', 'id, master_project_id, station_id, item_id, at, qty'),
+    page('sp_welds', 'id, master_project_id, station_id, weld_no, size_in, joint_type, weld_date, ndt_method, ndt_date, ndt_result, repairs, buried, blast_date, coat_date'),
+    supabase.from('sp_settings').select('*').then((r) => (r.error ? [] : ((r.data ?? []) as Row[]))),
+  ])
+  const by = new Map<string, { stations: StationRec[]; items: Item[]; logs: Log[]; welds: Weld[]; settings: SpSettings }>()
+  const get = (pid: string) => { let v = by.get(pid); if (!v) by.set(pid, (v = { stations: [], items: [], logs: [], welds: [], settings: DEFAULT_SP_SETTINGS })); return v }
+  for (const r of st) get(r.master_project_id).stations.push(stationOf(r))
+  for (const r of it) get(r.master_project_id).items.push(itemOf(r))
+  for (const r of lg) get(r.master_project_id).logs.push({ ...logOf(r), note: '', by: '' })
+  for (const r of wd) get(r.master_project_id).welds.push(weldOf(r))
+  for (const r of cfg) get(r.master_project_id).settings = settingsOf(r)
+  return by
 }
 export async function twinAssets(pid: string): Promise<TwinAsset[]> {
   const r = await supabase.from('pdt_assets').select('id, tag, kind, name, km').eq('master_project_id', pid).in('kind', ['station', 'valve', 'launcher']).order('km')
@@ -73,6 +113,7 @@ export async function addLogs(pid: string, rows: { stationId: string; itemId: st
 const weldRow = (pid: string, x: Partial<Weld> & { stationId: string; weldNo: string }, by: string) => ({
   master_project_id: pid, station_id: x.stationId, line_id: x.lineId ?? null, drawing_id: x.drawingId ?? null, weld_no: x.weldNo.trim(), size_in: x.sizeIn ?? 0, thk_mm: x.thkMm ?? null, joint_type: x.jointType ?? 'BW', shop_field: x.shopField ?? 'field',
   material: x.material ?? '', wps: x.wps ?? '', welder: x.welder ?? '', fitup_date: x.fitupDate || null, weld_date: x.weldDate || null, ndt_method: x.ndtMethod ?? 'RT', ndt_date: x.ndtDate || null, ndt_result: x.ndtResult ?? 'pending', repairs: x.repairs ?? 0,
+  buried: x.buried ?? true, blast_date: x.blastDate || null, coat_date: x.coatDate || null, coat_type: x.coatType ?? '',
   x: x.x ?? null, y: x.y ?? null, note: x.note ?? '', by_user: by, updated_at: now(),
 })
 export async function saveWeld(pid: string, x: Partial<Weld> & { stationId: string; weldNo: string }, by: string) {

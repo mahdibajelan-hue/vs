@@ -114,3 +114,20 @@
 .spx-focus-actions { display: flex; flex-wrap: wrap; gap: .35rem; }
 .spx-map-edit { grid-column: 1 / -1; }
 @media (prefers-reduced-motion: reduce) { .spx-bar i, .spx-card, .spx-pin, .spx-flash { transition: none; animation: none; } }
+/* the stations' share of the EPC construction progress */
+.spx-epc-flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: .5rem; margin-bottom: .75rem; }
+.spx-epc-flow > div { flex: 1 1 8.5rem; display: grid; gap: .15rem; padding: .7rem .8rem; border-radius: 14px; border: 1px solid var(--border-soft); background: color-mix(in srgb, var(--bg-panel-solid) 92%, #6366f1); }
+.spx-epc-flow > div span { font-size: .75rem; color: var(--text-muted); font-weight: 700; }
+.spx-epc-flow > div b { font-size: 1.35rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+.spx-epc-flow > div small { font-size: .72rem; color: var(--text-muted); }
+.spx-epc-flow > div.is-st { border-color: color-mix(in srgb, #0891b2 45%, transparent); }
+.spx-epc-flow > div.is-c { border-color: color-mix(in srgb, #14b8a6 55%, transparent); background: color-mix(in srgb, var(--bg-panel-solid) 85%, #14b8a6); }
+.spx-epc-flow > div.is-t { border-color: color-mix(in srgb, #0ea5e9 55%, transparent); background: color-mix(in srgb, var(--bg-panel-solid) 85%, #0ea5e9); }
+.spx-epc-flow > i { align-self: center; font-style: normal; font-weight: 900; color: var(--text-muted); }
+@media (max-width: 640px) { .spx-epc-flow > i { display: none; } .spx-epc-flow > div { flex-basis: 40%; } }
+/* the day's joint operations: weld numbers as toggles */
+.spx-picks { display: flex; flex-wrap: wrap; gap: .35rem; margin: .65rem 0; }
+.spx-picks button { display: inline-flex; align-items: baseline; gap: .3rem; padding: .3rem .55rem; border-radius: 99px; border: 1px solid var(--border-soft); background: transparent; color: inherit; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; transition: transform 140ms cubic-bezier(.23,1,.32,1), background-color 140ms ease; }
+.spx-picks button small { font-size: .68rem; opacity: .7; }
+.spx-picks button:active { transform: scale(.97); }
+.spx-picks button[aria-pressed="true"] { background: #0891b2; border-color: #0891b2; color: #fff; }

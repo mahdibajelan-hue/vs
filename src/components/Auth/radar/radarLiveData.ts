@@ -22,6 +22,9 @@ import type { ImIssue } from '../../../modules/issues/types'
 import { loadScheduleSummary } from '../../../modules/scheduling/lib/summaryLoader'
 import { loadStageGateRadar } from './stageGateRadar'
 import { loadEpcProgress } from '../../../modules/epc/epcProgressLoader'
+import { spRadarOf } from '../../../modules/stationpiping/spEpc'
+import { DISC_FA } from '../../../modules/stationpiping/lib/spCore'
+import { todayTehran } from '../../../lib/today'
 import { loadPssrSummary } from '../../../modules/pssr/lib/pssrSummary'
 import { loadProjectMetrics } from '../../../modules/projectMetrics/projectMetricsLoader'
 import type { EpcProgress } from '../../../modules/epc/epcProgress'
@@ -397,6 +400,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   const pPssr = settle(loadPssrSummary(masterProjectId))
   const pContract = settle(fetchContractSummary(masterProjectId))
   const pSched = settle(loadScheduleSummary(masterProjectId))
+  const pSp = settle(spRadarOf(masterProjectId, todayTehran()))
   const pCr = settle(Promise.resolve(supabase.from('chg_change_requests').select('id, cr_number, title, status, priority, proposed_schedule_impact_days, proposed_change_amount').eq('master_project_id', masterProjectId).in('status', ['submitted', 'evaluating', 'awaiting_approval', 'returned'])))
 
   const { data: afterRiskIssue, criticalCounts } = await applyRiskIssueSection(base, masterProjectId)
@@ -571,6 +575,39 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
     result = { ...result, signals: [...result.signals.filter((x) => x.category !== 'change'), ...sig], kpi: { ...result.kpi, pendingChanges: open.length } }
   } catch (err) {
     console.warn('[radar] change requests failed', err)
+  }
+
+  // --- Stations (piping & welding module): stations behind their plan, the weld repair rate --------------------------
+  try {
+    const sp = await val(pSp)
+    if (sp) {
+      const nf = (v: number, d = 0) => new Intl.NumberFormat('fa-IR', { maximumFractionDigits: d }).format(v)
+      const late = sp.stations.filter((p) => p.planned != null && (p.planned as number) - p.actual >= 10).sort((a, b) => ((b.planned as number) - b.actual) - ((a.planned as number) - a.actual))
+      const sig: RadarSignal[] = late.slice(0, 6).map((p, i, arr) => {
+        const gap = (p.planned as number) - p.actual
+        const sev: SignalSeverity = gap >= 25 ? 'high' : 'medium', [rMin, rMax] = SEVERITY_RADIUS_RANGE[sev]
+        const worst = [...p.disciplines].filter((x) => x.hasScope && x.planned != null).sort((a, b) => ((b.planned as number) - b.actual) - ((a.planned as number) - a.actual))[0]
+        return {
+          id: `sp-late-${p.station.id}`, category: 'delay', severity: sev, title: `عقب‌ماندگی ایستگاه ${p.station.code}`, subject: `واقعی ${nf(p.actual, 1)}٪ در برابر برنامه ${nf(p.planned as number, 1)}٪`,
+          detail: worst ? `بیشترین فاصله در ${DISC_FA[worst.discipline]}: ${nf(worst.actual, 0)}٪ در برابر ${nf(worst.planned as number, 0)}٪` : '', impact: 'تأخیر در آماده‌سازی ایستگاه برای تست و راه‌اندازی',
+          rootCause: '—', recommendedAction: 'بررسی کارکرد روزانه در «ایستگاه‌ها (پایپینگ و جوشکاری)»',
+          titleEn: `Station ${p.station.code} behind plan`, subjectEn: '', detailEn: '', impactEn: '', rootCauseEn: '—', recommendedActionEn: '',
+          angle: Math.round(200 + (i / Math.max(1, arr.length)) * 50), radius: spreadRadius(rMin, rMax, i),
+        }
+      })
+      const rr = sp.welds.repairRate
+      if (rr != null && sp.welds.tested >= 10 && rr > 0.05) {
+        const sev: SignalSeverity = rr > 0.1 ? 'high' : 'medium', [rMin, rMax] = SEVERITY_RADIUS_RANGE[sev]
+        sig.push({
+          id: 'sp-repair', category: 'issue', severity: sev, title: 'نرخ تعمیر جوش ایستگاه‌ها', subject: `${nf(rr * 100, 1)}٪ از ${nf(sp.welds.tested)} جوش آزمایش‌شده`,
+          detail: 'بالاتر از حد معمول ۵٪', impact: 'دوباره‌کاری، مصرف بیشتر فیلم و تأخیر در تکمیل پایپینگ', rootCause: '—', recommendedAction: 'بررسی جوشکاران در تب «جوشکاران و NDT»',
+          titleEn: 'Station weld repair rate', subjectEn: '', detailEn: '', impactEn: '', rootCauseEn: '—', recommendedActionEn: '', angle: 250, radius: (rMin + rMax) / 2,
+        })
+      }
+      if (sig.length) result = { ...result, status: escalateStatus(result.status, sig), signals: [...result.signals.filter((x) => !x.id.startsWith('sp-')), ...sig] }
+    }
+  } catch (err) {
+    console.warn('[radar] stations failed', err)
   }
 
   // --- Contract claims open in the finance module --------------------------------------------------------

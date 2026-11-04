@@ -16,6 +16,9 @@ export interface EpcProgress {
   weightSource?: 'value' | 'report' | 'equal'
   /** each discipline's value in rial when the weights are value-based */
   values?: EpcWeights
+  /** construction's two sources when the project has stations: the line (execution module) and the stations (station
+   * piping module); stationShare = the stations' percent of C */
+  consParts?: { line: Discipline | null; stations: Discipline; stationShare: number }
   /** weighted over the disciplines that have data; null when none has */
   overall: { actual: number; planned: number | null } | null
 }

@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { CheckCircle2, Crosshair, Flame, MapPin, Minus, Plus, XCircle } from 'lucide-react'
+import { CheckCircle2, Crosshair, Flame, MapPin, Minus, Plus, ShieldCheck, Sparkles, XCircle } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { todayTehran } from '../../../lib/today'
 import { useSpStore } from '../store/useSpStore'
-import { NDT_FA, type Weld } from '../lib/spCore'
+import { COAT_TYPES, NDT_FA, type Weld } from '../lib/spCore'
 import { drawingUrl, type StationRec } from '../repo'
 import { fa, jd } from '../StationPipingApp'
 import { WeldForm } from './StationPage'
 
 /** the marker's label: the weld number's trailing digits («MLV-01-W016» → «16»), the full number is in its tooltip */
 const shortNo = (no: string) => { const m = /(\d+)\D*$/.exec(no); return m ? String(Number(m[1])) : no.slice(-4) }
-/** a weld's state on the map: not welded / welded (NDT pending) / accepted / rejected */
-const STATE = (w: Weld) => (!w.weldDate ? 'todo' : w.ndtResult === 'accepted' || w.ndtResult === 'na' ? 'ok' : w.ndtResult === 'rejected' ? 'bad' : 'ndt')
-const STATE_UI = { todo: { label: 'زده‌نشده', color: '#94a3b8' }, ndt: { label: 'زده‌شده — در انتظار NDT', color: '#3b82f6' }, ok: { label: 'قبول', color: '#22c55e' }, bad: { label: 'مردود / تعمیر', color: '#ef4444' } } as const
+/** a weld's state on the map: not welded / welded (radiography pending) / accepted (blasting or coating to do) / rejected /
+ * finished (blasted, and coated when buried; an above-ground joint is finished with the painting) */
+const STATE = (w: Weld) => (!w.weldDate ? 'todo' : w.ndtResult === 'rejected' ? 'bad' : w.ndtResult === 'pending' ? 'ndt' : w.blastDate && (!w.buried || w.coatDate) ? 'fin' : 'ok')
+const STATE_UI = {
+  todo: { label: 'زده‌نشده', color: '#94a3b8' }, ndt: { label: 'در انتظار رادیوگرافی', color: '#3b82f6' }, ok: { label: 'قبول — در انتظار زنگ‌زدایی / عایق', color: '#22c55e' },
+  bad: { label: 'مردود / تعمیر', color: '#ef4444' }, fin: { label: 'تکمیل (زنگ‌زدایی و عایق)', color: '#0e7490' },
+} as const
 
 /**
  * The weld map: a station drawing (image) with every weld marked where it is. Pick a weld from the list and click on the
@@ -35,7 +39,7 @@ export function WeldMap({ station }: { station: StationRec }) {
   const welds = st.welds.filter((w) => w.stationId === station.id)
   const onMap = welds.filter((w) => w.drawingId === drawing?.id && w.x != null && w.y != null)
   const unplaced = welds.filter((w) => !(w.drawingId === drawing?.id && w.x != null)).filter((w) => !q || w.weldNo.toLowerCase().includes(q.toLowerCase()))
-  const counts = useMemo(() => { const c = { todo: 0, ndt: 0, ok: 0, bad: 0 }; for (const w of onMap) c[STATE(w)]++; return c }, [onMap])
+  const counts = useMemo(() => { const c = { todo: 0, ndt: 0, ok: 0, bad: 0, fin: 0 }; for (const w of onMap) c[STATE(w)]++; return c }, [onMap])
   const focused = welds.find((w) => w.id === focus) ?? null
 
   if (!images.length) return (
@@ -79,11 +83,16 @@ export function WeldMap({ station }: { station: StationRec }) {
               <div><dt>تاریخ جوش</dt><dd>{jd(focused.weldDate)}</dd></div>
               <div><dt>NDT</dt><dd>{focused.ndtMethod} · {NDT_FA[focused.ndtResult]}{focused.ndtDate ? ` · ${jd(focused.ndtDate)}` : ''}</dd></div>
               {focused.repairs > 0 && <div><dt>تعمیر</dt><dd>{fa(focused.repairs)} بار</dd></div>}
+              <div><dt>موقعیت</dt><dd>{focused.buried ? 'مدفون' : 'روزمینی'}</dd></div>
+              <div><dt>زنگ‌زدایی</dt><dd>{jd(focused.blastDate)}</dd></div>
+              {focused.buried && <div><dt>عایق سرجوش</dt><dd>{jd(focused.coatDate)}{focused.coatType ? ` · ${focused.coatType.split(' (')[0]}` : ''}</dd></div>}
             </dl>
             <div className="spx-focus-actions">
               {!focused.weldDate && <button type="button" className="ps-btn is-primary" onClick={() => st.patchWelds([focused.id], { weld_date: todayTehran() }, 'جوشکاری امروز ثبت شد')}><Flame size={13} /> جوشکاری امروز</button>}
               {focused.weldDate && focused.ndtResult !== 'accepted' && <button type="button" className="ps-btn" onClick={() => st.patchWelds([focused.id], { ndt_date: todayTehran(), ndt_result: 'accepted' }, 'NDT قبول ثبت شد')}><CheckCircle2 size={13} /> NDT قبول</button>}
               {focused.weldDate && focused.ndtResult !== 'rejected' && <button type="button" className="ps-btn" onClick={() => st.patchWelds([focused.id], { ndt_date: todayTehran(), ndt_result: 'rejected', repairs: focused.repairs + 1 }, 'NDT مردود ثبت شد')}><XCircle size={13} /> NDT مردود</button>}
+              {focused.weldDate && focused.ndtResult !== 'pending' && focused.ndtResult !== 'rejected' && !focused.blastDate && <button type="button" className="ps-btn" onClick={() => st.patchWelds([focused.id], { blast_date: todayTehran() }, 'زنگ‌زدایی سرجوش ثبت شد')}><Sparkles size={13} /> زنگ‌زدایی امروز</button>}
+              {focused.buried && focused.blastDate && !focused.coatDate && <button type="button" className="ps-btn" onClick={() => st.patchWelds([focused.id], { coat_date: todayTehran(), coat_type: focused.coatType || COAT_TYPES[0] }, 'عایق‌کاری سرجوش ثبت شد')}><ShieldCheck size={13} /> عایق سرجوش امروز</button>}
               <button type="button" className="ps-btn is-ghost" onClick={() => setEdit(focused)}>ویرایش کامل</button>
               <button type="button" className="ps-btn is-ghost" onClick={() => setPlacing(focused.id)}><Crosshair size={13} /> جابه‌جایی</button>
               <button type="button" className="ps-btn is-ghost" onClick={() => setFocus(null)}>بستن</button>

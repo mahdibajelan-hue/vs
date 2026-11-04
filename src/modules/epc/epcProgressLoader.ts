@@ -7,13 +7,16 @@ import { engCore } from '../execution/lib/engCore'
 import { materialCore } from '../material/lib/control/materialCore'
 import { combineEpc, EQUAL_EPC_WEIGHTS, weightsFromReport, type EpcProgress, type EpcWeights } from './epcProgress'
 import { todayTehran } from '../../lib/today'
+import { ensureSpEpc, spConstructionOf, spDatesOf } from '../stationpiping/spEpc'
+import { blendConstruction } from '../stationpiping/lib/spCore'
 
 let loading: Promise<void> | null = null
 /** Loads the engineering / material / execution stores once (they hold every project the user may read). */
 export function ensureEpcStores(): Promise<void> {
   const ex = useExecutionStore.getState(), epc = useEpcStore.getState(), ms = useMaterialStore.getState(), cs = useMaterialControlStore.getState()
-  if (ex.coreLoaded && epc.loaded && ms.loaded && cs.loaded) return Promise.resolve()
+  if (ex.coreLoaded && epc.loaded && ms.loaded && cs.loaded) return ensureSpEpc()
   loading ??= Promise.all([
+    ensureSpEpc(),
     ex.coreLoaded ? null : ex.fetchAll({ lite: true }),
     epc.loaded ? null : epc.fetchAll(),
     ms.loaded ? null : ms.fetchAll(),
@@ -44,7 +47,7 @@ export function epcWeightsOf(projectId: string, fallback?: EpcWeights | null): {
   if (hit) return hit
   const today = todayTehran()
   const ex = useExecutionStore.getState(), epc = useEpcStore.getState(), ms = useMaterialStore.getState(), cs = useMaterialControlStore.getState()
-  const has = { e: epc.engDocs.some((d) => d.projectId === projectId), p: materialCore(ms, cs, projectId, today).items.length > 0, c: ex.activities.some((a) => a.projectId === projectId) }
+  const has = { e: epc.engDocs.some((d) => d.projectId === projectId), p: materialCore(ms, cs, projectId, today).items.length > 0, c: ex.activities.some((a) => a.projectId === projectId) || !!spConstructionOf(projectId, today) }
   const values = epcValuesOf(projectId, today)
   const ok = (has.e || has.p || has.c) && (!has.e || values.e > 0) && (!has.p || values.p > 0) && (!has.c || values.c > 0)
   const out = ok ? { w: values, source: 'value' as const, values }
@@ -63,11 +66,16 @@ export function epcProgressOf(projectId: string, fallback?: EpcWeights | null, t
   const exe = executionCore(ex, epc, projectId, today)
   const pct = (v: number) => Math.round(v * 1000) / 10
   const ws = epcWeightsOf(projectId, fallback)
+  // construction = the line (execution module) and the project's stations (station piping module, by their share of C)
+  const line = exe.activities.length > 0 ? { actual: pct(exe.approved.overall), planned: exe.planned.overall == null ? null : pct(exe.planned.overall) } : null
+  const st = spConstructionOf(projectId, today)
+  const cons = blendConstruction(line, st, st?.share ?? 0)
   return { ...combineEpc({
     eng: eng.progress.docs > 0 ? { actual: pct(eng.progress.actualScore), planned: pct(eng.progress.plannedScore) } : null,
     proc: mat.items.length > 0 ? { actual: pct(mat.progress.actual), planned: pct(mat.progress.planned) } : null,
-    cons: exe.activities.length > 0 ? { actual: pct(exe.approved.overall), planned: exe.planned.overall == null ? null : pct(exe.planned.overall) } : null,
-  }, ws.w), weightSource: ws.source, values: ws.values }
+    cons,
+  }, ws.w), weightSource: ws.source, values: ws.values,
+  consParts: st ? { line, stations: { actual: st.actual, planned: st.planned }, stationShare: line ? st.share : 100 } : undefined }
 }
 
 /** Loads the modules if needed, then one project's EPC progress weighted by its Stage-Gate client report (equal otherwise). */
@@ -85,6 +93,7 @@ export function epcWindowOf(projectId: string): { start: string; finish: string 
   const mat = materialCore(ms, cs, projectId)
   for (const s of mat.stages) if (s.plannedDate) dates.push(s.plannedDate.slice(0, 10))
   for (const a of ex.activities) if (a.projectId === projectId) for (const v of [a.plannedStart, a.plannedEnd]) if (v) dates.push(v.slice(0, 10))
+  dates.push(...spDatesOf(projectId))
   if (!dates.length) return null
   dates.sort()
   return { start: dates[0], finish: dates[dates.length - 1] }

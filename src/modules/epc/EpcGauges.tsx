@@ -18,7 +18,7 @@ const CSS = `.epg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150p
 .epg-s b{font-weight:800}
 @media (prefers-reduced-motion:reduce){.epg-arc{transition:none}}`
 
-function Gauge({ k, actual, planned, weight }: { k: keyof typeof EPC_COLORS; actual: number | null; planned: number | null; weight: number | null }) {
+function Gauge({ k, actual, planned, weight, note }: { k: keyof typeof EPC_COLORS; actual: number | null; planned: number | null; weight: number | null; note?: string }) {
   const [on, setOn] = useState(false)
   useEffect(() => { const t = requestAnimationFrame(() => setOn(true)); return () => cancelAnimationFrame(t) }, [])
   const r = 52, C = 2 * Math.PI * r, arc = 0.75 // a 270° arc
@@ -43,9 +43,17 @@ function Gauge({ k, actual, planned, weight }: { k: keyof typeof EPC_COLORS; act
       <div className="epg-s">
         برنامه <b>{planned == null ? '—' : `${fa(planned)}٪`}</b>{varc != null && <> · <b style={{ color: varc >= 0 ? '#16a34a' : '#ef4444' }}>{varc >= 0 ? '+' : '−'}{fa(Math.abs(varc))}</b></>}
         {weight != null && <><br />سهم از قرارداد {fa(weight * 100, 0)}٪</>}
+        {note && <><br />{note}</>}
       </div>
     </div>
   )
+}
+
+/** construction's two sources, when the project has stations */
+function consNote(p: EpcProgress) {
+  const c = p.consParts
+  if (!c) return undefined
+  return c.line ? `خط ${fa(c.line.actual)}٪ · ایستگاه‌ها ${fa(c.stations.actual)}٪ (سهم ${fa(c.stationShare, 0)}٪)` : `فقط ایستگاه‌ها: ${fa(c.stations.actual)}٪`
 }
 
 export function EpcGauges({ p }: { p: EpcProgress }) {
@@ -55,7 +63,7 @@ export function EpcGauges({ p }: { p: EpcProgress }) {
     <div className="epg" role="group" aria-label="پیشرفت قرارداد EPC">
       <style>{CSS}</style>
       <Gauge k="total" actual={p.overall?.actual ?? null} planned={p.overall?.planned ?? null} weight={null} />
-      {parts.map(([k, d, w]) => <Gauge key={k} k={k} actual={d?.actual ?? null} planned={d?.planned ?? null} weight={d && W > 0 ? w / W : null} />)}
+      {parts.map(([k, d, w]) => <Gauge key={k} k={k} actual={d?.actual ?? null} planned={d?.planned ?? null} weight={d && W > 0 ? w / W : null} note={k === 'cons' ? consNote(p) : undefined} />)}
     </div>
   )
 }

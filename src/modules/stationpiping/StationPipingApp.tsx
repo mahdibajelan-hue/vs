@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { CalendarDays, CheckCircle2, ClipboardList, Cpu, Factory, Flame, LayoutDashboard, Loader2, Plus, Save, Trash2 } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ClipboardList, Cpu, Factory, Flame, HardHat, LayoutDashboard, Loader2, Plus, Save, ShieldCheck, Sparkles, Trash2 } from 'lucide-react'
+import { useEpcLive } from '../epc/useEpcLive'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useAuthStore } from '../../store/useAuthStore'
@@ -12,8 +13,8 @@ import { todayTehran } from '../../lib/today'
 import { useRemembered } from '../../lib/navMemory'
 import { useSpStore } from './store/useSpStore'
 import {
-  DISC_COLOR, DISC_FA, DISCIPLINES, KIND_FA, AUTO_DISC, doneByItem, overallProgress, progressCurve, scopeTemplate, stationProgress, weldStats, welderStats,
-  type Discipline, type StationKind, type StationProgress,
+  COAT_TYPES, DISC_COLOR, DISC_FA, DISCIPLINES, KIND_FA, AUTO_DISC, doneByItem, overallProgress, progressCurve, scopeTemplate, stationProgress, weldStats, welderStats,
+  type Discipline, type StationKind, type StationProgress, type Weld,
 } from './lib/spCore'
 import type { StationRec, TwinAsset } from './repo'
 import { StationPage } from './components/StationPage'
@@ -114,6 +115,7 @@ function Dashboard({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t:
         <Kpi label="پیشرفت کل ایستگاه‌ها" value={pct(overall.actual)} sub={`برنامه ${pct(overall.planned)} · ${fa(overall.stations)} ایستگاه دارای محدودهٔ کار`} color="#6366f1" />
         <Kpi label="جوش‌های انجام‌شده" value={`${fa(welds.welded)} از ${fa(welds.count)}`} sub={`${fa(welds.weldedDi, 1)} از ${fa(welds.totalDi, 1)} اینچ‌قطر`} color="#f97316" />
         <Kpi label="NDT قبول‌شده" value={`${fa(welds.accepted)} از ${fa(welds.ndtRequired)}`} sub={`${fa(welds.tested)} جوش آزمایش‌شده`} color="#ec4899" />
+        <Kpi label="زنگ‌زدایی و عایق سرجوش" value={`${pct(welds.totalDi ? (welds.blastedDi / welds.totalDi) * 100 : null, 0)} · ${pct(welds.buriedDi ? (welds.coatedDi / welds.buriedDi) * 100 : null, 0)}`} sub={`${fa(welds.blasted)} سرجوش زنگ‌زدایی · ${fa(welds.coated)} از ${fa(welds.buried)} مدفون عایق‌شده`} color="#0891b2" />
         <Kpi label="نرخ تعمیر جوش" value={welds.repairRate == null ? '—' : pct(welds.repairRate * 100)} sub="مردود یا تعمیرشده ÷ آزمایش‌شده" color={welds.repairRate != null && welds.repairRate > 0.05 ? '#ef4444' : '#22c55e'} />
         <Kpi label="هفتهٔ اخیر" value={`${fa(weekLogs)} کارکرد`} sub={`${fa(weekWelds)} جوش زده شده`} color="#14b8a6" />
       </section>
@@ -130,6 +132,8 @@ function Dashboard({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t:
         <Matrix per={per} onOpen={onOpen} />
       </section>
 
+      <EpcShare overall={overall} />
+
       {curve.length > 1 && (
         <section className="ps-card">
           <header className="ps-card-head"><b>منحنی پیشرفت ایستگاه‌ها</b><small className="ps-meta">میانگین ایستگاه‌ها؛ برنامه از تاریخ‌های برنامه‌ای آیتم‌ها و ایستگاه‌ها</small></header>
@@ -139,6 +143,38 @@ function Dashboard({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t:
     </div>
   )
 }
+/** how the stations enter the project's EPC progress, and the construction figure it gives (the same as the radar's) */
+function EpcShare({ overall }: { overall: { actual: number; planned: number | null } }) {
+  const st = useSpStore()
+  const email = useAuthStore((s) => s.profile?.email ?? '')
+  const live = useEpcLive(st.projectId)
+  const [f, setF] = useState(st.settings)
+  useEffect(() => setF(st.settings), [st.settings])
+  const now = live && live !== 'loading' ? live.now : null
+  const c = now?.cons ?? null, parts = now?.consParts
+  const dirty = f.consShare !== st.settings.consShare || f.inEpc !== st.settings.inEpc
+  return (
+    <section className="ps-card spx-epc">
+      <header className="ps-card-head"><b><HardHat size={15} /> سهم ایستگاه‌ها در پیشرفت EPC پروژه</b><small className="ps-meta">همان عددی که رادار، داشبورد پروژه و مرکز سلامت نشان می‌دهند</small></header>
+      <div className="spx-epc-flow">
+        <div><span>خط لوله (ماژول اجرا)</span><b>{parts?.line ? pct(parts.line.actual) : '—'}</b><small>سهم {fa(parts?.line ? 100 - parts.stationShare : 0)}٪</small></div>
+        <i aria-hidden>+</i>
+        <div className="is-st"><span>ایستگاه‌ها</span><b>{pct(overall.actual)}</b><small>سهم {fa(st.settings.inEpc ? (parts ? parts.stationShare : st.settings.consShare) : 0)}٪</small></div>
+        <i aria-hidden>=</i>
+        <div className="is-c"><span>اجرا (C) در EPC</span><b>{live === 'loading' ? '…' : pct(c?.actual)}</b><small>برنامه {pct(c?.planned)}</small></div>
+        <i aria-hidden>→</i>
+        <div className="is-t"><span>کل قرارداد EPC</span><b>{live === 'loading' ? '…' : pct(now?.overall?.actual)}</b><small>برنامه {pct(now?.overall?.planned)}</small></div>
+      </div>
+      <div className="ps-grid">
+        <label className="ps-field"><span>سهم ایستگاه‌ها از بخش اجرا (٪)</span><input type="number" min={0} max={100} dir="ltr" value={f.consShare} onChange={(e) => setF({ ...f, consShare: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })} /></label>
+        <label className="ps-field"><span>&nbsp;</span><span className="spx-check"><input type="checkbox" checked={f.inEpc} onChange={(e) => setF({ ...f, inEpc: e.target.checked })} /> پیشرفت ایستگاه‌ها در پیشرفت EPC و رادار حساب شود</span></label>
+      </div>
+      <p className="ps-hint">اجرا (C) = (۱۰۰ − سهم ایستگاه‌ها)٪ × پیشرفت خط + سهم ایستگاه‌ها٪ × میانگین پیشرفت ایستگاه‌ها. اگر پروژه هنوز فعالیت اجرایی خط نداشته باشد، ایستگاه‌ها کل بخش اجرا را تشکیل می‌دهند. سهم را بر اساس سهم ریالی ایستگاه‌ها در قرارداد اجرا تعیین کنید.</p>
+      {dirty && <div className="ps-actions"><button type="button" className="ps-btn is-primary" onClick={() => void st.saveSettings(f, email)}><Save size={14} /> ذخیره</button></div>}
+    </section>
+  )
+}
+
 function StationCard({ p, onOpen }: { p: StationProgress; onOpen: () => void }) {
   const scoped = p.disciplines.filter((d) => d.hasScope)
   return (
@@ -235,13 +271,15 @@ function Daily() {
   const [q, setQ] = useState<Record<string, { qty: string; note: string }>>({})
   const todays = st.logs.filter((l) => l.stationId === station?.id && l.at === date)
   const weldsToday = st.welds.filter((w) => w.stationId === station?.id && w.weldDate === date)
+  const blastToday = st.welds.filter((w) => w.stationId === station?.id && w.blastDate === date)
+  const coatToday = st.welds.filter((w) => w.stationId === station?.id && w.coatDate === date)
   if (!station) return <p className="ps-hint">ابتدا در بخش «ایستگاه‌ها» یک ایستگاه تعریف کنید.</p>
   const rows = Object.entries(q).filter(([, v]) => v.qty !== '' && Number(v.qty) !== 0).map(([itemId, v]) => ({ stationId: station.id, itemId, at: date, qty: Number(v.qty), note: v.note }))
   let last: Discipline | null = null
   return (
     <div className="ps-stack">
       <section className="ps-card">
-        <header className="ps-card-head"><b><ClipboardList size={15} /> ثبت کارکرد روزانه</b><small className="ps-meta">مقدار انجام‌شده در همان روز؛ جوشکاری و NDT از ثبت جوش‌ها حساب می‌شوند</small></header>
+        <header className="ps-card-head"><b><ClipboardList size={15} /> ثبت کارکرد روزانه</b><small className="ps-meta">مقدار انجام‌شده در همان روز؛ عملیات سرجوش‌ها در کادر پایین ثبت می‌شود</small></header>
         <div className="ps-grid">
           <div className="ps-field"><span>تاریخ</span><ShamsiDate value={date} onChange={setDate} max={todayTehran()} label="تاریخ" /></div>
           <label className="ps-field"><span>ایستگاه</span><select value={station.id} onChange={(e) => { setSid(e.target.value); setQ({}) }}>{st.stations.map((s) => <option key={s.id} value={s.id}>{s.code}{s.name ? ` — ${s.name}` : ''}</option>)}</select></label>
@@ -260,16 +298,52 @@ function Daily() {
         )}
         <div className="ps-actions"><button type="button" className="ps-btn is-primary" disabled={!rows.length} onClick={async () => { if (await st.addLogs(rows, email)) setQ({}) }}><Save size={14} /> ثبت {fa(rows.length)} ردیف کارکرد</button></div>
       </section>
+      <JointOps key={`${station.id}-${date}`} station={station} date={date} />
       <section className="ps-card">
         <header className="ps-card-head"><b>کارکرد ثبت‌شدهٔ {jd(date)} — {station.code}</b></header>
-        {todays.length === 0 && weldsToday.length === 0 ? <p className="ps-hint">برای این روز کارکردی ثبت نشده است.</p> : <>
+        {todays.length === 0 && weldsToday.length === 0 && blastToday.length === 0 && coatToday.length === 0 ? <p className="ps-hint">برای این روز کارکردی ثبت نشده است.</p> : <>
           {todays.length > 0 && <div className="ps-table-wrap"><table className="ps-table"><thead><tr><th>رشته</th><th>آیتم</th><th>مقدار</th><th>توضیح</th><th>ثبت‌کننده</th><th /></tr></thead>
             <tbody>{todays.map((l) => { const i = st.items.find((x) => x.id === l.itemId); return <tr key={l.id}><td>{i ? DISC_FA[i.discipline] : '—'}</td><td>{i?.title ?? '—'}</td><td>{fa(l.qty, 2)} {i?.unit}</td><td>{l.note}</td><td className="ps-meta">{l.by}</td>
               <td><button type="button" className="ps-btn is-ghost" aria-label="حذف" onClick={() => { if (window.confirm('این ردیف کارکرد حذف شود؟')) void st.archiveLog(l.id) }}><Trash2 size={13} /></button></td></tr> })}</tbody></table></div>}
           {weldsToday.length > 0 && <p className="ps-hint"><CheckCircle2 size={14} /> {fa(weldsToday.length)} جوش در این روز زده شده: {weldsToday.map((w) => w.weldNo).join('، ')}</p>}
+          {blastToday.length > 0 && <p className="ps-hint"><Sparkles size={14} /> زنگ‌زدایی {fa(blastToday.length)} سرجوش: {blastToday.map((w) => w.weldNo).join('، ')}</p>}
+          {coatToday.length > 0 && <p className="ps-hint"><ShieldCheck size={14} /> عایق‌کاری {fa(coatToday.length)} سرجوش: {coatToday.map((w) => w.weldNo).join('، ')}</p>}
         </>}
       </section>
     </div>
+  )
+}
+
+/** the day's operations on the joints: welding, radiography, blasting, field-joint coating — pick the welds that were done */
+type Op = 'weld' | 'rt' | 'blast' | 'coat'
+const OPS: { k: Op; label: string; ready: (w: Weld) => boolean; patch: (date: string, coatType: string) => Record<string, unknown>; done: string }[] = [
+  { k: 'weld', label: 'جوشکاری', ready: (w) => !w.weldDate, patch: (d) => ({ weld_date: d }), done: 'جوشکاری ثبت شد' },
+  { k: 'rt', label: 'رادیوگرافی (قبول)', ready: (w) => !!w.weldDate && w.ndtResult === 'pending', patch: (d) => ({ ndt_date: d, ndt_result: 'accepted' }), done: 'رادیوگرافی قبول ثبت شد' },
+  { k: 'blast', label: 'زنگ‌زدایی سرجوش', ready: (w) => !!w.weldDate && (w.ndtResult === 'accepted' || w.ndtResult === 'na') && !w.blastDate, patch: (d) => ({ blast_date: d }), done: 'زنگ‌زدایی سرجوش ثبت شد' },
+  { k: 'coat', label: 'عایق‌کاری سرجوش', ready: (w) => w.buried && !!w.blastDate && !w.coatDate, patch: (d, c) => ({ coat_date: d, coat_type: c }), done: 'عایق‌کاری سرجوش ثبت شد' },
+]
+function JointOps({ station, date }: { station: StationRec; date: string }) {
+  const st = useSpStore()
+  const [op, setOp] = useState<Op>('weld')
+  const [sel, setSel] = useState<Set<string>>(new Set())
+  const [coatType, setCoatType] = useState(COAT_TYPES[0])
+  const o = OPS.find((x) => x.k === op)!
+  const ws = st.welds.filter((w) => w.stationId === station.id).sort((a, b) => a.weldNo.localeCompare(b.weldNo, 'en', { numeric: true }))
+  const ready = ws.filter(o.ready)
+  if (!ws.length) return null
+  return (
+    <section className="ps-card">
+      <header className="ps-card-head"><b><Flame size={15} /> عملیات روی سرجوش‌ها</b><small className="ps-meta">زنجیرهٔ هر سرجوش: جوشکاری ← رادیوگرافی ← زنگ‌زدایی ← عایق‌کاری (سرجوش مدفون)؛ سرجوش روزمینی با رنگ‌آمیزی پوشش داده می‌شود</small></header>
+      <div className="spx-seg" role="tablist">{OPS.map((x) => <button key={x.k} type="button" role="tab" aria-selected={op === x.k} onClick={() => { setOp(x.k); setSel(new Set()) }}>{x.label} <i>{fa(ws.filter(x.ready).length)}</i></button>)}</div>
+      {ready.length === 0 ? <p className="ps-hint">سرجوشی آمادهٔ «{o.label}» نیست.</p> : <>
+        <div className="spx-picks">{ready.map((w) => <button key={w.id} type="button" aria-pressed={sel.has(w.id)} onClick={() => { const n = new Set(sel); if (n.has(w.id)) n.delete(w.id); else n.add(w.id); setSel(n) }} dir="ltr">{w.weldNo}<small>{fa(w.sizeIn, 0)}″</small></button>)}</div>
+        <div className="ps-actions">
+          <button type="button" className="ps-btn is-ghost" onClick={() => setSel(sel.size === ready.length ? new Set() : new Set(ready.map((w) => w.id)))}>{sel.size === ready.length ? 'هیچ‌کدام' : 'انتخاب همه'}</button>
+          {op === 'coat' && <select value={coatType} onChange={(e) => setCoatType(e.target.value)} aria-label="نوع عایق">{COAT_TYPES.map((c) => <option key={c}>{c}</option>)}</select>}
+          <button type="button" className="ps-btn is-primary" disabled={!sel.size} onClick={async () => { if (await st.patchWelds([...sel], o.patch(date, coatType), o.done)) setSel(new Set()) }}><Save size={14} /> ثبت {o.label} برای {fa(sel.size)} سرجوش در {jd(date)}</button>
+        </div>
+      </>}
+    </section>
   )
 }
 
@@ -289,10 +363,10 @@ function Welders() {
         )}
       </section>
       <section className="ps-card">
-        <header className="ps-card-head"><b>وضعیت جوش و NDT ایستگاه‌ها</b></header>
+        <header className="ps-card-head"><b>وضعیت سرجوش‌های ایستگاه‌ها: جوش، رادیوگرافی، زنگ‌زدایی و عایق</b></header>
         {byStation.length === 0 ? <p className="ps-hint">جوشی ثبت نشده است.</p> : (
-          <div className="ps-table-wrap"><table className="ps-table"><thead><tr><th>ایستگاه</th><th>جوش‌ها</th><th>زده‌شده</th><th>اینچ‌قطر</th><th>نیازمند NDT</th><th>قبول</th><th>مردود</th><th>در انتظار NDT</th></tr></thead>
-            <tbody>{byStation.map(({ s, w }) => <tr key={s.id}><td dir="ltr"><b>{s.code}</b></td><td>{fa(w.count)}</td><td>{fa(w.welded)}</td><td>{fa(w.weldedDi, 1)} / {fa(w.totalDi, 1)}</td><td>{fa(w.ndtRequired)}</td><td>{fa(w.accepted)}</td><td className={w.rejected ? 'is-late' : ''}>{fa(w.rejected)}</td><td>{fa(Math.max(0, w.ndtRequired - w.tested))}</td></tr>)}</tbody></table></div>
+          <div className="ps-table-wrap"><table className="ps-table"><thead><tr><th>ایستگاه</th><th>جوش‌ها</th><th>زده‌شده</th><th>اینچ‌قطر</th><th>نیازمند NDT</th><th>قبول</th><th>مردود</th><th>در انتظار NDT</th><th>زنگ‌زدایی</th><th>عایق سرجوش (مدفون)</th></tr></thead>
+            <tbody>{byStation.map(({ s, w }) => <tr key={s.id}><td dir="ltr"><b>{s.code}</b></td><td>{fa(w.count)}</td><td>{fa(w.welded)}</td><td>{fa(w.weldedDi, 1)} / {fa(w.totalDi, 1)}</td><td>{fa(w.ndtRequired)}</td><td>{fa(w.accepted)}</td><td className={w.rejected ? 'is-late' : ''}>{fa(w.rejected)}</td><td>{fa(Math.max(0, w.ndtRequired - w.tested))}</td><td>{fa(w.blasted)} / {fa(w.count)}</td><td>{fa(w.coated)} / {fa(w.buried)}</td></tr>)}</tbody></table></div>
         )}
       </section>
     </div>

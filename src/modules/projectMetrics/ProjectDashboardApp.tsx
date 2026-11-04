@@ -156,7 +156,7 @@ function Body({ m }: { m: ProjectSnapshot }) {
         <summary><HelpCircle size={14} aria-hidden /> نحوهٔ محاسبه</summary>
         <ul>
           <li>پیشرفت کل چرخهٔ عمر = میانگین وزنی فازها (وزن هر فاز در مستر پلن). فازهای غیر EPC با مستر پلن کنترل می‌شوند؛ فاز اجرای پروژه (EPC) پیشرفت و برنامه‌اش را از ماژول‌ها می‌گیرد. همین عدد در رادار، کارت پروژه، Stage-Gate و ماژول مالی نمایش داده می‌شود.</li>
-          <li>پیشرفت EPC: مهندسی از مدارک (تهیه و تأیید، وزن مدرک)، کالا از مراحل تأمین (ارزش‌محور)، اجرا از کارکرد تأییدشدهٔ گزارش‌های روزانه. وزن هر بخش = ارزش ریالی آن در ماژول خودش (قیمت مدارک، ارزش اقلام بسته‌ها، مقدار × فی فعالیت‌ها).</li>
+          <li>پیشرفت EPC: مهندسی از مدارک (تهیه و تأیید، وزن مدرک)، کالا از مراحل تأمین (ارزش‌محور)، اجرا از کارکرد تأییدشدهٔ گزارش‌های روزانهٔ خط و پیشرفت ایستگاه‌ها (با سهمی که در ماژول ایستگاه‌ها تعیین می‌شود). وزن هر بخش = ارزش ریالی آن در ماژول خودش (قیمت مدارک، ارزش اقلام بسته‌ها، مقدار × فی فعالیت‌ها).</li>
           <li>ارزش کسب‌شده فقط روی پیمان EPC: BAC = ارزش جاری قرارداد(های) EPC، EV = BAC × پیشرفت واقعی EPC، PV = BAC × پیشرفت برنامه‌ای EPC، AC = کارکرد تأییدشدهٔ قرارداد EPC تا امروز. SPI = EV÷PV، CPI = EV÷AC، TCPI = (BAC−EV)÷(BAC−AC)، EAC = BAC÷CPI، ETC = EAC−AC، VAC = BAC−EAC، CV = EV−AC، SV = EV−PV. مبالغ به میلیارد ریال.</li>
           <li>منحنی S و پیشرفت هفتگی از تاریخ‌های ثبت‌شده در ماژول‌ها (برنامه و تأیید هر مدرک، مرحلهٔ کالا و گزارش روزانه) بازسازی می‌شوند.</li>
           <li>سلامت پروژه: راهنمای (?) کنار کارت سلامت را ببینید.</li>
@@ -327,7 +327,7 @@ function EpcBreakdown({ m }: { m: ProjectMetrics }) {
             {d?.planned != null && <span className="pdb-bar-plan" style={{ width: `${Math.min(100, d.planned)}%` }} />}
             {d && <span className="pdb-bar-act" style={{ width: `${Math.min(100, d.actual)}%` }} />}
           </span>
-          <small className="pdb-epc-plan">{d ? `برنامه ${pct(d.planned)}` : 'بدون داده'}</small>
+          <small className="pdb-epc-plan">{d ? `برنامه ${pct(d.planned)}` : 'بدون داده'}{key === 'execution' && m.epc.consParts ? ` · ${m.epc.consParts.line ? `خط ${pct(m.epc.consParts.line.actual)} و ایستگاه‌ها ${pct(m.epc.consParts.stations.actual)} (سهم ${fa(m.epc.consParts.stationShare)}٪)` : `ایستگاه‌ها ${pct(m.epc.consParts.stations.actual)}`}` : ''}</small>
         </button>
       ))}
       {m.epc.overall && <p className="pdb-epc-total">پیشرفت وزنی EPC: <b>{pct(m.epc.overall.actual)}</b> · برنامه {pct(m.epc.overall.planned)}</p>}
