@@ -19,6 +19,9 @@ export function InboxHubCard({ locked }: { locked?: boolean }) {
   const setOpen = useInboxStore((s) => s.setOpen)
   const setFilter = useInboxStore((s) => s.setFilter)
   const notes = useNotificationStore((s) => s.items.length)
+  const notesLoaded = useNotificationStore((s) => s.loadedOnce)
+  // Until the first load lands, a count shows a dash, not a zero that looks like an empty inbox.
+  const n = (v: number, ready = loaded) => (ready ? fa(v) : '–')
   const st = useMemo(() => computeStats(selectVisible({ items, snoozed })), [items, snoozed])
   const md = mood(st)
   const total = st.total || 1
@@ -44,10 +47,10 @@ export function InboxHubCard({ locked }: { locked?: boolean }) {
           <b>کارتابل من</b>
           <span className="ibh-sub">{locked ? 'پس از ورود، همهٔ کارهای شما در همهٔ ماژول‌ها یک‌جاست' : loaded ? md.text : 'در حال بارگذاری…'}</span>
           <span className="ibh-nums">
-            <span><em>{fa(st.total)}</em>کار باز</span>
-            <span className={st.urgent ? 'hot' : ''}><em>{fa(st.urgent)}</em>فوری</span>
-            <span><em>{fa(st.byGroup.decide)}</em>تصمیم و تأیید</span>
-            <span className={notes ? 'note' : ''}><Bell size={12} /><em>{fa(notes)}</em>اعلان</span>
+            <span><em>{n(st.total)}</em>کار باز</span>
+            <span className={st.urgent ? 'hot' : ''}><em>{n(st.urgent)}</em>فوری</span>
+            <span><em>{n(st.byGroup.decide)}</em>تصمیم و تأیید</span>
+            <span className={notes ? 'note' : ''}><Bell size={12} /><em>{n(notes, notesLoaded)}</em>اعلان</span>
           </span>
         </span>
         <span className="ibh-go" aria-hidden><ArrowLeft size={18} /></span>
@@ -59,9 +62,9 @@ export function InboxHubCard({ locked }: { locked?: boolean }) {
             <svg viewBox="0 0 70 70" width="74" height="74" aria-hidden>
               <circle cx="35" cy="35" r={r} fill="none" stroke="rgba(148,163,184,.25)" strokeWidth="9" />
               {st.bySource.map(([k, v]) => { const len = (v / total) * c; const el = <circle key={k} cx="35" cy="35" r={r} fill="none" stroke={SOURCE_COLOR[k]} strokeWidth="9" strokeDasharray={`${Math.max(0, len - 1.2)} ${c}`} strokeDashoffset={-off} transform="rotate(-90 35 35)" />; off += len; return el })}
-              <text x="35" y="39" textAnchor="middle" className="ibh-dn">{fa(st.total)}</text>
+              <text x="35" y="39" textAnchor="middle" className="ibh-dn">{n(st.total)}</text>
             </svg>
-            <ul>{st.bySource.slice(0, 4).map(([k, v]) => { const I = SOURCE_ICON[k]; return <li key={k}><button onClick={() => go(k)}><I size={12} style={{ color: SOURCE_COLOR[k] }} />{SOURCE_LABEL_FA[k]}<b>{fa(v)}</b></button></li> })}{st.bySource.length === 0 && <li className="ibh-none">کار بازی نیست 🎉</li>}</ul>
+            <ul>{st.bySource.slice(0, 4).map(([k, v]) => { const I = SOURCE_ICON[k]; return <li key={k}><button onClick={() => go(k)}><I size={12} style={{ color: SOURCE_COLOR[k] }} />{SOURCE_LABEL_FA[k]}<b>{fa(v)}</b></button></li> })}{loaded && st.bySource.length === 0 && <li className="ibh-none">کار بازی نیست 🎉</li>}</ul>
           </div>
           <div className="ibh-bars" title="مهلت انجام کارها">
             {BUCKETS.map((b) => <span key={b} className="ibh-bar"><i style={{ height: `${Math.max(st.byBucket[b] ? 12 : 4, (st.byBucket[b] / max) * 100)}%`, background: BUCKET_COLOR[b] }} /><em>{BUCKET_LABEL_FA[b]}</em></span>)}

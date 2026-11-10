@@ -6,7 +6,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../../store/useModuleStore'
 import { formatJalali } from '../../../lib/jalali'
-import { HealthGuideButton, healthColor as healthColorOf } from '../../../modules/projectMetrics/HealthGuide'
+import { HEALTH_VERDICT_FA, HealthGuideButton, healthColor as healthColorOf } from '../../../modules/projectMetrics/HealthGuide'
 import { HEALTH_DIMENSION_LABEL_FA } from '../../../modules/lifecycle/types'
 import { ModuleHeaderActions } from '../../common/ModuleHeaderActions'
 import { RadarDisplay } from './RadarDisplay'
@@ -28,7 +28,7 @@ const jd = (iso: string | null | undefined) => (iso ? formatJalali(iso.slice(0, 
 const SEV_RANK: Record<SignalSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3 }
 const CAT_ICON: Record<SignalCategory, LucideIcon> = { risk: AlertTriangle, issue: CircleAlert, delay: Clock3, change: RefreshCw, milestone: Flag, contract: FileText, gate: ShieldCheck }
 const CAT_ORDER: SignalCategory[] = ['risk', 'issue', 'delay', 'change', 'contract', 'gate', 'milestone']
-const VERDICT_FA = { green: 'سالم', yellow: 'نیازمند توجه', red: 'در معرض خطر', black: 'گیت مسدود' } as const
+const VERDICT_FA = HEALTH_VERDICT_FA
 const moduleOf = (s: RadarSignal): ModuleKey => (s.category === 'risk' ? 'risk' : s.category === 'issue' ? 'taskissue' : s.category === 'change' ? 'change' : s.category === 'contract' ? 'finance' : s.category === 'gate' ? (s.id.startsWith('pssr') ? 'pssr' : 'stagegate') : 'scheduling')
 const MODULE_FA: Partial<Record<ModuleKey, string>> = { risk: 'مدیریت ریسک', taskissue: 'موانع و اقدامات', change: 'مدیریت تغییرات', finance: 'قراردادها و مالی', pssr: 'آمادگی راه‌اندازی', stagegate: 'چرخهٔ عمر', scheduling: 'برنامه‌ریزی و کنترل زمان' }
 

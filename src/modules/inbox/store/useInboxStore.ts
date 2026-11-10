@@ -12,7 +12,13 @@ const liveSnooze = (m: Record<string, number>) => Object.fromEntries(Object.entr
 
 type Row = Record<string, unknown>
 /** The database writes dates as ISO text; people read them in the Jalali calendar. */
-const jal = (t: string) => t.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (m) => { try { return formatJalali(m) } catch { return m } })
+const faDigits = (t: string) => t.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])
+const CUR_FA: Record<string, string> = { IRR: 'ریال', USD: 'دلار', EUR: 'یورو' }
+/** Server text arrives with ISO dates and raw `110000000000 IRR` amounts; show Jalali dates and grouped rials in Persian digits. Codes such as PC-11 keep their Latin digits. */
+const jal = (t: string) => t
+  .replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (m) => { try { return formatJalali(m) } catch { return m } })
+  .replace(/\b1[34]\d{2}\/\d{2}\/\d{2}\b/g, faDigits)
+  .replace(/(?<![\w\-/.])(\d{5,})(?![\w\-/.])(?:\s(IRR|USD|EUR)\b)?/g, (_m, n: string, cur?: string) => `${Number(n).toLocaleString('fa-IR')}${cur ? ' ' + CUR_FA[cur] : ''}`)
 const fromRow = (r: Row): InboxItem => ({ key: String(r.key), source: r.source as InboxItem['source'], kind: r.kind as InboxItem['kind'], projectId: (r.project_id as string) ?? null, projectName: String(r.project_name ?? ''), title: jal(String(r.title ?? '')), sub: jal(String(r.sub ?? '')), due: (r.due as string) ?? null, since: String(r.since ?? ''), urgent: !!r.urgent, refId: String(r.ref_id), extra: (r.extra as Record<string, unknown>) ?? {} })
 
 interface InboxState {

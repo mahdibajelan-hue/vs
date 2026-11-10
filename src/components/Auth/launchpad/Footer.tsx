@@ -5,14 +5,7 @@ export function Footer() {
       style={{ borderColor: 'var(--border-soft)', animationDelay: '560ms' }}
     >
       <span>فرین — راهکار جامع مدیریت پروژه و توسعه نیروی انسانی</span>
-      <span className="flex items-center gap-2.5" dir="ltr">
-        <span>v1.0</span>
-        <span className="opacity-40">•</span>
-        <span className="flex items-center gap-1.5">
-          <span className="radar-live-dot h-1 w-1 rounded-full" style={{ background: 'var(--text-muted)' }} />
-          Last Sync: Just Now
-        </span>
-      </span>
+      <span>نسخهٔ ۱٫۰</span>
     </footer>
   )
 }

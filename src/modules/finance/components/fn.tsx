@@ -4,6 +4,7 @@ import type { Tone } from '../lib/financeKpis'
 import { formatJalali } from '../../../lib/jalali'
 import { Spark } from './charts'
 import { pressable } from '../../../lib/pressable'
+import { parseNum } from '../../../lib/parseNum'
 
 /** Rial amount in billions with a fixed number of decimals — for tables whose header states «میلیارد ریال». */
 export const fmtBn = (n: number, d = 1): string => (n / 1e9).toLocaleString('fa-IR', { maximumFractionDigits: d, minimumFractionDigits: n !== 0 && Math.abs(n) < 1e10 ? d : 0 })

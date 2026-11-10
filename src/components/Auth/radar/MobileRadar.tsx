@@ -1,4 +1,4 @@
-import { HealthGuideButton, healthColor as healthColorOf } from '../../../modules/projectMetrics/HealthGuide'
+import { HEALTH_VERDICT_FA, HealthGuideButton, healthColor as healthColorOf } from '../../../modules/projectMetrics/HealthGuide'
 import { useEffect, type CSSProperties } from 'react'
 import { Activity, ArrowLeftRight, ArrowRight, ChevronLeft, Clock3, RefreshCw, ShieldAlert } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -24,6 +24,8 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
   onHome: () => void
 }) {
   const k = data.kpi
+  // Until the live read lands the numbers are placeholders: show dashes and a reading state, never «عادی ۰ از ۱۰۰».
+  const loading = !data.live
   // coming back from a module the window may still be scrolled down
   useEffect(() => { window.scrollTo(0, 0) }, [])
   // colour = the health verdict (worst dimension) when known, so the ring and the status always agree
@@ -50,21 +52,21 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
         <p className="mr-sub">گزارش {data.reportDateFa} · مرحلهٔ جاری: {data.currentStageLabel}</p>
       </section>
 
-      <section className="mr-hero" style={{ '--st': statusColor } as CSSProperties}>
-        <Ring value={k.health} color={statusColor} />
+      <section className="mr-hero" style={{ '--st': loading ? 'var(--text-muted, #94a3b8)' : statusColor } as CSSProperties} aria-busy={loading || undefined}>
+        <Ring value={k.health} color={statusColor} loading={loading} />
         <div className="mr-hero-body">
           <p className="mr-hero-label">سلامت پروژه <HealthGuideButton health={data.healthDetail} /></p>
-          <p className="mr-hero-status"><span className="mr-pulse" aria-hidden />{STATUS_LABEL_FA[data.status]}</p>
-          <Bar label="پیشرفت واقعی" value={k.progressActual} ref2={k.progressPlanned} ref2Label="برنامه" color={k.progressActual >= k.progressPlanned ? '#22c55e' : '#f59e0b'} />
-          <Bar label="عملکرد هزینه" value={k.costPerformancePct} color={k.costVariancePct >= 0 ? '#22c55e' : '#f59e0b'} />
+          <p className="mr-hero-status">{!loading && <span className="mr-pulse" aria-hidden />}{loading ? 'در حال خواندن…' : data.healthDetail ? HEALTH_VERDICT_FA[data.healthDetail.status] : STATUS_LABEL_FA[data.status]}</p>
+          <Bar loading={loading} label="پیشرفت واقعی" value={k.progressActual} ref2={k.progressPlanned} ref2Label="برنامه" color={k.progressActual >= k.progressPlanned ? '#22c55e' : '#f59e0b'} />
+          <Bar loading={loading} label="عملکرد هزینه" value={k.costPerformancePct} color={k.costVariancePct >= 0 ? '#22c55e' : '#f59e0b'} />
         </div>
       </section>
 
       <section className="mr-kpis" aria-label="شاخص‌های پایش">
-        <Kpi icon={ShieldAlert} label="ریسک فعال" value={k.activeRisks} sub={k.activeRisksHigh ? `${fa(k.activeRisksHigh)} بالا` : undefined} color="#f43f5e" onClick={() => open('risk')} />
-        <Kpi icon={Activity} label="مسئلهٔ باز" value={k.openIssues} sub={k.openIssuesHigh ? `${fa(k.openIssuesHigh)} بالا` : undefined} color="#a78bfa" onClick={() => open('taskissue')} />
-        <Kpi icon={Clock3} label="فعالیت معوق" value={k.delayedActivities} color="#f59e0b" onClick={() => open('scheduling')} />
-        <Kpi icon={RefreshCw} label="تغییر در انتظار" value={k.pendingChanges} color="#38bdf8" onClick={() => open('change')} />
+        <Kpi loading={loading} icon={ShieldAlert} label="ریسک فعال" value={k.activeRisks} sub={k.activeRisksHigh ? `${fa(k.activeRisksHigh)} بالا` : undefined} color="#f43f5e" onClick={() => open('risk')} />
+        <Kpi loading={loading} icon={Activity} label="مسئلهٔ باز" value={k.openIssues} sub={k.openIssuesHigh ? `${fa(k.openIssuesHigh)} بالا` : undefined} color="#a78bfa" onClick={() => open('taskissue')} />
+        <Kpi loading={loading} icon={Clock3} label="فعالیت معوق" value={k.delayedActivities} color="#f59e0b" onClick={() => open('scheduling')} />
+        <Kpi loading={loading} icon={RefreshCw} label="تغییر در انتظار" value={k.pendingChanges} color="#38bdf8" onClick={() => open('change')} />
       </section>
 
       <section className="mr-mods" aria-label="ماژول‌های پروژه">
@@ -94,39 +96,39 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
 }
 
 
-function Ring({ value, color }: { value: number; color: string }) {
+function Ring({ value, color, loading }: { value: number; color: string; loading?: boolean }) {
   const r = 40, c = 2 * Math.PI * r, v = Math.max(0, Math.min(100, value))
   return (
-    <div className="mr-ring" role="img" aria-label={`سلامت ${fa(v)} از ۱۰۰`}>
+    <div className="mr-ring" role="img" aria-label={loading ? 'سلامت پروژه در حال خواندن' : `سلامت ${fa(v)} از ۱۰۰`}>
       <svg viewBox="0 0 100 100">
         <circle cx="50" cy="50" r={r} className="mr-ring-bg" />
-        {v > 0 && <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(v / 100) * c} ${c}`} transform="rotate(-90 50 50)" className="mr-ring-fg" />}
+        {!loading && v > 0 && <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(v / 100) * c} ${c}`} transform="rotate(-90 50 50)" className="mr-ring-fg" />}
       </svg>
-      <span className="mr-ring-num">{fa(v)}<small>از ۱۰۰</small></span>
+      <span className="mr-ring-num">{loading ? '—' : fa(v)}<small>از ۱۰۰</small></span>
     </div>
   )
 }
 
-function Bar({ label, value, color, ref2, ref2Label }: { label: string; value: number; color: string; ref2?: number; ref2Label?: string }) {
+function Bar({ label, value, color, ref2, ref2Label, loading }: { label: string; value: number; color: string; ref2?: number; ref2Label?: string; loading?: boolean }) {
   const v = Math.max(0, Math.min(100, value))
   return (
     <div className="mr-bar">
-      <span className="mr-bar-row"><span>{label}</span><b>{fa(v)}٪{ref2 != null && <small> / {ref2Label} {fa(ref2)}٪</small>}</b></span>
+      <span className="mr-bar-row"><span>{label}</span><b>{loading ? '—' : <>{fa(v)}٪{ref2 != null && <small> / {ref2Label} {fa(ref2)}٪</small>}</>}</b></span>
       <span className="mr-track">
-        <span style={{ width: `${v}%`, background: color }} />
-        {ref2 != null && <i style={{ right: `${Math.max(0, Math.min(100, ref2))}%` }} aria-hidden />}
+        <span style={{ width: loading ? 0 : `${v}%`, background: color }} />
+        {!loading && ref2 != null && <i style={{ right: `${Math.max(0, Math.min(100, ref2))}%` }} aria-hidden />}
       </span>
     </div>
   )
 }
 
-function Kpi({ icon: Icon, label, value, sub, color, onClick }: { icon: LucideIcon; label: string; value: number; sub?: string; color: string; onClick: () => void }) {
+function Kpi({ icon: Icon, label, value, sub, color, onClick, loading }: { icon: LucideIcon; label: string; value: number; sub?: string; color: string; onClick: () => void; loading?: boolean }) {
   return (
     <button type="button" className="mr-kpi" style={{ '--c': color } as CSSProperties} onClick={onClick}>
       <span className="mr-kpi-ico"><Icon size={15} aria-hidden /></span>
-      <span className="mr-kpi-val">{fa(value)}</span>
+      <span className="mr-kpi-val">{loading ? '—' : fa(value)}</span>
       <span className="mr-kpi-label">{label}</span>
-      {sub && <span className="mr-kpi-sub">{sub}</span>}
+      {!loading && sub && <span className="mr-kpi-sub">{sub}</span>}
     </button>
   )
 }

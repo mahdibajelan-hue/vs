@@ -1,3 +1,4 @@
+import { useOnline } from '../../../lib/useOnline'
 import { useState } from 'react'
 import { UserCircle2 } from 'lucide-react'
 import { useAuthStore } from '../../../store/useAuthStore'
@@ -12,6 +13,8 @@ import { FARIN_NAME_FA, FARIN_TAGLINE_FA, FarinMark } from '../../common/Logo'
 /** Sign-in itself lives on the page as LoginCard, not here — the header just switches between a
  * quiet "signed out" state (brand only) and the full authed toolbar once isAuthed flips. */
 export function Header() {
+  const online = useOnline()
+  const netColor = online ? 'var(--radar-green)' : 'var(--radar-amber)'
   const isAuthed = useAuthStore((s) => s.isAuthed)
   const currentUser = useAuthStore((s) => s.currentUser())
   const [profileOpen, setProfileOpen] = useState(false)
@@ -42,12 +45,12 @@ export function Header() {
       {isAuthed && (
         <div className="tb-bar relative flex items-center gap-1 sm:gap-1.5" role="toolbar" aria-label="میانبرهای سامانه">
           <span
-            className="mr-1 hidden items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-bold tracking-wide sm:flex"
-            style={{ borderColor: 'color-mix(in srgb, var(--radar-green) 35%, transparent)', color: 'var(--radar-green)', background: 'color-mix(in srgb, var(--radar-green) 8%, transparent)' }}
-            dir="ltr"
+            className="mr-1 hidden items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-bold sm:flex"
+            style={{ borderColor: `color-mix(in srgb, ${netColor} 35%, transparent)`, color: netColor, background: `color-mix(in srgb, ${netColor} 8%, transparent)` }}
+            role="status"
           >
-            <span className="radar-live-dot h-1.5 w-1.5 rounded-full" style={{ background: 'var(--radar-green)' }} />
-            SYSTEM ONLINE
+            <span className={`${online ? 'radar-live-dot ' : ''}h-1.5 w-1.5 rounded-full`} style={{ background: netColor }} />
+            {online ? 'متصل' : 'بدون اتصال'}
           </span>
 
           <InboxButton />

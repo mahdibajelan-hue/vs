@@ -94,7 +94,7 @@ export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: M
   return (
     <div className="launchpad-shell relative flex min-h-screen w-screen flex-col overflow-x-clip bg-black">
       <Header />
-      <LampContainer className={`flex-1 [--lamp-bg:#000] ${isAuthed ? 'pb-16 md:pb-6 [&>div:last-child]:-mt-[14.5rem] md:[&>div:last-child]:-mt-[19.5rem]' : 'pb-28 md:pb-8 md:[&>div:last-child]:-mt-[19rem]'}`} lightClassName="opacity-25 md:opacity-50">
+      <LampContainer className={`flex-1 [--lamp-bg:#000] ${isAuthed ? 'pb-16 md:pb-6 [&>div:last-child]:-mt-[19.5rem]' : 'pb-28 md:pb-8 [&>div:last-child]:-mt-[19rem]'}`} lightClassName="opacity-25 md:opacity-50">
         {/* The black showcase box the lamp shines onto: hairline cyan→gold border, drafting-sheet
             corner ticks, and the lamp's light reflected on the "floor" beneath it. */}
         <div className={`relative mx-auto w-full ${isAuthed ? 'max-w-5xl' : 'max-w-5xl md:max-w-3xl'}`}>

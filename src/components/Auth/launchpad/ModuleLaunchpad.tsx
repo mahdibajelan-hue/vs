@@ -1,3 +1,4 @@
+import { useInboxStore } from '../../../modules/inbox/store/useInboxStore'
 import { useEffect, type ReactElement } from 'react'
 import { useAuthStore } from '../../../store/useAuthStore'
 import type { ModuleKey } from '../../../store/useModuleStore'
@@ -48,7 +49,11 @@ export function ModuleLaunchpad({ onSelect, embedded }: { onSelect: (key: 'radar
   const notifications = useNotificationStore((s) => s.items)
   // …and the waiting work of «کارتابل من»: a module shows the larger of the two (some things reach both lists)
   const work = useInboxWork()
-  const countFor = (key: ModuleKey) => Math.max(notifications.filter((n) => n.module === key).length, work.filter((w) => w.module === key).length)
+  // Badges wait until both lists have arrived once: a count that climbs from a half-loaded total reads as real.
+  const notesReady = useNotificationStore((s) => s.loadedOnce)
+  const workReady = useInboxStore((s) => s.loadedOnce)
+  const countsReady = notesReady && workReady
+  const countFor = (key: ModuleKey) => !countsReady ? 0 : Math.max(notifications.filter((n) => n.module === key).length, work.filter((w) => w.module === key).length)
   const projectCount = [...PROJECT_MODULES].reduce((n, k) => n + countFor(k), 0)
   const mdLoaded = useMasterDataStore((s) => s.loaded)
   useEffect(() => {

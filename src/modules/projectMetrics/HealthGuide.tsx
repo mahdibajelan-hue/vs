@@ -6,6 +6,8 @@ import { HEALTH_DIMENSION_LABEL_FA, type HealthStatus } from '../lifecycle/types
 import type { ProjectHealth } from './projectMetricsLoader'
 import './healthGuide.css'
 
+/** Short verdict for a status line — shared by the desktop cockpit and the phone radar so both say the same thing. */
+export const HEALTH_VERDICT_FA: Record<HealthStatus, string> = { green: 'سالم', yellow: 'نیازمند توجه', red: 'در معرض خطر', black: 'گیت مسدود' }
 export const HEALTH_STATUS_FA: Record<HealthStatus, string> = { green: 'سبز — سالم', yellow: 'زرد — نیازمند توجه', red: 'قرمز — در خطر', black: 'سیاه — گیت مسدود' }
 const fa = (v: number) => v.toLocaleString('fa-IR')
 
