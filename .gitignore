@@ -35,3 +35,8 @@ backups/
 *.sw?
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+
+# Impeccable: per-developer config and hook cache
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/*.pending*
