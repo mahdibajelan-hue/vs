@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import { AlertTriangle, ChevronDown, ChevronLeft } from 'lucide-react'
 import { groupLines, PART_META, type GenLine, type Part, type Totals } from './lib/stmtCore'
 import { fa, pct, rial, short } from './ui'
+import { pressable } from '../../lib/pressable'
 
 /** the five figures of a statement; «خالص قابل پرداخت» is the one finance pays */
 export function Figures({ t, part }: { t: Totals; part: Part }) {
@@ -62,7 +63,7 @@ export function LinesTable({ part, lines, editable, onEdit }: { part: Part; line
               const open = !closed[g.label]
               const sum = (k: 'baseAmount' | 'sysCumAmount' | 'cumAmount') => g.lines.reduce((a, l) => a + l[k], 0)
               return [
-                <tr key={`g-${g.label}`} className="g" onClick={() => setClosed((x) => ({ ...x, [g.label]: open }))}>
+                <tr key={`g-${g.label}`} className="g" {...pressable(() => setClosed((x) => ({ ...x, [g.label]: open })), { row: true })}>
                   <td colSpan={5}>{open ? <ChevronDown size={13} aria-hidden /> : <ChevronLeft size={13} aria-hidden />} {g.label} <small style={{ color: 'var(--text-muted)', fontWeight: 600 }}>({fa(g.lines.length)})</small></td>
                   <td className="n">{short(sum('baseAmount'))}</td><td /><td className="n">{short(sum('sysCumAmount'))}</td><td className="n pst-this">{short(sum('cumAmount'))}</td>
                 </tr>,

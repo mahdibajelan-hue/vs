@@ -40,7 +40,6 @@
 /* KPI band — one line of figures, each with its meaning in words */
 .rpx-kpis { display: grid; gap: .55rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); }
 .rpx-kpi { position: relative; padding: .65rem .8rem .7rem; border-radius: .85rem; border: 1px solid var(--border-soft); background: var(--bg-app); overflow: hidden; }
-.rpx-kpi::before { content: ''; position: absolute; inset-inline-start: 0; top: .6rem; bottom: .6rem; width: 3px; border-radius: 3px; background: var(--c, var(--none)); }
 .rpx-kpi dt { font-size: 11px; color: var(--text-muted); }
 .rpx-kpi dd { font-size: 1.35rem; font-weight: 800; margin-top: .1rem; color: var(--c, var(--text-primary)); }
 .rpx-kpi small { display: block; font-size: 10.5px; color: var(--text-muted); margin-top: .05rem; }
@@ -51,13 +50,13 @@
 .rpx-table th { text-align: right; font-size: 11px; font-weight: 700; color: var(--text-muted); padding: .5rem .6rem; background: var(--bg-app); border-bottom: 1px solid var(--border-soft); white-space: nowrap; }
 .rpx-table td { padding: .5rem .6rem; border-bottom: 1px solid var(--border-soft); vertical-align: top; line-height: 1.65; }
 .rpx-table tr:last-child td { border-bottom: 0; }
-.rpx-table tr.tone-bad td:first-child { box-shadow: inset -3px 0 0 var(--bad); }
-.rpx-table tr.tone-warn td:first-child { box-shadow: inset -3px 0 0 var(--warn); }
-.rpx-table tr.tone-good td:first-child { box-shadow: inset -3px 0 0 var(--good); }
+.rpx-table tr.tone-bad td:first-child { box-shadow: inset -1px 0 0 var(--bad); }
+.rpx-table tr.tone-warn td:first-child { box-shadow: inset -1px 0 0 var(--warn); }
+.rpx-table tr.tone-good td:first-child { box-shadow: inset -1px 0 0 var(--good); }
 
 /* item lists (causes, warnings, suggestions) */
 .rpx-items { display: grid; gap: .5rem; }
-.rpx-item { padding: .65rem .8rem; border-radius: .8rem; border: 1px solid var(--border-soft); background: var(--bg-app); border-inline-start: 3px solid var(--c, var(--border-soft)); }
+.rpx-item { padding: .65rem .8rem; border-radius: .8rem; border: 1px solid var(--border-soft); background: var(--bg-app); border-inline-start: 1px solid var(--c, var(--border-soft)); }
 .rpx-item-head { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
 .rpx-item-head b { font-size: 12.5px; line-height: 1.7; }
 .rpx-item p { font-size: 12px; line-height: 1.8; color: var(--text-secondary); margin-top: .2rem; }

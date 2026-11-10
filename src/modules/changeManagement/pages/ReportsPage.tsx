@@ -13,6 +13,7 @@ import { CM_HELP } from '../lib/help'
 import { jd } from '../components/RouteTrack'
 import { nf, pct } from '../components/cm'
 import type { PageProps } from '../ChangeApp'
+import { pressable } from '../../../lib/pressable'
 
 type Rep = 'counts' | 'money' | 'delay' | 'time' | 'outcome' | 'causes'
 type Row = (string | number | null)[]
@@ -124,7 +125,7 @@ export function ReportsPage({ onOpen }: PageProps) {
       {rep === 'causes' && reasonRows.length > 0 && <div className="im-card"><div className="im-section-title">علل پرتکرار</div><HBars rows={reasonRows.map((r) => ({ key: String(r[0]), label: String(r[0]), value: Number(r[1]) }))} /></div>}
       {table.rows.length === 0 ? <div className="im-empty">برای این فیلترها داده‌ای نیست.</div> : (
         <div className="im-table-wrap"><table className="im-table"><thead><tr>{table.headers.map((h) => <th key={h}>{h}</th>)}</tr></thead><tbody>
-          {table.rows.map((r, i) => <tr key={i} style={table.ids ? { cursor: 'pointer' } : undefined} onClick={table.ids ? () => onOpen(table.ids![i], 'flow') : undefined}>{r.map((c, j) => <td key={j} className={typeof c === 'number' ? 'cm-mono' : undefined}>{typeof c === 'number' ? (table.headers[j].includes('٪') ? pct(c) : nf(c)) : c ?? ''}</td>)}</tr>)}
+          {table.rows.map((r, i) => <tr key={i} style={table.ids ? { cursor: 'pointer' } : undefined} {...pressable(table.ids ? () => onOpen(table.ids![i], 'flow') : undefined, { row: true })}>{r.map((c, j) => <td key={j} className={typeof c === 'number' ? 'cm-mono' : undefined}>{typeof c === 'number' ? (table.headers[j].includes('٪') ? pct(c) : nf(c)) : c ?? ''}</td>)}</tr>)}
         </tbody></table></div>
       )}
     </div>

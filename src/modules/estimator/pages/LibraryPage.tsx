@@ -173,7 +173,7 @@ export function LibraryPage({ nowYear }: { nowYear: number }) {
 function Fig({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px]" style={{ color: MUTED_FG }}>{label}</div>
+      <div className="text-[11px]" style={{ color: MUTED_FG }}>{label}</div>
       <div className="est-mono text-[13px] font-bold truncate" style={{ color: strong ? SAFETY : INK }}>{value}</div>
     </div>
   )
@@ -274,7 +274,7 @@ const LIB_STYLE = `
   .est-box-whisker { position: absolute; top: 7px; height: 2px; background: ${MUTED_FG}; }
   .est-box-iqr { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; opacity: .85; transform-origin: left; animation: est-grow .7s var(--ease) both; }
   .est-box-med { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: #fff; }
-  .est-bm { position: relative; padding: 1rem 1.05rem; border-radius: 16px; background: ${SURFACE}; border: 1px solid ${BORDER}; border-top: 3px solid var(--sc); transition: border-color .18s ease, transform .2s var(--ease); }
+  .est-bm { position: relative; padding: 1rem 1.05rem; border-radius: 16px; background: ${SURFACE}; border: 1px solid ${BORDER}; border-top: 1px solid var(--sc); transition: border-color .18s ease, transform .2s var(--ease); }
   @media (hover: hover) and (pointer: fine) { .est-bm:hover { transform: translateY(-2px); } }
   .est-bm.is-out { opacity: .72; border-top-style: dashed; }
   .est-bm-notes { font-size: 10.5px; line-height: 1.8; color: ${MUTED_FG}; margin: 0 0 .6rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

@@ -39,7 +39,7 @@ export function CapstoneCard({ score, note, editable, onChange }: CapstoneCardPr
             {s}
           </button>
         ))}
-        <span className="mr-1 text-[10px] text-muted">{score != null ? SCORE_LABELS_FA[score] : 'ثبت‌نشده'}</span>
+        <span className="mr-1 text-[11px] text-muted">{score != null ? SCORE_LABELS_FA[score] : 'ثبت‌نشده'}</span>
       </div>
       {criteria && (
         <p

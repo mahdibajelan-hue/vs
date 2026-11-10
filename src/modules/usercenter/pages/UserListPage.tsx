@@ -9,6 +9,7 @@ import { Avatar, Badge, EmptyState, Segmented, StatusBadge, TypeBadge } from '..
 import { StatusDialog } from '../components/StatusDialog'
 import { KpiCard } from '../components/KpiCard'
 import type { ProfileTab } from './UserProfilePage'
+import { pressable } from '../../../lib/pressable'
 
 export type Quick = 'all' | 'active' | 'inactive' | 'admin' | 'noproject' | 'never'
 export type SortKey = 'name' | 'status' | 'projects' | 'lastSignIn' | 'created'
@@ -217,7 +218,7 @@ export function UserListPage({
                   {shown.map((u, i) => {
                     const st = stats.get(u.id)
                     return (
-                      <tr key={u.id} style={{ '--i': i } as CSSProperties} onClick={() => onOpen(u.id)}>
+                      <tr key={u.id} style={{ '--i': i } as CSSProperties} {...pressable(() => onOpen(u.id), { row: true })}>
                         <td>
                           <div className="flex items-center gap-3">
                             <Avatar user={u} size={36} />
@@ -246,7 +247,7 @@ export function UserListPage({
               {shown.map((u, i) => {
                 const st = stats.get(u.id)
                 return (
-                  <li key={u.id} style={{ '--i': i, cursor: 'pointer' } as CSSProperties} className="uc-list-item flex flex-col gap-2.5 p-4" onClick={() => onOpen(u.id)}>
+                  <li key={u.id} style={{ '--i': i, cursor: 'pointer' } as CSSProperties} className="uc-list-item flex flex-col gap-2.5 p-4" {...pressable(() => onOpen(u.id))}>
                     <div className="flex items-center gap-3">
                       <Avatar user={u} size={42} />
                       <div className="min-w-0 flex-1">

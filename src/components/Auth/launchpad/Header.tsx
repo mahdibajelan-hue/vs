@@ -42,7 +42,7 @@ export function Header() {
       {isAuthed && (
         <div className="tb-bar relative flex items-center gap-1 sm:gap-1.5" role="toolbar" aria-label="میانبرهای سامانه">
           <span
-            className="mr-1 hidden items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[10px] font-bold tracking-wide sm:flex"
+            className="mr-1 hidden items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-bold tracking-wide sm:flex"
             style={{ borderColor: 'color-mix(in srgb, var(--radar-green) 35%, transparent)', color: 'var(--radar-green)', background: 'color-mix(in srgb, var(--radar-green) 8%, transparent)' }}
             dir="ltr"
           >

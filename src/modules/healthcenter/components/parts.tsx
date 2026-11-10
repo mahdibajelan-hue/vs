@@ -2,6 +2,7 @@ import { useId, useMemo, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp, CircleCheck, CircleHelp, Eye, Minus, Siren, TriangleAlert } from 'lucide-react'
 import { Spark, useCountUp } from '../../executive/components/viz'
 import { DEF, STATUS_COLOR, STATUS_FA, rangeText, type Band, type HealthResult, type Indicator, type OrganKey, type Status } from '../lib/healthCore'
+import { pressable } from '../../../lib/pressable'
 
 export const fa = (v: number | null | undefined, d = 0) => (v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('fa-IR', { maximumFractionDigits: d }))
 export const valueText = (id: string, v: number | null) => (v == null ? 'داده ناقص' : fa(v, DEF[id]?.digits ?? 0))
@@ -135,7 +136,7 @@ export function LabTable({ r, bands, onOpen }: { r: HealthResult; bands: Record<
           {LAB_ORDER.map((id) => {
             const d = DEF[id], ind = r.indicators[id], b = bands[id]
             return (
-              <tr key={id} className={ind.status === 'critical' || ind.status === 'bad' ? 'is-out' : ''} onClick={() => onOpen(id)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(id) } }}>
+              <tr key={id} className={ind.status === 'critical' || ind.status === 'bad' ? 'is-out' : ''} {...pressable(() => onOpen(id), { row: true })} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(id) } }}>
                 <td><span className="phc-lab-code">{LAB_CODE[id]}</span><span className="phc-lab-name"><b>{d.medical}</b><small>{d.label}</small></span></td>
                 <td className="phc-lab-val" style={{ color: STATUS_COLOR[ind.status] }}>{valueText(id, ind.value)}</td>
                 <td className="phc-lab-range">{rangeText(id, b)}</td>

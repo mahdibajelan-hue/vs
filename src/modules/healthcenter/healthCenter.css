@@ -28,7 +28,7 @@
 .phc-brand { display: flex; align-items: center; gap: .8rem; min-width: 0; }
 .phc-brand-ico { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: .8rem; color: #04201c; background: linear-gradient(135deg, #5eead4, #22d3ee); box-shadow: 0 0 24px -4px rgb(45 212 191 / .7); }
 .phc-brand-txt { display: grid; line-height: 1.15; }
-.phc-brand-txt b { font-size: 14px; letter-spacing: .14em; font-weight: 900; background: linear-gradient(90deg, #ccfbf1, #7dd3fc); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.phc-brand-txt b { font-size: 14px; letter-spacing: .14em; font-weight: 900; color: #ccfbf1; }
 .phc-brand-txt small { font-size: 10.5px; letter-spacing: .22em; color: var(--teal); text-transform: uppercase; }
 .phc-brand-txt i { font-style: normal; color: var(--ink-3); padding: 0 .15rem; }
 .phc-brand-proj { display: grid; min-width: 0; padding-inline-start: .8rem; border-inline-start: 1px solid var(--line); }
@@ -110,10 +110,10 @@
 .phc-domains button:active { transform: scale(.98); }
 @media (hover: hover) and (pointer: fine) { .phc-domains button:hover { border-color: color-mix(in srgb, var(--c) 55%, var(--line)); } }
 .phc-domains span:first-child { display: grid; font-size: 12px; font-weight: 700; }
-.phc-domains small { font-size: 10px; font-weight: 500; color: var(--ink-3); }
+.phc-domains small { font-size: 11px; font-weight: 500; color: var(--ink-3); }
 .phc-domains b { font-size: 20px; font-weight: 900; color: var(--c); font-variant-numeric: tabular-nums; }
 .phc-domains .phc-meter { grid-column: 1 / -1; }
-.phc-domains em { grid-column: 1 / -1; font-style: normal; font-size: 10px; color: #fbbf24; }
+.phc-domains em { grid-column: 1 / -1; font-style: normal; font-size: 11px; color: #fbbf24; }
 
 /* the stage: engineer + hologram */
 .phc-stage { position: relative; display: grid; place-items: center; min-height: 380px; }
@@ -154,10 +154,10 @@
 .phc-ecg { width: 100%; height: 50px; }
 @media (prefers-reduced-motion: no-preference) { .phc-ecg-line { stroke-dasharray: 1400; animation: phc-trace 3.2s linear infinite; } }
 .phc-bp { display: grid; gap: .35rem; width: 100%; }
-.phc-bp > span { display: grid; grid-template-columns: 4.5rem 1fr; align-items: center; gap: .4rem; font-size: 10px; color: var(--ink-3); }
+.phc-bp > span { display: grid; grid-template-columns: 4.5rem 1fr; align-items: center; gap: .4rem; font-size: 11px; color: var(--ink-3); }
 .phc-bp i { display: block; height: 8px; border-radius: 99px; background: var(--c); box-shadow: 0 0 10px -2px var(--c); }
 .phc-bp i.is-dia { background: #38bdf8; box-shadow: 0 0 10px -2px #38bdf8; }
-.phc-thermo { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; padding-top: 14px; font-size: 9.5px; color: var(--ink-3); }
+.phc-thermo { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; padding-top: 14px; font-size: 11px; color: var(--ink-3); }
 .phc-thermo::before { content: ''; position: absolute; top: 0; inset-inline: 0; height: 9px; border-radius: 99px; background: linear-gradient(270deg, #22c55e, #eab308 40%, #f97316 60%, #ef4444); opacity: .25; }
 .phc-thermo i { position: absolute; top: 0; inset-inline-start: 0; height: 9px; border-radius: 99px; background: linear-gradient(270deg, #22c55e, var(--c)); box-shadow: 0 0 10px -2px var(--c); }
 .phc-thermo small:nth-child(3) { text-align: center; } .phc-thermo small:nth-child(4) { text-align: left; }
@@ -167,7 +167,7 @@
 
 /* status chip */
 .phc-chip { display: inline-flex; align-items: center; gap: .3rem; padding: .12rem .5rem; border-radius: 99px; font-size: 11px; font-weight: 700; white-space: nowrap; color: var(--c); background: color-mix(in srgb, var(--c) 13%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); }
-.phc-chip b { font-family: var(--font-mono); font-size: 10px; padding: 0 .25rem; border-radius: .3rem; color: #fff; background: var(--c); }
+.phc-chip b { font-family: var(--font-mono); font-size: 11px; padding: 0 .25rem; border-radius: .3rem; color: #fff; background: var(--c); }
 
 /* blood test */
 .phc-lab-wrap { overflow-x: auto; border-radius: .9rem; border: 1px solid var(--line); }
@@ -270,7 +270,7 @@
 .phc-ocard-txt em { font-style: normal; font-size: 10.5px; color: color-mix(in srgb, var(--c) 75%, #fff); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .phc-ocard-score { flex: none; display: grid; justify-items: end; line-height: 1.1; }
 .phc-ocard-score strong { font-size: 24px; font-weight: 900; color: var(--c); text-shadow: 0 0 14px color-mix(in srgb, var(--c) 55%, transparent); font-variant-numeric: tabular-nums; }
-.phc-ocard-score small { font-size: 10px; color: var(--ink-3); }
+.phc-ocard-score small { font-size: 11px; color: var(--ink-3); }
 .phc-tally { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .3rem; }
 .phc-tally span { display: inline-flex; align-items: center; gap: .25rem; padding: .15rem .5rem; border-radius: 99px; font-size: 11px; font-weight: 700; color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); white-space: nowrap; }
 
@@ -350,7 +350,7 @@
 .phc-rx-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; padding: .5rem .6rem; border-radius: .7rem; background: rgb(2 6 23 / .4); border: 1px solid var(--line); font-size: 12px; }
 .phc-rx-list li > button, .phc-rx-list li > span { display: grid; gap: .1rem; text-align: right; min-width: 0; }
 .phc-rx-list li span span, .phc-rx-list li button span { font-size: 11px; color: var(--ink-3); line-height: 1.6; }
-.phc-rx-list em { flex: none; font-style: normal; font-size: 10px; padding: .05rem .4rem; border-radius: 99px; color: var(--ink-2); background: rgb(148 163 184 / .12); }
+.phc-rx-list em { flex: none; font-style: normal; font-size: 11px; padding: .05rem .4rem; border-radius: 99px; color: var(--ink-2); background: rgb(148 163 184 / .12); }
 .phc-rx-prog { padding: .7rem .8rem; border-radius: .8rem; border: 1px solid var(--line); background: rgb(2 6 23 / .4); }
 .phc-rx-prog p { font-size: 12.5px; font-weight: 700; line-height: 1.8; }
 .phc-rx-prog ul { margin-top: .4rem; padding-inline-start: 1rem; list-style: disc; font-size: 11.5px; color: var(--ink-2); line-height: 1.8; }

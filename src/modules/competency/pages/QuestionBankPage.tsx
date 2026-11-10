@@ -259,8 +259,8 @@ function TechnicalQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
             {questionBank.map((q) => (
               <div key={q.id} className="glass-panel rounded-xl p-3.5">
                 <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-secondary">{jobRoleLabel(jobRoleConfigs, q.jobRole)}</span>
-                  <span className="rounded-full bg-purple-500/12 px-2 py-0.5 text-[9.5px] font-bold text-purple-200">{QUESTION_TYPE_LABEL_FA[q.category]}</span>
+                  <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-bold text-secondary">{jobRoleLabel(jobRoleConfigs, q.jobRole)}</span>
+                  <span className="rounded-full bg-purple-500/12 px-2 py-0.5 text-[11px] font-bold text-purple-200">{QUESTION_TYPE_LABEL_FA[q.category]}</span>
                   <ApprovalBadge status={q.approvalStatus} />
                 </div>
                 <p className="text-xs leading-6">{q.questionText}</p>
@@ -303,8 +303,8 @@ function TechnicalQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
                 roleFilter === role ? 'border-purple-400/50 bg-purple-500/15' : 'border-white/10 bg-white/[0.02] hover:bg-white/5'
               }`}
             >
-              <p className="truncate text-[10px] font-bold">{labelFa}</p>
-              <p className="num text-[10px] text-muted">
+              <p className="truncate text-[11px] font-bold">{labelFa}</p>
+              <p className="num text-[11px] text-muted">
                 {(c?.active ?? 0).toLocaleString('fa-IR')} فعال / {(c?.total ?? 0).toLocaleString('fa-IR')} کل
               </p>
             </button>
@@ -346,27 +346,27 @@ function TechnicalQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
           {filtered.map((q) => (
             <div key={q.id} className="glass-panel rounded-xl p-3.5">
               <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-secondary">{jobRoleLabel(jobRoleConfigs, q.jobRole)}</span>
-                <span className="rounded-full bg-purple-500/12 px-2 py-0.5 text-[9.5px] font-bold text-purple-200">{QUESTION_TYPE_LABEL_FA[q.category]}</span>
+                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-bold text-secondary">{jobRoleLabel(jobRoleConfigs, q.jobRole)}</span>
+                <span className="rounded-full bg-purple-500/12 px-2 py-0.5 text-[11px] font-bold text-purple-200">{QUESTION_TYPE_LABEL_FA[q.category]}</span>
                 <span
-                  className="rounded-full px-2 py-0.5 text-[9.5px] font-bold"
+                  className="rounded-full px-2 py-0.5 text-[11px] font-bold"
                   style={{ background: `${QUESTION_DIFFICULTY_COLOR[q.difficulty]}1c`, color: QUESTION_DIFFICULTY_COLOR[q.difficulty] }}
                 >
                   {QUESTION_DIFFICULTY_LABEL_FA[q.difficulty]}
                 </span>
-                {q.subCategory && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">{q.subCategory}</span>}
+                {q.subCategory && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-muted">{q.subCategory}</span>}
                 {q.standardReference && (
-                  <span className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[9.5px] text-amber-300">
+                  <span className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300">
                     <ShieldAlert size={10} /> {q.standardReference}
                   </span>
                 )}
                 {q.version > 1 && (
-                  <span className="num rounded-full bg-sky-500/12 px-2 py-0.5 text-[9.5px] font-bold text-sky-300">نسخه {q.version.toLocaleString('fa-IR')}</span>
+                  <span className="num rounded-full bg-sky-500/12 px-2 py-0.5 text-[11px] font-bold text-sky-300">نسخه {q.version.toLocaleString('fa-IR')}</span>
                 )}
-                {q.supersededBy && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">نسخه جدیدتری از این سؤال ثبت شده</span>}
+                {q.supersededBy && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-muted">نسخه جدیدتری از این سؤال ثبت شده</span>}
                 {q.approvalStatus !== 'APPROVED' && <ApprovalBadge status={q.approvalStatus} />}
                 <span
-                  className={`mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold ${
+                  className={`mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
                     q.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'
                   }`}
                 >
@@ -442,7 +442,7 @@ function ApprovalBadge({ status }: { status: CompQuestionBankItem['approvalStatu
   if (status === 'APPROVED') return null
   const toneClass = status === 'REJECTED' ? 'bg-red-500/12 text-red-300' : 'bg-amber-500/12 text-amber-300'
   return (
-    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold ${toneClass}`}>
+    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${toneClass}`}>
       <Clock size={10} /> {QUESTION_APPROVAL_STATUS_LABEL_FA[status]}
     </span>
   )
@@ -614,7 +614,7 @@ function QuestionEditorModal({
         )}
 
         <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] p-2.5">
-          <p className="mb-1.5 text-[10px] font-bold text-muted">کنترل کیفیت سؤال</p>
+          <p className="mb-1.5 text-[11px] font-bold text-muted">کنترل کیفیت سؤال</p>
           <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
             {checklist.map((c) => (
               <p key={c.label} className={`flex items-center gap-1.5 text-[10.5px] ${c.ok ? 'text-emerald-300' : 'text-muted'}`}>
@@ -622,7 +622,7 @@ function QuestionEditorModal({
               </p>
             ))}
           </div>
-          {!allOk && <p className="mt-1.5 text-[10px] text-amber-300">می‌توانید به‌عنوان پیش‌نویس ذخیره کنید، اما پیش از فعال‌سازی نهایی موارد بالا را کامل کنید.</p>}
+          {!allOk && <p className="mt-1.5 text-[11px] text-amber-300">می‌توانید به‌عنوان پیش‌نویس ذخیره کنید، اما پیش از فعال‌سازی نهایی موارد بالا را کامل کنید.</p>}
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
@@ -746,14 +746,14 @@ function PersonalityQuestionBank({ isModuleAdmin, onNavSettings }: { isModuleAdm
           {filtered.map((q) => (
             <div key={q.id} className="glass-panel rounded-xl p-3.5">
               <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                <span className="rounded-full bg-pink-500/12 px-2 py-0.5 text-[9.5px] font-bold text-pink-200">{PERSONALITY_QUESTION_TYPE_LABEL_FA[q.questionType]}</span>
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-secondary">{PERSONALITY_COMPLEXITY_LABEL_FA[q.complexity]}</span>
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">{constructLabel(q)}</span>
-                {q.jobRole && <span className="rounded-full bg-sky-500/12 px-2 py-0.5 text-[9.5px] text-sky-300">{jobRoleLabel(jobRoleConfigs, q.jobRole)}</span>}
-                {q.reverseScored && <span className="rounded-full bg-amber-500/12 px-2 py-0.5 text-[9.5px] text-amber-300">نمره‌گذاری معکوس</span>}
+                <span className="rounded-full bg-pink-500/12 px-2 py-0.5 text-[11px] font-bold text-pink-200">{PERSONALITY_QUESTION_TYPE_LABEL_FA[q.questionType]}</span>
+                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-bold text-secondary">{PERSONALITY_COMPLEXITY_LABEL_FA[q.complexity]}</span>
+                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-muted">{constructLabel(q)}</span>
+                {q.jobRole && <span className="rounded-full bg-sky-500/12 px-2 py-0.5 text-[11px] text-sky-300">{jobRoleLabel(jobRoleConfigs, q.jobRole)}</span>}
+                {q.reverseScored && <span className="rounded-full bg-amber-500/12 px-2 py-0.5 text-[11px] text-amber-300">نمره‌گذاری معکوس</span>}
                 <PersonalityApprovalBadge status={q.approvalStatus} />
                 <span
-                  className={`mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold ${
+                  className={`mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
                     q.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'
                   }`}
                 >
@@ -845,7 +845,7 @@ function PersonalityApprovalBadge({ status }: { status: PersonalityApprovalStatu
   if (status === 'APPROVED') return null
   const toneClass = status === 'REJECTED' ? 'bg-red-500/12 text-red-300' : 'bg-amber-500/12 text-amber-300'
   return (
-    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold ${toneClass}`}>
+    <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${toneClass}`}>
       <Clock size={10} /> {PERSONALITY_APPROVAL_STATUS_LABEL_FA[status]}
     </span>
   )
@@ -1039,7 +1039,7 @@ function PersonalityQuestionEditorModal({
               </select>
             </FormField>
           </div>
-          <p className="mb-1 text-[10px] text-amber-300">حداقل یکی از ویژگی یا بعد رفتاری باید انتخاب شود.</p>
+          <p className="mb-1 text-[11px] text-amber-300">حداقل یکی از ویژگی یا بعد رفتاری باید انتخاب شود.</p>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FormField label="شغل مرتبط (اختیاری — خالی یعنی همه مشاغل)">
@@ -1244,7 +1244,7 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
         {isModuleAdmin && (
           <button
             onClick={() => setEditing('new')}
-            className="flex items-center gap-1.5 rounded-xl bg-teal-500 px-4 py-2 text-xs font-bold text-white hover:bg-teal-400"
+            className="flex items-center gap-1.5 rounded-xl bg-teal-700 px-4 py-2 text-xs font-bold text-white hover:bg-teal-800"
           >
             <Plus size={14} /> سؤال جدید
           </button>
@@ -1281,11 +1281,11 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
           </div>
           <div className="min-w-[180px] text-[11px]">
             <p className="text-muted">گزینهٔ درست محسوساً بلندترین است در</p>
-            <p className={`num text-lg font-extrabold ${health.longestShare > 0.4 ? 'text-red-300' : health.longestShare > 0.3 ? 'text-amber-300' : 'text-emerald-300'}`}>{Math.round(health.longestShare * 100).toLocaleString('fa-IR')}٪ <span className="text-[10px] font-normal text-muted">از سؤال‌ها (مطلوب: زیر ۲۵٪)</span></p>
+            <p className={`num text-lg font-extrabold ${health.longestShare > 0.4 ? 'text-red-300' : health.longestShare > 0.3 ? 'text-amber-300' : 'text-emerald-300'}`}>{Math.round(health.longestShare * 100).toLocaleString('fa-IR')}٪ <span className="text-[11px] font-normal text-muted">از سؤال‌ها (مطلوب: زیر ۲۵٪)</span></p>
           </div>
           <label className="mr-auto flex cursor-pointer items-center gap-1.5 text-[11px] text-secondary"><input type="checkbox" checked={flawOnly} onChange={(e) => setFlawOnly(e.target.checked)} /> فقط سؤال‌های دارای ایراد</label>
           {isModuleAdmin && roleFilter !== 'all' && pendingInScope.length > 0 && (
-            <button onClick={approveAllPending} disabled={bulkBusy} className="flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 py-2 text-[11px] font-bold text-white hover:bg-emerald-400 disabled:opacity-60">
+            <button onClick={approveAllPending} disabled={bulkBusy} className="flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2 text-[11px] font-bold text-white hover:bg-emerald-800 disabled:opacity-60">
               <CheckCircle2 size={13} /> {bulkBusy ? 'در حال تأیید…' : `تأیید ${pendingInScope.length.toLocaleString('fa-IR')} سؤال در انتظار`}
             </button>
           )}
@@ -1303,8 +1303,8 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
                 roleFilter === role ? 'border-teal-400/50 bg-teal-500/15' : 'border-white/10 bg-white/[0.02] hover:bg-white/5'
               }`}
             >
-              <p className="truncate text-[10px] font-bold">{labelFa}</p>
-              <p className="num text-[10px] text-muted">
+              <p className="truncate text-[11px] font-bold">{labelFa}</p>
+              <p className="num text-[11px] text-muted">
                 {(c?.approved ?? 0).toLocaleString('fa-IR')} تأییدشده / {(c?.total ?? 0).toLocaleString('fa-IR')} کل
               </p>
             </button>
@@ -1354,31 +1354,31 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
           {filtered.map((q) => (
             <div key={q.id} className="glass-panel rounded-xl p-3.5">
               <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-secondary">{jobRoleLabel(jobRoleConfigs, q.jobRole)}</span>
-                <span className="rounded-full bg-teal-500/12 px-2 py-0.5 text-[9.5px] font-bold text-teal-200">{QUESTION_TYPE_LABEL_FA[q.category]}</span>
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">{q.topic}</span>
+                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-bold text-secondary">{jobRoleLabel(jobRoleConfigs, q.jobRole)}</span>
+                <span className="rounded-full bg-teal-500/12 px-2 py-0.5 text-[11px] font-bold text-teal-200">{QUESTION_TYPE_LABEL_FA[q.category]}</span>
+                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-muted">{q.topic}</span>
                 <span
-                  className="rounded-full px-2 py-0.5 text-[9.5px] font-bold"
+                  className="rounded-full px-2 py-0.5 text-[11px] font-bold"
                   style={{ background: `${MCQ_DIFFICULTY_COLOR[q.difficulty]}1c`, color: MCQ_DIFFICULTY_COLOR[q.difficulty] }}
                 >
                   {MCQ_DIFFICULTY_LABEL_FA[q.difficulty]}
                 </span>
                 {q.standardRef && (
-                  <span className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[9.5px] text-amber-300">
+                  <span className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300">
                     <ShieldAlert size={10} /> {q.standardRef}
                   </span>
                 )}
                 {q.version > 1 && (
-                  <span className="num rounded-full bg-sky-500/12 px-2 py-0.5 text-[9.5px] font-bold text-sky-300">نسخه {q.version.toLocaleString('fa-IR')}</span>
+                  <span className="num rounded-full bg-sky-500/12 px-2 py-0.5 text-[11px] font-bold text-sky-300">نسخه {q.version.toLocaleString('fa-IR')}</span>
                 )}
                 {q.usageCount > 0 && (
-                  <span className="num rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">{q.usageCount.toLocaleString('fa-IR')} بار استفاده‌شده</span>
+                  <span className="num rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-muted">{q.usageCount.toLocaleString('fa-IR')} بار استفاده‌شده</span>
                 )}
                 {q.approvalStatus !== 'APPROVED' && <ApprovalBadge status={q.approvalStatus} />}
-                {q.itemType !== 'SINGLE' && <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[9.5px] font-bold text-sky-300">{MCQ_ITEM_TYPE_LABEL_FA[q.itemType]}</span>}
-                {(() => { if (q.itemType !== 'SINGLE') return null; const r = mcqQuality({ stem: q.stemFa, options: q.options, correct: q.correctOption }); return r.level === 'OK' ? null : (<span title={r.flaws.map((f) => `${MCQ_FLAW_LABEL_FA[f.kind]}${f.detail ? ` — ${f.detail}` : ''}`).join('\n')} className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold ${r.level === 'BAD' ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300'}`}>{r.level === 'BAD' ? 'ایراد جدی' : 'نیازمند بازبینی'}: {MCQ_FLAW_LABEL_FA[r.flaws[0].kind]}</span>) })()}
+                {q.itemType !== 'SINGLE' && <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-bold text-sky-300">{MCQ_ITEM_TYPE_LABEL_FA[q.itemType]}</span>}
+                {(() => { if (q.itemType !== 'SINGLE') return null; const r = mcqQuality({ stem: q.stemFa, options: q.options, correct: q.correctOption }); return r.level === 'OK' ? null : (<span title={r.flaws.map((f) => `${MCQ_FLAW_LABEL_FA[f.kind]}${f.detail ? ` — ${f.detail}` : ''}`).join('\n')} className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${r.level === 'BAD' ? 'bg-red-500/15 text-red-300' : 'bg-amber-500/15 text-amber-300'}`}>{r.level === 'BAD' ? 'ایراد جدی' : 'نیازمند بازبینی'}: {MCQ_FLAW_LABEL_FA[r.flaws[0].kind]}</span>) })()}
                 <span
-                  className={`mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold ${
+                  className={`mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
                     q.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'
                   }`}
                 >
@@ -1400,7 +1400,7 @@ function McqQuestionBank({ isModuleAdmin }: { isModuleAdmin: boolean }) {
                     key={i}
                     className={`flex items-start gap-1.5 text-[11px] leading-6 ${ok ? 'font-bold text-emerald-300' : 'text-secondary'}`}
                   >
-                    <span className="mt-0.5 shrink-0 text-[9.5px] text-muted">{q.itemType === 'ORDER' ? (keyArr.indexOf(i) + 1).toLocaleString('fa-IR') : MCQ_OPTION_LETTERS[i]}.</span>
+                    <span className="mt-0.5 shrink-0 text-[11px] text-muted">{q.itemType === 'ORDER' ? (keyArr.indexOf(i) + 1).toLocaleString('fa-IR') : MCQ_OPTION_LETTERS[i]}.</span>
                     {opt}
                     {ok && <CheckCircle2 size={11} className="mt-0.5 shrink-0" />}
                   </p>
@@ -1651,7 +1651,7 @@ function McqQuestionEditorModal({
           <button onClick={onClose} className="rounded-lg border border-white/10 px-3.5 py-1.5 text-xs">
             انصراف
           </button>
-          <button onClick={submit} disabled={saving || !canSubmit} className="rounded-lg bg-teal-500 px-4 py-1.5 text-xs font-bold text-white hover:bg-teal-400 disabled:opacity-50">
+          <button onClick={submit} disabled={saving || !canSubmit} className="rounded-lg bg-teal-700 px-4 py-1.5 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-50">
             {saving ? 'در حال ذخیره…' : 'ذخیره سؤال'}
           </button>
         </div>

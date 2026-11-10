@@ -56,5 +56,5 @@ export function ForecastCard({ masterProjectId }: { masterProjectId: string }) {
   )
 }
 function Fig({ label, v, sub, c, strong }: { label: string; v: string; sub?: string; c?: string; strong?: boolean }) {
-  return <div><p className="fin-text-muted flex items-center gap-1 text-[10.5px]">{c && <i className="inline-block h-2 w-2 rounded-sm" style={{ background: c }} />}{label}</p><p className={`num mt-0.5 ${strong ? 'text-sm font-extrabold' : 'font-bold'}`}>{v}</p>{sub && <p className="text-[10px] fin-text-muted">{sub}</p>}</div>
+  return <div><p className="fin-text-muted flex items-center gap-1 text-[10.5px]">{c && <i className="inline-block h-2 w-2 rounded-sm" style={{ background: c }} />}{label}</p><p className={`num mt-0.5 ${strong ? 'text-sm font-extrabold' : 'font-bold'}`}>{v}</p>{sub && <p className="text-[11px] fin-text-muted">{sub}</p>}</div>
 }

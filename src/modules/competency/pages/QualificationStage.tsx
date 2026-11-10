@@ -113,7 +113,7 @@ export function EvaluationSummaryCard({
           <MessageSquareText size={13} className="text-purple-300" /> نتایج مصاحبه (خودکار — میانگین داوران)
         </div>
         <p className="num text-2xl font-extrabold text-purple-300">{interviewScore != null ? interviewScore.toLocaleString('fa-IR') : '—'} / ۵</p>
-        <p className="mt-1 text-[10px] text-muted">{overallPercent != null ? `٪${overallPercent.toLocaleString('fa-IR')} میانگین وزنی حوزه‌ها` : 'هنوز امتیازدهی نشده'}</p>
+        <p className="mt-1 text-[11px] text-muted">{overallPercent != null ? `٪${overallPercent.toLocaleString('fa-IR')} میانگین وزنی حوزه‌ها` : 'هنوز امتیازدهی نشده'}</p>
       </div>
 
       <div className="glass-panel space-y-3 rounded-2xl p-4">
@@ -188,7 +188,7 @@ function QualificationChip({
           </button>
         ))}
       </div>
-      {hint && <p className="mt-1.5 text-[10px] text-muted">{hint}</p>}
+      {hint && <p className="mt-1.5 text-[11px] text-muted">{hint}</p>}
     </div>
   )
 }

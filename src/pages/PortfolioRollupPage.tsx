@@ -141,7 +141,7 @@ function PortfolioCard({ rollup, onOpenProject }: { rollup: PortfolioProgressRol
           {open ? <ChevronDown size={15} className="text-muted" /> : <ChevronLeft size={15} className="text-muted" />}
           <Folders size={15} className="text-brand-400" />
           <span className="text-sm font-bold">{rollup.portfolio.name}</span>
-          <span className="text-[10px] text-muted">({rollup.portfolio.code})</span>
+          <span className="text-[11px] text-muted">({rollup.portfolio.code})</span>
         </span>
       </button>
       <div className="mt-2 pr-6">
@@ -182,7 +182,7 @@ function ProgramRow({ rollup, onOpenProject }: { rollup: ProgramProgressRollup; 
           {open ? <ChevronDown size={13} className="text-muted" /> : <ChevronLeft size={13} className="text-muted" />}
           <Layers size={13} className="text-orange-400" />
           <span className="text-xs font-bold">{rollup.program.name}</span>
-          <span className="text-[10px] text-muted">({rollup.program.code})</span>
+          <span className="text-[11px] text-muted">({rollup.program.code})</span>
         </span>
       </button>
       <div className="mt-1.5 pr-5">

@@ -31,7 +31,7 @@ export function RiskHeatMap({
       <p className="mb-1 text-sm font-bold">نقشه حرارتی ریسک (۵×۵)</p>
       <p className="mb-3 text-[11px] text-muted">احتمال وقوع × شدت پیامد بر اساس آخرین وضعیت — روی هر خانه کلیک کنید تا ریسک‌های آن دیده شوند</p>
       <div className="flex gap-1.5 sm:gap-2" dir="ltr">
-        <div className="flex shrink-0 flex-col justify-between py-1 text-[9px] text-muted sm:text-[10px]">
+        <div className="flex shrink-0 flex-col justify-between py-1 text-[11px] text-muted sm:text-[11px]">
           {LEVELS.map((lvl) => (
             <div key={lvl} className="flex h-10 w-4 items-center justify-center sm:h-14 sm:w-5">
               {lvl.toLocaleString('fa-IR')}
@@ -65,15 +65,15 @@ export function RiskHeatMap({
               }),
             )}
           </div>
-          <div className="mt-1.5 grid grid-cols-5 gap-1 text-center text-[9px] text-muted sm:gap-1.5 sm:text-[10px]">
+          <div className="mt-1.5 grid grid-cols-5 gap-1 text-center text-[11px] text-muted sm:gap-1.5 sm:text-[11px]">
             {[1, 2, 3, 4, 5].map((p) => (
               <div key={p}>{p.toLocaleString('fa-IR')}</div>
             ))}
           </div>
-          <p className="mt-1 text-center text-[9px] text-muted sm:text-[10px]">احتمال وقوع →</p>
+          <p className="mt-1 text-center text-[11px] text-muted sm:text-[11px]">احتمال وقوع →</p>
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[10px]">
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px]">
         {(['low', 'medium', 'high', 'critical'] as const).map((lvl) => (
           <span key={lvl} className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-sm" style={{ background: RISK_LEVEL_COLOR[lvl] }} />

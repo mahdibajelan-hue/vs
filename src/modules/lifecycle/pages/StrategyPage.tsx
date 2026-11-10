@@ -79,7 +79,7 @@ export function StrategyPage({ projectId, onBack }: { projectId: string; onBack:
                   className="rounded-xl border p-2.5 text-start transition-colors"
                   style={{ borderColor: active ? STRATEGY_COLOR[k] : 'var(--border-soft)', background: active ? `${STRATEGY_COLOR[k]}1f` : undefined }}>
                   <p className="text-[11px] font-extrabold" style={{ color: active ? STRATEGY_COLOR[k] : undefined }}>{STRATEGY_LABEL_FA[k]}</p>
-                  <p className="mt-0.5 text-[15px] font-extrabold">{faNum(all[k].totalDays)} <span className="text-[10px] font-normal text-muted">روز</span></p>
+                  <p className="mt-0.5 text-[15px] font-extrabold">{faNum(all[k].totalDays)} <span className="text-[11px] font-normal text-muted">روز</span></p>
                   <p className="plc-stat-sub">{saving > 0 ? `${faNum(saving)} روز کوتاه‌تر از متوالی` : 'مبنای مقایسه'}</p>
                 </button>
               )
@@ -119,7 +119,7 @@ export function StrategyPage({ projectId, onBack }: { projectId: string; onBack:
             <div className="flex justify-between"><dt className="text-muted">تکمیل نهایی</dt><dd className="font-bold">{fa(sched.finishDate)}</dd></div>
             <div className="flex justify-between"><dt className="text-muted">مدت کل</dt><dd className="font-bold">{faNum(sched.totalDays)} روز</dd></div>
           </dl>
-          <button onClick={applyToGates} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-sky-500 py-2 text-[11px] font-bold text-white">
+          <button onClick={applyToGates} className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-sky-700 py-2 text-[11px] font-bold text-white">
             <Rocket size={13} /> نوشتن تاریخ‌ها روی گیت‌ها
           </button>
           <p className="plc-stat-sub mt-1.5">فقط تاریخ‌های برنامه‌ای گیت‌ها نوشته می‌شود؛ چیز دیگری تغییر نمی‌کند.</p>
@@ -151,7 +151,7 @@ export function StrategyPage({ projectId, onBack }: { projectId: string; onBack:
             <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="یادداشت نسخه"
               className="min-w-[180px] flex-1 rounded border bg-black/20 px-2 py-1.5 text-[11px]" style={{ borderColor: 'var(--border-soft)' }} />
             <button onClick={() => snapshot('minor')} className="rounded-lg border px-3 py-1.5 text-[11px]" style={{ borderColor: 'var(--border-soft)' }}>ثبت نسخهٔ فرعی</button>
-            <button onClick={() => snapshot('major')} className="rounded-lg bg-sky-500 px-3 py-1.5 text-[11px] font-bold text-white">ثبت نسخهٔ اصلی</button>
+            <button onClick={() => snapshot('major')} className="rounded-lg bg-sky-700 px-3 py-1.5 text-[11px] font-bold text-white">ثبت نسخهٔ اصلی</button>
           </div>
           {plan.versions.length === 0 ? <EmptyState message="هنوز نسخه‌ای ثبت نشده" /> : (
             <div className="overflow-x-auto">

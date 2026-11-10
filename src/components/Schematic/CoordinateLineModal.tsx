@@ -91,7 +91,7 @@ export function CoordinateLineModal({ onClose, onConfirm }: CoordinateLineModalP
 function CoordField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] text-muted">{label}</span>
+      <span className="mb-1 block text-[11px] text-muted">{label}</span>
       <input type="number" step="0.1" value={value} onChange={(e) => onChange(e.target.value)} className="input num" />
     </label>
   )

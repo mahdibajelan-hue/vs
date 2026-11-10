@@ -47,9 +47,9 @@ export const earlyWarningWidget: WidgetDefinition<EarlyWarning[]> = {
               <p className="text-xs font-bold">{w.warning}</p>
               <ToneBadge tone={w.severity} />
             </div>
-            <p className="mt-1 text-[10px] text-muted">{w.explanation}</p>
-            {w.recommendedAction && <p className="mt-1 text-[10px] text-secondary">اقدام پیشنهادی: {w.recommendedAction}</p>}
-            <p className="mt-1 text-[9px] text-muted">منبع: {w.source}</p>
+            <p className="mt-1 text-[11px] text-muted">{w.explanation}</p>
+            {w.recommendedAction && <p className="mt-1 text-[11px] text-secondary">اقدام پیشنهادی: {w.recommendedAction}</p>}
+            <p className="mt-1 text-[11px] text-muted">منبع: {w.source}</p>
           </div>
         ))}
       </div>
@@ -72,7 +72,7 @@ export const managementAttentionWidget: WidgetDefinition<AttentionItem[]> = {
           <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2.5 py-1.5">
             <div className="min-w-0">
               <p className="truncate text-xs font-medium">{item.title}</p>
-              <p className="text-[10px] text-muted">{item.reason}</p>
+              <p className="text-[11px] text-muted">{item.reason}</p>
             </div>
             <ToneBadge tone={item.severity} />
           </div>
@@ -96,7 +96,7 @@ export const executiveInsightWidget: WidgetDefinition<InsightStatement[]> = {
           <ToneBadge tone={s.tone} />
           <div className="min-w-0">
             <p className="text-xs leading-6">{s.text}</p>
-            <p className="text-[9px] text-muted">منبع: {s.sourceLabel}</p>
+            <p className="text-[11px] text-muted">منبع: {s.sourceLabel}</p>
           </div>
         </div>
       ))}

@@ -65,7 +65,7 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
               <p className="text-[11px] leading-6 text-secondary">{bankItem.referenceAnswer}</p>
               {bankItem.keyPoints.length > 0 && (
                 <div>
-                  <p className="mb-1 text-[10px] font-bold text-purple-200">نکات کلیدی مورد انتظار</p>
+                  <p className="mb-1 text-[11px] font-bold text-purple-200">نکات کلیدی مورد انتظار</p>
                   <ul className="space-y-0.5">
                     {bankItem.keyPoints.map((k, i) => (
                       <li key={i} className="flex items-start gap-1.5 text-[10.5px] leading-5 text-secondary">
@@ -77,7 +77,7 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
               )}
               {bankItem.excellentAnswerIndicators.length > 0 && (
                 <div>
-                  <p className="mb-1 flex items-center gap-1 text-[10px] font-bold text-emerald-300">
+                  <p className="mb-1 flex items-center gap-1 text-[11px] font-bold text-emerald-300">
                     <Sparkles size={11} /> نشانه‌های پاسخ ممتاز
                   </p>
                   <ul className="space-y-0.5">
@@ -91,7 +91,7 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
               )}
               {bankItem.commonMistakes.length > 0 && (
                 <div>
-                  <p className="mb-1 flex items-center gap-1 text-[10px] font-bold text-red-300">
+                  <p className="mb-1 flex items-center gap-1 text-[11px] font-bold text-red-300">
                     <XCircle size={11} /> خطاهای رایج
                   </p>
                   <ul className="space-y-0.5">
@@ -104,7 +104,7 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
                 </div>
               )}
               {bankItem.standardReference && (
-                <p className="flex items-center gap-1.5 text-[10px] text-muted">
+                <p className="flex items-center gap-1.5 text-[11px] text-muted">
                   <ShieldAlert size={11} /> مرجع/استاندارد: <span className="font-bold text-secondary">{bankItem.standardReference}</span>
                 </p>
               )}
@@ -116,8 +116,8 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
       {panelVotes && panelVotes.length > 0 && (
         <div className="mt-2.5 rounded-lg border border-purple-400/20 bg-purple-500/[0.06] p-2.5">
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-[10px] font-bold text-purple-200">نظر داوران</span>
-            <span className="num text-[10px] text-purple-200">میانگین: {average != null ? average.toLocaleString('fa-IR') : '—'}</span>
+            <span className="text-[11px] font-bold text-purple-200">نظر داوران</span>
+            <span className="num text-[11px] text-purple-200">میانگین: {average != null ? average.toLocaleString('fa-IR') : '—'}</span>
           </div>
           <div className="space-y-1">
             {panelVotes.map((v) => (
@@ -151,7 +151,7 @@ export function QuestionScoreCard({ index, question, hint, answer, editable, onC
             {s}
           </button>
         ))}
-        <span className="mr-1 text-[10px] text-muted">{score != null ? SCORE_LABELS_FA[score] : 'ثبت‌نشده'}</span>
+        <span className="mr-1 text-[11px] text-muted">{score != null ? SCORE_LABELS_FA[score] : 'ثبت‌نشده'}</span>
       </div>
       {criteria && (
         <p

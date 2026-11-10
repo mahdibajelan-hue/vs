@@ -121,7 +121,7 @@ export function JalaliDateInput({ value, onChange, className = '' }: JalaliDateI
               </div>
               <div className="grid grid-cols-7 gap-1 mb-1">
                 {JALALI_WEEKDAYS.map((w, i) => (
-                  <span key={i} className="text-center text-[10px] text-muted">
+                  <span key={i} className="text-center text-[11px] text-muted">
                     {w}
                   </span>
                 ))}

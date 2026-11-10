@@ -25,7 +25,7 @@ export function RiskExposureTrendWidget({ risks, assessments }: { risks: RmRisk[
       <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
         <TrendingUp size={12} style={{ color: CAT.risk }} /> روند مواجهه ریسک پورتفولیو
       </p>
-      <p className="mb-2 text-[10px] leading-5 text-muted">مجموع امتیاز ریسک‌های فعال در هر تاریخ شناسایی یا بازبینی واقعی — فقط از سابقهٔ واقعی ساخته می‌شود.</p>
+      <p className="mb-2 text-[11px] leading-5 text-muted">مجموع امتیاز ریسک‌های فعال در هر تاریخ شناسایی یا بازبینی واقعی — فقط از سابقهٔ واقعی ساخته می‌شود.</p>
       {points.length < 2 ? (
         <div className="flex h-40 items-center justify-center text-center text-[11px] text-muted">داده تاریخی کافی برای رسم روند ثبت نشده (نیاز به حداقل دو رویداد شناسایی/بازبینی ریسک)</div>
       ) : (
@@ -81,10 +81,10 @@ export function DependencyWidget({
     <div className="glass-panel rounded-2xl p-4">
       <RankedBarChart title="وابستگی‌های بین‌پروژه‌ای" icon={<Network size={12} style={{ color: CAT.strategic }} />} data={data} unit="پروژه وابسته" onBarClick={onDrillProject} />
       {dependencies.length === 0 ? (
-        <p className="mt-2 text-[10px] text-muted">هنوز هیچ وابستگی بین‌پروژه‌ای در شناسنامه پروژه‌ها ثبت نشده است.</p>
+        <p className="mt-2 text-[11px] text-muted">هنوز هیچ وابستگی بین‌پروژه‌ای در شناسنامه پروژه‌ها ثبت نشده است.</p>
       ) : atRisk.length > 0 ? (
         <div className="mt-3 space-y-1">
-          <p className="text-[10px] font-bold text-red-300">وابستگی‌های در معرض ریسک تاخیر آبشاری:</p>
+          <p className="text-[11px] font-bold text-red-300">وابستگی‌های در معرض ریسک تاخیر آبشاری:</p>
           {atRisk.map((i) => (
             <button
               key={i.dependency.id}
@@ -98,7 +98,7 @@ export function DependencyWidget({
           ))}
         </div>
       ) : (
-        <p className="mt-2 text-[10px] text-green-300">هیچ‌کدام از پروژه‌های مرجع وابستگی در وضعیت تاخیر یا ناسالم نیستند.</p>
+        <p className="mt-2 text-[11px] text-green-300">هیچ‌کدام از پروژه‌های مرجع وابستگی در وضعیت تاخیر یا ناسالم نیستند.</p>
       )}
     </div>
   )

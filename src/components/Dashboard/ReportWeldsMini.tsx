@@ -2,7 +2,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 
 import type { WeldsBySize } from '../../lib/progress'
 
 export function ReportWeldsMini({ data }: { data: WeldsBySize[] }) {
-  if (data.length === 0) return <p className="text-[10px] text-center py-6" style={{ color: '#94a3b8' }}>داده‌ای موجود نیست</p>
+  if (data.length === 0) return <p className="text-[11px] text-center py-6" style={{ color: '#94a3b8' }}>داده‌ای موجود نیست</p>
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>

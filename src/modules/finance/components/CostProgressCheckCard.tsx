@@ -43,19 +43,19 @@ export function CostProgressCheckCard({ project, financialPercent }: { project: 
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div>
-              <p className="text-[10px] fin-text-muted">پیشرفت فیزیکی واقعی (چرخهٔ عمر)</p>
+              <p className="text-[11px] fin-text-muted">پیشرفت فیزیکی واقعی (چرخهٔ عمر)</p>
               <p className="num text-xl font-extrabold" style={{ color: '#3e7c74' }}>
                 {check.physicalPercent.toLocaleString('fa-IR')}٪
               </p>
             </div>
             <div>
-              <p className="text-[10px] fin-text-muted">پیشرفت مالی (تاییدشده / بودجه جاری)</p>
+              <p className="text-[11px] fin-text-muted">پیشرفت مالی (تاییدشده / بودجه جاری)</p>
               <p className="num text-xl font-extrabold" style={{ color: '#5c7290' }}>
                 {check.financialPercent.toLocaleString('fa-IR')}٪
               </p>
             </div>
             <div>
-              <p className="text-[10px] fin-text-muted">فاصله (مالی − فیزیکی)</p>
+              <p className="text-[11px] fin-text-muted">فاصله (مالی − فیزیکی)</p>
               <p className="num flex items-center gap-1 text-xl font-extrabold" style={{ color: gap > GAP_THRESHOLD ? '#b5573a' : gap < -GAP_THRESHOLD ? '#b8863b' : '#3e7c74' }}>
                 {gap > 0 ? <ArrowUpRight size={16} /> : gap < 0 ? <ArrowDownRight size={16} /> : <Activity size={16} />}
                 {gap > 0 ? '+' : ''}

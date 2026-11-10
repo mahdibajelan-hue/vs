@@ -101,7 +101,7 @@ export function WorkStatusEditor({ assessment, onDecisionSaved }: { assessment: 
         <button
           onClick={() => setAskNote(true)}
           disabled={!dirty || invalid || saving}
-          className="flex min-h-10 items-center gap-1.5 rounded-xl bg-sky-600 px-3.5 py-2 text-xs font-bold text-white transition-colors hover:bg-sky-500 disabled:opacity-40"
+          className="flex min-h-10 items-center gap-1.5 rounded-xl bg-sky-700 px-3.5 py-2 text-xs font-bold text-white transition-colors hover:bg-sky-800 disabled:opacity-40"
         >
           <Save size={14} aria-hidden /> ذخیره وضعیت اشتغال
         </button>

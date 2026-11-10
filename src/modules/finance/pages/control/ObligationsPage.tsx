@@ -47,7 +47,7 @@ export function ObligationsPage({ masterProjectId }: { masterProjectId: string }
                       <select className="fin-input w-28" value={cl.status} onChange={(e) => upd({ status: e.target.value as Clearance['status'] })}>{(['pending', 'issued', 'expired'] as const).map((s) => <option key={s} value={s}>{ST_FA[s]}</option>)}</select>
                       <input className="fin-input min-w-0 flex-1" dir="ltr" placeholder="شماره" defaultValue={cl.number} onBlur={(e) => e.target.value !== cl.number && upd({ number: e.target.value })} />
                     </div>
-                    <div className="grid grid-cols-2 gap-1.5"><div><span className="text-[10px] fin-text-muted">صدور</span><JalaliDateInput value={cl.issueDate ?? ''} onChange={(v) => upd({ issueDate: v || null })} /></div><div><span className="text-[10px] fin-text-muted">انقضا</span><JalaliDateInput value={cl.expiryDate ?? ''} onChange={(v) => upd({ expiryDate: v || null })} /></div></div>
+                    <div className="grid grid-cols-2 gap-1.5"><div><span className="text-[11px] fin-text-muted">صدور</span><JalaliDateInput value={cl.issueDate ?? ''} onChange={(v) => upd({ issueDate: v || null })} /></div><div><span className="text-[11px] fin-text-muted">انقضا</span><JalaliDateInput value={cl.expiryDate ?? ''} onChange={(v) => upd({ expiryDate: v || null })} /></div></div>
                   </div>
                 )
               })}

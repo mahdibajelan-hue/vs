@@ -51,18 +51,18 @@ export function HealthGauge({
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center" dir="rtl">
           <span className="plc-figure" style={{ color: STATUS_TEXT_COLOR[status] }}>{faNum(score)}</span>
-          <span className="mt-0.5 text-[9px] text-muted">از ۱۰۰</span>
+          <span className="mt-0.5 text-[11px] text-muted">از ۱۰۰</span>
         </div>
       </div>
 
       <span
-        className="mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold text-white"
+        className="mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold text-white"
         style={{ background: STATUS_COLOR[status] }}
       >
         {HEALTH_STATUS_LABEL_FA[status]}
       </span>
 
-      <p className="mt-2 text-center text-[10px] leading-relaxed text-muted">
+      <p className="mt-2 text-center text-[11px] leading-relaxed text-muted">
         {isOverridden
           ? 'تعیین‌شده به‌صورت دستی'
           : drivenBy
@@ -199,16 +199,16 @@ export function GateLadder({
                 <span className="truncate text-[11px] font-bold">گیت EPC</span>
                 <span className="plc-epc-badge">یکپارچه</span>
               </span>
-              <span className="mt-0.5 block truncate text-[9px] text-muted">
+              <span className="mt-0.5 block truncate text-[11px] text-muted">
                 {epcPresentKeys.map((k) => STAGE_LABEL_FA[k]).join(' · ')}
               </span>
             </span>
             <span className="shrink-0 text-left">
-              <span className="block text-[10px] font-extrabold" style={{ color: epcTone }}>
+              <span className="block text-[11px] font-extrabold" style={{ color: epcTone }}>
                 {GATE_STATUS_LABEL_FA[epcStatus]}
               </span>
               {epcBlockers > 0 && (
-                <span className="flex items-center justify-end gap-0.5 text-[9px]" style={{ color: STATUS_TEXT_COLOR.red }}>
+                <span className="flex items-center justify-end gap-0.5 text-[11px]" style={{ color: STATUS_TEXT_COLOR.red }}>
                   <Lock size={8} /> {faNum(epcBlockers)} مانع
                 </span>
               )}
@@ -267,16 +267,16 @@ function GateRow({ gate, status, blockers, isCurrent, onOpenStage }: {
         <GateGlyph status={status} color={tone} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[11px] font-bold">{gate.name}</span>
-          <span className="block truncate text-[9px] text-muted">
+          <span className="block truncate text-[11px] text-muted">
             {STAGE_LABEL_FA[gate.stageKey as StageKey] ?? gate.stageKey}
           </span>
         </span>
         <span className="shrink-0 text-left">
-          <span className="block text-[10px] font-extrabold" style={{ color: tone }}>
+          <span className="block text-[11px] font-extrabold" style={{ color: tone }}>
             {GATE_STATUS_LABEL_FA[status]}
           </span>
           {blockers > 0 && (
-            <span className="flex items-center justify-end gap-0.5 text-[9px]" style={{ color: STATUS_TEXT_COLOR.red }}>
+            <span className="flex items-center justify-end gap-0.5 text-[11px]" style={{ color: STATUS_TEXT_COLOR.red }}>
               <Lock size={8} /> {faNum(blockers)} مانع
             </span>
           )}
@@ -310,17 +310,17 @@ function SubGateRow({ stageKey, gateName, status, blockers, isCurrent, onOpenSta
       >
         <GateGlyph status={status} color={tone} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[10px] font-bold">
+          <span className="block truncate text-[11px] font-bold">
             {STAGE_LABEL_FA[stageKey as StageKey] ?? stageKey}
           </span>
-          {gateName && <span className="block truncate text-[9px] text-muted">{gateName}</span>}
+          {gateName && <span className="block truncate text-[11px] text-muted">{gateName}</span>}
         </span>
         <span className="shrink-0 text-left">
-          <span className="block text-[9px] font-extrabold" style={{ color: tone }}>
+          <span className="block text-[11px] font-extrabold" style={{ color: tone }}>
             {GATE_STATUS_LABEL_FA[status]}
           </span>
           {blockers > 0 && (
-            <span className="flex items-center justify-end gap-0.5 text-[8px]" style={{ color: STATUS_TEXT_COLOR.red }}>
+            <span className="flex items-center justify-end gap-0.5 text-[11px]" style={{ color: STATUS_TEXT_COLOR.red }}>
               <Lock size={7} /> {faNum(blockers)}
             </span>
           )}
@@ -390,7 +390,7 @@ export function ReadinessWaffle({ readiness }: { readiness: StageReadiness | nul
         })}
       </div>
 
-      <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[9px] text-muted">
+      <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
         <Swatch color={COLOR.done} label={`تکمیل‌شده (${faNum(done)})`} />
         {overdue > 0 && <Swatch color={COLOR.overdue} label={`دارای تأخیر (${faNum(overdue)})`} />}
         <Swatch color={COLOR.todo} label={`باقی‌مانده (${faNum(remaining)})`} />

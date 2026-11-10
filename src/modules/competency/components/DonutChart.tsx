@@ -130,7 +130,7 @@ export function DonutChart({
         {(centerLabel || centerValue) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             {centerValue && <span className="num text-lg font-black leading-none" style={{ color: 'var(--text-primary)' }}>{centerValue}</span>}
-            {centerLabel && <span className="fx-muted mt-0.5 text-[9.5px]">{centerLabel}</span>}
+            {centerLabel && <span className="fx-muted mt-0.5 text-[11px]">{centerLabel}</span>}
           </div>
         )}
       </div>

@@ -56,7 +56,7 @@ export function Topbar({ project, title, onMenuClick }: { project: Project | nul
               <UserCircle2 size={14} />
             )}
             {currentUser.fullName || currentUser.email}
-            {role && <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{ROLE_LABEL_FA[role]}</span>}
+            {role && <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[11px]">{ROLE_LABEL_FA[role]}</span>}
           </button>
         )}
         <button

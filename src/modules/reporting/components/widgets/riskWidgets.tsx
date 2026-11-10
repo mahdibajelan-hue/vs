@@ -36,7 +36,7 @@ export const riskTopWidget: WidgetDefinition<TopRiskRow[] | null> = {
           <div key={row.risk.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2.5 py-1.5">
             <div className="min-w-0">
               <p className="truncate text-xs font-medium">{row.risk.title}</p>
-              <p className="text-[10px] text-muted">{row.risk.code}</p>
+              <p className="text-[11px] text-muted">{row.risk.code}</p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <span className="text-[11px] font-bold" style={{ color: RISK_LEVEL_COLOR[row.level] }}>

@@ -24,7 +24,7 @@ export function DemoDataToggle({ className = '' }: { className?: string }) {
 
 export function DemoBadge() {
   return (
-    <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-200" title="داوطلب آزمایشی — در آمار و رتبه‌بندی پیش‌فرض حساب نمی‌شود">
+    <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-bold text-amber-200" title="داوطلب آزمایشی — در آمار و رتبه‌بندی پیش‌فرض حساب نمی‌شود">
       آزمایشی
     </span>
   )

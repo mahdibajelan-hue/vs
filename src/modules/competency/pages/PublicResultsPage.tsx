@@ -243,7 +243,7 @@ export function PublicResultsPage({ token }: { token: string }) {
             </div>
             <div className="cred-title">
               <p className="text-[13.5px] font-extrabold leading-5 text-stone-800">کارت صلاحیت حرفه‌ای</p>
-              <p className="text-[10px] font-medium text-stone-500">Professional Qualification Card</p>
+              <p className="text-[11px] font-medium text-stone-500">Professional Qualification Card</p>
               {row.candidate_position && <p className="mt-1 text-[12px] font-bold leading-5 text-stone-700">{row.candidate_position}</p>}
             </div>
           </div>
@@ -374,7 +374,7 @@ function ProficiencyBar({ score, label }: { score: number; label: string }) {
           {ZONES.map((z) => (
             <div key={z.key} className="cred-spectrum-label">
               <span className="text-[10.5px] font-bold text-stone-700">{z.label}</span>
-              <span className="text-[9.5px] font-medium text-stone-500">{z.range}</span>
+              <span className="text-[11px] font-medium text-stone-500">{z.range}</span>
             </div>
           ))}
         </div>

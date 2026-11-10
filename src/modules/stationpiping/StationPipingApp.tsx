@@ -21,6 +21,7 @@ import { StationPage } from './components/StationPage'
 import { SpGuide } from './components/SpGuide'
 import '../pssr/pssr.css'
 import './sp.css'
+import { pressable } from '../../lib/pressable'
 
 export const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 export const pct = (v: number | null | undefined, d = 1) => (v == null || !Number.isFinite(v) ? '—' : `${fa(v, d)}٪`)
@@ -193,7 +194,7 @@ function Matrix({ per, onOpen }: { per: StationProgress[]; onOpen: (id: string) 
   return (
     <div className="ps-table-wrap"><table className="ps-table spx-matrix">
       <thead><tr><th>ایستگاه</th>{used.map((d) => <th key={d}><i style={{ background: DISC_COLOR[d] }} />{DISC_FA[d]}</th>)}<th>کل</th></tr></thead>
-      <tbody>{per.map((p) => <tr key={p.station.id} className="is-click" onClick={() => onOpen(p.station.id)}>
+      <tbody>{per.map((p) => <tr key={p.station.id} className="is-click" {...pressable(() => onOpen(p.station.id), { row: true })}>
         <td className="ps-nowrap"><b>{p.station.code}</b></td>
         {used.map((d) => { const x = p.disciplines.find((y) => y.discipline === d)!; if (!x.hasScope) return <td key={d} className="spx-cell is-none">—</td>
           const late = x.planned != null && x.actual < x.planned - 5
@@ -247,7 +248,7 @@ function Stations({ onOpen }: { onOpen: (id: string) => void }) {
         <header className="ps-card-head"><b>ایستگاه‌های پروژه</b></header>
         <div className="ps-table-wrap"><table className="ps-table">
           <thead><tr><th>کد</th><th>نوع</th><th>کیلومتر</th><th>بازهٔ برنامه</th><th>پیشرفت</th><th>جوش</th><th>نقشه</th><th /></tr></thead>
-          <tbody>{per.map((p) => <tr key={p.station.id} className="is-click" onClick={() => onOpen(p.station.id)}>
+          <tbody>{per.map((p) => <tr key={p.station.id} className="is-click" {...pressable(() => onOpen(p.station.id), { row: true })}>
             <td><b dir="ltr">{p.station.code}</b>{p.station.name && <small className="ps-meta"> {p.station.name}</small>}</td><td>{KIND_FA[p.station.kind]}</td><td>{p.station.km == null ? '—' : fa(p.station.km, 3)}</td>
             <td className="ps-nowrap">{jd(p.station.plannedStart)} ← {jd(p.station.plannedFinish)}</td>
             <td style={{ minWidth: '9rem' }}>{pct(p.actual)}<Bar actual={p.actual} planned={p.planned} /></td>

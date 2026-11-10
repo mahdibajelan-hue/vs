@@ -139,7 +139,7 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode, doc
                   ))}
                 </select>
                 {initial && form.jobRole !== initial.jobRole && (
-                  <p className="mt-1 text-[10px] text-amber-300">تغییر شغل مورد ارزیابی، سؤالات قبلاً انتخاب‌شده برای این نامزد را پاک می‌کند تا از بانک سؤالات نقش جدید دوباره انتخاب شوند.</p>
+                  <p className="mt-1 text-[11px] text-amber-300">تغییر شغل مورد ارزیابی، سؤالات قبلاً انتخاب‌شده برای این نامزد را پاک می‌کند تا از بانک سؤالات نقش جدید دوباره انتخاب شوند.</p>
                 )}
               </Field>
               <Field label="تاریخ مصاحبه">
@@ -162,7 +162,7 @@ export function ProfileForm({ initial, submitLabel, onSubmit, candidateMode, doc
           <SummaryStat label="سابقه اجرای خط لوله" value={formatDurationFa(pipelineMonths)} />
           <SummaryStat label="کل سابقه بیمه" value={formatDurationFa(insuranceMonths)} />
         </div>
-        <p className="text-[10px] leading-5 text-muted">
+        <p className="text-[11px] leading-5 text-muted">
           سابقهٔ کل و سابقهٔ خط لوله از جمع دوره‌های ثبت‌شده در بخش «سوابق شغلی» زیر محاسبه می‌شود؛ هر موقعیتی که با تیک «احداث خط لوله» علامت بخورد در سابقهٔ
           خط لوله هم لحاظ می‌شود.
         </p>
@@ -209,7 +209,7 @@ function SummaryStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-center">
       <p className="num text-sm font-extrabold text-purple-300">{value}</p>
-      <p className="mt-0.5 text-[10px] text-muted">{label}</p>
+      <p className="mt-0.5 text-[11px] text-muted">{label}</p>
     </div>
   )
 }
@@ -226,7 +226,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function DateField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] text-muted">{label}</span>
+      <span className="mb-1 block text-[11px] text-muted">{label}</span>
       <JalaliDateInput value={value} onChange={onChange} />
     </label>
   )

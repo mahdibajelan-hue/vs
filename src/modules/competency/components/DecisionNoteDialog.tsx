@@ -35,7 +35,7 @@ export function DecisionNoteDialog({ decision, candidateName, onCancel, onConfir
           {required && !ok && note.length > 0 && <p className="mt-1 text-[10.5px] text-amber-300">متن کوتاه است.</p>}
           <div className="mt-4 flex justify-end gap-2 border-t border-white/10 pt-3">
             <button onClick={onCancel} className="rounded-xl border border-white/10 px-3.5 py-2 text-xs text-secondary hover:bg-white/5">انصراف</button>
-            <button onClick={submit} disabled={!ok || saving} className="flex items-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white hover:bg-sky-500 disabled:opacity-40">
+            <button onClick={submit} disabled={!ok || saving} className="flex items-center gap-1.5 rounded-xl bg-sky-700 px-4 py-2 text-xs font-bold text-white hover:bg-sky-800 disabled:opacity-40">
               {saving && <Loader2 size={13} className="animate-spin" />} ثبت و ادامه
             </button>
           </div>

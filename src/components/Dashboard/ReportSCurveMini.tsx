@@ -3,7 +3,7 @@ import type { SCurvePoint } from '../../lib/progress'
 import { formatJalali } from '../../lib/jalali'
 
 export function ReportSCurveMini({ data }: { data: SCurvePoint[] }) {
-  if (data.length === 0) return <p className="text-[10px] text-center py-6" style={{ color: '#94a3b8' }}>داده‌ای موجود نیست</p>
+  if (data.length === 0) return <p className="text-[11px] text-center py-6" style={{ color: '#94a3b8' }}>داده‌ای موجود نیست</p>
   return (
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>

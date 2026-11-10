@@ -9,6 +9,7 @@ import { faNum, shamsi } from '../lib/fa'
 import { Avatar, Card, EmptyState, Kpi, Meter, Pill, SectionHead, SeverityDot, StatusPill } from '../components/ui'
 import { MISSION_STATUS_LABEL } from '../types'
 import type { PortfolioData } from '../repo/types'
+import { pressable } from '../../../lib/pressable'
 
 const TONE_ICON = { bad: TriangleAlert, warn: TriangleAlert, info: Lightbulb, good: CircleCheck } as const
 const TONE_VAR = { bad: 'var(--ms-bad)', warn: 'var(--ms-warn)', info: 'var(--ms-sky)', good: 'var(--ms-good)' } as const
@@ -284,7 +285,7 @@ export function DashboardPage() {
             </thead>
             <tbody>
               {data.missions.slice(0, 6).map((m) => (
-                <tr key={m.id} className="is-click" onClick={() => go({ kind: 'mission', id: m.id })}>
+                <tr key={m.id} className="is-click" {...pressable(() => go({ kind: 'mission', id: m.id }), { row: true })}>
                   <td className="font-bold">{m.code}</td>
                   <td>{m.requesterName}</td>
                   <td>{m.projectName}</td>

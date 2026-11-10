@@ -8,7 +8,7 @@
 .sp.is-set .sp-btn { background: linear-gradient(135deg, color-mix(in srgb, var(--c) 9%, var(--bg-panel-solid)), var(--bg-panel-solid)); border-color: color-mix(in srgb, var(--c) 40%, var(--border-soft)); }
 .sp-ic { display: grid; place-items: center; width: 1.9rem; height: 1.9rem; border-radius: .6rem; flex: none; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
 .sp-txt { display: grid; min-width: 0; line-height: 1.35; }
-.sp-txt small { font-size: 10px; font-weight: 700; color: var(--text-muted); }
+.sp-txt small { font-size: 11px; font-weight: 700; color: var(--text-muted); }
 .sp-txt b { font-size: 12.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-chev { position: absolute; inset-inline-end: .65rem; color: var(--text-muted); transition: transform 200ms cubic-bezier(.23, 1, .32, 1); pointer-events: none; }
 .sp.is-open .sp-chev { transform: rotate(180deg); color: var(--c); }

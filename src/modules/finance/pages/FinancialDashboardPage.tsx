@@ -536,7 +536,7 @@ function DashboardBody({
     .map((c) => ({ id: c.id, certificateNumber: c.certificateNumber, certificateType: FIN_CERTIFICATE_TYPE_LABEL_FA[c.certificateType], certifiedAmount: c.certifiedAmount, certificateDate: c.certificateDate }))
 
   const certColumns: SimpleTableColumn<CertRow>[] = [
-    { key: 'number', label: 'شماره/نوع', render: (r) => <span>{r.certificateNumber || '—'} <span className="fin-text-muted text-[10px]">({r.certificateType})</span></span> },
+    { key: 'number', label: 'شماره/نوع', render: (r) => <span>{r.certificateNumber || '—'} <span className="fin-text-muted text-[11px]">({r.certificateType})</span></span> },
     { key: 'amount', label: 'مبلغ', render: (r) => <span className="num font-bold">{r.certifiedAmount != null ? fmtCurrency(r.certifiedAmount, currency) : 'در انتظار تایید'}</span> },
     { key: 'date', label: 'تاریخ', render: (r) => <span className="num">{fmtDate(r.certificateDate)}</span> },
   ]
@@ -575,7 +575,7 @@ function DashboardBody({
         <div className="flex items-center gap-3">
           <StampBadge label={healthLabel} tone={healthTone} />
           <div className="text-left">
-            <p className="fin-text-muted text-[9.5px]">جذب بودجه</p>
+            <p className="fin-text-muted text-[11px]">جذب بودجه</p>
             <p className="num fin-text text-sm font-bold">{summary.budgetAbsorptionPct.toLocaleString('fa-IR')}٪</p>
           </div>
         </div>
@@ -682,7 +682,7 @@ export function BulletComparison({
           <span className="h-2 w-0.5 bg-white" /> {targetLabel}: <span className="num font-bold">{fmtCurrency(target, currency)}</span>
         </span>
       </div>
-      {emptyHint && <p className="mt-2 text-[10px] leading-5 text-muted">{emptyHint}</p>}
+      {emptyHint && <p className="mt-2 text-[11px] leading-5 text-muted">{emptyHint}</p>}
     </div>
   )
 }

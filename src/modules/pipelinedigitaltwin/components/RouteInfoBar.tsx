@@ -21,7 +21,7 @@ export function RouteInfoBar({ route, pipe }: RouteInfoBarProps) {
       {items.map((it) => (
         <div key={it.label} className="flex flex-col leading-tight">
           <span className="num text-[11px] font-bold text-white">{it.value}</span>
-          <span className="text-[9px] text-muted">{it.label}</span>
+          <span className="text-[11px] text-muted">{it.label}</span>
         </div>
       ))}
     </div>

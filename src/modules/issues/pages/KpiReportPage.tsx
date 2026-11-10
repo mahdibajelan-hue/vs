@@ -11,6 +11,7 @@ import { useIssueConfigStore } from '../store/useIssueConfigStore'
 import { Donut, Gauge, HBars, Ring, StackBar, Trend, type Slice } from '../components/charts'
 import { IssueCode } from '../components/ui'
 import { HelpButton } from '../components/Help'
+import { pressable } from '../../../lib/pressable'
 
 const SEV_COLOR = { critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#38bdf8' } as const
 const STAGE_COLOR: Record<string, string> = { registered: '#a78bfa', validated: '#818cf8', analysis: '#60a5fa', action_plan: '#38bdf8', in_progress: '#f59e0b', resolution_review: '#2dd4bf', effectiveness_check: '#14b8a6', closed: '#34d399', returned: '#fb923c', reopened: '#f472b6', cancelled: '#64748b', duplicate: '#94a3b8' }
@@ -128,7 +129,7 @@ export function KpiReportPage({ onSelectIssue }: { onSelectIssue: (id: string) =
       <div className="im-card">
         <div className="im-section-title">فهرست تأخیردارها</div>
         <div className="im-table-wrap" style={{ border: 'none', boxShadow: 'none' }}><table className="im-table"><thead><tr><th>شناسه</th><th>عنوان</th><th>پروژه</th><th>سررسید</th></tr></thead>
-          <tbody>{overdueList.map((i) => <tr key={i.id} className="row" onClick={() => onSelectIssue(i.id)}><td><IssueCode issue={i} /></td><td className="ttl">{i.title}</td><td style={{ color: 'var(--im-muted)' }}>{sc.projects.find((p) => p.id === i.projectId)?.name}</td><td>{formatJalali(effectiveDue(i))}</td></tr>)}</tbody></table>
+          <tbody>{overdueList.map((i) => <tr key={i.id} className="row" {...pressable(() => onSelectIssue(i.id), { row: true })}><td><IssueCode issue={i} /></td><td className="ttl">{i.title}</td><td style={{ color: 'var(--im-muted)' }}>{sc.projects.find((p) => p.id === i.projectId)?.name}</td><td>{formatJalali(effectiveDue(i))}</td></tr>)}</tbody></table>
           {overdueList.length === 0 && <div className="im-empty" style={{ padding: 20 }}>مورد تأخیردار وجود ندارد 🎯</div>}</div>
       </div>
     </div>

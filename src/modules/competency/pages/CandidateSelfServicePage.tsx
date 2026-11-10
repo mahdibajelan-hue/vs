@@ -301,7 +301,7 @@ export function CandidateSelfServicePage({ token: rawToken }: { token: string })
             </button>
           )}
           {loadErrorDetail && (
-            <details className="mt-3 text-right text-[10px] text-muted">
+            <details className="mt-3 text-right text-[11px] text-muted">
               <summary className="cursor-pointer">جزئیات فنی</summary>
               <p dir="ltr" className="mt-1 break-all rounded-lg bg-black/20 p-2">
                 {loadErrorDetail}
@@ -360,7 +360,7 @@ export function CandidateSelfServicePage({ token: rawToken }: { token: string })
         {submitError && (
           <div className="glass-panel rounded-2xl border border-red-400/25 bg-red-500/[0.05] p-4 text-xs text-red-300">
             ثبت اطلاعات با خطا مواجه شد. لطفاً دوباره تلاش کنید یا با تیم مصاحبه‌کننده تماس بگیرید.
-            <details className="mt-2 text-[10px] text-red-200/70">
+            <details className="mt-2 text-[11px] text-red-200/70">
               <summary className="cursor-pointer">جزئیات فنی</summary>
               <p dir="ltr" className="mt-1 break-all rounded-lg bg-black/20 p-2">
                 {submitError}
@@ -397,7 +397,7 @@ export function CandidateSelfServicePage({ token: rawToken }: { token: string })
               e.target.value = ''
             }}
           />
-          <p className="w-full text-center text-[10px] text-muted">{PHOTO_LIMIT_FA}</p>
+          <p className="w-full text-center text-[11px] text-muted">{PHOTO_LIMIT_FA}</p>
           {photoError && <p className="w-full text-center text-[11px] text-red-300">{photoError}</p>}
         </div>
 

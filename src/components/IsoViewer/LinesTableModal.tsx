@@ -135,7 +135,7 @@ export function LinesTableModal({ projectId, lines, logs, onClose }: LinesTableM
                 <td className="p-1.5 font-mono text-xs whitespace-nowrap">
                   {line.svgElementId}
                   {line.svgElementIds.length > 1 && (
-                    <span className="mr-1.5 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-secondary" title="این خط از چند قطعه SVG ادغام شده است">
+                    <span className="mr-1.5 rounded-full bg-white/10 px-1.5 py-0.5 text-[11px] text-secondary" title="این خط از چند قطعه SVG ادغام شده است">
                       {line.svgElementIds.length} قطعه
                     </span>
                   )}
@@ -150,7 +150,7 @@ export function LinesTableModal({ projectId, lines, logs, onClose }: LinesTableM
                   {confirmDeleteId === line.id ? (
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
                       {(logCountByLine.get(line.id) ?? 0) > 0 && (
-                        <span className="text-[10px] text-red-400">{logCountByLine.get(line.id)} کارکرد حذف می‌شود</span>
+                        <span className="text-[11px] text-red-400">{logCountByLine.get(line.id)} کارکرد حذف می‌شود</span>
                       )}
                       <button onClick={() => deleteLine(projectId, line.id)} className="text-xs text-red-400 hover:underline">
                         تایید حذف

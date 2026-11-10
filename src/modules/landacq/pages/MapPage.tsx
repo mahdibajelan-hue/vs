@@ -81,7 +81,7 @@ export function MapPage() {
           <LayerMenu
             title="ایستگاه‌ها"
             total={stations.length}
-            items={STATION_TYPES.map((t) => ({ key: t, label: <><span className="rounded px-1 text-[9.5px] font-bold text-white" style={{ background: STATION[t].color }}>{STATION[t].short}</span> {STATION[t].label}</>, count: stations.filter((r) => r.parcel.stationType === t).length }))}
+            items={STATION_TYPES.map((t) => ({ key: t, label: <><span className="rounded px-1 text-[11px] font-bold text-white" style={{ background: STATION[t].color }}>{STATION[t].short}</span> {STATION[t].label}</>, count: stations.filter((r) => r.parcel.stationType === t).length }))}
             selected={stTypes}
             onChange={setStTypes}
           />

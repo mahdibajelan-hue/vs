@@ -108,7 +108,7 @@ export function VerdictTile({
             background: `${STATUS_COLOR.red}0a`,
           }}
         >
-          <span className="flex items-center gap-1.5 text-[10px] font-extrabold" style={{ color: STATUS_TEXT_COLOR.red }}>
+          <span className="flex items-center gap-1.5 text-[11px] font-extrabold" style={{ color: STATUS_TEXT_COLOR.red }}>
             <Zap size={12} /> اقدام شماره یک
           </span>
           <span className="min-w-0 flex-1 text-[12px] font-medium leading-relaxed">{faText(top.recommendedAction)}</span>

@@ -252,3 +252,6 @@ button.pf-dec-count:active { transform: scale(.97); }
   .pf-scope .sp-ic { width: 1.6rem; height: 1.6rem; }
   .pf-scope .pf-loading { grid-column: 1 / -1; }
 }
+
+/* touch screens: frequent buttons reach the 44px target */
+@media (pointer: coarse) { .pf-btn { min-height: 44px; } .pf-tabs button { min-height: 44px; } }

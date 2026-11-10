@@ -349,7 +349,7 @@ export function Model3DPage({ project }: { project: Project }) {
                             }}
                           />
                           {next && (
-                            <div className="my-1 flex items-center justify-between gap-2 rounded-lg border border-dashed border-white/10 px-2.5 py-1.5 text-[10px] text-muted">
+                            <div className="my-1 flex items-center justify-between gap-2 rounded-lg border border-dashed border-white/10 px-2.5 py-1.5 text-[11px] text-muted">
                               <span>اسپول بین {joint.jointNumber || `#${joint.sequenceNumber}`} و {next.jointNumber || `#${next.sequenceNumber}`}</span>
                               {editable && (
                                 <div className="flex shrink-0 items-center gap-1">
@@ -406,22 +406,22 @@ export function Model3DPage({ project }: { project: Project }) {
             </div>
 
             <div className="shrink-0 border-t border-white/10 p-3">
-              <p className="mb-2 text-[10px] font-bold text-secondary">آمار جوشکاری</p>
+              <p className="mb-2 text-[11px] font-bold text-secondary">آمار جوشکاری</p>
               <div className="grid grid-cols-3 gap-1.5">
                 <div className="rounded-lg border border-white/10 p-1.5 text-center">
                   <p className="num text-sm font-bold">{jointStats.total.toLocaleString('fa-IR')}</p>
-                  <p className="text-[9px] text-muted">کل اتصالات</p>
+                  <p className="text-[11px] text-muted">کل اتصالات</p>
                 </div>
                 <div className="rounded-lg border border-white/10 p-1.5 text-center">
                   <p className="num text-sm font-bold text-green-400">{jointStats.completed.toLocaleString('fa-IR')}</p>
-                  <p className="text-[9px] text-muted">تکمیل‌شده</p>
+                  <p className="text-[11px] text-muted">تکمیل‌شده</p>
                 </div>
                 <div className="rounded-lg border border-white/10 p-1.5 text-center">
                   <p className="num text-sm font-bold text-red-400">{(jointStats.total - jointStats.completed).toLocaleString('fa-IR')}</p>
-                  <p className="text-[9px] text-muted">باقیمانده</p>
+                  <p className="text-[11px] text-muted">باقیمانده</p>
                 </div>
               </div>
-              <p className="mt-2 text-[9px] leading-4 text-muted">
+              <p className="mt-2 text-[11px] leading-4 text-muted">
                 آمار رادیوگرافی (NDT) در مرحلهٔ بعدی — پس از افزودن مراحل جداگانهٔ جوش/تست به هر اتصال — اضافه می‌شود.
               </p>
             </div>
@@ -465,7 +465,7 @@ export function Model3DPage({ project }: { project: Project }) {
                   is the single fact that explains whether clicking one pipe is even possible. */}
               {splitStats && (
                 <div
-                  className="pointer-events-none absolute right-3 top-3 rounded-lg bg-black/70 px-2.5 py-1.5 text-[10px] leading-relaxed text-white/80 backdrop-blur-sm"
+                  className="pointer-events-none absolute right-3 top-3 rounded-lg bg-black/70 px-2.5 py-1.5 text-[11px] leading-relaxed text-white/80 backdrop-blur-sm"
                   dir="rtl"
                 >
                   اجزای مدل: {splitStats.meshesBefore.toLocaleString('fa-IR')}
@@ -503,7 +503,7 @@ export function Model3DPage({ project }: { project: Project }) {
                           exporter merged the file, so the outcome is stated instead of leaving a
                           fused model looking like a broken app. */}
                       {splitStats && (
-                        <span className="mt-0.5 block text-[10px] text-white/60">
+                        <span className="mt-0.5 block text-[11px] text-white/60">
                           {splitStats.meshesSplit > 0
                             ? `مدل تفکیک شد: ${splitStats.meshesBefore.toLocaleString('fa-IR')} جزء → ${splitStats.meshesAfter.toLocaleString('fa-IR')} جزء قابل انتخاب`
                             : `${splitStats.meshesBefore.toLocaleString('fa-IR')} جزء — اجزای این فایل در خروجی به هم جوش خورده‌اند و بیش از این قابل تفکیک نیستند`}
@@ -533,7 +533,7 @@ export function Model3DPage({ project }: { project: Project }) {
                     </div>
                   </div>
                   {droppedMeshLinks > 0 && (
-                    <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-1.5 text-[10px] leading-relaxed text-amber-200">
+                    <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-200">
                       پیوند قبلی این مورد روی کل مش ذخیره شده بود (پیش از تفکیک مدل) و دیگر به یک جزء مشخص اشاره نمی‌کند،
                       بنابراین کنار گذاشته شد. حالا روی همان لوله‌ای که می‌خواهید کلیک کنید و «تایید» بزنید.
                     </p>
@@ -541,7 +541,7 @@ export function Model3DPage({ project }: { project: Project }) {
                   {selectedMeshNames.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 overflow-y-auto border-t border-white/10 pt-2">
                       {selectedMeshNames.map((name) => (
-                        <span key={name} className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-white">
+                        <span key={name} className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white">
                           {name}
                           <button
                             onClick={() => handleMeshToggle(name)}
@@ -724,7 +724,7 @@ function StatTile({ label, value, color }: { label: string; value: number; color
       <p className="num text-lg font-bold" style={{ color }}>
         {value.toLocaleString('fa-IR')}
       </p>
-      <p className="text-[10px] text-muted">{label}</p>
+      <p className="text-[11px] text-muted">{label}</p>
     </div>
   )
 }
@@ -754,7 +754,7 @@ function JointRow({
           <p className="truncate text-xs font-medium">
             {JOINT_TYPE_LABEL_FA[joint.jointType]} {joint.jointNumber || `#${joint.sequenceNumber}`}
           </p>
-          <p className="truncate text-[10px] text-muted">
+          <p className="truncate text-[11px] text-muted">
             {[joint.diameter, joint.thickness].filter(Boolean).join(' — ') || '—'}
             {complete && joint.completedDate ? ` · ${formatJalali(joint.completedDate)}` : ''}
           </p>
@@ -764,7 +764,7 @@ function JointRow({
         <div className="flex shrink-0 items-center gap-1">
           <button
             onClick={onToggleStatus}
-            className={`rounded-lg px-2 py-1 text-[10px] font-medium transition-colors ${
+            className={`rounded-lg px-2 py-1 text-[11px] font-medium transition-colors ${
               complete ? 'bg-green-500/15 text-green-300 hover:bg-green-500/25' : 'bg-white/5 text-secondary hover:bg-white/10'
             }`}
           >
@@ -805,10 +805,10 @@ function Equipment3DCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-xs font-bold">{equipment.tag}</p>
-          {equipment.description && <p className="truncate text-[10px] text-muted">{equipment.description}</p>}
+          {equipment.description && <p className="truncate text-[11px] text-muted">{equipment.description}</p>}
         </div>
         <span
-          className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
+          className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
           style={{ background: complete ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.06)', color: complete ? '#2ecc71' : 'var(--text-secondary)' }}
         >
           {complete ? 'تکمیل شده' : 'در حال اجرا'}
@@ -818,16 +818,16 @@ function Equipment3DCard({
       {editable ? (
         <div className="grid grid-cols-2 gap-2">
           <label className="block">
-            <span className="mb-1 block text-[10px] text-muted">فونداسیون آماده</span>
+            <span className="mb-1 block text-[11px] text-muted">فونداسیون آماده</span>
             <JalaliDateInput value={equipment.foundationReadyDate ?? ''} onChange={onSetFoundationDate} />
           </label>
           <label className="block">
-            <span className="mb-1 block text-[10px] text-muted">استقرار انجام شد</span>
+            <span className="mb-1 block text-[11px] text-muted">استقرار انجام شد</span>
             <JalaliDateInput value={equipment.erectedDate ?? ''} onChange={onSetErectedDate} />
           </label>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2 text-[10px] text-muted">
+        <div className="grid grid-cols-2 gap-2 text-[11px] text-muted">
           <span>فونداسیون: {equipment.foundationReadyDate ? formatJalali(equipment.foundationReadyDate) : '—'}</span>
           <span>استقرار: {equipment.erectedDate ? formatJalali(equipment.erectedDate) : '—'}</span>
         </div>
@@ -837,7 +837,7 @@ function Equipment3DCard({
         <div className="flex items-center justify-between gap-1.5 pt-1">
           <button
             onClick={onSelectMeshes}
-            className="flex items-center gap-1 rounded-lg bg-brand-500/10 px-2 py-1 text-[10px] font-medium text-brand-300 hover:bg-brand-500/20"
+            className="flex items-center gap-1 rounded-lg bg-brand-500/10 px-2 py-1 text-[11px] font-medium text-brand-300 hover:bg-brand-500/20"
           >
             <Boxes size={11} /> اجزای مدل ({equipment.meshObjectNames.length.toLocaleString('fa-IR')})
           </button>

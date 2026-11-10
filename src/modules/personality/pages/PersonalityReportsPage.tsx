@@ -54,7 +54,7 @@ function Bar({ label, value, count, color }: { label: string; value: number | nu
         <span className="font-medium text-secondary">{label}</span>
         <span className="num font-bold">
           {value != null ? value.toLocaleString('fa-IR') : '—'}
-          {count != null && <span className="mr-1 text-[10px] font-normal text-muted">({count.toLocaleString('fa-IR')} مورد)</span>}
+          {count != null && <span className="mr-1 text-[11px] font-normal text-muted">({count.toLocaleString('fa-IR')} مورد)</span>}
         </span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-white/5">

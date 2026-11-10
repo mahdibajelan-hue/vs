@@ -187,12 +187,12 @@ export function MasterPlanPage({ projectId, onBack }: { projectId: string; onBac
                   <option value="">مرحله — بدون اتصال</option>
                   {DEFAULT_STAGE_ORDER.map((sk) => <option key={sk} value={sk}>{STAGE_LABEL_FA[sk]}</option>)}
                 </select>
-                <label className="text-[10px] text-muted">
+                <label className="text-[11px] text-muted">
                   شروع پیش‌بینی
                   <input type="date" value={draft.forecastStart} onChange={(e) => setDraft({ ...draft, forecastStart: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
                 </label>
-                <label className="text-[10px] text-muted">
+                <label className="text-[11px] text-muted">
                   پایان پیش‌بینی
                   <input type="date" value={draft.forecastFinish} onChange={(e) => setDraft({ ...draft, forecastFinish: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
@@ -231,7 +231,7 @@ export function MasterPlanPage({ projectId, onBack }: { projectId: string; onBac
               <div />
               <div dir="ltr" className="relative" style={{ height: 22 }}>
                 {months.map((m, i) => (
-                  <span key={i} className="absolute top-0 whitespace-nowrap text-[9px] text-muted" style={{ left: `${m.left}%` }}>
+                  <span key={i} className="absolute top-0 whitespace-nowrap text-[11px] text-muted" style={{ left: `${m.left}%` }}>
                     {m.label}
                   </span>
                 ))}
@@ -254,7 +254,7 @@ export function MasterPlanPage({ projectId, onBack }: { projectId: string; onBac
                         {a.isCritical && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: STATUS_COLOR.red }} />}
                         <span className="truncate">{a.wbsCode ? `${a.wbsCode} — ${a.name}` : a.name}</span>
                       </div>
-                      {dependsOn && <div className="truncate text-[9px] text-muted">⤷ بعد از: {dependsOn.name}</div>}
+                      {dependsOn && <div className="truncate text-[11px] text-muted">⤷ بعد از: {dependsOn.name}</div>}
                     </button>
 
                     <div dir="ltr" className="relative" style={{ height: 26 }}>
@@ -316,7 +316,7 @@ export function MasterPlanPage({ projectId, onBack }: { projectId: string; onBac
               })}
             </div>
           )}
-          <p className="mt-3 text-[9px] text-muted">
+          <p className="mt-3 text-[11px] text-muted">
             نوار کم‌رنگ هاشور‌دار = Baseline · نوار پررنگ قابل‌کشیدن = پیش‌بینی (کشیدن = جابه‌جایی تاریخ) · خط سبز زیرین = واقعی · خط زرد عمودی = امروز
           </p>
         </TowerTile>
@@ -357,7 +357,7 @@ function ActivityEditor({ activity, others, onSave, onDelete }: {
 
       <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {(['baselineStart', 'baselineFinish', 'forecastStart', 'forecastFinish'] as const).map((k) => (
-          <label key={k} className="text-[10px] text-muted">
+          <label key={k} className="text-[11px] text-muted">
             {k === 'baselineStart' ? 'شروع Baseline' : k === 'baselineFinish' ? 'پایان Baseline' : k === 'forecastStart' ? 'شروع پیش‌بینی' : 'پایان پیش‌بینی'}
             <input type="date" value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })}
               className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
@@ -366,24 +366,24 @@ function ActivityEditor({ activity, others, onSave, onDelete }: {
       </div>
 
       <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <label className="text-[10px] text-muted">
+        <label className="text-[11px] text-muted">
           شروع واقعی
           <input type="date" value={form.actualStart} onChange={(e) => setForm({ ...form, actualStart: e.target.value })}
             className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
         </label>
-        <label className="text-[10px] text-muted">
+        <label className="text-[11px] text-muted">
           پایان واقعی
           <input type="date" value={form.actualFinish} onChange={(e) => setForm({ ...form, actualFinish: e.target.value })}
             className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
         </label>
-        <label className="text-[10px] text-muted">
+        <label className="text-[11px] text-muted">
           وضعیت
           <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as ActivityStatus })}
             className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }}>
             {Object.entries(ACTIVITY_STATUS_LABEL_FA).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
         </label>
-        <label className="text-[10px] text-muted">
+        <label className="text-[11px] text-muted">
           پیشرفت ({faNum(form.progress)}٪)
           <input type="range" min={0} max={100} value={form.progress} onChange={(e) => setForm({ ...form, progress: Number(e.target.value) })}
             className="mt-2.5 w-full" />

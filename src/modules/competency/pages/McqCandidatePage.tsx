@@ -319,7 +319,7 @@ export function McqCandidatePage({ token }: { token: string }) {
               setStarting(false)
             }}
             disabled={starting}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-500 py-3 text-sm font-bold text-white shadow-lg hover:bg-teal-400 disabled:opacity-40"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-700 py-3 text-sm font-bold text-white shadow-lg hover:bg-teal-800 disabled:opacity-40"
           >
             {starting ? <Loader2 size={15} className="animate-spin" /> : <ClipboardList size={15} />}
             شروع آزمون (تمام‌صفحه)
@@ -376,7 +376,7 @@ export function McqCandidatePage({ token }: { token: string }) {
             <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
               <div className="h-full rounded-full bg-teal-400 transition-[width] duration-200 ease-out" style={{ width: `${totalCount > 0 ? (answeredCount / totalCount) * 100 : 0}%` }} />
             </div>
-            <p className="num mt-1.5 text-[10px] text-muted">
+            <p className="num mt-1.5 text-[11px] text-muted">
               {answeredCount.toLocaleString('fa-IR')} از {totalCount.toLocaleString('fa-IR')} پاسخ داده‌شده — سؤال {(index + 1).toLocaleString('fa-IR')} از {totalCount.toLocaleString('fa-IR')}
               {flaggedCount > 0 && ` — ${flaggedCount.toLocaleString('fa-IR')} علامت‌گذاری‌شده`}
             </p>
@@ -427,7 +427,7 @@ export function McqCandidatePage({ token }: { token: string }) {
                     {t === 'ORDER' && (
                       <p className="flex items-center justify-between text-[10.5px] text-amber-300/90">
                         <span>گزینه‌ها را به ترتیب درست (از اول تا آخر) لمس کنید.</span>
-                        {shownOrder.length > 0 && <button onClick={() => { setOrderDraft((p) => ({ ...p, [q.id]: [] })); }} className="rounded-lg border border-white/10 px-2 py-0.5 text-[10px] text-secondary hover:bg-white/5">پاک کردن ترتیب</button>}
+                        {shownOrder.length > 0 && <button onClick={() => { setOrderDraft((p) => ({ ...p, [q.id]: [] })); }} className="rounded-lg border border-white/10 px-2 py-0.5 text-[11px] text-secondary hover:bg-white/5">پاک کردن ترتیب</button>}
                       </p>
                     )}
                     <div className="space-y-2">
@@ -443,7 +443,7 @@ export function McqCandidatePage({ token }: { token: string }) {
                               selected ? 'border-teal-400 bg-teal-500/20 text-teal-100' : 'border-white/10 bg-white/[0.02] text-secondary hover:bg-white/5'
                             }`}
                           >
-                            <span className={`num mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-[10px] font-bold ${t === 'MULTI' ? 'rounded-md' : 'rounded-full'} ${selected ? 'bg-teal-400 text-slate-900' : 'bg-white/10 text-muted'}`}>{badge == null ? '' : badge.toLocaleString('fa-IR')}</span>
+                            <span className={`num mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-[11px] font-bold ${t === 'MULTI' ? 'rounded-md' : 'rounded-full'} ${selected ? 'bg-teal-400 text-slate-900' : 'bg-white/10 text-muted'}`}>{badge == null ? '' : badge.toLocaleString('fa-IR')}</span>
                             <span>{opt.text}</span>
                           </button>
                         )
@@ -452,7 +452,7 @@ export function McqCandidatePage({ token }: { token: string }) {
                   </div>
                 )
               })()}
-              {saving[currentQuestion.id] && <p className="mt-2 text-[9.5px] text-muted">در حال ذخیره…</p>}
+              {saving[currentQuestion.id] && <p className="mt-2 text-[11px] text-muted">در حال ذخیره…</p>}
               {!saving[currentQuestion.id] && saveErrors[currentQuestion.id] != null && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[10.5px] text-red-300">
                   <AlertTriangle size={12} /> این پاسخ ذخیره نشد.
@@ -467,11 +467,11 @@ export function McqCandidatePage({ token }: { token: string }) {
                   <ChevronRight size={13} /> قبلی
                 </button>
                 {index < totalCount - 1 ? (
-                  <button onClick={() => setIndex((i) => Math.min(totalCount - 1, i + 1))} className="flex items-center gap-1 rounded-xl bg-teal-500 px-4 py-2 text-[11px] font-bold text-white transition-transform duration-150 ease-out hover:bg-teal-400 active:scale-[0.97]">
+                  <button onClick={() => setIndex((i) => Math.min(totalCount - 1, i + 1))} className="flex items-center gap-1 rounded-xl bg-teal-700 px-4 py-2 text-[11px] font-bold text-white transition-transform duration-150 ease-out hover:bg-teal-800 active:scale-[0.97]">
                     بعدی <ChevronLeft size={13} />
                   </button>
                 ) : (
-                  <button onClick={() => setReviewing(true)} className="flex items-center gap-1 rounded-xl bg-teal-500 px-4 py-2 text-[11px] font-bold text-white hover:bg-teal-400">
+                  <button onClick={() => setReviewing(true)} className="flex items-center gap-1 rounded-xl bg-teal-700 px-4 py-2 text-[11px] font-bold text-white hover:bg-teal-800">
                     بازبینی و ثبت نهایی <ChevronLeft size={13} />
                   </button>
                 )}
@@ -505,7 +505,7 @@ export function McqCandidatePage({ token }: { token: string }) {
               )}
               <div className="flex gap-2">
                 <button onClick={() => setReviewing(false)} className="flex-1 rounded-xl border border-white/10 px-3 py-2.5 text-[11.5px] text-secondary hover:bg-white/5">بازگشت به سؤالات</button>
-                <button onClick={() => setConfirmingSubmit(true)} disabled={!allAnswered || submitting} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-teal-500 px-3 py-2.5 text-[11.5px] font-bold text-white hover:bg-teal-400 disabled:opacity-40">
+                <button onClick={() => setConfirmingSubmit(true)} disabled={!allAnswered || submitting} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-teal-700 px-3 py-2.5 text-[11.5px] font-bold text-white hover:bg-teal-800 disabled:opacity-40">
                   <CheckCircle2 size={14} /> ثبت نهایی پاسخ‌ها
                 </button>
               </div>
@@ -517,7 +517,7 @@ export function McqCandidatePage({ token }: { token: string }) {
           <div className="glass-panel rounded-2xl p-3">
             <p className="mb-2 text-[11px] font-bold text-secondary">فهرست سؤال‌ها</p>
             {rail}
-            <div className="mt-3 space-y-1 text-[9.5px] text-muted">
+            <div className="mt-3 space-y-1 text-[11px] text-muted">
               <p><span className="ml-1 inline-block h-2 w-2 rounded-sm bg-teal-500/40" />پاسخ داده شده</p>
               <p><span className="ml-1 inline-block h-2 w-2 rounded-sm border border-white/20" />بدون پاسخ</p>
               <p><Flag size={9} className="ml-1 inline text-amber-300" fill="currentColor" />علامت‌گذاری‌شده</p>
@@ -535,7 +535,7 @@ export function McqCandidatePage({ token }: { token: string }) {
             <p className="text-[12.5px] font-bold text-primary">پس از ثبت نهایی، امکان تغییر پاسخ‌ها وجود نخواهد داشت. مطمئن هستید؟</p>
             <div className="flex gap-2">
               <button onClick={() => setConfirmingSubmit(false)} disabled={submitting} className="flex-1 rounded-xl border border-white/10 px-3 py-2 text-[11.5px] text-secondary hover:bg-white/5">انصراف</button>
-              <button onClick={handleFinalSubmit} disabled={submitting} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-teal-500 px-3 py-2 text-[11.5px] font-bold text-white hover:bg-teal-400 disabled:opacity-40">
+              <button onClick={handleFinalSubmit} disabled={submitting} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-teal-700 px-3 py-2 text-[11.5px] font-bold text-white hover:bg-teal-800 disabled:opacity-40">
                 {submitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                 بله، ثبت نهایی
               </button>

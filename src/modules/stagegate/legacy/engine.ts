@@ -982,23 +982,23 @@ export function createStageGateEngine(env) {
                         <span class="lc-node-title" style="color:${meta.color};">${esc(p.title)}</span>
                     </div>
                     ${delay ? `<div class="pointer-events-none text-center" style="position:absolute; right:${100 - titleLeftPct}%; top:${titleTopPct}%; transform:translate(50%, calc(-50% + 15px)); width:160px; z-index:6;">
-                        <span class="animate-pulse text-[8px] font-extrabold px-1.5 py-0.5 rounded-full inline-block" style="background:#dc2626; color:#ffffff; box-shadow:0 0 6px rgba(220,38,38,.7);" title="زیرفعالیت تاخیردار">⚠ ${esc(lcTitleWithReviewFlag(delay.item.title).clean)} (+${toPersianDigits(delay.delayDays)} روز)</span>
+                        <span class="animate-pulse text-[11px] font-extrabold px-1.5 py-0.5 rounded-full inline-block" style="background:#dc2626; color:#ffffff; box-shadow:0 0 6px rgba(220,38,38,.7);" title="زیرفعالیت تاخیردار">⚠ ${esc(lcTitleWithReviewFlag(delay.item.title).clean)} (+${toPersianDigits(delay.delayDays)} روز)</span>
                     </div>` : ''}
                     <div class="lc-callout${isSelected ? ' lc-callout-pinned' : ''} pointer-events-none" style="position:absolute; ${pushLeft ? 'right' : 'left'}:calc(100% + 10px); top:50%; transform:translateY(-50%); width:180px; z-index:5;">
                         <div class="rounded-xl px-3 py-2.5 text-center" style="background:rgba(8,15,30,.88); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,.14); box-shadow:0 8px 24px rgba(0,0,0,.35);">
-                            <p class="text-[10px] font-bold" style="color:${meta.color};">${toPersianDigits(i + 1)} · ${esc(meta.label)}</p>
+                            <p class="text-[11px] font-bold" style="color:${meta.color};">${toPersianDigits(i + 1)} · ${esc(meta.label)}</p>
                             <p class="text-[12px] font-extrabold text-white leading-snug mt-1">${esc(p.title)}</p>
                             <div class="grid grid-cols-2 gap-1.5 mt-2">
                                 <div class="rounded-lg py-1.5" style="background:${LC_NODE_PLANNED_COLOR}22;">
-                                    <p class="text-[9px] font-bold" style="color:${LC_NODE_PLANNED_COLOR};">برنامه‌ای</p>
+                                    <p class="text-[11px] font-bold" style="color:${LC_NODE_PLANNED_COLOR};">برنامه‌ای</p>
                                     <p class="text-sm font-extrabold" style="color:${LC_NODE_PLANNED_COLOR};">${toPersianDigits(Math.round(planned))}٪</p>
                                 </div>
                                 <div class="rounded-lg py-1.5" style="background:${LC_NEON_GREEN}22;">
-                                    <p class="text-[9px] font-bold" style="color:${LC_NEON_GREEN};">واقعی</p>
+                                    <p class="text-[11px] font-bold" style="color:${LC_NEON_GREEN};">واقعی</p>
                                     <p class="text-sm font-extrabold" style="color:${LC_NEON_GREEN};">${toPersianDigits(Math.round(actual))}٪</p>
                                 </div>
                             </div>
-                            <div class="flex items-center justify-between text-[10px] mt-2 pt-1.5" style="border-top:1px solid rgba(255,255,255,.14); color:#cbd5e1;">
+                            <div class="flex items-center justify-between text-[11px] mt-2 pt-1.5" style="border-top:1px solid rgba(255,255,255,.14); color:#cbd5e1;">
                                 <span>معیار عبور</span><b style="color:${counts.criteriaTotal && counts.criteriaOk === counts.criteriaTotal ? LC_NEON_GREEN : '#fbbf24'};">${toPersianDigits(counts.criteriaOk)}/${toPersianDigits(counts.criteriaTotal)} تایید</b>
                             </div>
                         </div>
@@ -1043,7 +1043,7 @@ export function createStageGateEngine(env) {
 
         function lcLegendHtml() {
             return `<div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 mt-4 pt-3" style="border-top: 1px solid rgba(255,255,255,.08);">
-                ${Object.values(LC_NODE_STATUS_META).map(m => `<span class="inline-flex items-center gap-1.5 text-[10px] font-semibold" style="color:#94a3b8;"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${m.color}"></span>${esc(m.label)}</span>`).join('')}
+                ${Object.values(LC_NODE_STATUS_META).map(m => `<span class="inline-flex items-center gap-1.5 text-[11px] font-semibold" style="color:#94a3b8;"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${m.color}"></span>${esc(m.label)}</span>`).join('')}
             </div>`;
         }
 
@@ -1108,7 +1108,7 @@ export function createStageGateEngine(env) {
         }
         function lcStatusBadge(kind, status) {
             const meta = lcStatusMeta(kind, status);
-            return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-${meta.color}-100 text-${meta.color}-700">${esc(meta.label)}</span>`;
+            return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-${meta.color}-100 text-${meta.color}-700">${esc(meta.label)}</span>`;
         }
 
         // «خروجی کلیدی رو در یک لیست برای اطلاع ... بیاور اما نیاز به ورود
@@ -1146,7 +1146,7 @@ export function createStageGateEngine(env) {
                     ${master.map(m => {
                         const row = progressMap[m.id] || { status: statuses[0][0] };
                         const { clean, needsReview } = lcTitleWithReviewFlag(m.title);
-                        const mandatoryTag = (kind === 'criterion' && m.is_mandatory) ? '<span class="text-[9px] font-bold text-red-500 mr-1">[الزامی]</span>' : '';
+                        const mandatoryTag = (kind === 'criterion' && m.is_mandatory) ? '<span class="text-[11px] font-bold text-red-500 mr-1">[الزامی]</span>' : '';
                         return `
                         <div class="border rounded-xl p-2.5" data-lc-item-row data-kind="${kind}" data-item-id="${m.id}" data-phase="${phase.code}">
                             <div class="flex items-center justify-between gap-2">
@@ -1155,17 +1155,17 @@ export function createStageGateEngine(env) {
                             </div>
                             ${lcState.canEdit ? `
                             <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                                <select data-lc-action="set-status" class="text-[10px] border rounded-lg px-1.5 py-1">
+                                <select data-lc-action="set-status" class="text-[11px] border rounded-lg px-1.5 py-1">
                                     ${statuses.map(([sv, sl]) => `<option value="${sv}" ${row.status === sv ? 'selected' : ''}>${esc(sl)}</option>`).join('')}
                                 </select>
-                                <input type="text" data-lc-field="evidence" placeholder="مدرک/شاهد (لینک یا توضیح)" value="${esc(row.evidence || '')}" class="text-[10px] border rounded-lg px-2 py-1 flex-1 min-w-[110px]">
-                                <input type="file" data-lc-field="evidence-file" class="text-[10px]" style="max-width:130px;">
-                                <button type="button" data-lc-action="save-item" class="text-[10px] font-bold px-2 py-1 rounded-lg bg-blue-900 text-white">ذخیره</button>
+                                <input type="text" data-lc-field="evidence" placeholder="مدرک/شاهد (لینک یا توضیح)" value="${esc(row.evidence || '')}" class="text-[11px] border rounded-lg px-2 py-1 flex-1 min-w-[110px]">
+                                <input type="file" data-lc-field="evidence-file" class="text-[11px]" style="max-width:130px;">
+                                <button type="button" data-lc-action="save-item" class="text-[11px] font-bold px-2 py-1 rounded-lg bg-blue-900 text-white">ذخیره</button>
                             </div>
-                            ${row.evidence_file_url ? `<a href="${esc(row.evidence_file_url)}" target="_blank" rel="noopener" class="text-[10px] text-blue-600 underline mt-1 inline-block">📎 مشاهده فایل ضمیمه</a>` : ''}
+                            ${row.evidence_file_url ? `<a href="${esc(row.evidence_file_url)}" target="_blank" rel="noopener" class="text-[11px] text-blue-600 underline mt-1 inline-block">📎 مشاهده فایل ضمیمه</a>` : ''}
                             ` : `
-                            ${row.evidence ? `<p class="text-[10px] text-slate-400 mt-1">مدرک: ${esc(row.evidence)}</p>` : ''}
-                            ${row.evidence_file_url ? `<a href="${esc(row.evidence_file_url)}" target="_blank" rel="noopener" class="text-[10px] text-blue-600 underline mt-1 inline-block">📎 مشاهده فایل ضمیمه</a>` : ''}
+                            ${row.evidence ? `<p class="text-[11px] text-slate-400 mt-1">مدرک: ${esc(row.evidence)}</p>` : ''}
+                            ${row.evidence_file_url ? `<a href="${esc(row.evidence_file_url)}" target="_blank" rel="noopener" class="text-[11px] text-blue-600 underline mt-1 inline-block">📎 مشاهده فایل ضمیمه</a>` : ''}
                             `}
                         </div>`;
                     }).join('')}
@@ -1194,7 +1194,7 @@ export function createStageGateEngine(env) {
             <div class="border rounded-xl p-3 space-y-2.5">
                 <div class="flex items-center justify-between">
                     <p class="text-[11px] font-extrabold text-slate-600">درون‌کاوی EPC (مهندسی / تدارکات / اجرا)</p>
-                    <span class="text-[10px] text-slate-400">از ماژول‌های مهندسی، کالا و اجرا</span>
+                    <span class="text-[11px] text-slate-400">از ماژول‌های مهندسی، کالا و اجرا</span>
                 </div>
                 ${rows.map(([d, rlabel, w]) => {
                     if (!d) return `<div class="flex items-center justify-between text-[11px]"><span class="font-bold text-slate-400">${rlabel}</span><span class="text-slate-400">بدون داده در ماژول</span></div>`;
@@ -1213,7 +1213,7 @@ export function createStageGateEngine(env) {
                 }).join('')}
                 <div class="pt-2 border-t flex items-center justify-between text-xs">
                     <span class="font-extrabold text-slate-700">پیشرفت وزنی EPC</span>
-                    <span class="font-extrabold text-slate-800">${r0(live.overall.actual)}٪ <span class="text-slate-400 font-normal text-[10px]">(برنامه ${live.overall.planned == null ? '—' : r0(live.overall.planned) + '٪'})</span></span>
+                    <span class="font-extrabold text-slate-800">${r0(live.overall.actual)}٪ <span class="text-slate-400 font-normal text-[11px]">(برنامه ${live.overall.planned == null ? '—' : r0(live.overall.planned) + '٪'})</span></span>
                 </div>
             </div>`;
             }
@@ -1225,7 +1225,7 @@ export function createStageGateEngine(env) {
             <div class="border rounded-xl p-3 space-y-2.5">
                 <div class="flex items-center justify-between">
                     <p class="text-[11px] font-extrabold text-slate-600">درون‌کاوی EPC (مهندسی / تدارکات / اجرا)</p>
-                    <button type="button" data-lc-action="goto-client-report" class="text-[10px] font-bold text-blue-700 underline">ویرایش در «اطلاعات پایه پروژه»</button>
+                    <button type="button" data-lc-action="goto-client-report" class="text-[11px] font-bold text-blue-700 underline">ویرایش در «اطلاعات پایه پروژه»</button>
                 </div>
                 ${rows.map(([key, rlabel]) => {
                     const w = Number(cr[`progress_${key}_weight`]) || 0;
@@ -1245,7 +1245,7 @@ export function createStageGateEngine(env) {
                 }).join('')}
                 <div class="pt-2 border-t flex items-center justify-between text-xs">
                     <span class="font-extrabold text-slate-700">پیشرفت وزنی EPC</span>
-                    <span class="font-extrabold text-slate-800">${toPersianDigits(Math.round(overall))}٪ <span class="text-slate-400 font-normal text-[10px]">(برنامه ${toPersianDigits(Math.round(overallPlanned))}٪)</span></span>
+                    <span class="font-extrabold text-slate-800">${toPersianDigits(Math.round(overall))}٪ <span class="text-slate-400 font-normal text-[11px]">(برنامه ${toPersianDigits(Math.round(overallPlanned))}٪)</span></span>
                 </div>
             </div>`;
         }
@@ -1257,21 +1257,21 @@ export function createStageGateEngine(env) {
             <div class="border rounded-xl p-3 space-y-2.5">
                 <div class="flex items-center justify-between">
                     <p class="text-[11px] font-extrabold text-slate-600">پیشرفت دوره‌ای طراحی پایه</p>
-                    ${pp.contract_value ? `<span class="text-[10px] text-slate-400">ارزش قرارداد: ${toPersianDigits(Number(pp.contract_value).toLocaleString('en-US'))} ریال</span>` : ''}
+                    ${pp.contract_value ? `<span class="text-[11px] text-slate-400">ارزش قرارداد: ${toPersianDigits(Number(pp.contract_value).toLocaleString('en-US'))} ریال</span>` : ''}
                 </div>
                 ${lcSparklineHtml(history.map(h => h.new_pct))}
                 <div class="text-[11px] text-slate-500">آخرین درصد ثبت‌شده: <b class="text-slate-800">${latest != null ? toPersianDigits(latest) + '٪' : '—'}</b></div>
                 ${history.length ? `<div class="max-h-28 overflow-y-auto scroll-thin space-y-1">
-                    ${history.slice().reverse().map(h => `<div class="flex items-center justify-between text-[10px] text-slate-500 border-b pb-1">
+                    ${history.slice().reverse().map(h => `<div class="flex items-center justify-between text-[11px] text-slate-500 border-b pb-1">
                         <span>${esc(h.period_label || formatJalali(h.recorded_at))}</span>
                         <span>${h.previous_pct != null ? toPersianDigits(h.previous_pct) + '٪ ← ' : ''}<b class="text-slate-700">${toPersianDigits(h.new_pct)}٪</b></span>
                     </div>`).join('')}
                 </div>` : ''}
                 ${lcState.canEdit ? `
                 <div class="grid grid-cols-3 gap-1.5 pt-1">
-                    <input type="text" data-lc-field="bd-period" placeholder="برچسب دوره (مثلاً هفته ۲ آبان)" class="text-[10px] border rounded-lg px-2 py-1.5 col-span-3 md:col-span-1">
-                    <input type="number" min="0" max="100" data-lc-field="bd-pct" placeholder="درصد جدید" class="text-[10px] border rounded-lg px-2 py-1.5">
-                    <button type="button" data-lc-action="record-bd-progress" data-phase="${phase.code}" class="text-[10px] font-bold px-2 py-1.5 rounded-lg bg-blue-900 text-white">ثبت پیشرفت دوره</button>
+                    <input type="text" data-lc-field="bd-period" placeholder="برچسب دوره (مثلاً هفته ۲ آبان)" class="text-[11px] border rounded-lg px-2 py-1.5 col-span-3 md:col-span-1">
+                    <input type="number" min="0" max="100" data-lc-field="bd-pct" placeholder="درصد جدید" class="text-[11px] border rounded-lg px-2 py-1.5">
+                    <button type="button" data-lc-action="record-bd-progress" data-phase="${phase.code}" class="text-[11px] font-bold px-2 py-1.5 rounded-lg bg-blue-900 text-white">ثبت پیشرفت دوره</button>
                 </div>` : ''}
             </div>`;
         }
@@ -1284,7 +1284,7 @@ export function createStageGateEngine(env) {
             if (stored === 'passed') {
                 body = `<div class="space-y-2">
                     <p class="text-[11px] text-emerald-700 font-bold">✓ این گیت تایید نهایی شده است.</p>
-                    ${isAdminUser() ? `<button type="button" data-lc-action="cancel-gate-pass" data-phase="${phase.code}" class="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-red-400 text-red-500 hover:bg-red-50">لغو تایید نهایی (در صورت تایید اشتباه)</button>` : ''}
+                    ${isAdminUser() ? `<button type="button" data-lc-action="cancel-gate-pass" data-phase="${phase.code}" class="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-red-400 text-red-500 hover:bg-red-50">لغو تایید نهایی (در صورت تایید اشتباه)</button>` : ''}
                 </div>`;
             } else if (stored === 'conditional') {
                 body = `<p class="text-[11px] text-purple-700 font-bold">این گیت با شرط عبور کرده — پیگیری شرط لازم است (به تاریخچه تصمیمات مراجعه کنید).</p>`;
@@ -1293,9 +1293,9 @@ export function createStageGateEngine(env) {
                 <div class="space-y-2">
                     <p class="text-[11px] text-slate-500">${gate.readyForGate ? 'همه موارد الزامی تکمیل شده — آماده تصمیم‌گیری Gate.' : 'برخی موارد الزامی هنوز تکمیل نشده است.'}</p>
                     <div class="grid grid-cols-3 gap-1.5">
-                        <button type="button" data-lc-action="gate-pass" data-phase="${phase.code}" class="text-[10px] font-bold px-2 py-1.5 rounded-lg bg-emerald-600 text-white">PASS GATE</button>
-                        <button type="button" data-lc-action="gate-conditional" data-phase="${phase.code}" class="text-[10px] font-bold px-2 py-1.5 rounded-lg bg-purple-600 text-white">عبور مشروط</button>
-                        <button type="button" data-lc-action="gate-return" data-phase="${phase.code}" class="text-[10px] font-bold px-2 py-1.5 rounded-lg bg-red-600 text-white">بازگشت جهت اقدام</button>
+                        <button type="button" data-lc-action="gate-pass" data-phase="${phase.code}" class="text-[11px] font-bold px-2 py-1.5 rounded-lg bg-emerald-600 text-white">PASS GATE</button>
+                        <button type="button" data-lc-action="gate-conditional" data-phase="${phase.code}" class="text-[11px] font-bold px-2 py-1.5 rounded-lg bg-purple-600 text-white">عبور مشروط</button>
+                        <button type="button" data-lc-action="gate-return" data-phase="${phase.code}" class="text-[11px] font-bold px-2 py-1.5 rounded-lg bg-red-600 text-white">بازگشت جهت اقدام</button>
                     </div>
                 </div>`;
             } else if (stored === 'ready_for_review') {
@@ -1313,7 +1313,7 @@ export function createStageGateEngine(env) {
             return `<div>
                 <p class="text-[11px] font-extrabold text-slate-500 mb-1.5">تاریخچه تصمیمات Gate</p>
                 <div class="space-y-1.5">
-                    ${decisions.map(d => `<div class="text-[10px] border rounded-lg p-2">
+                    ${decisions.map(d => `<div class="text-[11px] border rounded-lg p-2">
                         <div class="flex items-center justify-between"><b class="text-slate-700">${esc(labels[d.decision] || d.decision)}</b><span class="text-slate-400">${formatJalali(d.decided_at)}</span></div>
                         <p class="text-slate-500 mt-0.5">توسط: ${esc(d.decided_by)}</p>
                         ${d.reason ? `<p class="text-red-500 mt-0.5">دلیل: ${esc(d.reason)}</p>` : ''}
@@ -1330,7 +1330,7 @@ export function createStageGateEngine(env) {
             if (!risks.length) return '';
             return `<div class="bg-red-50 border border-red-200 rounded-xl p-3">
                 <p class="text-[11px] font-extrabold text-red-700 mb-1.5">ریسک‌ها / موانع اثرگذار بر گیت</p>
-                <div class="space-y-1">${risks.map(r => `<p class="text-[10px] text-red-600">• <b>${esc(r.kind)}:</b> ${esc(lcTitleWithReviewFlag(r.label).clean)}${r.comment ? ' — ' + esc(r.comment) : ''}</p>`).join('')}</div>
+                <div class="space-y-1">${risks.map(r => `<p class="text-[11px] text-red-600">• <b>${esc(r.kind)}:</b> ${esc(lcTitleWithReviewFlag(r.label).clean)}${r.comment ? ' — ' + esc(r.comment) : ''}</p>`).join('')}</div>
             </div>`;
         }
 
@@ -1352,10 +1352,10 @@ export function createStageGateEngine(env) {
                 <div class="flex justify-between"><span class="text-slate-500">وزن فاز در چرخه عمر</span><b class="text-slate-700">${pp.weight_pct != null ? toPersianDigits(pp.weight_pct) + '٪' : 'به‌صورت مساوی'}</b></div>
                 ${isAdminUser() ? `
                 <div class="flex items-center gap-2 pt-1">
-                    <input type="number" min="0" max="100" step="0.1" data-lc-field="phase-weight" value="${pp.weight_pct ?? ''}" placeholder="وزن فاز (٪)" class="text-[10px] border rounded-lg px-2 py-1 flex-1">
-                    <button type="button" data-lc-action="save-phase-weight" data-phase="${phase.code}" class="text-[10px] font-bold px-2 py-1 rounded-lg bg-blue-900 text-white">ذخیره وزن</button>
+                    <input type="number" min="0" max="100" step="0.1" data-lc-field="phase-weight" value="${pp.weight_pct ?? ''}" placeholder="وزن فاز (٪)" class="text-[11px] border rounded-lg px-2 py-1 flex-1">
+                    <button type="button" data-lc-action="save-phase-weight" data-phase="${phase.code}" class="text-[11px] font-bold px-2 py-1 rounded-lg bg-blue-900 text-white">ذخیره وزن</button>
                 </div>
-                <p class="text-[9px] text-slate-400">جمع وزن همه فازها اکنون: ${toPersianDigits(Math.round(lcTotalWeight()))}٪ (باید ۱۰۰٪ باشد)</p>` : ''}
+                <p class="text-[11px] text-slate-400">جمع وزن همه فازها اکنون: ${toPersianDigits(Math.round(lcTotalWeight()))}٪ (باید ۱۰۰٪ باشد)</p>` : ''}
             </div>`;
         }
 
@@ -1417,7 +1417,7 @@ export function createStageGateEngine(env) {
             ];
             return `<div class="bg-white rounded-2xl shadow-sm border p-4">
                 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
-                    ${cells.map(([clabel, cvalue]) => `<div class="text-center"><p class="text-[9px] text-slate-400 mb-0.5">${esc(clabel)}</p><p class="text-[11px] font-extrabold text-slate-700">${cvalue}</p></div>`).join('')}
+                    ${cells.map(([clabel, cvalue]) => `<div class="text-center"><p class="text-[11px] text-slate-400 mb-0.5">${esc(clabel)}</p><p class="text-[11px] font-extrabold text-slate-700">${cvalue}</p></div>`).join('')}
                 </div>
             </div>`;
         }
@@ -1618,7 +1618,7 @@ export function createStageGateEngine(env) {
             if (counts.gap) parts.push(`${LC_COVERAGE_META.gap.icon} ${toPersianDigits(counts.gap)} ردیف با شکاف زمانی`);
             if (counts.minor_gap) parts.push(`${LC_COVERAGE_META.minor_gap.icon} ${toPersianDigits(counts.minor_gap)} ردیف با شکاف جزئی`);
             if (!parts.length) return '';
-            return `<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] mb-3 px-3 py-2 rounded-lg" style="background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.2); color:#fca5a5;">${parts.join(' · ')}</div>`;
+            return `<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] mb-3 px-3 py-2 rounded-lg" style="background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.2); color:#fca5a5;">${parts.join(' · ')}</div>`;
         }
 
         // ---------------- Actual-progress rollup + status engine (Phase 4) ----------------
@@ -1716,11 +1716,11 @@ export function createStageGateEngine(env) {
 
         function lcGanttLabelHtml(row) {
             const caret = row.hasChildren
-                ? `<button type="button" data-lc-toggle-row="${esc(row.id)}" class="w-4 h-4 shrink-0 inline-flex items-center justify-center text-[9px] rounded hover:bg-white/10" style="color:#93c5fd;">${lcState.collapsedScheduleRows.has(row.id) ? '▸' : '▾'}</button>`
+                ? `<button type="button" data-lc-toggle-row="${esc(row.id)}" class="w-4 h-4 shrink-0 inline-flex items-center justify-center text-[11px] rounded hover:bg-white/10" style="color:#93c5fd;">${lcState.collapsedScheduleRows.has(row.id) ? '▸' : '▾'}</button>`
                 : `<span class="inline-block w-4 shrink-0"></span>`;
             const titleCls = row.isPhase ? 'text-white font-extrabold' : (row.depth === 1 ? 'text-slate-200 font-bold' : 'text-slate-400');
             const gateDot = row.isPhase ? `<span class="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-${LC_GATE_STATUS_META[row.gateStatus].color}-500"></span>` : '';
-            const weightTag = (!row.isPhase && row.item?.weight_pct != null) ? `<span class="text-[9px] shrink-0" style="color:#64748b;">${toPersianDigits(row.item.weight_pct)}٪</span>` : '';
+            const weightTag = (!row.isPhase && row.item?.weight_pct != null) ? `<span class="text-[11px] shrink-0" style="color:#64748b;">${toPersianDigits(row.item.weight_pct)}٪</span>` : '';
             const itemStatus = lcItemStatus(row);
             const statusBadge = itemStatus ? `<span class="shrink-0" title="وضعیت: ${esc(LC_ITEM_STATUS_META[itemStatus].label)}">${LC_ITEM_STATUS_META[itemStatus].icon}</span>` : '';
             const coverage = lcRowCoverage(row);
@@ -1734,8 +1734,8 @@ export function createStageGateEngine(env) {
             // so only their own stopPropagation is needed to keep a click on
             // them from also opening the editor drawer underneath.
             const fitButtons = (lcState.canEdit && row.hasChildren) ? `<span class="shrink-0 flex items-center">
-                <button type="button" data-lc-action="auto-fit" data-row-kind="${row.isPhase ? 'phase' : 'item'}" data-phase="${esc(row.phaseCode)}" data-item-id="${row.isPhase ? '' : row.item.id}" title="تنظیم خودکار بازه این ردیف بر اساس زیرمجموعه‌ها" class="text-[9px] w-4 h-4 inline-flex items-center justify-center rounded hover:bg-white/10" style="color:${LC_PLANNED_COLOR};">⇲</button>
-                <button type="button" data-lc-action="fit-children" data-row-kind="${row.isPhase ? 'phase' : 'item'}" data-phase="${esc(row.phaseCode)}" data-item-id="${row.isPhase ? '' : row.item.id}" title="تنظیم بازه زیرمجموعه‌ها متناسب با این ردیف" class="text-[9px] w-4 h-4 inline-flex items-center justify-center rounded hover:bg-white/10" style="color:${LC_NODE_PLANNED_COLOR};">⇱</button>
+                <button type="button" data-lc-action="auto-fit" data-row-kind="${row.isPhase ? 'phase' : 'item'}" data-phase="${esc(row.phaseCode)}" data-item-id="${row.isPhase ? '' : row.item.id}" title="تنظیم خودکار بازه این ردیف بر اساس زیرمجموعه‌ها" class="text-[11px] w-4 h-4 inline-flex items-center justify-center rounded hover:bg-white/10" style="color:${LC_PLANNED_COLOR};">⇲</button>
+                <button type="button" data-lc-action="fit-children" data-row-kind="${row.isPhase ? 'phase' : 'item'}" data-phase="${esc(row.phaseCode)}" data-item-id="${row.isPhase ? '' : row.item.id}" title="تنظیم بازه زیرمجموعه‌ها متناسب با این ردیف" class="text-[11px] w-4 h-4 inline-flex items-center justify-center rounded hover:bg-white/10" style="color:${LC_NODE_PLANNED_COLOR};">⇱</button>
             </span>` : '';
             // Bulk-seed a phase's first round of schedule sub-items straight
             // from its own (immutable) اهداف مرحله — one schedule item per
@@ -1931,7 +1931,7 @@ export function createStageGateEngine(env) {
         function lcGanttBarHtml(row, index, range) {
             const top = index * LC_GANTT_ROW_H;
             if (!row.start || !row.finish) {
-                return `<div class="absolute text-[9px]" style="top:${top}px; left:8px; height:${LC_GANTT_ROW_H}px; line-height:${LC_GANTT_ROW_H}px; color:#475569;">بدون تاریخ برنامه‌ای</div>`;
+                return `<div class="absolute text-[11px]" style="top:${top}px; left:8px; height:${LC_GANTT_ROW_H}px; line-height:${LC_GANTT_ROW_H}px; color:#475569;">بدون تاریخ برنامه‌ای</div>`;
             }
             const startPct = lcPctForDate(row.start, range), finishPct = lcPctForDate(row.finish, range);
             const left = Math.min(startPct, finishPct), width = Math.max(0.8, Math.abs(finishPct - startPct));
@@ -2048,12 +2048,12 @@ export function createStageGateEngine(env) {
 
             return `
             <div class="flex items-center justify-between gap-2 mb-3">
-                <p class="text-[10px]" style="color:#93c5fd;">از ${formatJalali(range.minIso)} تا ${formatJalali(range.maxIso)}</p>
+                <p class="text-[11px]" style="color:#93c5fd;">از ${formatJalali(range.minIso)} تا ${formatJalali(range.maxIso)}</p>
                 <div class="flex items-center gap-1 shrink-0">
                     <button type="button" data-lc-action="gantt-zoom-out" title="کوچک‌نمایی" class="text-[11px] font-bold w-6 h-6 rounded border text-slate-200 hover:bg-white/10" style="border-color:rgba(255,255,255,.2);">−</button>
-                    <span class="text-[10px] w-9 text-center" style="color:#94a3b8;">×${toPersianDigits(String(lcState.ganttZoom || 1))}</span>
+                    <span class="text-[11px] w-9 text-center" style="color:#94a3b8;">×${toPersianDigits(String(lcState.ganttZoom || 1))}</span>
                     <button type="button" data-lc-action="gantt-zoom-in" title="بزرگ‌نمایی" class="text-[11px] font-bold w-6 h-6 rounded border text-slate-200 hover:bg-white/10" style="border-color:rgba(255,255,255,.2);">+</button>
-                    ${(lcState.ganttZoom || 1) !== 1 ? `<button type="button" data-lc-action="gantt-zoom-reset" title="بازنشانی زوم" class="text-[10px] font-bold px-1.5 h-6 rounded border text-slate-300 hover:bg-white/10" style="border-color:rgba(255,255,255,.2);">۱۰۰٪</button>` : ''}
+                    ${(lcState.ganttZoom || 1) !== 1 ? `<button type="button" data-lc-action="gantt-zoom-reset" title="بازنشانی زوم" class="text-[11px] font-bold px-1.5 h-6 rounded border text-slate-300 hover:bg-white/10" style="border-color:rgba(255,255,255,.2);">۱۰۰٪</button>` : ''}
                 </div>
             </div>
             ${lcCoverageSummaryHtml(rows)}
@@ -2064,7 +2064,7 @@ export function createStageGateEngine(env) {
                         <div class="relative" style="width:${lcGanttTimelineW()}px; height:${LC_GANTT_HEADER_H}px; border-bottom:1px solid rgba(255,255,255,.1);">
                             ${ticks.map(t => `<div class="absolute flex flex-col items-start whitespace-nowrap" style="left:${lcPctForDate(t.iso, range)}%; bottom:2px; padding-left:4px; border-left:1px solid rgba(255,255,255,.15); line-height:1.25;">
                                 <span class="text-[8.5px]" style="color:#94a3b8; opacity:.6;">${t.yearLabel}</span>
-                                <span class="text-[9.5px] font-bold" style="color:#e2e8f0;">${t.monthLabel}</span>
+                                <span class="text-[11px] font-bold" style="color:#e2e8f0;">${t.monthLabel}</span>
                             </div>`).join('')}
                         </div>
                     </div>
@@ -2082,13 +2082,13 @@ export function createStageGateEngine(env) {
                     </div>
                 </div>
             </div>
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 pt-3 text-[10px]" style="border-top:1px solid rgba(255,255,255,.08); color:#94a3b8;">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 pt-3 text-[11px]" style="border-top:1px solid rgba(255,255,255,.08); color:#94a3b8;">
                 <span class="inline-flex items-center gap-1.5"><span class="inline-block w-3 h-1.5 rounded-sm" style="background:${LC_PLANNED_COLOR}55; border:1px solid ${LC_PLANNED_COLOR};"></span>بازه برنامه‌ای</span>
                 <span class="inline-flex items-center gap-1.5"><span class="inline-block w-3 h-1.5 rounded-sm" style="background:${LC_NEON_GREEN};"></span>پیشرفت واقعی</span>
                 <span class="inline-flex items-center gap-1.5"><span class="inline-block w-2.5 h-2.5" style="background:#fbbf24;"></span>امروز</span>
                 <span class="inline-flex items-center gap-1">${Object.values(LC_ITEM_STATUS_META).map(m => `<span title="${esc(m.label)}">${m.icon}</span>`).join('')}<span style="color:#64748b;">وضعیت (زمانی/فیزیکی)</span></span>
                 ${lcState.baselines.length ? `<span class="inline-flex items-center gap-1.5"><span class="inline-block w-3 h-0.5 rounded-sm" style="background:#94a3b8;"></span>خط مبنا</span>` : ''}
-                ${lcState.canEdit ? `<span class="text-[9px] mr-auto" style="color:#64748b;">برای ویرایش روی ردیف کلیک کنید؛ برای جابه‌جایی/تغییر بازه، نوار را بکشید.</span>` : ''}
+                ${lcState.canEdit ? `<span class="text-[11px] mr-auto" style="color:#64748b;">برای ویرایش روی ردیف کلیک کنید؛ برای جابه‌جایی/تغییر بازه، نوار را بکشید.</span>` : ''}
             </div>
             ${lcScheduleEditorHtml()}`;
         }
@@ -2108,7 +2108,7 @@ export function createStageGateEngine(env) {
             const currentEnd = currentFinishes.reduce((a, b) => b > a ? b : a);
             const varianceDays = lcDaysBetween(baselineEnd, currentEnd);
             const varianceColor = varianceDays > 5 ? '#f87171' : varianceDays < -2 ? '#34d399' : '#93c5fd';
-            return `<p class="text-[10px] mb-2" style="color:#93c5fd;">
+            return `<p class="text-[11px] mb-2" style="color:#93c5fd;">
                 خط مبنا: «${esc(baseline.label)}» (${formatJalali(baseline.created_at)}) —
                 <span style="color:${varianceColor}; font-weight:700;">${varianceDays > 0 ? '+' : ''}${toPersianDigits(varianceDays)} روز</span>
                 نسبت به پایان برنامه‌ای آن (${formatJalali(baselineEnd)} ← ${formatJalali(currentEnd)})
@@ -2402,7 +2402,7 @@ export function createStageGateEngine(env) {
                     ${lcState.successTemplates.map(t => {
                         const months = t.total_duration_days != null ? Math.round(t.total_duration_days / 30 * 10) / 10 : null;
                         const tooltip = `پروژه مبدا: ${t.source_project_name} — استراتژی: ${LC_STRATEGY_LABELS[t.execution_strategy] || t.execution_strategy || '—'}${months != null ? ' — ' + months + ' ماه' : ''}`;
-                        return `<span class="text-[10px] px-2.5 py-1 rounded-lg" style="background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); color:#93c5fd;" title="${esc(tooltip)}">${esc(t.name)}</span>`;
+                        return `<span class="text-[11px] px-2.5 py-1 rounded-lg" style="background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); color:#93c5fd;" title="${esc(tooltip)}">${esc(t.name)}</span>`;
                     }).join('')}
                 </div>
             </div>`;
@@ -2427,10 +2427,10 @@ export function createStageGateEngine(env) {
             ];
             return `<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                 ${cells.map(([label, value]) => `<div class="rounded-xl p-3 text-center" style="background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1);">
-                    <p class="text-[9.5px] mb-1" style="color:#93c5fd;">${esc(label)}</p>
+                    <p class="text-[11px] mb-1" style="color:#93c5fd;">${esc(label)}</p>
                     <p class="text-white font-extrabold text-sm">${value}</p>
                 </div>`).join('')}
-                ${isDraft && lcState.canEdit ? `<p class="col-span-2 md:col-span-4 text-[10px]" style="color:#fbbf24;">⚠ این اعداد بر اساس استراتژی/تاریخ شروعِ درحال‌بررسی محاسبه شده و هنوز به برنامه فازها اعمال نشده — برای ثبت، «اعمال به برنامه فازها» را بزنید.</p>` : ''}
+                ${isDraft && lcState.canEdit ? `<p class="col-span-2 md:col-span-4 text-[11px]" style="color:#fbbf24;">⚠ این اعداد بر اساس استراتژی/تاریخ شروعِ درحال‌بررسی محاسبه شده و هنوز به برنامه فازها اعمال نشده — برای ثبت، «اعمال به برنامه فازها» را بزنید.</p>` : ''}
             </div>`;
         }
 
@@ -2466,7 +2466,7 @@ export function createStageGateEngine(env) {
                     <button type="button" data-lc-action="apply-master-schedule" class="text-[10.5px] font-bold px-3 py-1.5 rounded-lg bg-emerald-600 text-white">اعمال به برنامه فازها ↻</button>
                 </div>
                 ${lcStrategyComparisonTableHtml(startIso)}
-                ${current !== 'sequential' ? `<p class="text-[10px] px-3 py-2 rounded-lg" style="background:rgba(251,191,36,.1); color:#fbbf24; border:1px solid rgba(251,191,36,.3);">⚠️ افزایش ریسک تسریع (Fast-Track Exposure) — همپوشانی فعالیت‌ها می‌تواند ریسک هماهنگی، تغییرات و دوباره‌کاری را افزایش دهد.</p>` : ''}
+                ${current !== 'sequential' ? `<p class="text-[11px] px-3 py-2 rounded-lg" style="background:rgba(251,191,36,.1); color:#fbbf24; border:1px solid rgba(251,191,36,.3);">⚠️ افزایش ریسک تسریع (Fast-Track Exposure) — همپوشانی فعالیت‌ها می‌تواند ریسک هماهنگی، تغییرات و دوباره‌کاری را افزایش دهد.</p>` : ''}
             </div>`;
         }
 
@@ -2496,16 +2496,16 @@ export function createStageGateEngine(env) {
             return `<div class="rounded-xl p-4 mb-3" style="background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1);">
                 <p class="text-white font-extrabold text-[11px] mb-2">خلاصه اجرایی چرخه عمر پروژه</p>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2">
-                    ${rows.map(([label, value]) => `<div><p class="text-[9px]" style="color:#64748b;">${esc(label)}</p><p class="text-[10.5px] font-bold text-slate-200">${value}</p></div>`).join('')}
+                    ${rows.map(([label, value]) => `<div><p class="text-[11px]" style="color:#64748b;">${esc(label)}</p><p class="text-[10.5px] font-bold text-slate-200">${value}</p></div>`).join('')}
                 </div>
-                ${criticalTitles.length ? `<p class="text-[9.5px] mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,.08); color:#f87171;">مسیر بحرانی (Critical Path): ${criticalTitles.map(esc).join(' ← ')}</p>` : ''}
+                ${criticalTitles.length ? `<p class="text-[11px] mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,.08); color:#f87171;">مسیر بحرانی (Critical Path): ${criticalTitles.map(esc).join(' ← ')}</p>` : ''}
             </div>`;
         }
 
         function lcGovernanceStepperHtml() {
             const current = lcState.masterSchedule?.governance_status || 'draft';
             const idx = LC_GOVERNANCE_FLOW.indexOf(current);
-            return `<div class="flex flex-wrap items-center gap-1 mb-3 text-[9.5px]">
+            return `<div class="flex flex-wrap items-center gap-1 mb-3 text-[11px]">
                 ${LC_GOVERNANCE_FLOW.map((st, i) => `<span class="px-2 py-1 rounded-full ${i <= idx ? 'bg-blue-900 text-white' : 'border text-slate-500'}">${esc(LC_GOVERNANCE_LABELS[st])}</span>${i < LC_GOVERNANCE_FLOW.length - 1 ? '<span style="color:#475569;">←</span>' : ''}`).join('')}
             </div>`;
         }
@@ -2514,7 +2514,7 @@ export function createStageGateEngine(env) {
             if (!lcState.scheduleVersions.length) return '';
             return `<div class="mb-3">
                 <p class="text-white font-extrabold text-[10.5px] mb-2">تاریخچه نسخه‌های زمان‌بندی</p>
-                <table class="w-full text-[10px]">
+                <table class="w-full text-[11px]">
                     <thead><tr style="color:#64748b;"><th class="text-right pb-1 font-normal">نسخه</th><th class="pb-1 font-normal">استراتژی</th><th class="pb-1 font-normal">Start-up</th><th class="pb-1 font-normal">تکمیل</th><th class="pb-1 font-normal">تاریخ ثبت</th></tr></thead>
                     <tbody>
                         ${lcState.scheduleVersions.map(v => `<tr style="color:${v.is_baseline ? '#ffffff' : '#93c5fd'};">
@@ -2612,7 +2612,7 @@ export function createStageGateEngine(env) {
                     <input type="text" data-lc-sf="finish" value="${isEdit ? formatJalali(item.planned_finish) : ''}" placeholder="پایان (۱۴۰۴/۰۱/۰۱)" class="text-[11px] border rounded-lg px-2 py-1.5">
                     <input type="number" min="0" step="1" data-lc-sf="duration" value="${isEdit && item.planned_start && item.planned_finish ? lcDaysBetween(item.planned_start, item.planned_finish) : ''}" placeholder="تعداد روز" class="text-[11px] border rounded-lg px-2 py-1.5">
                 </div>
-                <p class="text-[9.5px] mb-2" style="color:#64748b;">هر ۲ مورد از «شروع/پایان/تعداد روز» را وارد کنید، مورد سوم خودکار محاسبه می‌شود.</p>
+                <p class="text-[11px] mb-2" style="color:#64748b;">هر ۲ مورد از «شروع/پایان/تعداد روز» را وارد کنید، مورد سوم خودکار محاسبه می‌شود.</p>
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2">
                     <input type="number" min="0" max="100" step="0.1" data-lc-sf="weight" value="${isEdit && item.weight_pct != null ? item.weight_pct : ''}" placeholder="وزن در بین هم‌سطح‌ها (٪)" class="text-[11px] border rounded-lg px-2 py-1.5">
                     ${isEdit && !hasChildren ? `<input type="number" min="0" max="100" step="1" data-lc-sf="actual" value="${item.manual_actual_pct != null ? item.manual_actual_pct : ''}" placeholder="٪ پیشرفت واقعی" class="text-[11px] border rounded-lg px-2 py-1.5 md:col-span-2">` : ''}
@@ -2633,12 +2633,12 @@ export function createStageGateEngine(env) {
                             return `<div class="text-[10.5px] py-1.5 px-2 rounded-lg mb-1" style="background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12);">
                                 <p class="mb-1.5" style="color:#cbd5e1;">${isPred ? 'قبل از' : 'بعد از'} «${esc(other?.title || '—')}»</p>
                                 <div class="flex flex-wrap items-center gap-1.5">
-                                    <select data-lc-edit-dep-type="${d.id}" class="text-[10px] border rounded-lg px-1.5 py-1">
+                                    <select data-lc-edit-dep-type="${d.id}" class="text-[11px] border rounded-lg px-1.5 py-1">
                                         ${Object.entries(depTypeLabels).map(([k, l]) => `<option value="${k}" ${d.dep_type === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}
                                     </select>
-                                    <input type="number" data-lc-edit-dep-lag="${d.id}" value="${d.lag_days || 0}" placeholder="تاخیر(+)/همپوشانی(-)" class="text-[10px] border rounded-lg px-1.5 py-1 w-28">
-                                    <button type="button" data-lc-action="save-dependency-edit" data-id="${d.id}" class="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-blue-900 text-white">ذخیره</button>
-                                    <button type="button" data-lc-action="cancel-dependency-edit" class="text-[10px] text-slate-400 hover:underline">انصراف</button>
+                                    <input type="number" data-lc-edit-dep-lag="${d.id}" value="${d.lag_days || 0}" placeholder="تاخیر(+)/همپوشانی(-)" class="text-[11px] border rounded-lg px-1.5 py-1 w-28">
+                                    <button type="button" data-lc-action="save-dependency-edit" data-id="${d.id}" class="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-blue-900 text-white">ذخیره</button>
+                                    <button type="button" data-lc-action="cancel-dependency-edit" class="text-[11px] text-slate-400 hover:underline">انصراف</button>
                                 </div>
                             </div>`;
                         }
@@ -2650,8 +2650,8 @@ export function createStageGateEngine(env) {
                                 <button type="button" data-lc-action="delete-dependency" data-id="${d.id}" class="text-red-400 hover:underline">حذف</button>
                             </span>
                         </div>`;
-                    }).join('') : `<p class="text-[10px] text-slate-500 mb-2">وابستگی‌ای ثبت نشده.</p>`}
-                    <p class="text-[10px] mt-2 mb-1" style="color:#93c5fd;">این فعالیت به فعالیت زیر وابسته است:</p>
+                    }).join('') : `<p class="text-[11px] text-slate-500 mb-2">وابستگی‌ای ثبت نشده.</p>`}
+                    <p class="text-[11px] mt-2 mb-1" style="color:#93c5fd;">این فعالیت به فعالیت زیر وابسته است:</p>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                         <select data-lc-sf="dep-other" class="text-[10.5px] border rounded-lg px-2 py-1.5 md:col-span-2">
                             <option value="">-- گزینش فعالیت --</option>

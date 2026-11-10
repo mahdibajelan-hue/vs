@@ -112,7 +112,7 @@ export function SettingsPage() {
                 onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, offshore: { ...d.specs.offshore, generalServicesPct: v } } }))}
                 hint="درصد اضافه برای پشتیبانی عمومی پروژه دریایی (لجستیک، بازرسی، مدیریت شناور)." />
             </div>
-            <p className="text-[10px] mt-1" style={{ color: MUTED_FG }}>ضریب آب کم‌عمق در همان پروژه (بخش مشخصات) وارد می‌شود، چون به عمق آب مسیر هر پروژه بستگی دارد.</p>
+            <p className="text-[11px] mt-1" style={{ color: MUTED_FG }}>ضریب آب کم‌عمق در همان پروژه (بخش مشخصات) وارد می‌شود، چون به عمق آب مسیر هر پروژه بستگی دارد.</p>
           </Section>
 
           <Section title="پوشش خطوط لوله" icon={<Paintbrush size={17} />} accent={SECTION_COLOR.coating}>
@@ -127,7 +127,7 @@ export function SettingsPage() {
                 onChange={(v) => patch((d) => ({ ...d, specs: { ...d.specs, compressor: { ...d.specs.compressor, ratedPowerMwPerStation: v } } }))}
                 hint="توان پیشنهادی هر ایستگاه برای پروژه‌های جدید؛ در هر پروژه با توجه به دبی و افت فشار واقعی قابل تغییر است." />
             </div>
-            <p className="text-[10px] mt-1" style={{ color: MUTED_FG }}>قیمت تجهیزات دوار از منحنی هزینه بر حسب توان (دلار بر کیلووات) محاسبه می‌شود و در این بخش قابل ویرایش نیست.</p>
+            <p className="text-[11px] mt-1" style={{ color: MUTED_FG }}>قیمت تجهیزات دوار از منحنی هزینه بر حسب توان (دلار بر کیلووات) محاسبه می‌شود و در این بخش قابل ویرایش نیست.</p>
           </Section>
 
           <Section title="ایستگاه‌های جانبی و مخابرات" subtitle="نرخ واحد پارامتریک" icon={<Signpost size={17} />} accent={SECTION_COLOR.launcher}>
@@ -202,7 +202,7 @@ export function SettingsPage() {
         >
           {saved ? <Check size={16} /> : <Save size={16} />} {savingAssumptions ? 'در حال ذخیره...' : saved ? 'ذخیره شد' : 'ذخیره مبانی محاسبات برای همه کاربران'}
         </button>
-        <p className="text-[10px] text-center" style={{ color: MUTED_FG, borderTop: `1px solid ${BORDER}`, paddingTop: 8 }}>
+        <p className="text-[11px] text-center" style={{ color: MUTED_FG, borderTop: `1px solid ${BORDER}`, paddingTop: 8 }}>
           این مقادیر فقط پایه پیش‌فرض پروژه‌های جدید است؛ تغییر آن، محاسبات پروژه‌های موجود را عوض نمی‌کند.
         </p>
       </div>

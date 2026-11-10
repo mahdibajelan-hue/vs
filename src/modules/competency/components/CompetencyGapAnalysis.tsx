@@ -20,6 +20,7 @@ import {
 } from '../lib/competencyGap'
 import { CompetencyEvidenceDrawer } from './CompetencyEvidenceDrawer'
 import { QUESTION_TYPE_LABEL_FA, type CompCompetencyStatus, type CompEvidenceSourceType, type CompetencyAssessment, type QuestionType } from '../types'
+import { pressable } from '../../../lib/pressable'
 
 const SORT_LABEL: Record<GapSortKey, string> = {
   severity: 'شدت وضعیت',
@@ -115,7 +116,7 @@ export function CompetencyGapAnalysis({ assessment, canRecompute }: CompetencyGa
             <p className="flex items-center gap-1.5 text-xs font-bold">
               <Target size={14} style={{ color: summary.fitColor }} /> آمادگی برای شغل
             </p>
-            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] text-muted" title="برآوردی مشتق‌شده از امتیازهای موتور شایستگی — نه یک امتیاز مستقل">
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-muted" title="برآوردی مشتق‌شده از امتیازهای موتور شایستگی — نه یک امتیاز مستقل">
               شاخص مشتق‌شده
             </span>
           </div>
@@ -125,7 +126,7 @@ export function CompetencyGapAnalysis({ assessment, canRecompute }: CompetencyGa
           <p className="text-[11px] font-bold" style={{ color: summary.fitColor }}>
             {summary.fitLabel}
           </p>
-          <p className="text-[9.5px] leading-5 text-muted">
+          <p className="text-[11px] leading-5 text-muted">
             تنها شاخص نهایی تناسب با شغل: میزان تحقق سطح الزامی هر شایستگی (حیاتی‌ها دوبرابر)، با اعمال اطمینان شواهد و کسر بخش‌های سنجیده‌نشده؛ ۱۰۰ فقط وقتی که همهٔ الزامات سنجیده، برآورده و با شواهد قوی تأیید شده باشند. شکاف حیاتی سقف ۵۹ می‌گذارد.
           </p>
         </div>
@@ -152,7 +153,7 @@ export function CompetencyGapAnalysis({ assessment, canRecompute }: CompetencyGa
               <span
                 key={m}
                 title={summary.methods[m] ? 'در طرح آزمون این متقاضی' : 'خارج از طرح آزمون (ارزیابی‌نشده به انتخاب طراح — نه کمبود شواهد)'}
-                className={`rounded-full border px-2 py-0.5 text-[10px] ${summary.methods[m] ? 'border-sky-400/30 bg-sky-500/10 text-sky-200' : 'border-dashed border-white/15 text-muted line-through'}`}
+                className={`rounded-full border px-2 py-0.5 text-[11px] ${summary.methods[m] ? 'border-sky-400/30 bg-sky-500/10 text-sky-200' : 'border-dashed border-white/15 text-muted line-through'}`}
               >
                 {ASSESSMENT_METHOD_LABEL_FA[m]}
               </span>
@@ -170,7 +171,7 @@ export function CompetencyGapAnalysis({ assessment, canRecompute }: CompetencyGa
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            <span className="text-[9.5px] text-muted">{lastComputedAt ? `آخرین محاسبه: ${new Date(lastComputedAt).toLocaleString('fa-IR')}` : ''}</span>
+            <span className="text-[11px] text-muted">{lastComputedAt ? `آخرین محاسبه: ${new Date(lastComputedAt).toLocaleString('fa-IR')}` : ''}</span>
             {recomputeButton}
           </div>
         </div>
@@ -212,7 +213,7 @@ export function CompetencyGapAnalysis({ assessment, canRecompute }: CompetencyGa
       <div className="glass-panel hidden overflow-x-auto rounded-2xl md:block">
         <table className="w-full text-right text-[11px]">
           <thead>
-            <tr className="border-b border-white/10 text-[10px] text-muted">
+            <tr className="border-b border-white/10 text-[11px] text-muted">
               <th className="px-3 py-2.5 font-bold">شایستگی</th>
               <th className="px-2 py-2.5 text-center font-bold">سطح الزامی</th>
               <th className="px-2 py-2.5 text-center font-bold">سطح واقعی</th>
@@ -229,7 +230,7 @@ export function CompetencyGapAnalysis({ assessment, canRecompute }: CompetencyGa
               return (
                 <tr
                   key={row.competencyId}
-                  onClick={() => setOpenCompetencyId(row.competencyId)}
+                  {...pressable(() => setOpenCompetencyId(row.competencyId), { row: true })}
                   className={`cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.04]`}
                   style={insufficient ? { backgroundImage: 'repeating-linear-gradient(135deg, rgba(148,163,184,0.06) 0 6px, transparent 6px 12px)' } : undefined}
                 >
@@ -283,7 +284,7 @@ export function CompetencyGapAnalysis({ assessment, canRecompute }: CompetencyGa
                 <StatusBadge status={row.score.status} />
               </div>
               <NoBankQuestionsNote row={row} />
-              <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+              <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
                 <div className="rounded-lg bg-white/[0.03] p-1.5">
                   <p className="text-muted">الزامی</p>
                   <p className="num text-[12px] font-bold">{formatLevel(row.score.requiredLevel)}</p>
@@ -306,7 +307,7 @@ export function CompetencyGapAnalysis({ assessment, canRecompute }: CompetencyGa
         })}
       </div>
 
-      <p className="text-[9.5px] leading-5 text-muted">
+      <p className="text-[11px] leading-5 text-muted">
         «شواهد ناکافی» یعنی هنوز داده‌ای برای سنجش این شایستگی ثبت نشده — این به معنای ضعف متقاضی نیست و در شاخص آمادگی لحاظ نمی‌شود. برای مشاهده شواهد و
         سؤالات پشتوانه هر شایستگی روی آن کلیک کنید.
       </p>
@@ -359,8 +360,8 @@ function SummaryTile({ icon: Icon, color, label, value, hint, dashed }: { icon: 
       <p className="num text-xl font-black leading-none" style={{ color }}>
         {value.toLocaleString('fa-IR')}
       </p>
-      <p className="mt-1 text-[10px] font-bold text-secondary">{label}</p>
-      {hint && <p className="text-[9px] text-muted">{hint}</p>}
+      <p className="mt-1 text-[11px] font-bold text-secondary">{label}</p>
+      {hint && <p className="text-[11px] text-muted">{hint}</p>}
     </div>
   )
 }
@@ -370,7 +371,7 @@ export function StatusBadge({ status }: { status: CompCompetencyStatus }) {
   const insufficient = status === 'INSUFFICIENT_EVIDENCE'
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-bold ${insufficient ? 'border-dashed' : ''}`}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-bold ${insufficient ? 'border-dashed' : ''}`}
       style={{ borderColor: `${meta.color}55`, background: insufficient ? 'transparent' : `${meta.color}1c`, color: meta.color }}
     >
       {insufficient ? <HelpCircle size={11} /> : status === 'MEETS' || status === 'EXCEEDS' ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
@@ -381,7 +382,7 @@ export function StatusBadge({ status }: { status: CompCompetencyStatus }) {
 
 function ActualLevelCell({ row }: { row: GapRow }) {
   if (row.score.actualLevel == null) {
-    return <span className="text-[10px] italic text-muted">نامعلوم</span>
+    return <span className="text-[11px] italic text-muted">نامعلوم</span>
   }
   const color = GAP_STATUS_META[row.score.status].color
   return (
@@ -392,7 +393,7 @@ function ActualLevelCell({ row }: { row: GapRow }) {
 }
 
 function GapCell({ gap }: { gap: number | null }) {
-  if (gap == null) return <span className="text-[10px] italic text-muted">نامعلوم</span>
+  if (gap == null) return <span className="text-[11px] italic text-muted">نامعلوم</span>
   if (gap > 0) return <span className="num text-[11px] font-bold text-red-300">{formatLevel(gap)} کمبود</span>
   if (gap < 0) return <span className="num text-[11px] font-bold text-emerald-300">{formatLevel(-gap)} مازاد</span>
   return <span className="text-[10.5px] text-emerald-300">بدون شکاف</span>
@@ -400,9 +401,9 @@ function GapCell({ gap }: { gap: number | null }) {
 
 function CriticalityBadge({ isCritical }: { isCritical: boolean }) {
   return isCritical ? (
-    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-300">★ حیاتی</span>
+    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-bold text-amber-300">★ حیاتی</span>
   ) : (
-    <span className="text-[10px] text-muted">عادی</span>
+    <span className="text-[11px] text-muted">عادی</span>
   )
 }
 
@@ -410,10 +411,10 @@ export function ConfidenceBadge({ confidence, coverage }: { confidence: keyof ty
   const meta = GAP_CONFIDENCE_META[confidence]
   return (
     <span className="inline-flex flex-col items-center leading-tight" title={coverage != null ? `پوشش منابع شواهد: ${formatPercent(coverage)}` : undefined}>
-      <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${meta.color}1c`, color: meta.color }}>
+      <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: `${meta.color}1c`, color: meta.color }}>
         {meta.label}
       </span>
-      {coverage != null && confidence !== 'NONE' && <span className="num text-[9px] text-muted">پوشش {formatPercent(coverage)}</span>}
+      {coverage != null && confidence !== 'NONE' && <span className="num text-[11px] text-muted">پوشش {formatPercent(coverage)}</span>}
     </span>
   )
 }
@@ -426,7 +427,7 @@ function NoBankQuestionsNote({ row }: { row: GapRow }) {
   const names = sources.map((s) => QUESTION_TYPE_LABEL_FA[s.sourceRef as QuestionType] ?? s.sourceRef).join('، ')
   return (
     <span
-      className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-dashed border-slate-400/30 px-1.5 py-0.5 text-[9.5px] text-muted"
+      className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-dashed border-slate-400/30 px-1.5 py-0.5 text-[11px] text-muted"
       title={`این منبع در بانک سؤال این شغل هیچ سؤال تأییدشده‌ای ندارد و در محاسبه پوشش کنار گذاشته شد: ${names}. نبود شاهد به معنای ضعف متقاضی نیست.`}
     >
       <HelpCircle size={10} /> منبع بدون سؤال در بانک ({names})
@@ -436,14 +437,14 @@ function NoBankQuestionsNote({ row }: { row: GapRow }) {
 
 function EvidenceChips({ row }: { row: GapRow }) {
   const entries = Object.entries(row.sourceCounts) as [CompEvidenceSourceType, number][]
-  if (entries.length === 0) return <span className="text-[10px] italic text-muted">بدون شواهد</span>
+  if (entries.length === 0) return <span className="text-[11px] italic text-muted">بدون شواهد</span>
   return (
     <span className="flex flex-wrap items-center gap-1">
       <span className="num text-[10.5px] font-bold">{row.score.evidenceCount.toLocaleString('fa-IR')}</span>
       {entries.map(([type, count]) => (
         <span
           key={type}
-          className="rounded-full px-1.5 py-0.5 text-[9.5px] font-bold"
+          className="rounded-full px-1.5 py-0.5 text-[11px] font-bold"
           style={{ background: `${EVIDENCE_SOURCE_CHIP[type].color}1f`, color: EVIDENCE_SOURCE_CHIP[type].color }}
         >
           {EVIDENCE_SOURCE_CHIP[type].label} <span className="num">{count.toLocaleString('fa-IR')}</span>
@@ -477,7 +478,7 @@ function GapList({
       <p className="flex items-center gap-1.5 text-xs font-bold" style={{ color }}>
         <Icon size={13} /> {title} <span className="num text-muted">({rows.length.toLocaleString('fa-IR')})</span>
       </p>
-      <p className="mb-2 text-[9.5px] text-muted">{subtitle}</p>
+      <p className="mb-2 text-[11px] text-muted">{subtitle}</p>
       {rows.length === 0 ? (
         <p className="py-2 text-[10.5px] text-muted">{empty}</p>
       ) : (
@@ -488,7 +489,7 @@ function GapList({
                 <span className="flex items-center gap-1 text-secondary">
                   {r.labelFa} {r.score.isCritical && <span className="text-amber-300">★</span>}
                 </span>
-                <span className="num shrink-0 text-[10px] font-bold" style={{ color }}>
+                <span className="num shrink-0 text-[11px] font-bold" style={{ color }}>
                   {metric(r)}
                 </span>
               </button>

@@ -5,6 +5,7 @@ import { NoRoute } from '../components/shared'
 import { HelpButton } from '../components/Help'
 import { buildReports, REPORT_COLOR, toCsv, type Report, type ReportKey } from '../lib/reports'
 import { faNum, fmtDate } from '../lib/fa'
+import { pressable } from '../../../lib/pressable'
 
 const ICON: Record<ReportKey, LucideIcon> = { critical: ShieldAlert, constraint: FileWarning, upcoming: CalendarClock, last_action: History, overdue: AlarmClockOff, ready: CheckCircle2, recommended: Sparkles, conflict: GitCompareArrows }
 /** Words that get a coloured pill wherever they start a cell. */
@@ -97,7 +98,7 @@ export function ReportsPage() {
             <thead><tr><th>#</th>{r.columns.map((c) => <th key={c}>{c}</th>)}</tr></thead>
             <tbody>
               {r.rows.map((x, i) => (
-                <tr key={i} data-hot={x.hot ? '' : undefined} onClick={x.parcelId ? () => select(x.parcelId!) : undefined} style={{ cursor: x.parcelId ? 'pointer' : undefined }}>
+                <tr key={i} data-hot={x.hot ? '' : undefined} {...pressable(x.parcelId ? () => select(x.parcelId!) : undefined, { row: true })} style={{ cursor: x.parcelId ? 'pointer' : undefined }}>
                   <td className="la-num" style={{ color: 'var(--la-muted)' }}>{faNum(i + 1)}</td>
                   {x.cells.map((c, j) => <td key={j}><Cell text={c} /></td>)}
                 </tr>

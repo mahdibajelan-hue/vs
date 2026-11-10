@@ -95,7 +95,7 @@
 /* signal feed */
 .rc-feed { max-height: 46rem; grid-template-rows: auto minmax(0, 1fr); }
 .rc-signals { display: grid; gap: .35rem; overflow-y: auto; padding-inline-end: .2rem; scrollbar-width: thin; }
-.rc-signals li { border-radius: .85rem; border: 1px solid var(--border-soft); border-inline-start: 3px solid var(--sv); transition: background-color 160ms ease; }
+.rc-signals li { border-radius: .85rem; border: 1px solid var(--border-soft); border-inline-start: 1px solid var(--sv); transition: background-color 160ms ease; }
 .rc-signals li.is-open { background: color-mix(in srgb, var(--sv) 6%, transparent); }
 .rc-sig { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .6rem; align-items: center; width: 100%; padding: .55rem .7rem; text-align: start; border-radius: inherit; transition: transform 140ms var(--rc-ease); }
 .rc-sig:hover { background: color-mix(in srgb, var(--text-primary) 3%, transparent); }
@@ -154,7 +154,7 @@
 .rc-count-body { display: grid; min-width: 0; }
 .rc-count-body small { font-size: 10.5px; color: var(--text-muted); }
 .rc-count-body b { font-size: 1.2rem; font-weight: 900; line-height: 1.25; }
-.rc-count-body em { font-style: normal; font-size: 10px; color: var(--cc); }
+.rc-count-body em { font-style: normal; font-size: 11px; color: var(--cc); }
 .rc-ms { display: grid; gap: .35rem; padding-top: .55rem; border-top: 1px dashed var(--border-soft); }
 .rc-ms-head { display: flex; align-items: center; gap: .35rem; font-size: 12px; font-weight: 800; }
 .rc-ms-head i { font-style: normal; margin-inline-start: auto; padding: 0 .45rem; border-radius: 99px; font-size: 11px; background: color-mix(in srgb, var(--radar-green) 14%, transparent); color: var(--radar-green); }

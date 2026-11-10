@@ -71,7 +71,7 @@ export function OverdueActionsIssuePanel({
   return (
     <div className="space-y-2">
       {!mappingLoading && !mapped && (
-        <p className="rounded-lg border px-2.5 py-2 text-[10px] leading-relaxed text-muted" style={{ borderColor: 'var(--border-soft)' }}>
+        <p className="rounded-lg border px-2.5 py-2 text-[11px] leading-relaxed text-muted" style={{ borderColor: 'var(--border-soft)' }}>
           این پروژه هنوز به یک پروژه «مدیریت مسائل» متصل نشده — برای تبدیل اقدام به Issue، ابتدا این اتصال را در
           «داده‌های پایه ← نگاشت پروژه‌ها» برقرار کنید.
         </p>
@@ -87,7 +87,7 @@ export function OverdueActionsIssuePanel({
                   <AlertOctagon size={13} className="mt-0.5 shrink-0" style={{ color: STATUS_TEXT_COLOR.red }} />
                   <span className="min-w-0">
                     <span className="block truncate text-[11px] font-bold">{a.title}</span>
-                    <span className="block text-[9px] text-muted">
+                    <span className="block text-[11px] text-muted">
                       سررسید {fa(a.dueDate)} · اولویت {PRIORITY_LABEL_FA[a.priority]}
                     </span>
                   </span>
@@ -95,7 +95,7 @@ export function OverdueActionsIssuePanel({
               </div>
 
               {already ? (
-                <p className="flex items-center gap-1 pr-5.5 text-[10px] text-emerald-400">
+                <p className="flex items-center gap-1 pr-5.5 text-[11px] text-emerald-400">
                   <CheckCircle2 size={12} /> به Issue Management تبدیل شده است
                 </p>
               ) : mapped ? (
@@ -103,7 +103,7 @@ export function OverdueActionsIssuePanel({
                   <select
                     value={draft.pursuerId}
                     onChange={(e) => setDraft(a.id, { pursuerId: e.target.value })}
-                    className="min-w-0 flex-1 rounded-lg border bg-transparent px-2 py-1 text-[10px]"
+                    className="min-w-0 flex-1 rounded-lg border bg-transparent px-2 py-1 text-[11px]"
                     style={{ borderColor: 'var(--border-soft)' }}
                   >
                     <option value="">مسئول اقدام...</option>
@@ -116,21 +116,21 @@ export function OverdueActionsIssuePanel({
                     min={1}
                     value={draft.deadlineDays}
                     onChange={(e) => setDraft(a.id, { deadlineDays: Math.max(1, Number(e.target.value) || 1) })}
-                    className="w-16 rounded-lg border bg-transparent px-2 py-1 text-[10px]"
+                    className="w-16 rounded-lg border bg-transparent px-2 py-1 text-[11px]"
                     style={{ borderColor: 'var(--border-soft)' }}
                     title="مهلت (روز)"
                   />
-                  <span className="text-[9px] text-muted">روز مهلت</span>
+                  <span className="text-[11px] text-muted">روز مهلت</span>
                   <button
                     onClick={() => convert(a)}
                     disabled={convertingId === a.id}
-                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold text-white disabled:opacity-50"
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-white disabled:opacity-50"
                     style={{ background: 'var(--plc-amber, #fab219)' }}
                   >
                     <Send size={11} /> {convertingId === a.id ? 'در حال ثبت...' : 'تبدیل به Issue'}
                   </button>
                   {errorByAction[a.id] && (
-                    <span className="w-full text-[9px]" style={{ color: STATUS_TEXT_COLOR.red }}>{errorByAction[a.id]}</span>
+                    <span className="w-full text-[11px]" style={{ color: STATUS_TEXT_COLOR.red }}>{errorByAction[a.id]}</span>
                   )}
                 </div>
               ) : null}

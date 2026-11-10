@@ -96,5 +96,5 @@ export function ChangesBridgePage({ masterProjectId }: { masterProjectId: string
 }
 
 function Fig({ label, value, hint, strong }: { label: string; value: string; hint?: string; strong?: boolean }) {
-  return <div><p className="fin-text-muted text-[10.5px]">{label}</p><p className={`num mt-0.5 ${strong ? 'text-sm font-extrabold' : 'text-xs font-bold'}`}>{value}</p>{hint && <p className="text-[10px] fin-text-muted">{hint}</p>}</div>
+  return <div><p className="fin-text-muted text-[10.5px]">{label}</p><p className={`num mt-0.5 ${strong ? 'text-sm font-extrabold' : 'text-xs font-bold'}`}>{value}</p>{hint && <p className="text-[11px] fin-text-muted">{hint}</p>}</div>
 }

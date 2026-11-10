@@ -100,13 +100,13 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
             </button>
           )}
         </div>
-        <p className="text-[10px] leading-5 text-muted">
+        <p className="text-[11px] leading-5 text-muted">
           لینک تاریخ انقضا ندارد. فقط در این حالت‌ها فرم را باز نمی‌کند: صدور «لینک جدید» (لینک قبلی باطل می‌شود)، تأیید و بستن فرم توسط مسئول ارزیابی، یا
           نهایی شدن ارزیابی — و در هر حالت نامزد پیام مشخص همان حالت را می‌بیند.
         </p>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span
-            className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+            className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
               assessment.selfServiceStatus === 'submitted'
                 ? 'bg-amber-500/15 text-amber-300'
                 : assessment.selfServiceStatus === 'reviewed'
@@ -121,7 +121,7 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
               type="button"
               onClick={() => setConfirmClose(true)}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold ${
-                status === 'submitted' ? 'bg-green-500 text-white hover:bg-green-400' : 'border border-white/10 text-secondary hover:bg-white/5'
+                status === 'submitted' ? 'bg-green-700 text-white hover:bg-green-800' : 'border border-white/10 text-secondary hover:bg-white/5'
               }`}
             >
               <CheckCircle2 size={13} /> تأیید و بستن فرم خوداظهاری
@@ -142,9 +142,9 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
               <LockOpen size={13} /> بازگشایی فرم برای نامزد
             </button>
           )}
-          {!isLead && status === 'submitted' && <span className="text-[10px] text-muted">تأیید و بستن فرم خوداظهاری فقط توسط مسئول ارزیابی انجام می‌شود</span>}
+          {!isLead && status === 'submitted' && <span className="text-[11px] text-muted">تأیید و بستن فرم خوداظهاری فقط توسط مسئول ارزیابی انجام می‌شود</span>}
         </div>
-        <p className="text-[10px] leading-5 text-muted">
+        <p className="text-[11px] leading-5 text-muted">
           «تأیید و بستن» یعنی مشخصات و مدارک نامزد بررسی شد و درست است: فرم برای نامزد قفل می‌شود تا اطلاعات زیر دست داوران تغییر نکند، مرحله‌ی «غربالگری اولیه»
           با تاریخ تأیید ثبت می‌شود و کار «تأیید فرم خوداظهاری» از فهرست اقدامات داشبورد حذف می‌شود. در صورت نیاز می‌توانید فرم را دوباره باز کنید.
         </p>
@@ -175,7 +175,7 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
                   setBusy(false)
                   setConfirmClose(false)
                 }}
-                className="flex items-center gap-1.5 rounded-lg bg-green-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-green-400 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-green-800 disabled:opacity-50"
               >
                 {busy ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} تأیید و بستن فرم
               </button>
@@ -201,7 +201,7 @@ export function DocumentsStage({ assessment, isLead, canSetPhoto, onContinue }: 
           ) : (
             <span className="text-[10.5px] text-muted">بارگذاری عکس توسط مسئول ارزیابی یا طراح آزمون انجام می‌شود.</span>
           )}
-          <span className="text-[10px] text-muted">{PHOTO_LIMIT_FA}</span>
+          <span className="text-[11px] text-muted">{PHOTO_LIMIT_FA}</span>
           <input
             ref={photoRef}
             type="file"

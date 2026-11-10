@@ -3,6 +3,7 @@ import { ArrowDownAZ, ArrowUpAZ, Info } from 'lucide-react'
 import type { Tone } from '../lib/financeKpis'
 import { formatJalali } from '../../../lib/jalali'
 import { Spark } from './charts'
+import { pressable } from '../../../lib/pressable'
 
 /** Rial amount in billions with a fixed number of decimals — for tables whose header states «میلیارد ریال». */
 export const fmtBn = (n: number, d = 1): string => (n / 1e9).toLocaleString('fa-IR', { maximumFractionDigits: d, minimumFractionDigits: n !== 0 && Math.abs(n) < 1e10 ? d : 0 })
@@ -16,11 +17,10 @@ export function splitMoney(n: number): { v: string; u: string } {
 }
 export const fmtPct = (n: number | null, d = 1): string => (n == null ? '—' : `${n.toLocaleString('fa-IR', { maximumFractionDigits: d })}٪`)
 
-const FA = '۰۱۲۳۴۵۶۷۸۹', AR = '٠١٢٣٤٥٦٧٨٩'
+const FA = '۰۱۲۳۴۵۶۷۸۹'
 /** Digits to Persian for display (dates and codes that come out of helpers with Latin digits). */
 export const faDigits = (s: string): string => s.replace(/[0-9]/g, (d) => FA[+d])
-/** Parses what a person typed: Persian/Arabic digits, thousands separators and the Persian decimal mark. */
-export const parseNum = (s: string): number => { const t = s.replace(/[۰-۹]/g, (d) => String(FA.indexOf(d))).replace(/[٠-٩]/g, (d) => String(AR.indexOf(d))).replace(/[٬,\s]/g, '').replace('٫', '.'); const n = Number(t); return Number.isFinite(n) ? n : 0 }
+export { parseNum } from '../../../lib/parseNum'
 export const fmtD = (iso: string | null | undefined): string => (iso ? faDigits(formatJalali(iso) || '') || '—' : '—')
 
 /** Text input for numbers that shows Persian digits and accepts any digit style; commits on blur. */
@@ -86,7 +86,7 @@ export function DataTable<T>({ cols, rows, rowKey, onRow, empty = 'موردی ن
         })}</tr></thead>
         <tbody>
           {sorted.length === 0 ? <tr><td colSpan={cols.length} className="fn-empty">{empty}</td></tr> : sorted.map((r) => (
-            <tr key={rowKey(r)} className={onRow ? 'click' : ''} onClick={onRow ? () => onRow(r) : undefined}>{cols.map((c) => <td key={c.key} className={c.num ? 'num' : ''}>{c.render(r)}</td>)}</tr>
+            <tr key={rowKey(r)} className={onRow ? 'click' : ''} {...pressable(onRow ? () => onRow(r) : undefined, { row: true })}>{cols.map((c) => <td key={c.key} className={c.num ? 'num' : ''}>{c.render(r)}</td>)}</tr>
           ))}
         </tbody>
         {foot && sorted.length > 0 && <tfoot><tr>{cols.map((c) => <td key={c.key} className={c.num ? 'num' : ''}>{c.foot ?? ''}</td>)}</tr></tfoot>}

@@ -14,6 +14,7 @@ import { RK_HELP } from '../lib/help'
 import { RM_SOURCE_LABEL_FA } from '../types'
 import { useCategoryLabel } from '../components/rk'
 import type { PageProps } from '../RiskApp'
+import { pressable } from '../../../lib/pressable'
 
 interface IssueRow { id: string; code: string; title: string; stage: string | null; status: string; category: string | null; project_id: string; source: string | null; source_ref_id: string | null }
 const IM_TO_RM: Record<string, string> = { engineering: 'engineering', procurement: 'procurement', contractor: 'contractor', contract_commercial: 'legal', land_right_of_way: 'land', land_acquisition: 'land', permits: 'permits', hse: 'hse', quality: 'quality', finance: 'cost', interface: 'stakeholders', document_approval: 'engineering', other: 'other' }
@@ -109,7 +110,7 @@ export function IntegrationPage({ onOpenRisk }: PageProps) {
         {realized.length === 0 ? <div className="im-helper">ریسکی تحقق نیافته است. تبدیل از تب «ارتباطات» هر ریسک انجام می‌شود.</div> : (
           <div className="im-table-wrap"><table className="im-table"><thead><tr><th>ریسک</th><th>تاریخ تحقق</th><th>مسئلهٔ ایجادشده</th><th>مرحلهٔ مسئله</th></tr></thead><tbody>
             {realized.map((r) => { const i = issueByRisk.get(r.id); return (
-              <tr key={r.id} className="rk-row-click" onClick={() => onOpenRisk(r.id, 'links')}><td><span className="im-code">{r.code}</span> {r.title.slice(0, 60)}</td><td className="im-helper">{r.realizedAt ? formatJalali(r.realizedAt.slice(0, 10)) : '—'}</td>
+              <tr key={r.id} className="rk-row-click" {...pressable(() => onOpenRisk(r.id, 'links'), { row: true })}><td><span className="im-code">{r.code}</span> {r.title.slice(0, 60)}</td><td className="im-helper">{r.realizedAt ? formatJalali(r.realizedAt.slice(0, 10)) : '—'}</td>
                 <td>{i ? <button className="im-ghostlink" onClick={(e) => { e.stopPropagation(); goIssue(i.id) }}><ExternalLink size={11} /> {i.code}</button> : <span className="im-helper">—</span>}</td><td className="im-helper">{i ? i.stage ?? i.status : '—'}</td></tr>) })}
           </tbody></table></div>
         )}
@@ -164,7 +165,7 @@ export function IntegrationPage({ onOpenRisk }: PageProps) {
           مقدارهای شاخص‌های هشدار هم با درج در <code dir="ltr">rm_kri_readings</code> (با <code dir="ltr">external_ref</code> یکتا) از هر سامانه قابل‌دریافت‌اند؛ وضعیت و عبور از آستانه را پایگاه‌داده خودش حساب می‌کند.</div>
         {external.length === 0 && extKris.length === 0 ? <div className="im-helper">هنوز ریسک یا شاخصی از سامانهٔ خارجی دریافت نشده است.</div> : (
           <div className="im-table-wrap"><table className="im-table"><thead><tr><th>مورد</th><th>سامانهٔ مبدأ</th><th>شناسهٔ خارجی</th><th>همگام‌سازی</th></tr></thead><tbody>
-            {external.slice(0, 30).map((r) => <tr key={r.id} className="rk-row-click" onClick={() => onOpenRisk(r.id, 'links')}><td><span className="im-code">{r.code}</span> {r.title.slice(0, 50)}</td><td className="im-helper">{r.externalSystem}</td><td dir="ltr" className="im-helper">{r.externalId}</td><td className="im-helper">{r.syncStatus}{r.syncedAt ? ` · ${formatJalali(r.syncedAt.slice(0, 10))}` : ''}</td></tr>)}
+            {external.slice(0, 30).map((r) => <tr key={r.id} className="rk-row-click" {...pressable(() => onOpenRisk(r.id, 'links'), { row: true })}><td><span className="im-code">{r.code}</span> {r.title.slice(0, 50)}</td><td className="im-helper">{r.externalSystem}</td><td dir="ltr" className="im-helper">{r.externalId}</td><td className="im-helper">{r.syncStatus}{r.syncedAt ? ` · ${formatJalali(r.syncedAt.slice(0, 10))}` : ''}</td></tr>)}
             {extKris.map((k) => <tr key={k.id}><td>شاخص: {k.name}</td><td className="im-helper">{k.externalSystem ?? '—'}</td><td dir="ltr" className="im-helper">{k.externalKey ?? '—'}</td><td className="im-helper">{k.lastReadingAt ? formatJalali(k.lastReadingAt.slice(0, 10)) : 'بدون قرائت'}</td></tr>)}
           </tbody></table></div>
         )}

@@ -14,6 +14,7 @@ import { AlertsPanel } from '../components/epc/AlertsPanel'
 import { useEpcModel } from '../lib/useEpcModel'
 import { RoleDesk } from '../components/RoleDesk'
 import { DriversTable } from '../components/DriversTable'
+import { pressable } from '../../../lib/pressable'
 
 export function DashboardPage({ projectId, onGo }: { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }) {
   const m = useExecutionModel(projectId)
@@ -66,7 +67,7 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; sub: str
       )}
       <div className="im-card" style={{ padding: 0 }}>
         <div style={{ padding: '10px 14px' }}><b>آخرین گزارش‌ها</b></div>
-        <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><tbody>{recent.map((r) => <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => onGo('daily', r.formKey === 'work' ? 'work' : 'forms')}><td className="fn-code">{r.reportNo}</td><td>{r.formKey === 'work' ? 'کارکرد روزانه' : FORM_BY_KEY[r.formKey]?.title}</td><td>{fmtD(r.reportDate)}</td><td>{r.front || '—'}</td><td><ReportStatusChip status={r.status} /></td></tr>)}{recent.length === 0 && <tr><td className="fn-empty">گزارشی نیست.</td></tr>}</tbody></table></div>
+        <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><tbody>{recent.map((r) => <tr key={r.id} style={{ cursor: 'pointer' }} {...pressable(() => onGo('daily', r.formKey === 'work' ? 'work' : 'forms'), { row: true })}><td className="fn-code">{r.reportNo}</td><td>{r.formKey === 'work' ? 'کارکرد روزانه' : FORM_BY_KEY[r.formKey]?.title}</td><td>{fmtD(r.reportDate)}</td><td>{r.front || '—'}</td><td><ReportStatusChip status={r.status} /></td></tr>)}{recent.length === 0 && <tr><td className="fn-empty">گزارشی نیست.</td></tr>}</tbody></table></div>
       </div>
       <p className="im-helper" style={{ margin: 0 }}><Chip>{m.baselines.filter((b) => b.status === 'approved').length ? `نسخهٔ مبنای ${fa(Math.max(...m.baselines.filter((b) => b.status === 'approved').map((b) => b.version)))}` : 'بدون نسخهٔ مبنای مصوب'}</Chip> · تأیید کارکرد به‌معنای تأیید کیفیت نهایی یا صورت‌وضعیت مالی نیست.</p>
     </div>

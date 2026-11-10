@@ -32,7 +32,7 @@ function FilterChip({ label, color, count, active, onClick }: { label: string; c
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium transition-colors"
+      className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors"
       style={{ borderColor: active ? color : 'var(--border-soft)', background: active ? `${color}22` : 'transparent', color: active ? color : undefined }}
     >
       <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} />

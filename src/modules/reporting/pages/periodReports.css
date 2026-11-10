@@ -42,7 +42,6 @@
 .prx-tile { --c: #6366f1; --t: #64748b; position: relative; display: flex; flex-direction: column; gap: .55rem; min-width: 0; padding: .85rem .95rem .7rem; text-align: right; border-radius: 1.1rem; color: var(--text-primary);
   border: 1px solid color-mix(in srgb, var(--c) 20%, var(--border-soft)); background: radial-gradient(110% 80% at 100% 0%, color-mix(in srgb, var(--c) 11%, transparent), transparent 55%), var(--bg-panel-solid);
   transition: transform 180ms var(--ease), border-color 180ms ease, box-shadow 220ms ease; }
-.prx-tile::before { content: ''; position: absolute; top: .9rem; bottom: .9rem; inset-inline-start: 0; width: 3px; border-radius: 3px; background: var(--c); }
 .prx-tile:active:not(.is-empty) { transform: scale(.985); }
 .prx-tile:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .prx-tile.is-click:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--c) 55%, var(--border-soft)); box-shadow: 0 20px 36px -26px var(--c); } .prx-tile.is-click:hover .prx-more { opacity: 1; transform: none; } }
@@ -61,7 +60,7 @@
 .prx-tile-chart .vz-legend { min-width: 8rem; }
 .prx-stats { display: flex; flex-wrap: wrap; gap: .35rem; }
 .prx-stats div { display: grid; padding: .3rem .55rem; border-radius: .6rem; background: var(--bg-app); border: 1px solid var(--border-soft); min-width: 5.5rem; }
-.prx-stats dt { font-size: 10px; color: var(--text-muted); }
+.prx-stats dt { font-size: 11px; color: var(--text-muted); }
 .prx-stats dd { font-size: 12.5px; font-weight: 800; }
 .prx-stats .t-bad dd, .prx-detail-stat.t-bad b, .prx-proj-foot .t-bad { color: #f43f5e; }
 .prx-stats .t-warn dd, .prx-detail-stat.t-warn b, .prx-proj-foot .t-warn { color: #f59e0b; }
@@ -74,13 +73,13 @@
 .prx-h2 { font-size: 14px; font-weight: 900; margin-bottom: .6rem; }
 .prx-h2 small { font-size: 10.5px; font-weight: 500; color: var(--text-muted); margin-inline-start: .4rem; }
 .prx-projects { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); }
-.prx-proj { --c: #64748b; display: grid; gap: .45rem; padding: .75rem .85rem; text-align: right; border-radius: 1rem; border: 1px solid var(--border-soft); border-top: 3px solid var(--c); background: var(--bg-panel-solid); transition: transform 160ms var(--ease), box-shadow 220ms ease; }
+.prx-proj { --c: #64748b; display: grid; gap: .45rem; padding: .75rem .85rem; text-align: right; border-radius: 1rem; border: 1px solid var(--border-soft); border-top: 1px solid var(--c); background: var(--bg-panel-solid); transition: transform 160ms var(--ease), box-shadow 220ms ease; }
 .prx-proj:active { transform: scale(.985); }
 @media (hover: hover) and (pointer: fine) { .prx-proj:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -24px var(--c); } }
 @media (prefers-reduced-motion: no-preference) { .prx-proj { animation: vz-rise 340ms calc(var(--i) * 30ms) var(--ease) both; } }
 .prx-proj-top { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
 .prx-proj-top b { font-size: 12.5px; line-height: 1.6; }
-.prx-proj-h { flex: none; padding: .1rem .5rem; border-radius: 99px; font-size: 10px; font-weight: 800; color: #fff; }
+.prx-proj-h { flex: none; padding: .1rem .5rem; border-radius: 99px; font-size: 11px; font-weight: 800; color: #fff; }
 .prx-proj-foot { display: flex; justify-content: space-between; gap: .5rem; font-size: 11.5px; font-weight: 800; }
 .prx-proj-foot small { font-weight: 500; color: var(--text-muted); }
 
@@ -92,7 +91,7 @@
 @media (prefers-reduced-motion: no-preference) { .prx-progress i { animation: lpp-grow 900ms 150ms var(--ease) both; } }
 @keyframes lpp-grow { from { transform: scaleX(0); } }
 .prx-progress-wrap { display: grid; gap: .35rem; padding-top: .3rem; }
-.prx-progress-wrap small { font-size: 10px; color: var(--text-muted); }
+.prx-progress-wrap small { font-size: 11px; color: var(--text-muted); }
 
 .prx-detail-top { display: flex; flex-wrap: wrap; gap: .45rem; }
 .prx-detail-head { --c: #6366f1; display: grid; flex: 1 1 12rem; padding: .6rem .75rem; border-radius: .9rem; color: var(--text-primary); background: linear-gradient(130deg, color-mix(in srgb, var(--c) 20%, var(--bg-app)), var(--bg-app)); border: 1px solid color-mix(in srgb, var(--c) 35%, var(--border-soft)); }

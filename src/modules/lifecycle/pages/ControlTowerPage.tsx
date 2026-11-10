@@ -120,10 +120,10 @@ export function ControlTowerPage({
         <div className="flex min-w-0 items-center gap-2">
           <StatusDot status={analysis.overall.status} size={8} />
           <h1 className="truncate text-sm font-extrabold">{project.officialName}</h1>
-          <span className="shrink-0 rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] text-muted" dir="ltr">
+          <span className="shrink-0 rounded-md bg-white/5 px-1.5 py-0.5 text-[11px] text-muted" dir="ltr">
             {project.projectIdCode}
           </span>
-          <span className="hidden shrink-0 text-[10px] text-muted sm:inline">
+          <span className="hidden shrink-0 text-[11px] text-muted sm:inline">
             مرحله {stageLabel}
             {bundle.lifecycle.stageEnteredAt && <> · از {fa(bundle.lifecycle.stageEnteredAt)}</>}
           </span>
@@ -233,7 +233,7 @@ export function ControlTowerPage({
                   <div className="mb-1 flex items-start justify-between gap-2">
                     <span className="flex min-w-0 items-start gap-1.5">
                       <span
-                        className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-md text-[9px] font-extrabold"
+                        className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-md text-[11px] font-extrabold"
                         style={{ background: 'var(--border-soft)' }}
                       >
                         {faNum(a.rank)}
@@ -242,10 +242,10 @@ export function ControlTowerPage({
                     </span>
                     <SeverityPill severity={a.severity} label={WARNING_SEVERITY_LABEL_FA[a.severity]} />
                   </div>
-                  <p className="pr-5.5 text-[10px] leading-relaxed text-secondary">
+                  <p className="pr-5.5 text-[11px] leading-relaxed text-secondary">
                     <b>اقدام:</b> {faText(a.recommendedAction)}
                   </p>
-                  <p className="pr-5.5 text-[9px] text-muted">
+                  <p className="pr-5.5 text-[11px] text-muted">
                     اثر: {faText(a.impact)} · ارجاع به {ESCALATION_LABEL_FA[a.escalation]}
                   </p>
                 </li>
@@ -257,21 +257,21 @@ export function ControlTowerPage({
         {/* ── Row 4 — the analytics ────────────────────────────────── */}
         <TowerTile span={4} eyebrow="Balance" title="توازن سلامت پروژه" icon={<Activity size={13} />} delay={240}>
           <HealthRadar health={analysis.health} />
-          <p className="text-[9px] leading-relaxed text-muted">
+          <p className="text-[11px] leading-relaxed text-muted">
             شکل نامتوازن یعنی یک بُعد کل پروژه را پایین می‌کشد.
           </p>
         </TowerTile>
 
         <TowerTile span={4} eyebrow="Readiness by stage" title="آمادگی مراحل چرخه عمر" icon={<BarChart3 size={13} />} delay={280}>
           <StageReadinessBars readiness={analysis.readiness} stageOrder={stageOrder} />
-          <p className="text-[9px] leading-relaxed text-muted">
+          <p className="text-[11px] leading-relaxed text-muted">
             میله خاکستری = مرحله دارای مانع؛ درصد بالا در آن به معنی نزدیک‌بودن به تصویب نیست.
           </p>
         </TowerTile>
 
         <TowerTile span={4} eyebrow="Forecast drift" title="روند رانش پیش‌بینی" icon={<TrendingUp size={13} />} delay={320}>
           <DriftTrendChart history={bundle.forecastHistory} milestones={bundle.milestones} />
-          <p className="text-[9px] leading-relaxed text-muted">
+          <p className="text-[11px] leading-relaxed text-muted">
             یک جابه‌جایی تاریخ رویداد است؛ منحنی صعودی، روند.
           </p>
         </TowerTile>
@@ -285,7 +285,7 @@ export function ControlTowerPage({
           delay={360}
           edge={analysis.milestoneKpis.criticalDelayed > 0 ? 'red' : undefined}
           action={
-            <button onClick={onOpenMilestones} className="flex shrink-0 items-center gap-1 text-[10px] text-sky-400 hover:underline">
+            <button onClick={onOpenMilestones} className="flex shrink-0 items-center gap-1 text-[11px] text-sky-400 hover:underline">
               همه <ChevronLeft size={11} />
             </button>
           }
@@ -305,7 +305,7 @@ export function ControlTowerPage({
                       {ms.isCritical && <Flag size={10} style={{ color: STATUS_TEXT_COLOR.red }} />}
                       <span className="truncate text-[11px] font-medium">{ms.name}</span>
                     </span>
-                    <span className="block text-[9px] text-muted">
+                    <span className="block text-[11px] text-muted">
                       Baseline {fa(ms.baselineDate)} · پیش‌بینی {fa(ms.forecastDate)}
                     </span>
                   </span>
@@ -316,7 +316,7 @@ export function ControlTowerPage({
                     >
                       {faVariance(milestoneVariance(ms))}
                     </span>
-                    <span className="block text-[9px] text-muted">{MILESTONE_STATUS_LABEL_FA[status]}</span>
+                    <span className="block text-[11px] text-muted">{MILESTONE_STATUS_LABEL_FA[status]}</span>
                   </span>
                 </li>
               ))}
@@ -388,14 +388,14 @@ export function ControlTowerPage({
               >
                 <div className="mb-1 flex items-center gap-1.5">
                   <StatusDot status={h.status} size={7} />
-                  <span className="truncate text-[10px] font-medium">{HEALTH_DIMENSION_LABEL_FA[h.dimension]}</span>
-                  {h.isManual && <span className="shrink-0 text-[8px] text-muted">دستی</span>}
+                  <span className="truncate text-[11px] font-medium">{HEALTH_DIMENSION_LABEL_FA[h.dimension]}</span>
+                  {h.isManual && <span className="shrink-0 text-[11px] text-muted">دستی</span>}
                 </div>
                 <div className="mb-1 flex items-end gap-1">
                   <span className="plc-num text-lg font-extrabold leading-none" style={{ color: STATUS_TEXT_COLOR[h.status] }}>
                     {faNum(h.score)}
                   </span>
-                  <span className="text-[8px] text-muted">/۱۰۰</span>
+                  <span className="text-[11px] text-muted">/۱۰۰</span>
                 </div>
                 <div className="mb-1 h-1 w-full overflow-hidden rounded-full" style={{ background: 'var(--border-soft)' }}>
                   <div
@@ -403,7 +403,7 @@ export function ControlTowerPage({
                     style={{ width: `${h.score}%`, background: STATUS_COLOR[h.status] }}
                   />
                 </div>
-                <p className="text-[9px] leading-relaxed text-muted">{faText(h.explanation)}</p>
+                <p className="text-[11px] leading-relaxed text-muted">{faText(h.explanation)}</p>
               </div>
             ))}
           </div>
@@ -433,8 +433,8 @@ export function ControlTowerPage({
                       <span className="text-[11px] font-bold">{faText(w.title)}</span>
                       <SeverityPill severity={w.severity} label={WARNING_SEVERITY_LABEL_FA[w.severity]} />
                     </div>
-                    <p className="mt-0.5 text-[10px] leading-relaxed text-muted">{faText(w.detail)}</p>
-                    <p className="mt-0.5 text-[10px] leading-relaxed text-secondary">← {faText(w.requiredAction)}</p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-muted">{faText(w.detail)}</p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-secondary">← {faText(w.requiredAction)}</p>
                   </div>
                 </li>
               ))}
@@ -463,12 +463,12 @@ function Metric({ label, value, sub, status }: {
     >
       <div className="mb-1 flex items-center gap-1.5">
         {status && <StatusDot status={status} size={6} />}
-        <span className="truncate text-[9px] text-muted">{label}</span>
+        <span className="truncate text-[11px] text-muted">{label}</span>
       </div>
       <div className="plc-num text-[15px] font-extrabold leading-none" style={status ? { color: STATUS_TEXT_COLOR[status] } : undefined}>
         {value}
       </div>
-      {sub && <div className="mt-1 text-[9px] leading-relaxed text-muted">{sub}</div>}
+      {sub && <div className="mt-1 text-[11px] leading-relaxed text-muted">{sub}</div>}
     </div>
   )
 }

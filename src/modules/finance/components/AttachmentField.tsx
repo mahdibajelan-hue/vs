@@ -56,7 +56,7 @@ export function AttachmentField({ folder, value, onChange }: { folder: string; v
           e.target.value = ''
         }}
       />
-      {error && <p className="mt-1 text-[10px] text-red-500">{error}</p>}
+      {error && <p className="mt-1 text-[11px] text-red-500">{error}</p>}
     </div>
   )
 }

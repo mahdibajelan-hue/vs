@@ -194,7 +194,7 @@ export function PersonalityCandidatePage({ token }: { token: string }) {
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/5">
             <div className="h-full rounded-full bg-pink-400 transition-all" style={{ width: `${questions.length > 0 ? (answeredCount / questions.length) * 100 : 0}%` }} />
           </div>
-          <p className="num mt-1.5 text-[10px] text-muted">
+          <p className="num mt-1.5 text-[11px] text-muted">
             {answeredCount.toLocaleString('fa-IR')} از {questions.length.toLocaleString('fa-IR')} پاسخ داده‌شده
           </p>
         </div>
@@ -241,7 +241,7 @@ export function PersonalityCandidatePage({ token }: { token: string }) {
                 })}
               </div>
             )}
-            {saving[q.id] && <p className="mt-1.5 text-[9.5px] text-muted">در حال ذخیره…</p>}
+            {saving[q.id] && <p className="mt-1.5 text-[11px] text-muted">در حال ذخیره…</p>}
             {!saving[q.id] && saveErrors[q.id] && (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-[10.5px] text-red-300">
                 <AlertTriangle size={12} /> این پاسخ ذخیره نشد.

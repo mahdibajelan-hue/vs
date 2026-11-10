@@ -68,7 +68,7 @@ export function CompetencyEvidenceDrawer({ assessmentId, competencyId, onClose }
       >
         <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-[10px] text-muted">
+            <p className="flex items-center gap-1.5 text-[11px] text-muted">
               <FileSearch size={12} /> متقاضی ← شایستگی ← شواهد ← آیتم ارزیابی
             </p>
             <p className="mt-0.5 truncate text-base font-extrabold">{detail?.competency.labelFa ?? '…'}</p>
@@ -108,7 +108,7 @@ export function CompetencyEvidenceDrawer({ assessmentId, competencyId, onClose }
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={score.status} />
                   <ConfidenceBadge confidence={score.confidence} coverage={score.coverage} />
-                  <span className="num text-[10px] text-muted">
+                  <span className="num text-[11px] text-muted">
                     {fa(score.evidenceCount, 0)} مورد شواهد از {fa(score.sourceTypesCovered, 0)} نوع منبع
                   </span>
                 </div>
@@ -138,7 +138,7 @@ export function CompetencyEvidenceDrawer({ assessmentId, competencyId, onClose }
                                 ? 'هنوز شاهدی از این منبع ثبت نشده'
                                 : undefined
                         }
-                        className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] ${state === 'excluded' ? 'border-dashed border-white/15 text-muted line-through' : state === 'nobank' ? 'border-dashed border-white/15 text-muted' : state === 'missing' ? 'border-dashed border-slate-400/30 text-muted' : ''}`}
+                        className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${state === 'excluded' ? 'border-dashed border-white/15 text-muted line-through' : state === 'nobank' ? 'border-dashed border-white/15 text-muted' : state === 'missing' ? 'border-dashed border-slate-400/30 text-muted' : ''}`}
                         style={state === 'covered' ? { borderColor: `${chip.color}50`, background: `${chip.color}14`, color: chip.color } : undefined}
                       >
                         {(state === 'excluded' || state === 'nobank') && <Ban size={10} />}
@@ -167,7 +167,7 @@ export function CompetencyEvidenceDrawer({ assessmentId, competencyId, onClose }
                 ))}
               </div>
               {detail.evidence.length > 0 && (
-                <p className="text-[9.5px] leading-5 text-muted">
+                <p className="text-[11px] leading-5 text-muted">
                   سهم هر شاهد = امتیاز نرمال‌شده × وزن مؤثر ÷ مجموع وزن‌ها؛ مجموع سهم‌ها برابر امتیاز شایستگی ({fa(score?.actualScore)}) است. وزن هر منبع به‌طور مساوی بین
                   موارد آن تقسیم می‌شود.
                 </p>
@@ -191,11 +191,11 @@ function sourceTitle(sourceType: CompEvidenceDetailRow['sourceType'], sourceRef:
 function Stat({ label, value, sub, color }: { label: string; value: string; sub?: string | null; color?: string }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5 text-center">
-      <p className="text-[9.5px] text-muted">{label}</p>
+      <p className="text-[11px] text-muted">{label}</p>
       <p className="num text-[13px] font-extrabold" style={color ? { color } : undefined}>
         {value}
       </p>
-      {sub && <p className="text-[9px] text-muted">{sub}</p>}
+      {sub && <p className="text-[11px] text-muted">{sub}</p>}
     </div>
   )
 }
@@ -226,20 +226,20 @@ function EvidenceRowCard({ row, expanded, onToggle }: { row: CompEvidenceDetailR
       <button onClick={onToggle} className="flex w-full items-start justify-between gap-2 p-3 text-right">
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-1.5">
-            <span className="rounded-full px-1.5 py-0.5 text-[9.5px] font-bold" style={{ background: `${chip.color}1f`, color: chip.color }}>
+            <span className="rounded-full px-1.5 py-0.5 text-[11px] font-bold" style={{ background: `${chip.color}1f`, color: chip.color }}>
               {COMP_EVIDENCE_SOURCE_TYPE_LABEL_FA[row.sourceType]}
             </span>
-            {row.sourceRef && <span className="text-[9.5px] text-muted">{row.sourceRef}</span>}
+            {row.sourceRef && <span className="text-[11px] text-muted">{row.sourceRef}</span>}
           </div>
           <p className="line-clamp-2 text-[11px] font-bold leading-5">{row.sourceLabel || row.sourceItemId}</p>
-          <p className="num mt-0.5 text-[9.5px] text-muted">{rawScoreLabel}</p>
+          <p className="num mt-0.5 text-[11px] text-muted">{rawScoreLabel}</p>
         </div>
         <div className="shrink-0 text-left">
           <p className="num text-[13px] font-extrabold" style={{ color: chip.color }}>
             {fa(row.normalizedScore)}
           </p>
-          <p className="num text-[9px] text-muted">وزن مؤثر {fa(row.effectiveWeight, 2)}</p>
-          <p className="num text-[9px] text-muted">
+          <p className="num text-[11px] text-muted">وزن مؤثر {fa(row.effectiveWeight, 2)}</p>
+          <p className="num text-[11px] text-muted">
             سهم {fa(row.contribution, 2)}
             {row.weightShare != null ? ` (${formatPercent(row.weightShare)})` : ''}
           </p>
@@ -269,7 +269,7 @@ function EvidenceItem({ item }: { item: CompEvidenceDetailItem }) {
       return (
         <div className="space-y-1.5 text-[10.5px]">
           <p className="leading-6 text-secondary">{item.questionText}</p>
-          <p className="text-[9.5px] text-muted">
+          <p className="text-[11px] text-muted">
             {item.category}
             {item.subCategory ? ` · ${item.subCategory}` : ''} · سطح {item.difficulty}
           </p>
@@ -284,7 +284,7 @@ function EvidenceItem({ item }: { item: CompEvidenceDetailItem }) {
               <div key={r.raterId} className="flex items-start justify-between gap-2 rounded-lg border border-white/5 px-2 py-1.5">
                 <span className="min-w-0">
                   <span className="font-bold">{r.raterName}</span>
-                  {r.note && <span className="block text-[9.5px] leading-5 text-muted">{r.note}</span>}
+                  {r.note && <span className="block text-[11px] leading-5 text-muted">{r.note}</span>}
                 </span>
                 <span className="num shrink-0 font-bold text-purple-300">{r.score != null ? `${fa(r.score)} / ۵` : 'بدون امتیاز'}</span>
               </div>
@@ -293,7 +293,7 @@ function EvidenceItem({ item }: { item: CompEvidenceDetailItem }) {
               <div className="flex items-start justify-between gap-2 rounded-lg border border-white/5 px-2 py-1.5">
                 <span className="min-w-0">
                   <span className="font-bold">ثبت سرپرست پنل</span>
-                  {item.leadNote && <span className="block text-[9.5px] leading-5 text-muted">{item.leadNote}</span>}
+                  {item.leadNote && <span className="block text-[11px] leading-5 text-muted">{item.leadNote}</span>}
                 </span>
                 <span className="num shrink-0 font-bold text-purple-300">{item.leadScore != null ? `${fa(item.leadScore)} / ۵` : '—'}</span>
               </div>
@@ -307,7 +307,7 @@ function EvidenceItem({ item }: { item: CompEvidenceDetailItem }) {
         <div className="flex items-start justify-between gap-2 rounded-lg border border-white/5 px-2 py-1.5 text-[10.5px]">
           <span className="min-w-0">
             <span className="block leading-5 text-secondary">{item.questionText}</span>
-            <span className="text-[9.5px] text-muted">
+            <span className="text-[11px] text-muted">
               {PERSONALITY_QUESTION_TYPE_LABEL_FA[item.questionType as PersonalityQuestionType] ?? item.questionType}
               {item.reverseScored ? ' · معکوس' : ''}
             </span>
@@ -331,7 +331,7 @@ function EvidenceItem({ item }: { item: CompEvidenceDetailItem }) {
                   {o.chosen && '✓ '}
                   {o.labelFa}
                 </span>
-                <span className="num shrink-0 text-[9.5px] text-muted">
+                <span className="num shrink-0 text-[11px] text-muted">
                   {o.score != null ? `${fa(o.score)} / ۵` : ''}
                   {o.dimensionKey ? ` · ${o.dimensionKey}` : ''}
                 </span>
@@ -348,13 +348,13 @@ function EvidenceItem({ item }: { item: CompEvidenceDetailItem }) {
             <span className="num font-bold text-sky-300">{fa(item.rating)} / ۵</span>
           </div>
           <p className="mt-0.5 leading-5 text-muted">{item.notes || 'بدون یادداشت'}</p>
-          {item.ratedAt && <p className="num text-[9px] text-muted">{new Date(item.ratedAt).toLocaleDateString('fa-IR')}</p>}
+          {item.ratedAt && <p className="num text-[11px] text-muted">{new Date(item.ratedAt).toLocaleDateString('fa-IR')}</p>}
         </div>
       )
     case 'EXPERIENCE':
       return (
         <div className="space-y-1 text-[10.5px]">
-          <p className="text-[9.5px] text-muted">{COMP_EXPERIENCE_METRIC_LABEL_FA[item.metric]}</p>
+          <p className="text-[11px] text-muted">{COMP_EXPERIENCE_METRIC_LABEL_FA[item.metric]}</p>
           {(item.metric === 'years_total' || item.metric === 'years_pipeline') && (
             <>
               <p className="num">

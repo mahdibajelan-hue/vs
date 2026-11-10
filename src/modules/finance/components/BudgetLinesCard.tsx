@@ -35,7 +35,7 @@ export function BudgetLinesCard({ masterProjectId }: { masterProjectId: string }
         <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="fin-text-muted text-right"><th className="py-1.5 font-medium">ردیف</th><th className="font-medium">دسته</th><th className="text-left font-medium">مصوب</th><th className="text-left font-medium">تعهد</th><th className="text-left font-medium">پرداخت‌شده</th><th className="text-left font-medium">مانده</th></tr></thead>
           <tbody>{rows.map(({ l, committed, paid, remaining }: { l: FinBudgetLine; committed: number; paid: number; remaining: number }) => (
             <tr key={l.id} className="border-t" style={{ borderColor: 'var(--fin-divider)', opacity: l.isActive ? 1 : 0.45 }}>
-              <td className="py-1.5"><b className="num" dir="ltr">{l.code}</b> {l.title}{l.kind === 'land' && <span className="ms-1 text-[10px] fin-text-muted">(تملک اراضی؛ ارقام از ماژول تحصیل)</span>}</td>
+              <td className="py-1.5"><b className="num" dir="ltr">{l.code}</b> {l.title}{l.kind === 'land' && <span className="ms-1 text-[11px] fin-text-muted">(تملک اراضی؛ ارقام از ماژول تحصیل)</span>}</td>
               <td>{items.find((i) => i.kind === 'cost_category' && i.key === l.costCategory)?.label ?? '—'}</td>
               <td className="num text-left">{fmtCurrency(l.approvedAmount, l.currency)}</td><td className="num text-left">{fmtCurrency(committed, l.currency)}</td><td className="num text-left">{fmtCurrency(paid, l.currency)}</td>
               <td className="num text-left font-bold" style={{ color: remaining < 0 ? '#b5573a' : undefined }}>{fmtCurrency(remaining, l.currency)}</td></tr>))}</tbody></table></div>

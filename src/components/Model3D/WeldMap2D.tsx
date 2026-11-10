@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { Equipment3D, Joint } from '../../types'
 import { DIM_COLOR, SPOOL_COMPLETE_COLOR } from '../../lib/model3dColoring'
 import { JointInfoCard } from './JointInfoCard'
+import { pressable } from '../../lib/pressable'
 
 const JOINT_COLOR_DONE = '#2ecc71'
 const JOINT_COLOR_PENDING = '#e74c3c'
@@ -86,7 +87,7 @@ export function WeldMap2D({ joints, lineLabel, equipment3d, selectedJointId, onS
             const done = joint.status === 'completed'
             const selected = joint.id === selectedJointId
             return (
-              <g key={joint.id} onClick={() => onSelectJoint(selected ? null : joint.id)} style={{ cursor: 'pointer' }}>
+              <g key={joint.id} {...pressable(() => onSelectJoint(selected ? null : joint.id))} style={{ cursor: 'pointer' }}>
                 <circle
                   cx={p.x}
                   cy={p.y}

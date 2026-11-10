@@ -9,6 +9,7 @@ import type { Welder } from '../lib/personnel'
 import { KIND_FA, type PersonKind } from '../lib/personnelForms'
 import { Chip, Section } from '../../finance/components/fn'
 import { todayTehran } from '../../../lib/today'
+import { pressable } from '../../../lib/pressable'
 
 const fa = (n: number | string) => String(n).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])
 const ST_FA = { active: 'فعال', suspended: 'معلق', left: 'ترک کار' } as const
@@ -98,7 +99,7 @@ function Body({ projects }: { projects: { id: string; officialName: string }[] }
       {list.length === 0 ? <div className="im-card im-empty" style={{ padding: 20 }}>هنوز {KIND_FA[kind]}ی برای این پروژه ثبت نشده است.</div> : (
         <div className="fn-tbl-wrap" style={{ maxHeight: 300 }}><table className="ex-lines"><thead><tr><th>نشانه</th><th>پروژه</th><th>نام</th><th>کد ملی</th><th>آزمون</th><th>کارت</th><th>وضعیت</th></tr></thead>
           <tbody>{list.map((w) => { const s = stateOf(w); return (
-            <tr key={w.id} onClick={() => pick(w)} style={{ cursor: 'pointer', background: w.id === sel ? 'rgba(14,165,233,.12)' : undefined }}>
+            <tr key={w.id} {...pressable(() => pick(w), { row: true })} style={{ cursor: 'pointer', background: w.id === sel ? 'rgba(14,165,233,.12)' : undefined }}>
               <td dir="ltr"><b>{w.raw}</b></td><td>{pname(w.projectId)}</td><td>{w.fullName || '—'}</td><td dir="ltr">{w.nationalId || '—'}</td><td>{testChip(w)}</td>
               <td><Chip tone={ST_CHIP[s].tone}>{ST_CHIP[s].label}</Chip></td>
               <td>{w.status === 'active' ? <span className="sub">{ST_FA.active}</span> : <Chip tone="bad">{ST_FA[w.status]}</Chip>}</td></tr>) })}</tbody></table></div>

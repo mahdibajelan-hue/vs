@@ -246,13 +246,13 @@ export function AssessmentDesignerModal({
             {STEPS.map((label, i) => (
               <div key={label} className="flex flex-1 items-center gap-1.5">
                 <div
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
                     i === step ? 'bg-purple-500 text-white' : i < step ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/5 text-muted'
                   }`}
                 >
                   {i < step ? <CheckCircle2 size={13} /> : (i + 1).toLocaleString('fa-IR')}
                 </div>
-                <span className={`hidden truncate text-[10px] sm:block ${i === step ? 'font-bold text-primary' : 'text-muted'}`}>{label}</span>
+                <span className={`hidden truncate text-[11px] sm:block ${i === step ? 'font-bold text-primary' : 'text-muted'}`}>{label}</span>
                 {i < STEPS.length - 1 && <div className="h-px flex-1 bg-white/10" />}
               </div>
             ))}
@@ -351,7 +351,7 @@ export function AssessmentDesignerModal({
                               (counts[cellKey(t, d)] ?? 0) > availableFor(t, d) ? 'border-amber-400/60 text-amber-200' : 'border-white/10'
                             }`}
                           />
-                          <span className="num mt-0.5 block text-[9px] text-muted">از {availableFor(t, d).toLocaleString('fa-IR')}</span>
+                          <span className="num mt-0.5 block text-[11px] text-muted">از {availableFor(t, d).toLocaleString('fa-IR')}</span>
                         </td>
                       ))}
                       <td className="num p-2 text-center font-bold text-purple-300">{totalByType(t).toLocaleString('fa-IR')}</td>
@@ -562,7 +562,7 @@ export function AssessmentDesignerModal({
 function PreviewTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5">
-      <p className="mb-0.5 text-[10px] text-muted">{label}</p>
+      <p className="mb-0.5 text-[11px] text-muted">{label}</p>
       <p className="num truncate text-xs font-bold">{value}</p>
     </div>
   )

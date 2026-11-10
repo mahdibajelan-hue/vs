@@ -114,7 +114,7 @@
 /* phones: keep the phase titles that fan out around the orbit inside the panel */
 @media (max-width: 640px) {
   .sg-root #lcOrbitStage > div { padding-inline: 2.25rem; }
-  .sg-root .lc-node-title { font-size: 8px; }
+  .sg-root .lc-node-title { font-size: 11px; }
 }
 :root[data-theme="light"] .sg-root .lc-callout [style*="color:#39ff8a"] { color: #39ff8a !important; }
 
@@ -149,7 +149,7 @@
 .sgx-plist-head b { font-size: 14px; font-weight: 900; } .sgx-plist-head small { font-size: 11.5px; color: var(--sgx-muted); }
 .sgx-plist ol { display: grid; gap: .5rem; grid-template-columns: 1fr; }
 @media (min-width: 1100px) { .sgx-plist ol { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.sgx-prow { width: 100%; display: flex; align-items: center; gap: .7rem; padding: .65rem .75rem; border-radius: .9rem; text-align: right; border: 1px solid var(--sgx-line); background: var(--sgx-card-2); border-inline-start: 4px solid var(--c); transition: transform 120ms ease, border-color 160ms ease, background-color 160ms ease; }
+.sgx-prow { width: 100%; display: flex; align-items: center; gap: .7rem; padding: .65rem .75rem; border-radius: .9rem; text-align: right; border: 1px solid var(--sgx-line); background: var(--sgx-card-2); border-inline-start: 1px solid var(--c); transition: transform 120ms ease, border-color 160ms ease, background-color 160ms ease; }
 .sgx-prow:hover { border-color: var(--c); background: color-mix(in srgb, var(--c) 8%, var(--sgx-card-2)); }
 .sgx-prow:active { transform: scale(.985); }
 .sgx-pcode { flex: none; display: inline-grid; place-items: center; width: 2.3rem; height: 2.3rem; border-radius: .7rem; font-size: 12px; font-weight: 900; color: #fff; background: var(--c); }
@@ -161,7 +161,7 @@
 .sgx-pbar-plan { position: absolute; inset-block: 0; inset-inline-start: 0; background: color-mix(in srgb, #fb923c 55%, transparent); border-radius: 99px; }
 .sgx-pbar-act { position: absolute; inset-block: 0; inset-inline-start: 0; background: #22c55e; border-radius: 99px; }
 .sgx-pnum { flex: none; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
-.sgx-pnum b { font-size: 14px; font-weight: 900; color: var(--sgx-text); } .sgx-pnum small { font-size: 10px; color: var(--sgx-muted); }
+.sgx-pnum b { font-size: 14px; font-weight: 900; color: var(--sgx-text); } .sgx-pnum small { font-size: 11px; color: var(--sgx-muted); }
 .sgx-pgo { flex: none; font-size: 20px; color: var(--sgx-muted); }
 /* phones: the orbit needs more room than a phone has — the list is the view */
 @media (max-width: 640px) { .sg-root .sgx-orbit-panel { display: none !important; } .sgx-plist { margin-top: 0; } }
@@ -205,7 +205,7 @@
 .sgx-jump-btn .sgx-num { width: 1.35rem; height: 1.35rem; font-size: 10.5px; }
 .sgx-jump-btn.is-auto .sgx-num { background: var(--sgx-auto); } .sgx-jump-btn.is-view .sgx-num { background: var(--sgx-view); }
 
-.sgx-sec { scroll-margin-top: 7rem; border-radius: 1rem; border: 1px solid var(--sgx-line); background: var(--sgx-card); border-inline-start: 4px solid var(--sgx-input); overflow: hidden; }
+.sgx-sec { scroll-margin-top: 7rem; border-radius: 1rem; border: 1px solid var(--sgx-line); background: var(--sgx-card); border-inline-start: 1px solid var(--sgx-input); overflow: hidden; }
 .sgx-sec.is-auto { border-inline-start-color: var(--sgx-auto); } .sgx-sec.is-view { border-inline-start-color: var(--sgx-view); }
 .sgx-sec-head { display: flex; align-items: flex-start; gap: .65rem; padding: .9rem 1rem .7rem; }
 .sgx-sec.is-auto .sgx-sec-head .sgx-num { background: var(--sgx-auto); } .sgx-sec.is-view .sgx-sec-head .sgx-num { background: var(--sgx-view); }
@@ -245,7 +245,7 @@
 /* larger, darker type: the legacy sizes (8.5–10.5px) were set for a dark screen */
 :root[data-theme="light"] .sg-root .lc-dark-panel h3 { font-size: 15px !important; color: #0b1324 !important; letter-spacing: -.01em; }
 :root[data-theme="light"] .sg-root .lc-dark-panel h4 { font-size: 13px !important; color: #0b1324 !important; }
-:root[data-theme="light"] .sg-root .lc-dark-panel .text-\[8\.5px\] { font-size: 10px !important; }
+:root[data-theme="light"] .sg-root .lc-dark-panel .text-\[8\.5px\] { font-size: 11px !important; }
 :root[data-theme="light"] .sg-root .lc-dark-panel .text-\[9\.5px\] { font-size: 11px !important; }
 :root[data-theme="light"] .sg-root .lc-dark-panel .text-\[10px\] { font-size: 11px !important; }
 :root[data-theme="light"] .sg-root .lc-dark-panel .text-\[10\.5px\] { font-size: 11.5px !important; }

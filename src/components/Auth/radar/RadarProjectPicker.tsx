@@ -8,6 +8,7 @@ import { loadPickerProgress } from './pickerProgress'
 import { ModuleHeaderActions } from '../../common/ModuleHeaderActions'
 import { syncRecentFromServer } from './projectVisits'
 import type { PickerProgress } from './pickerProgressCore'
+import { pressable } from '../../../lib/pressable'
 
 const TONE: Record<'neutral' | 'green' | 'amber' | 'red', string> = { neutral: '#94a3b8', green: '#22c55e', amber: '#f59e0b', red: '#ef4444' }
 const faNum = (n: number) => n.toLocaleString('fa-IR')
@@ -341,7 +342,7 @@ function Scope({ projects, hot, onPick }: { projects: MasterProject[]; hot: stri
         <line x1="100" y1={100 - R} x2="100" y2={100 + R} className="rpk-ring" />
         <line x1={100 - R} y1="100" x2={100 + R} y2="100" className="rpk-ring" />
         {pts.map(({ p, x, y, c, dim }) => (
-          <g key={p.id} className={`rpk-blip ${hot === p.id ? 'is-hot' : ''}`} onClick={() => onPick(p.id)} style={{ cursor: 'pointer', pointerEvents: 'auto' }}>
+          <g key={p.id} className={`rpk-blip ${hot === p.id ? 'is-hot' : ''}`} {...pressable(() => onPick(p.id))} style={{ cursor: 'pointer', pointerEvents: 'auto' }}>
             <circle cx={x} cy={y} r={hot === p.id ? 9 : 6} fill={c} opacity={0.18} />
             <circle cx={x} cy={y} r={hot === p.id ? 4 : 2.6} fill={c} opacity={dim ? 0.5 : 1} />
           </g>

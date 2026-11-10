@@ -269,7 +269,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
 
       <div
         style={{ right: 'var(--tw-ctrl-right, 0.75rem)' }}
-        className="pointer-events-none absolute top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(10,14,20,0.75)] text-[9px] font-bold text-white/80 backdrop-blur-md"
+        className="pointer-events-none absolute top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[rgba(10,14,20,0.75)] text-[11px] font-bold text-white/80 backdrop-blur-md"
         title="جهت شمال"
       >
         <span style={{ transform: `rotate(${-headingDeg}deg)`, transition: 'transform 0.1s linear' }}>N</span>
@@ -287,7 +287,7 @@ export function PipelineViewer({ route, pipe, joints, selectedJointId, statusFil
         </button>
       </div>
 
-      <span className="pointer-events-none absolute bottom-1.5 left-2 z-10 text-[9px] text-white/40">
+      <span className="pointer-events-none absolute bottom-1.5 left-2 z-10 text-[11px] text-white/40">
         {imageryStyle === 'satellite' ? '© Esri, Maxar, Earthstar Geographics' : '© OpenStreetMap contributors'}
       </span>
     </div>

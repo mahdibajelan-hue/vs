@@ -120,7 +120,7 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
           {readinessTone && <StatusDot status={readinessTone} size={8} />}
           <h1 className="text-sm font-extrabold">{stageName}</h1>
           {isCurrent && (
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: '#0ea5e9' }}>
+            <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: '#0ea5e9' }}>
               مرحله جاری
             </span>
           )}
@@ -349,12 +349,12 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
                                     {item.title}
                                   </span>
                                   {item.isMandatory && (
-                                    <span className="rounded px-1.5 py-px text-[9px] font-bold"
+                                    <span className="rounded px-1.5 py-px text-[11px] font-bold"
                                       style={{ background: 'var(--border-soft)' }}>الزامی</span>
                                   )}
                                   {item.requiresDocument && (
                                     <span
-                                      className="inline-flex items-center gap-0.5 rounded px-1.5 py-px text-[9px] font-bold"
+                                      className="inline-flex items-center gap-0.5 rounded px-1.5 py-px text-[11px] font-bold"
                                       style={
                                         item.evidenceUrl
                                           ? { background: `${STATUS_COLOR.green}22`, color: STATUS_COLOR.green }
@@ -366,7 +366,7 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
                                     </span>
                                   )}
                                   {item.requiresApproval && (
-                                    <span className="text-[9px] text-muted">نیازمند تأیید</span>
+                                    <span className="text-[11px] text-muted">نیازمند تأیید</span>
                                   )}
                                 </div>
                                 {item.guidance && <p className="mt-0.5 plc-stat-sub">{item.guidance}</p>}
@@ -394,7 +394,7 @@ export function StageGatePage({ stageKey, onBack }: { stageKey: string; onBack: 
                                 <button
                                   onClick={() => setOpenEvidence(expanded ? null : item.id)}
                                   title="بارگذاری مدرک و ثبت توضیح"
-                                  className="flex items-center gap-0.5 rounded-md border px-1.5 py-1 text-[10px] transition-colors hover:border-sky-400/60 hover:text-sky-400"
+                                  className="flex items-center gap-0.5 rounded-md border px-1.5 py-1 text-[11px] transition-colors hover:border-sky-400/60 hover:text-sky-400"
                                   style={{
                                     borderColor: missingDoc ? `${STATUS_COLOR.yellow}66` : 'var(--border-soft)',
                                     color: missingDoc ? STATUS_COLOR.yellow : undefined,

@@ -225,7 +225,7 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
                   ))}
                 </select>
               </label>
-              <span className={`num rounded-full px-2 py-0.5 text-[10px] font-bold ${panelFull ? 'bg-green-500/15 text-green-300' : 'bg-purple-500/15 text-purple-300'}`}>
+              <span className={`num rounded-full px-2 py-0.5 text-[11px] font-bold ${panelFull ? 'bg-green-500/15 text-green-300' : 'bg-purple-500/15 text-purple-300'}`}>
                 {panelists.length.toLocaleString('fa-IR')} از {panelSize.toLocaleString('fa-IR')} مصاحبه‌گر
               </span>
             </div>
@@ -298,7 +298,7 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
                     <div className="flex items-center gap-1.5">
                       <span>{profile?.fullName ?? p.userId}</span>
                       {p.isLead && (
-                        <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                        <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-bold text-amber-300">
                           <ShieldCheck size={11} /> مسئول تیم
                         </span>
                       )}
@@ -360,7 +360,7 @@ export function PanelStage({ assessmentId, onContinue }: PanelStageProps) {
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
                   <div className="h-full rounded-full" style={{ width: `${d.avg ?? 0}%`, background: tierColor(d.avg) }} />
                 </div>
-                <span className="num w-10 shrink-0 text-left text-[10px] text-muted">{d.avg != null ? `٪${d.avg}` : '—'}</span>
+                <span className="num w-10 shrink-0 text-left text-[11px] text-muted">{d.avg != null ? `٪${d.avg}` : '—'}</span>
               </div>
             ))}
           </div>
@@ -501,7 +501,7 @@ function PanelGroupPicker({
                   {p.fullName} <span className="text-muted">({p.email})</span>
                 </span>
                 {newMembers.includes(p.id) && (
-                  <label className="flex items-center gap-1 text-[10px] text-amber-300">
+                  <label className="flex items-center gap-1 text-[11px] text-amber-300">
                     <input type="radio" name="new-group-lead" checked={newLead === p.id} onChange={() => setNewLead(p.id)} className="h-3 w-3" /> مسئول تیم
                   </label>
                 )}
@@ -529,7 +529,7 @@ function PanelGroupPicker({
       {allGroups.length > 0 && (
         <div className="flex flex-wrap gap-1.5 border-t border-white/5 pt-2">
           {allGroups.map((g) => (
-            <span key={g.id} className="flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-[10px] text-secondary">
+            <span key={g.id} className="flex items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1 text-[11px] text-secondary">
               {g.name} {g.jobRole && <span className="text-muted">({jobRoleLabel(jobRoleConfigs, g.jobRole)})</span>}
               {(isAdmin || g.createdBy === myId) && (
                 <button onClick={() => onDeleteGroup(g.id)} className="text-muted hover:text-red-300">

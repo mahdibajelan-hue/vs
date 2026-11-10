@@ -80,7 +80,7 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
           <p style={{ fontFamily: "'Montserrat', sans-serif" }} className="text-sm font-extrabold tracking-wide">
             PipePulse
           </p>
-          <p className="text-[10px] text-muted">Piping Progress Intelligence</p>
+          <p className="text-[11px] text-muted">Piping Progress Intelligence</p>
         </div>
         <button onClick={onMobileClose} className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-white/5 lg:hidden">
           <X size={16} />
@@ -98,7 +98,7 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
           )}
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium truncate">{currentUser.fullName || currentUser.email}</p>
-            {role && <span className="mt-0.5 inline-block rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] text-brand-300">{ROLE_LABEL_FA[role]}</span>}
+            {role && <span className="mt-0.5 inline-block rounded-full bg-brand-500/15 px-2 py-0.5 text-[11px] text-brand-300">{ROLE_LABEL_FA[role]}</span>}
           </div>
         </div>
       )}
@@ -160,11 +160,11 @@ export function Sidebar({ page, onPageChange, onNewProject, mobileOpen, onMobile
                         deleteProject(p.id)
                         setConfirmDeleteId(null)
                       }}
-                      className="text-[10px] text-red-400 hover:underline"
+                      className="text-[11px] text-red-400 hover:underline"
                     >
                       تایید حذف
                     </button>
-                    <button onClick={() => setConfirmDeleteId(null)} className="text-[10px] text-secondary hover:underline">
+                    <button onClick={() => setConfirmDeleteId(null)} className="text-[11px] text-secondary hover:underline">
                       انصراف
                     </button>
                   </div>

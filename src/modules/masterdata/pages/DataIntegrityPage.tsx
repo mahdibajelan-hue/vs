@@ -91,7 +91,7 @@ export function DataIntegrityPage() {
           <div className="divide-y" style={{ borderColor: 'var(--border-soft)' }}>
             {stats.unmapped.map((sp) => (
               <div key={`${sp.sourceModule}:${sp.sourceProjectId}`} className="flex items-center gap-2 px-4 py-2 text-xs">
-                <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-secondary">
+                <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-secondary">
                   {MAPPING_SOURCE_MODULE_LABEL_FA[sp.sourceModule]}
                 </span>
                 <span className="truncate">{sp.name}</span>
@@ -123,7 +123,7 @@ function StatCard({
       <Icon size={18} className={toneClass} />
       <p className="mt-2 text-2xl font-extrabold num">{value}</p>
       <p className="mt-0.5 text-xs text-secondary">{label}</p>
-      <p className="mt-1 text-[10px] text-muted leading-4">{hint}</p>
+      <p className="mt-1 text-[11px] text-muted leading-4">{hint}</p>
     </div>
   )
 }

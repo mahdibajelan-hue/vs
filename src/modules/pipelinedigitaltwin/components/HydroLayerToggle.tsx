@@ -39,12 +39,12 @@ export function HydroLayerToggle({ on, onToggle, onSpans }: { on: boolean; onTog
       </button>
       {on && spans.length > 0 && (
         <>
-          <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0 text-[10px]">
+          <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0 text-[11px]">
             {HYDRO_LAYER_LEGEND.filter((l) => present.has(l.key)).map((l) => (
               <li key={l.key} className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{ background: l.color }} />{l.label}</li>
             ))}
           </ul>
-          <ul className="m-0 flex max-h-40 list-none flex-col gap-0.5 overflow-y-auto p-0 text-[10px] text-secondary">
+          <ul className="m-0 flex max-h-40 list-none flex-col gap-0.5 overflow-y-auto p-0 text-[11px] text-secondary">
             {spans.map((s) => (
               <li key={s.code} className="flex items-center gap-1.5">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
@@ -55,7 +55,7 @@ export function HydroLayerToggle({ on, onToggle, onSpans }: { on: boolean; onTog
           </ul>
         </>
       )}
-      {on && note && <p className="m-0 text-[10px] text-muted">{note}</p>}
+      {on && note && <p className="m-0 text-[11px] text-muted">{note}</p>}
     </div>
   )
 }

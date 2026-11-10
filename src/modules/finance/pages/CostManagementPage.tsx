@@ -153,14 +153,14 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
           <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
             <Calculator size={12} style={{ color: '#5c7290' }} /> هزینه متعهدشده به تفکیک نوع قرارداد
           </p>
-          <p className="mb-2 text-[10px] leading-5 fin-text-muted">سهم هر نوع قرارداد (EPC/مشاور/MC/TPI/سایر) از کل تعهد مالی پروژه.</p>
+          <p className="mb-2 text-[11px] leading-5 fin-text-muted">سهم هر نوع قرارداد (EPC/مشاور/MC/TPI/سایر) از کل تعهد مالی پروژه.</p>
           <BreakdownDonut title="" data={committedByRole} unit={currency} height={210} formatTotal={(n) => fmtCurrency(n, currency)} />
         </div>
         <div className="fin-card p-4">
           <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
             <Gauge size={12} style={{ color: '#8b6e9c' }} /> هزینه واقعی (تاییدشده) به تفکیک نوع قرارداد
           </p>
-          <p className="mb-2 text-[10px] leading-5 fin-text-muted">سهم هر نوع قرارداد از هزینه واقعا تاییدشده تا امروز.</p>
+          <p className="mb-2 text-[11px] leading-5 fin-text-muted">سهم هر نوع قرارداد از هزینه واقعا تاییدشده تا امروز.</p>
           <BreakdownDonut title="" data={certifiedByRole} unit={currency} height={210} formatTotal={(n) => fmtCurrency(n, currency)} />
         </div>
       </div>
@@ -189,13 +189,13 @@ export function CostManagementPage({ masterProjectId }: { masterProjectId: strin
                   <tr key={c.id} className="border-b last:border-0" style={{ borderColor: 'var(--fin-divider)' }}>
                     <td className="py-2">
                       <p className="font-bold">{c.title || c.contractNumber || 'بدون عنوان'}</p>
-                      <p className="num text-[10px] fin-text-muted" dir="ltr">
+                      <p className="num text-[11px] fin-text-muted" dir="ltr">
                         {c.contractNumber}
                       </p>
                     </td>
                     <td className="py-2">
                       <span
-                        className="rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                        className="rounded-full border px-2 py-0.5 text-[11px] font-medium"
                         style={{ borderColor: `${FIN_CONTRACT_ROLE_COLOR[c.contractRole]}55`, color: FIN_CONTRACT_ROLE_COLOR[c.contractRole] }}
                       >
                         {FIN_CONTRACT_ROLE_LABEL_FA[c.contractRole]}

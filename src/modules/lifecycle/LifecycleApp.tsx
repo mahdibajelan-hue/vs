@@ -85,7 +85,7 @@ export function LifecycleApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           </div>
           <div className="min-w-0 leading-tight">
             <p className="truncate text-sm font-extrabold">چرخه عمر و برج کنترل</p>
-            <p className="hidden text-[10px] text-muted sm:block" dir="ltr">Project Lifecycle &amp; Control Tower</p>
+            <p className="hidden text-[11px] text-muted sm:block" dir="ltr">Project Lifecycle &amp; Control Tower</p>
           </div>
           {activeProject && (
             <>
@@ -190,7 +190,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
     <button
       onClick={onClick}
       className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-        active ? 'bg-sky-500 text-white' : 'text-secondary hover:bg-white/5'
+        active ? 'bg-sky-700 text-white' : 'text-secondary hover:bg-white/5'
       }`}
     >
       {icon} {label}

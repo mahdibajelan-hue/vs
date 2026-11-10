@@ -151,7 +151,7 @@ export function DevelopmentPlanStage({ assessment, nav, onExitToHub, canManage, 
             <Sprout size={16} className="text-teal-300" /> برنامه توسعه فردی (IDP)
             {plan && (
               <span
-                className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+                className="rounded-full px-2 py-0.5 text-[11px] font-bold"
                 style={{ background: `${PLAN_STATUS_META[plan.status].color}1f`, color: PLAN_STATUS_META[plan.status].color }}
               >
                 {PLAN_STATUS_META[plan.status].label}
@@ -162,7 +162,7 @@ export function DevelopmentPlanStage({ assessment, nav, onExitToHub, canManage, 
             <button
               onClick={handleSeed}
               disabled={seeding}
-              className="flex items-center gap-1.5 rounded-lg bg-teal-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-teal-400 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg bg-teal-700 px-3.5 py-2 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-50"
             >
               {seeding ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
               {seeding ? 'در حال تولید…' : plan ? 'افزودن پیشنهادها از روی شکاف‌ها' : 'تولید برنامه از روی شکاف‌ها'}
@@ -263,7 +263,7 @@ export function DevelopmentPlanStage({ assessment, nav, onExitToHub, canManage, 
           <button
             onClick={handleReassess}
             disabled={reassessing}
-            className="flex shrink-0 items-center gap-1.5 rounded-xl bg-sky-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-sky-400 disabled:opacity-50"
+            className="flex shrink-0 items-center gap-1.5 rounded-xl bg-sky-700 px-3.5 py-2 text-xs font-bold text-white hover:bg-sky-800 disabled:opacity-50"
           >
             {reassessing ? <Loader2 size={13} className="animate-spin" /> : <Repeat size={13} />} {reassessing ? 'در حال ایجاد…' : 'ایجاد ارزیابی مجدد'}
           </button>
@@ -366,7 +366,7 @@ function GapBadge({ score }: { score: CompCompetencyScore | null }) {
   if (!score) return null
   if (score.status === 'INSUFFICIENT_EVIDENCE') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-400/40 px-2 py-0.5 text-[10px] text-slate-300">
+      <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-400/40 px-2 py-0.5 text-[11px] text-slate-300">
         <HelpCircle size={11} /> سطح نامعلوم — الزامی {formatLevel(score.requiredLevel)}
       </span>
     )
@@ -374,7 +374,7 @@ function GapBadge({ score }: { score: CompCompetencyScore | null }) {
   const shortfall = score.gap != null && score.gap > 0
   return (
     <span
-      className="num inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
+      className="num inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold"
       style={{ background: shortfall ? '#f871711c' : '#34d3991c', color: shortfall ? '#fca5a5' : '#6ee7b7' }}
     >
       {formatLevel(score.actualLevel)} ← {formatLevel(score.requiredLevel)}
@@ -396,7 +396,7 @@ function ActionGroupCard({ group, editable, profiles }: { group: ActionGroup; ed
           {group.score && <StatusBadge status={group.score.status} />}
           <GapBadge score={group.score} />
         </p>
-        <span className="num text-[10px] text-muted">
+        <span className="num text-[11px] text-muted">
           {done.toLocaleString('fa-IR')} / {live.toLocaleString('fa-IR')} انجام‌شده
         </span>
       </div>
@@ -453,13 +453,13 @@ function ActionRow({ action: a, editable, profiles }: { action: CompDevelopmentA
           <p className={`flex-1 text-[11.5px] font-bold ${a.status === 'DONE' ? 'text-emerald-200' : ''}`}>{a.title}</p>
         )}
         <div className="flex flex-wrap items-center gap-1">
-          <span className="rounded-full px-2 py-0.5 text-[9.5px] font-bold" style={{ background: `${PRIORITY_META[a.priority].color}1c`, color: PRIORITY_META[a.priority].color }}>
+          <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: `${PRIORITY_META[a.priority].color}1c`, color: PRIORITY_META[a.priority].color }}>
             {PRIORITY_META[a.priority].label}
           </span>
-          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9.5px] text-muted">{ACTION_SOURCE_LABEL_FA[a.source]}</span>
+          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-muted">{ACTION_SOURCE_LABEL_FA[a.source]}</span>
           {editable &&
             (confirmDelete ? (
-              <span className="flex items-center gap-1 text-[10px]">
+              <span className="flex items-center gap-1 text-[11px]">
                 <button onClick={() => removeDevelopmentAction(a.id)} className="rounded bg-red-500 px-1.5 py-0.5 font-bold text-white">
                   حذف
                 </button>
@@ -488,7 +488,7 @@ function ActionRow({ action: a, editable, profiles }: { action: CompDevelopmentA
         a.description && <p className="mt-1 text-[10.5px] leading-5 text-secondary">{a.description}</p>
       )}
 
-      <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-muted sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-muted sm:grid-cols-3 lg:grid-cols-6">
         <label className="space-y-0.5">
           <span>نوع اقدام</span>
           <select disabled={!editable} value={a.actionType} onChange={(e) => update({ actionType: e.target.value as CompDevelopmentActionType })} className="input w-full text-[11px]">
@@ -558,9 +558,9 @@ function ActionRow({ action: a, editable, profiles }: { action: CompDevelopmentA
           className="input mt-2 w-full text-[10.5px]"
         />
       ) : (
-        a.progressNote && <p className="mt-1.5 text-[10px] text-muted">یادداشت پیشرفت: {a.progressNote}</p>
+        a.progressNote && <p className="mt-1.5 text-[11px] text-muted">یادداشت پیشرفت: {a.progressNote}</p>
       )}
-      {a.completedAt && <p className="mt-1 text-[9.5px] text-emerald-300/80">انجام‌شده در {formatJalali(a.completedAt)}</p>}
+      {a.completedAt && <p className="mt-1 text-[11px] text-emerald-300/80">انجام‌شده در {formatJalali(a.completedAt)}</p>}
     </div>
   )
 }
@@ -592,7 +592,7 @@ function NewActionForm({
         <Plus size={13} className="text-teal-300" /> اقدام دستی جدید
       </p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="space-y-0.5 text-[10px] text-muted">
+        <label className="space-y-0.5 text-[11px] text-muted">
           <span>شایستگی</span>
           <select value={competencyId} onChange={(e) => setCompetencyId(e.target.value)} className="input w-full text-[11px]">
             <option value="">اقدام عمومی (بدون شایستگی مشخص)</option>
@@ -603,7 +603,7 @@ function NewActionForm({
             ))}
           </select>
         </label>
-        <label className="space-y-0.5 text-[10px] text-muted">
+        <label className="space-y-0.5 text-[11px] text-muted">
           <span>نوع اقدام</span>
           <select value={actionType} onChange={(e) => setActionType(e.target.value as CompDevelopmentActionType)} className="input w-full text-[11px]">
             {ACTION_TYPES.map((t) => (
@@ -613,7 +613,7 @@ function NewActionForm({
             ))}
           </select>
         </label>
-        <label className="space-y-0.5 text-[10px] text-muted">
+        <label className="space-y-0.5 text-[11px] text-muted">
           <span>اولویت</span>
           <select value={priority} onChange={(e) => setPriority(e.target.value as CompDevelopmentPriority)} className="input w-full text-[11px]">
             {PRIORITIES.map((p) => (
@@ -623,13 +623,13 @@ function NewActionForm({
             ))}
           </select>
         </label>
-        <div className="space-y-0.5 text-[10px] text-muted">
+        <div className="space-y-0.5 text-[11px] text-muted">
           <span>مهلت</span>
           <JalaliDateInput value={dueDate} onChange={setDueDate} />
         </div>
       </div>
       {insufficient && actionType !== 'EVIDENCE_COLLECTION' && (
-        <p className="flex items-start gap-1.5 rounded-lg border border-amber-400/25 bg-amber-500/10 p-2 text-[10px] text-amber-200">
+        <p className="flex items-start gap-1.5 rounded-lg border border-amber-400/25 bg-amber-500/10 p-2 text-[11px] text-amber-200">
           <AlertTriangle size={12} className="mt-0.5 shrink-0" /> برای این شایستگی شواهدی ثبت نشده — پیش از برنامه آموزشی، «ارزیابی تکمیلی» را در نظر بگیرید.
         </p>
       )}
@@ -658,7 +658,7 @@ function NewActionForm({
             })
             setSaving(false)
           }}
-          className="rounded-lg bg-teal-500 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-teal-400 disabled:opacity-40"
+          className="rounded-lg bg-teal-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-40"
         >
           افزودن
         </button>

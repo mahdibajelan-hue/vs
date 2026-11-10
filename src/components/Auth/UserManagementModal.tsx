@@ -64,7 +64,7 @@ export function UserManagementModal({ projectName, onClose }: { projectName: str
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">
-                  {m.fullName || m.email} {m.userId === myUserId && <span className="text-[10px] text-brand-400">(شما)</span>}
+                  {m.fullName || m.email} {m.userId === myUserId && <span className="text-[11px] text-brand-400">(شما)</span>}
                 </p>
                 <p className="text-[11px] text-muted truncate">{m.email}</p>
               </div>
@@ -82,7 +82,7 @@ export function UserManagementModal({ projectName, onClose }: { projectName: str
                     ))}
                   </select>
                 ) : (
-                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px]">{ROLE_LABEL_FA[m.role]}</span>
+                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px]">{ROLE_LABEL_FA[m.role]}</span>
                 )}
                 {canManage &&
                   (confirmDeleteId === m.userId ? (

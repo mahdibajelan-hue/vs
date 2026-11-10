@@ -32,13 +32,13 @@ export function LandLayerToggle({ on, onToggle, onSpans }: { on: boolean; onTogg
         {busy ? <Loader2 size={13} className="animate-spin" /> : <Sprout size={13} />} لایهٔ تحصیل اراضی
       </button>
       {on && !note && (
-        <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0 text-[10px]">
+        <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0 text-[11px]">
           {LAND_LAYER_LEGEND.map((l) => (
             <li key={l.status} className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{ background: l.color }} />{l.label}</li>
           ))}
         </ul>
       )}
-      {on && note && <p className="m-0 text-[10px] text-muted">{note}</p>}
+      {on && note && <p className="m-0 text-[11px] text-muted">{note}</p>}
     </div>
   )
 }

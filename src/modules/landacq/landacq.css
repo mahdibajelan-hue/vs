@@ -117,9 +117,9 @@ button.la-kpi:active { transform: scale(0.98); }
 .la-ribbon-block[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--la-ink); z-index: 2; }
 @media (hover: hover) and (pointer: fine) { .la-ribbon-block:hover { transform: translateY(-2px); z-index: 2; } }
 .la-ribbon-tick { position: absolute; top: 62px; width: 1px; height: 7px; background: var(--la-line-2); }
-.la-ribbon-tick span { position: absolute; top: 8px; transform: translateX(-50%); font-size: 10px; color: var(--la-muted); font-family: var(--font-mono); white-space: nowrap; }
+.la-ribbon-tick span { position: absolute; top: 8px; transform: translateX(-50%); font-size: 11px; color: var(--la-muted); font-family: var(--font-mono); white-space: nowrap; }
 .la-front { position: absolute; top: 8px; width: 0; height: 52px; border-inline-start: 2px dashed var(--la-ink-2); }
-.la-front span { position: absolute; top: -8px; inset-inline-start: 4px; font-size: 9.5px; font-weight: 600; color: var(--la-ink-2); background: var(--la-surface); padding: 0 4px; border-radius: 4px; white-space: nowrap; }
+.la-front span { position: absolute; top: -8px; inset-inline-start: 4px; font-size: 11px; font-weight: 600; color: var(--la-ink-2); background: var(--la-surface); padding: 0 4px; border-radius: 4px; white-space: nowrap; }
 
 /* ---- lists ----------------------------------------------------------------------------------------- */
 .la-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 14px; border: 0; border-bottom: 1px solid var(--la-line); background: transparent; color: inherit; font-family: inherit; text-align: right; cursor: pointer; transition: background-color 0.15s; }
@@ -161,7 +161,7 @@ button.la-kpi:active { transform: scale(0.98); }
 
 /* map: measuring panel + tile credit */
 .la-map-measure { position: absolute; z-index: 6; inset-inline-end: 10px; bottom: 10px; display: flex; flex-direction: column; gap: 6px; max-width: min(340px, calc(100% - 20px)); padding: 10px 12px; border-radius: 12px; background: var(--la-surface); border: 1px solid var(--la-line-2); box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5); font-size: 12px; line-height: 1.7; animation: la-rise 200ms var(--la-ease) both; }
-.la-map-credit { position: absolute; inset-inline-start: 8px; bottom: 6px; z-index: 5; padding: 1px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.75); color: #334; font-size: 9.5px; direction: ltr; pointer-events: none; }
+.la-map-credit { position: absolute; inset-inline-start: 8px; bottom: 6px; z-index: 5; padding: 1px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.75); color: #334; font-size: 11px; direction: ltr; pointer-events: none; }
 
 /* help: the "?" button and its floating explanation box */
 .la-help-btn { display: inline-flex; align-items: center; gap: 5px; min-width: 24px; min-height: 24px; padding: 0 6px; border-radius: 99px; border: 1px solid var(--la-line-2); background: var(--la-surface-2); color: var(--la-accent); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; vertical-align: middle; }
@@ -169,7 +169,7 @@ button.la-kpi:active { transform: scale(0.98); }
 .la-help { position: fixed; z-index: 70; display: flex; flex-direction: column; width: min(420px, calc(100vw - 16px)); max-height: min(78vh, 640px); border-radius: 14px; background: var(--la-surface); border: 1px solid var(--la-line-2); box-shadow: 0 24px 60px -16px rgba(0, 0, 0, 0.7); animation: la-rise 200ms var(--la-ease) both; }
 
 /* settings: coloured, foldable sections */
-.la-sec { --c: var(--la-accent); border-radius: 16px; background: var(--la-surface); border: 1px solid var(--la-line); overflow: hidden; border-inline-start: 4px solid var(--c); }
+.la-sec { --c: var(--la-accent); border-radius: 16px; background: var(--la-surface); border: 1px solid var(--la-line); overflow: hidden; border-inline-start: 1px solid var(--c); }
 .la-sec > summary { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; list-style: none; background: linear-gradient(100deg, color-mix(in srgb, var(--c) 14%, transparent), transparent 70%); }
 .la-sec > summary::-webkit-details-marker { display: none; }
 .la-sec-icon { display: inline-flex; width: 36px; height: 36px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 11px; color: #fff; background: linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 55%, #000)); box-shadow: 0 6px 14px -6px var(--c); }
@@ -190,8 +190,7 @@ button.la-kpi:active { transform: scale(0.98); }
 .la-logo svg { animation: la-sway 5s ease-in-out infinite; transform-origin: 50% 100%; }
 @keyframes la-pulse { 50% { box-shadow: 0 10px 28px -4px #0ea5e9, inset 0 0 0 1px rgba(255, 255, 255, 0.35); } }
 @keyframes la-sway { 50% { transform: rotate(-7deg) scale(1.06); } }
-.la-head-title { background: linear-gradient(90deg, var(--la-ink), color-mix(in srgb, #38bdf8 70%, var(--la-ink)) 50%, var(--la-ink)); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: la-shine 9s linear infinite; }
-@keyframes la-shine { to { background-position: -200% 0; } }
+.la-head-title { color: var(--la-ink); }
 
 .la-steps { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px 0 8px; }
 .la-step-wrap { display: inline-flex; align-items: center; gap: 4px; }
@@ -230,7 +229,7 @@ button.la-kpi:active { transform: scale(0.98); }
 .la-rep-table th { position: sticky; top: 0; padding: 10px 12px; text-align: right; font-weight: 700; color: var(--la-ink); background: var(--la-surface-3); border-bottom: 2px solid var(--la-line-2); white-space: nowrap; }
 .la-rep-table td { padding: 9px 12px; line-height: 1.7; border-bottom: 1px solid var(--la-line); }
 .la-rep-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--la-ink) 2.5%, transparent); }
-.la-rep-table tbody tr[data-hot] td:first-child { box-shadow: inset -3px 0 0 #ef4444; }
+.la-rep-table tbody tr[data-hot] td:first-child { box-shadow: inset -1px 0 0 #ef4444; }
 .la-rep-table tbody tr[data-hot] td { background: color-mix(in srgb, #ef4444 6%, transparent); }
 .la-rep-table tbody tr:hover td { background: var(--la-accent-soft); }
 

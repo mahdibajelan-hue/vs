@@ -11,6 +11,7 @@ import { jd } from '../components/RouteTrack'
 import { StatusChip, money, pct } from '../components/cm'
 import { OPEN_STATUSES } from '../types'
 import type { PageProps } from '../ChangeApp'
+import { pressable } from '../../../lib/pressable'
 
 export const requestRows = (reqs: ChangeRequest[], steps: ChangeStep[], c: ReturnType<typeof useChangeCtx>) => reqs.map((r) => {
   const cur = steps.filter((s) => s.requestId === r.id && s.attempt === r.attempt && s.status === 'active').map((s) => s.roleName).join('، ')
@@ -82,7 +83,7 @@ export function RequestsPage({ onOpen, onNew }: PageProps) {
             const cur = steps.filter((s) => s.requestId === r.id && s.attempt === r.attempt && s.status === 'active')
             const cp = (r.routeSnapshot?.basis ?? ctx.preview(r).basis).cum_pct
             return (
-              <tr key={r.id} onClick={() => onOpen(r.id, 'flow')} style={{ cursor: 'pointer' }}>
+              <tr key={r.id} {...pressable(() => onOpen(r.id, 'flow'), { row: true })} style={{ cursor: 'pointer' }}>
                 <td><span className="im-code">{r.crNumber}</span></td><td className="ttl">{r.title}</td><td><div style={{ fontSize: 12 }}>{ctx.projectName(r.masterProjectId)}</div><div className="im-helper">{ctx.contractLabel(r)}</div></td>
                 <td>{r.changeType ? TYPE_FA[r.changeType] : '—'}</td><td><StatusChip status={r.status} />{r.routeStatus === 'blocked' && <div className="cm-chip" style={{ ['--c' as string]: '#ef4444', marginTop: 3 }}>متوقف</div>}</td>
                 <td className="cm-mono">{money(r.proposedCost)}</td><td className="cm-mono">{r.proposedDays ? r.proposedDays + ' روز' : '—'}</td><td className="cm-mono">{pct(cp)}</td>

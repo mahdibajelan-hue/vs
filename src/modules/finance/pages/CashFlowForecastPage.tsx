@@ -310,7 +310,7 @@ export function FundingRequirementPanel({ cashFlow, currency, showManagementNote
       <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold">
         <Landmark size={12} style={{ color: FINANCE_ACCENT }} /> نیاز مالی و پیش‌بینی تامین بودجه (Funding Requirement)
       </p>
-      <p className="mb-3 text-[10px] leading-5 fin-text-muted">
+      <p className="mb-3 text-[11px] leading-5 fin-text-muted">
         برآورد ماهانه صورت‌وضعیت و پرداخت مورد انتظار، بر مبنای تعهد باقیمانده قراردادها تا تاریخ تکمیل برنامه‌ریزی‌شده هر قرارداد.
       </p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -401,7 +401,7 @@ export function CashFlowSection({ cashFlow, currency }: { cashFlow: CashFlowPoin
     <div className="fin-card p-4">
       <p className="mb-2 text-[11px] font-bold">جریان نقدی — ماهانه و تجمعی</p>
       {hasContractorEstimate && (
-        <p className="mb-2 text-[10px] leading-5 fin-text-muted">
+        <p className="mb-2 text-[11px] leading-5 fin-text-muted">
           «نیاز اعلامی پیمانکار» برآورد ماهانه‌ای است که خود پیمانکار ثبت کرده (از بخش «قراردادها» ← «برآورد نقدینگی ماهانه پیمانکار»)؛ «اختلاف» = نیاز اعلامی منهای پرداخت واقعی همان ماه.
         </p>
       )}

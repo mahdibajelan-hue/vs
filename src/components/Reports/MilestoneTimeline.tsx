@@ -74,7 +74,7 @@ export function MilestoneTimeline({ projectId, milestones }: { projectId: string
                 {canApprove(role) && !m.consultantApprovedAt && (
                   <button
                     onClick={() => approveMilestoneAsConsultant(projectId, m.id)}
-                    className="flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-secondary hover:bg-white/5 transition-colors"
+                    className="flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-secondary hover:bg-white/5 transition-colors"
                     title="تایید مشاور"
                   >
                     <Check size={10} /> تایید
@@ -83,7 +83,7 @@ export function MilestoneTimeline({ projectId, milestones }: { projectId: string
                 {canAuditMilestones && m.consultantApprovedAt && (
                   <button
                     onClick={() => setAuditingMilestone(m)}
-                    className="flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-secondary hover:bg-white/5 transition-colors"
+                    className="flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-secondary hover:bg-white/5 transition-colors"
                     title="ممیزی کارفرما"
                   >
                     <ShieldCheck size={10} /> ممیزی
@@ -106,7 +106,7 @@ export function MilestoneTimeline({ projectId, milestones }: { projectId: string
 function ApprovalPill({ approved, label, color = '#2ecc71' }: { approved: boolean; label: string; color?: string }) {
   return (
     <span
-      className="flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[9px] transition-colors"
+      className="flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] transition-colors"
       style={
         approved
           ? { background: `${color}22`, color, borderColor: `${color}55` }

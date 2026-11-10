@@ -74,7 +74,7 @@ export function AIAnalysisCard({ assessmentId, isPM }: { assessmentId: string; i
       {analysis && (
         <div className="space-y-3">
           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-            <p className="mb-1 text-[10px] font-bold text-indigo-200">خلاصه اجرایی</p>
+            <p className="mb-1 text-[11px] font-bold text-indigo-200">خلاصه اجرایی</p>
             <p className="text-[11px] leading-6 text-secondary">{analysis.analysis.executive_summary}</p>
           </div>
 
@@ -99,7 +99,7 @@ export function AIAnalysisCard({ assessmentId, isPM }: { assessmentId: string; i
 
           {analysis.analysis.follow_up_questions.length > 0 && (
             <div className="rounded-xl border border-purple-400/20 bg-purple-500/[0.06] p-3">
-              <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold text-purple-200">
+              <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold text-purple-200">
                 <HelpCircle size={12} /> سؤالات پیگیری پیشنهادی
               </p>
               <div className="space-y-1.5">
@@ -112,7 +112,7 @@ export function AIAnalysisCard({ assessmentId, isPM }: { assessmentId: string; i
             </div>
           )}
 
-          <div className="flex items-center justify-between text-[10px] text-muted">
+          <div className="flex items-center justify-between text-[11px] text-muted">
             <span className="flex items-center gap-1">
               <BadgeCheck size={11} /> مدل: {analysis.model} · اطمینان مدل: {Math.round((analysis.analysis.confidence ?? 0) <= 1 ? (analysis.analysis.confidence ?? 0) * 100 : analysis.analysis.confidence ?? 0)}٪
             </span>
@@ -139,7 +139,7 @@ function DimensionRow({ label, dim, expanded, onToggle }: { label: string; dim: 
           {dim.evidence.length > 0 && (
             <ul className="space-y-0.5">
               {dim.evidence.map((e, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-[10px] leading-5 text-muted">
+                <li key={i} className="flex items-start gap-1.5 text-[11px] leading-5 text-muted">
                   <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-indigo-300" /> {e}
                 </li>
               ))}
@@ -161,7 +161,7 @@ function ListCard({ icon, title, items, tone }: { icon: React.ReactNode; title: 
   if (items.length === 0) return null
   return (
     <div className={`rounded-xl border p-3 ${toneClasses[tone]}`}>
-      <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold">
+      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold">
         {icon} {title}
       </p>
       <ul className="space-y-1">

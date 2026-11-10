@@ -31,7 +31,7 @@ export function ScheduleStatusCard() {
   if (rows && rows.length === 0) return null
   return (
     <section className="glass-panel mb-3 p-3" dir="rtl" aria-label="وضعیت زمان‌بندی پروژه‌ها">
-      <div className="mb-2 flex items-center gap-2"><CalendarClock size={16} style={{ color: '#0ea5a4' }} aria-hidden /><b className="text-sm">وضعیت زمان‌بندی پروژه‌ها</b><span className="text-[10px] text-muted">بر پایهٔ برنامهٔ جاری؛ بدون اعمال کار زندهٔ ماژول اجرا</span></div>
+      <div className="mb-2 flex items-center gap-2"><CalendarClock size={16} style={{ color: '#0ea5a4' }} aria-hidden /><b className="text-sm">وضعیت زمان‌بندی پروژه‌ها</b><span className="text-[11px] text-muted">بر پایهٔ برنامهٔ جاری؛ بدون اعمال کار زندهٔ ماژول اجرا</span></div>
       {!rows ? <div className="im-skeleton" style={{ height: 60 }} /> : (
         <div style={{ overflowX: 'auto' }}>
           <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>

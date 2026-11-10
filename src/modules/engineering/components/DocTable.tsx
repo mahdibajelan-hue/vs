@@ -9,6 +9,7 @@ import { canonDiscipline } from '../lib/disciplines'
 import { COURT_COLOR, COURT_LABEL_FA, courtOf, type EngLens } from '../lib/roles'
 import { creditAt, plannedCreditAt } from '../../execution/lib/engine/engineering'
 import { DocCycle, cycleLine } from './DocCycle'
+import { pressable } from '../../../lib/pressable'
 
 const d = (x: string | null) => (x ? jalaliText(x) : '—')
 const ST_UI: Record<EngStatus, { icon: LucideIcon; color: string }> = {
@@ -66,7 +67,7 @@ export function DocTable({ docs, all, m, can, lens, projectId, total, upd }: { d
         const closed = shut.has(disc), [Icon, color] = discUi(disc), prog = w ? done / w : 0
         return (
           <div key={disc} className="dt-g" style={{ ['--c' as string]: color }}>
-            <div className="dt-h" onClick={() => toggle(disc)} role="button" aria-expanded={!closed}>
+            <div className="dt-h" {...pressable(() => toggle(disc))} role="button" aria-expanded={!closed}>
               <span className="dt-ic"><Icon size={14} /></span><b>{disc}</b><small className="sub">{fa(rows.length)} مدرک</small>
               <span style={{ marginInlineStart: 'auto', display: 'flex', gap: 12, alignItems: 'center', fontSize: 11.5 }}>
                 <span title="جمع وزن رشته و سهم آن از کل">وزن <b>{fa(w, 3)}</b> <small className="sub">({sumW ? pct(w / sumW, 1) : '—'})</small></span>

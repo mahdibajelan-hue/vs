@@ -8,7 +8,7 @@ colors:
   hairline: "rgba(148, 163, 184, 0.14)"
   ink-bright: "#e5edf7"
   ink-secondary: "#94a3b8"
-  ink-muted: "#64748b"
+  ink-muted: "#8593a8"
   daylight-hull: "#eef2f7"
   daylight-panel: "#ffffff"
   daylight-ink: "#0f172a"

@@ -69,7 +69,7 @@ export function ModulesTab({ user }: { user: UcUser }) {
               <tr>
                 <th>ماژول</th>
                 {columns.map((a) => (
-                  <th key={a.action} title={a.en}><span className="block">{a.label}</span><span className="block text-[10px] font-normal opacity-70" dir="ltr">{a.en}</span></th>
+                  <th key={a.action} title={a.en}><span className="block">{a.label}</span><span className="block text-[11px] font-normal opacity-70" dir="ltr">{a.en}</span></th>
                 ))}
                 <th style={{ width: 48 }} />
               </tr>

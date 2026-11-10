@@ -158,7 +158,7 @@ export function GanttChart({ project, lines, schedules }: GanttChartProps) {
                 return (
                   <div
                     key={t.iso}
-                    className="absolute top-0 h-full border-r px-1.5 text-[10px] font-bold text-secondary flex items-center overflow-hidden"
+                    className="absolute top-0 h-full border-r px-1.5 text-[11px] font-bold text-secondary flex items-center overflow-hidden"
                     style={{ right: x(t.iso), width, borderColor: 'var(--border-soft)' }}
                   >
                     {t.label}
@@ -170,7 +170,7 @@ export function GanttChart({ project, lines, schedules }: GanttChartProps) {
               {dayTickList.map((d) => (
                 <div
                   key={d.iso}
-                  className="absolute top-0 flex h-full items-center justify-center text-[9px] text-muted num"
+                  className="absolute top-0 flex h-full items-center justify-center text-[11px] text-muted num"
                   style={{ right: x(d.iso), width: DAY_WIDTH }}
                 >
                   {d.label}

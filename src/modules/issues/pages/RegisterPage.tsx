@@ -15,6 +15,7 @@ import { issuesPrintHtml, openPrint } from '../lib/imPrint'
 import { askRegister, extractIssues } from '../lib/imAiClient'
 import { IssueCode, Segmented, SeverityChip, SlaBadge, StageChip } from '../components/ui'
 import { ModalPortal } from '../../../components/common/ModalPortal'
+import { pressable } from '../../../lib/pressable'
 
 type View = 'table' | 'kanban' | 'timeline'
 interface Saved { id: string; name: string; filter: IssueFilter; isShared: boolean }
@@ -146,7 +147,7 @@ export function RegisterPage({ onSelectIssue, onNewIssue, lockedProjectId, initi
             </tr></thead>
             <tbody>
               {list.map((i) => (
-                <tr key={i.id} className="row" onClick={() => onSelectIssue(i.id)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onSelectIssue(i.id)}>
+                <tr key={i.id} className="row" {...pressable(() => onSelectIssue(i.id), { row: true })} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onSelectIssue(i.id)}>
                   <td><IssueCode issue={i} /></td>
                   <td className="ttl" title={i.title}>{i.title}{i.blockedSince && <span className="im-chip" style={{ marginRight: 6, color: 'var(--im-coral)' }}>مسدود</span>}</td>
                   <td className="hide-sm" style={{ color: 'var(--im-muted)' }}>{projectName(i.projectId)}</td>

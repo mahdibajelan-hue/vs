@@ -107,9 +107,9 @@ export function ReportCenterPage({ masterProjectId }: { masterProjectId: string 
                 <span className="text-xs font-bold" dir="ltr">
                   {s.reportNumber}
                 </span>
-                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-muted">{REPORT_STATUS_LABEL_FA[s.status]}</span>
+                <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-muted">{REPORT_STATUS_LABEL_FA[s.status]}</span>
               </div>
-              <p className="mt-1 text-[10px] text-muted">
+              <p className="mt-1 text-[11px] text-muted">
                 {REPORT_TYPE_LABEL_FA[s.reportType]} · نسخه {s.revision} · {formatJalali(s.createdAt.slice(0, 10))}
               </p>
             </button>

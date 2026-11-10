@@ -84,11 +84,11 @@ export function AttachmentPreviewCard({ kind, fileName, storagePath, uploadedByC
         <p className="truncate text-[11.5px] font-extrabold" style={{ color }}>
           {ATTACHMENT_KIND_LABEL_FA[kind]}
         </p>
-        <p className="truncate text-[10px] text-muted" dir="ltr">
+        <p className="truncate text-[11px] text-muted" dir="ltr">
           {fileName}
         </p>
         {(detail || uploadedByCandidate) && (
-          <p className="text-[9.5px] text-muted">
+          <p className="text-[11px] text-muted">
             {detail}
             {detail && uploadedByCandidate && ' · '}
             {uploadedByCandidate && <span className="text-amber-300">توسط نامزد</span>}

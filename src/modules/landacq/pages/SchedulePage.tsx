@@ -13,6 +13,7 @@ import { conflictsOf } from '../lib/plan'
 import { IssueButton } from '../components/IssueButton'
 import { fmtKmRange } from '../lib/dates'
 import { faNum } from '../lib/fa'
+import { pressable } from '../../../lib/pressable'
 
 const ACT_COLORS = ['#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#fbbf24', '#fb923c', '#94a3b8']
 
@@ -84,7 +85,7 @@ export function SchedulePage() {
                 const rel = r.early.projectedRelease
                 const late = !r.released && r.early.needBy != null && r.early.delayDays > 0
                 return (
-                  <g key={r.parcel.id} onClick={() => select(r.parcel.id)} style={{ cursor: 'pointer' }}>
+                  <g key={r.parcel.id} {...pressable(() => select(r.parcel.id))} style={{ cursor: 'pointer' }}>
                     <rect x={x0} y={T} width={w} height={H - T - B} fill={STATUS_COLOR[r.status]} opacity={sel ? 0.22 : r.released ? 0.05 : 0.1} />
                     {!r.released && <rect x={x0} y={y(rel) - 2} width={w} height={4} fill={late ? '#ef4444' : STATUS_COLOR[r.status]} rx={1} />}
                     {!r.released && r.early.needBy && <rect x={x0} y={y(r.early.needBy) - 1} width={w} height={2} fill="var(--la-ink)" />}

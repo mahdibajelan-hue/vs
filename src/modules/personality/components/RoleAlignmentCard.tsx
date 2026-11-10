@@ -48,7 +48,7 @@ export function RoleAlignmentCard({ jobRole, hasProfile, alignment }: { jobRole:
           <span className="num fx-tone-text text-xl font-black" style={tone(verdict.color)}>
             {pct != null ? `٪${pct.toLocaleString('fa-IR')}` : '—'}
           </span>
-          <span className="fx-muted text-[9.5px]">Role Fit</span>
+          <span className="fx-muted text-[11px]">Role Fit</span>
         </RingChart>
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 text-[14px] font-extrabold">

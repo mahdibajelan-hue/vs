@@ -9,7 +9,7 @@
 
 /* part chips and cards */
 .pst-part { display: inline-flex; align-items: center; gap: .3rem; padding: .12rem .5rem; border-radius: 99px; font-size: 11px; font-weight: 900; color: var(--pc); background: color-mix(in srgb, var(--pc) 15%, transparent); white-space: nowrap; }
-.pst-part b { display: inline-grid; place-items: center; width: 1.15rem; height: 1.15rem; border-radius: .35rem; color: #fff; background: var(--pc); font-size: 10px; }
+.pst-part b { display: inline-grid; place-items: center; width: 1.15rem; height: 1.15rem; border-radius: .35rem; color: #fff; background: var(--pc); font-size: 11px; }
 .pst-status { display: inline-flex; align-items: center; gap: .3rem; padding: .12rem .55rem; border-radius: 99px; font-size: 11px; font-weight: 800; color: var(--sc); background: color-mix(in srgb, var(--sc) 14%, transparent); white-space: nowrap; }
 .pst-status::before { content: ''; width: .45rem; height: .45rem; border-radius: 99px; background: var(--sc); }
 
@@ -95,14 +95,14 @@
 .pst-detail { display: flex; flex-wrap: wrap; gap: .3rem; }
 .pst-detail span { font-size: 10.5px; padding: .1rem .45rem; border-radius: 99px; background: color-mix(in srgb, var(--text-primary) 6%, transparent); color: var(--text-muted); }
 .pst-detail span.is-yes { color: #10b981; background: color-mix(in srgb, #10b981 12%, transparent); }
-.pst-tag { font-size: 10px; font-weight: 800; padding: .05rem .4rem; border-radius: 99px; color: #3b82f6; background: color-mix(in srgb, #3b82f6 13%, transparent); }
+.pst-tag { font-size: 11px; font-weight: 800; padding: .05rem .4rem; border-radius: 99px; color: #3b82f6; background: color-mix(in srgb, #3b82f6 13%, transparent); }
 .pst-tag.is-warn { color: #ef4444; background: color-mix(in srgb, #ef4444 12%, transparent); }
 .pst-bar-actions { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
 .pst-bar-actions .sp { flex: 1; }
 
 /* settings: payment sequence editor */
 .pst-seq { padding: .8rem; border-radius: .9rem; border: 1px solid var(--border-soft); display: grid; gap: .55rem; }
-.pst-seq-bar { display: flex; height: 1.4rem; border-radius: .5rem; overflow: hidden; background: color-mix(in srgb, var(--text-primary) 7%, transparent); font-size: 10px; font-weight: 800; color: #fff; }
+.pst-seq-bar { display: flex; height: 1.4rem; border-radius: .5rem; overflow: hidden; background: color-mix(in srgb, var(--text-primary) 7%, transparent); font-size: 11px; font-weight: 800; color: #fff; }
 .pst-seq-bar i { display: grid; place-items: center; font-style: normal; overflow: hidden; white-space: nowrap; border-inline-end: 1px solid rgba(255,255,255,.35); }
 .pst-step { display: grid; grid-template-columns: minmax(0, 1fr) 6rem auto; gap: .4rem; align-items: center; }
 .pst-total { font-size: 12px; font-weight: 900; } .pst-total.is-bad { color: #ef4444; } .pst-total.is-ok { color: #10b981; }

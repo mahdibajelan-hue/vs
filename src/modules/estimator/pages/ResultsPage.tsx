@@ -255,7 +255,7 @@ export function ResultsPage({
 
           <div className="flex h-7 w-full overflow-hidden rounded-lg mb-3" dir="ltr">
             {lifecyclePhases.map((p) => (
-              <div key={p.key} className="flex items-center justify-center text-[10px] font-bold"
+              <div key={p.key} className="flex items-center justify-center text-[11px] font-bold"
                 style={{ width: `${(p.months / totalMonths) * 100}%`, background: LIFECYCLE_COLOR[p.key], color: p.key === 'execution' ? '#1A1400' : '#fff' }}>
                 {toFa(p.months)}
               </div>
@@ -357,7 +357,7 @@ export function ResultsPage({
                   <tr key={s.key} style={{ borderBottom: `1px solid ${BORDER}`, borderRight: `3px solid ${SECTION_COLOR[s.key]}` }}>
                     <td className="py-1.5 pr-2" style={{ color: INK_SOFT }}>
                       {s.label}
-                      {s.note && <div className="text-[10px] mt-0.5" style={{ color: MUTED_FG }}>{s.note}</div>}
+                      {s.note && <div className="text-[11px] mt-0.5" style={{ color: MUTED_FG }}>{s.note}</div>}
                     </td>
                     <td className="text-left est-mono" style={{ color: INK }}>{fmtEUR(toEur(s.totalUsd))}</td>
                     <td className="text-left est-mono" style={{ color: MUTED_FG }}>{fmtRialBn(toRial(s.totalUsd))}</td>
@@ -421,7 +421,7 @@ export function ResultsPage({
                       <tr key={it.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
                         <td className="py-1.5 pr-2" style={{ color: INK_SOFT }}>{it.title || '—'}</td>
                         <td className="py-1.5 text-center">
-                          <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-bold text-white est-mono" style={{ background: atRisk ? STATUS.critical : STATUS.good }}>
+                          <span className="inline-block rounded-full px-2 py-0.5 text-[11px] font-bold text-white est-mono" style={{ background: atRisk ? STATUS.critical : STATUS.good }}>
                             {toFa(it.leadTimeMonths)} ماه
                           </span>
                         </td>
@@ -470,7 +470,7 @@ export function ResultsPage({
           <CardTitle icon={<AlertTriangle size={15} />} title="ریسک‌های پروژه" />
           <div className="flex flex-wrap items-start gap-4 mb-2">
             <div className="shrink-0">
-              <p className="text-[10px] mb-1" style={{ color: MUTED_FG }}>نقشه حرارتی (احتمال × اثر)</p>
+              <p className="text-[11px] mb-1" style={{ color: MUTED_FG }}>نقشه حرارتی (احتمال × اثر)</p>
               <div className="grid gap-0.5" style={{ gridTemplateColumns: 'repeat(5, 18px)', direction: 'ltr' }}>
                 {heatGrid.flat().map((cell) => {
                   const band = riskBand(cell.score)
@@ -478,7 +478,7 @@ export function ResultsPage({
                     <div
                       key={`${cell.likelihood}-${cell.impact}`}
                       title={cell.risks.map((r) => r.title || 'ریسک بی‌نام').join('، ') || 'بدون ریسک'}
-                      className="flex items-center justify-center rounded-[3px] text-[9px] font-bold"
+                      className="flex items-center justify-center rounded-[3px] text-[11px] font-bold"
                       style={{ width: 18, height: 18, background: cell.count > 0 ? band.color : SURFACE_2, color: cell.count > 0 ? '#fff' : MUTED_FG, opacity: cell.count > 0 ? 1 : 0.5 }}
                     >
                       {cell.count > 0 ? toFa(cell.count) : ''}
@@ -486,7 +486,7 @@ export function ResultsPage({
                   )
                 })}
               </div>
-              <div className="flex justify-between text-[8px] mt-1" style={{ color: MUTED_FG, direction: 'ltr', width: 5 * 18 + 4 * 2 }}>
+              <div className="flex justify-between text-[11px] mt-1" style={{ color: MUTED_FG, direction: 'ltr', width: 5 * 18 + 4 * 2 }}>
                 <span>کم</span>
                 <span>زیاد</span>
               </div>
@@ -519,7 +519,7 @@ export function ResultsPage({
                       <td className="py-1.5 pr-2" style={{ color: INK_SOFT }}>{r.title || '—'}</td>
                       <td className="py-1.5 text-xs" style={{ color: MUTED_FG }}>{RISK_CATEGORY_LABEL[r.category]}</td>
                       <td className="py-1.5 text-center">
-                        <span className="inline-block rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: band.color }}>
+                        <span className="inline-block rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: band.color }}>
                           {band.label} ({toFa(r.likelihood * r.impact)})
                         </span>
                       </td>

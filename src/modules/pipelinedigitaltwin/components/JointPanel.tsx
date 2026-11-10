@@ -50,7 +50,7 @@ export function JointPanel({ joint, pipe, position, prevJointNumber, nextJointNu
       <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3.5 py-3" style={{ borderColor: 'var(--border-soft)' }}>
         <div className="flex items-center gap-2">
           <p className="text-sm font-extrabold" dir="ltr">{joint.jointNumber}</p>
-          <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${color}22`, color }}>{FINAL_STATUS_LABEL_FA[joint.finalStatus]}</span>
+          <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: `${color}22`, color }}>{FINAL_STATUS_LABEL_FA[joint.finalStatus]}</span>
           {saving && <Loader2 size={13} className="animate-spin text-muted" />}
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -103,7 +103,7 @@ export function JointPanel({ joint, pipe, position, prevJointNumber, nextJointNu
           {joint.welders.length > 0 && <Info label="جوشکاران" value={joint.welders.join('، ')} />}
 
           <div>
-            <p className="mb-1 text-[10px] text-muted">یادداشت</p>
+            <p className="mb-1 text-[11px] text-muted">یادداشت</p>
             {editable
               ? <textarea key={joint.id} defaultValue={joint.notes} onBlur={(e) => e.target.value !== joint.notes && onUpdate('notes', e.target.value)} rows={2} className="w-full resize-none rounded-lg border border-white/10 bg-white/5 p-1.5 text-[11px] outline-none focus:border-brand-400" />
               : <p className="text-[11px] text-secondary">{joint.notes || '—'}</p>}

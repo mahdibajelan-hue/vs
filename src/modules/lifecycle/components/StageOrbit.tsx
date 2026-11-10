@@ -4,6 +4,7 @@ import type { GateStatus, ProjectGate, ProjectStage } from '../types'
 import { executiveSummary, type StageProgressInfo } from '../lib/gateProgress'
 import { faNum } from './ui'
 import { useStore } from '../../../store/useStore'
+import { pressable } from '../../../lib/pressable'
 
 export interface ProjectIdentity { name: string; contractType: string; contractor: string; consultant: string }
 
@@ -135,7 +136,7 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
       {identity && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl px-3 py-2" style={{ background: P.cell, border: `1px solid ${P.cellBorder}` }}>
           <span className="text-[13px] font-extrabold" style={{ color: P.strong }}>{identity.name}</span>
-          <span className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px]" style={{ color: P.muted }}>
+          <span className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px]" style={{ color: P.muted }}>
             {identity.contractType && <span>نوع قرارداد: <b style={{ color: P.text }}>{identity.contractType}</b></span>}
             {identity.contractor && <span>پیمانکار: <b style={{ color: P.text }}>{identity.contractor}</b></span>}
             {identity.consultant && <span>مشاور: <b style={{ color: P.text }}>{identity.consultant}</b></span>}
@@ -208,7 +209,7 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
             const actualDash = (actualLen * Math.max(0, Math.min(100, actual))) / 100
             return (
               <g key={stage.id} transform={`translate(${nx} ${ny})`} style={{ cursor: 'pointer' }}
-                onClick={() => { setSelected(stage.stageKey); onSelectStage(stage.stageKey) }}>
+                {...pressable(() => { setSelected(stage.stageKey); onSelectStage(stage.stageKey) })}>
                 <title>{`${stage.nameFa} — برنامه‌ای ${faNum(Math.round(planned))}٪ · واقعی ${faNum(Math.round(actual))}٪`}</title>
                 <circle r={NODE_R + 15} fill={meta.color} opacity={isSelected ? 0.28 : 0.14} filter="url(#orbitNodeBlur)" />
                 <circle r={plannedR} fill="none" stroke={P.ringBg} strokeOpacity={0.55} strokeWidth={3} />
@@ -267,7 +268,7 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
                 <div className="absolute text-center" style={{
                   right: `${100 - titleLeftPct}%`, top: `${titleTopPct}%`, transform: 'translate(50%, -50%)', width: 130, zIndex: 2,
                 }}>
-                  <span className="text-[10px] font-extrabold leading-tight" style={{ color: meta.color }}>{stage.nameFa}</span>
+                  <span className="text-[11px] font-extrabold leading-tight" style={{ color: meta.color }}>{stage.nameFa}</span>
                 </div>
               </div>
             )
@@ -277,7 +278,7 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
 
       <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 border-t pt-3" style={{ borderColor: P.line }}>
         {(Object.values(ORBIT_META)).map((m) => (
-          <span key={m.label} className="inline-flex items-center gap-1.5 text-[10px] font-semibold" style={{ color: P.muted }}>
+          <span key={m.label} className="inline-flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: P.muted }}>
             <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: m.color }} />
             {m.label}
           </span>
@@ -290,7 +291,7 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
 function StripCell({ P, label, value, color, small }: { P: Palette; label: string; value: string; color: string; small?: boolean }) {
   return (
     <div className="rounded-xl px-2.5 py-2" style={{ background: P.cell, border: `1px solid ${P.cellBorder}` }}>
-      <p className="text-[9px] font-semibold" style={{ color: P.muted }}>{label}</p>
+      <p className="text-[11px] font-semibold" style={{ color: P.muted }}>{label}</p>
       <p className={`${small ? 'text-[12px]' : 'text-lg'} mt-0.5 font-extrabold leading-tight`} style={{ color }}>{value}</p>
     </div>
   )

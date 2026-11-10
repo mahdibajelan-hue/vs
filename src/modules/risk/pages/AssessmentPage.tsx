@@ -11,6 +11,7 @@ import { ZONE_COLOR, ZONE_LABEL_FA, levelOf, type RiskZone } from '../lib/riskPo
 import { scoreAt, addDays } from '../lib/riskState'
 import { todayIso } from '../lib/riskScore'
 import type { PageProps } from '../RiskApp'
+import { pressable } from '../../../lib/pressable'
 
 const LV_COLOR = { low: '#22c55e', medium: '#eab308', high: '#f97316', critical: '#ef4444' } as const
 const LV_LABEL = { low: 'کم', medium: 'متوسط', high: 'زیاد', critical: 'بحرانی' } as const
@@ -89,7 +90,7 @@ export function AssessmentPage({ onOpenRisk }: PageProps) {
         {queue.length === 0 ? <div className="im-notice ok">همهٔ ارزیابی‌ها به‌روز است.</div> : (
           <div className="im-table-wrap"><table className="im-table"><thead><tr><th>ریسک</th><th>وضعیت</th><th>امتیاز</th><th>موعد</th><th>دلیل</th></tr></thead><tbody>
             {queue.slice(0, 60).map(({ r, s }) => (
-              <tr key={r.id} className="rk-row-click" onClick={() => onOpenRisk(r.id, 'assessment')}>
+              <tr key={r.id} className="rk-row-click" {...pressable(() => onOpenRisk(r.id, 'assessment'), { row: true })}>
                 <td><span className="im-code">{r.code}</span> <b>{r.title}</b></td>
                 <td><StatusChip status={r.status} /></td>
                 <td><ScoreTriple state={s} policy={d.policyFor(r.projectId)} /></td>

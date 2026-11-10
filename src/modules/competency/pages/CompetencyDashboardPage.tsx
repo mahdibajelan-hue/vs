@@ -472,7 +472,7 @@ function TalentPoolRow({
           </div>
         </div>
         <span
-          className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[9.5px] font-bold sm:inline-block ${
+          className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold sm:inline-block ${
             nextStep?.mine
               ? 'bg-rose-500/20 text-rose-200 ring-1 ring-rose-400/40'
               : nextStep?.tone === 'done' || (!nextStep && a.status === 'completed')
@@ -488,7 +488,7 @@ function TalentPoolRow({
           <span className="num text-sm font-extrabold" style={{ color: tier }}>
             {overall != null ? `٪${overall.toLocaleString('fa-IR')}` : '—'}
           </span>
-          <span className="fx-muted hidden text-[9.5px] sm:inline">{band.label}</span>
+          <span className="fx-muted hidden text-[11px] sm:inline">{band.label}</span>
         </div>
         <ChevronLeft size={14} className="fx-muted shrink-0" />
       </button>

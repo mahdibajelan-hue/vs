@@ -69,7 +69,7 @@ export function DocumentSlot({
             {busy ? 'در حال بارگذاری…' : buttonLabel}
           </button>
         ) : (
-          items.length === 0 && <span className="text-[10px] text-muted">{emptyHint ?? 'مدرکی پیوست نشده است.'}</span>
+          items.length === 0 && <span className="text-[11px] text-muted">{emptyHint ?? 'مدرکی پیوست نشده است.'}</span>
         )}
         <input
           ref={fileRef}
@@ -83,7 +83,7 @@ export function DocumentSlot({
           }}
         />
       </div>
-      {docs.editable && items.length === 0 && !error && <p className="text-[9.5px] text-muted">PDF یا تصویر JPG/PNG — حداکثر ۳۰۰ کیلوبایت</p>}
+      {docs.editable && items.length === 0 && !error && <p className="text-[11px] text-muted">PDF یا تصویر JPG/PNG — حداکثر ۳۰۰ کیلوبایت</p>}
       {error && <p className="rounded-lg border border-red-400/30 bg-red-500/10 px-2 py-1 text-[10.5px] text-red-200">{error}</p>}
     </div>
   )
@@ -135,7 +135,7 @@ export function DocChip({
         <p className="max-w-[10rem] truncate text-[10.5px]" dir="ltr" title={item.fileName}>
           {item.fileName}
         </p>
-        {item.fileSize != null && <p className="text-[9px] text-muted">{formatFileSizeFa(item.fileSize)}</p>}
+        {item.fileSize != null && <p className="text-[11px] text-muted">{formatFileSizeFa(item.fileSize)}</p>}
       </div>
       <button type="button" onClick={open} className="text-muted hover:text-purple-300" title="باز کردن">
         <ExternalLink size={11} />
@@ -166,7 +166,7 @@ export function DocSlotHeading({ title, hint }: { title: string; hint?: string }
       <p className="flex items-center gap-1.5 text-[11.5px] font-bold">
         <Paperclip size={12} className="text-purple-300" /> {title}
       </p>
-      {hint && <p className="mt-0.5 text-[10px] leading-5 text-muted">{hint}</p>}
+      {hint && <p className="mt-0.5 text-[11px] leading-5 text-muted">{hint}</p>}
     </div>
   )
 }

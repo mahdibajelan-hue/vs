@@ -193,7 +193,7 @@ export function PlanTreePage({ projectId, onBack }: { projectId: string; onBack:
             <option value="">همه گیت‌ها</option>
             {stageOptions.map((k) => <option key={k} value={k}>{stageName(k)}</option>)}
           </select>
-          <button onClick={() => addChild(null)} className="flex items-center gap-1 rounded-lg bg-sky-500 px-2.5 py-1.5 text-[11px] font-bold text-white">
+          <button onClick={() => addChild(null)} className="flex items-center gap-1 rounded-lg bg-sky-700 px-2.5 py-1.5 text-[11px] font-bold text-white">
             <Plus size={12} /> آیتم ریشه
           </button>
           <button onClick={onApplyDeps} className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px]" style={{ borderColor: 'var(--border-soft)' }}>
@@ -284,7 +284,7 @@ export function PlanTreePage({ projectId, onBack }: { projectId: string; onBack:
                         )}
                       </div>
                       {v !== undefined && (
-                        <span className="w-14 text-center text-[10px] font-bold" style={{ color: v > 0 ? STATUS_TEXT_COLOR.red : v < 0 ? STATUS_TEXT_COLOR.green : undefined }}>
+                        <span className="w-14 text-center text-[11px] font-bold" style={{ color: v > 0 ? STATUS_TEXT_COLOR.red : v < 0 ? STATUS_TEXT_COLOR.green : undefined }}>
                           {v === 0 ? '±۰' : `${v > 0 ? '+' : ''}${faNum(v)}د`}
                         </span>
                       )}
@@ -299,7 +299,7 @@ export function PlanTreePage({ projectId, onBack }: { projectId: string; onBack:
                         <JalaliDateInput value={node.finish ?? ''} onChange={(iso) => act && updateActivity(act, { forecastFinish: iso }, 'ویرایش دستی تاریخ')} />
                         <span className="plc-stat-sub">{node.start && node.finish ? `${faNum(diffDaysIso(node.start, node.finish))} روز` : ''}</span>
                         {plan.deps.filter((d) => d.toId === node.id).map((d) => (
-                          <span key={d.id} className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px]">
+                          <span key={d.id} className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[11px]">
                             ← {nameOf(d.fromId)} ({d.type}{d.lag ? `${d.lag > 0 ? '+' : ''}${faNum(d.lag)}` : ''})
                             <button className="ms-1 text-red-400" onClick={() => plan.removeDep(projectId, d.id)}>×</button>
                           </span>
@@ -333,7 +333,7 @@ export function PlanTreePage({ projectId, onBack }: { projectId: string; onBack:
             </div>
             <button disabled={!depForm.from || !depForm.to || depForm.from === depForm.to}
               onClick={() => plan.addDep(projectId, depForm.from, depForm.to, depForm.type, depForm.lag)}
-              className="w-full rounded-lg bg-sky-500 py-1.5 text-[11px] font-bold text-white disabled:opacity-40">افزودن وابستگی</button>
+              className="w-full rounded-lg bg-sky-700 py-1.5 text-[11px] font-bold text-white disabled:opacity-40">افزودن وابستگی</button>
             <p className="plc-stat-sub">عدد منفی = Lead، مثبت = Lag (روز). {faNum(plan.deps.length)} وابستگی ثبت شده.</p>
           </div>
         </TowerTile>
@@ -344,7 +344,7 @@ export function PlanTreePage({ projectId, onBack }: { projectId: string; onBack:
               {plan.baselines.map((b) => (
                 <li key={b.id} className="flex items-center justify-between text-[11px]">
                   <span>{b.label} <span className="text-muted">· {fa(b.createdAt)}</span></span>
-                  <label className="flex items-center gap-1 text-[10px]">
+                  <label className="flex items-center gap-1 text-[11px]">
                     <input type="radio" name="cmp" checked={cmpBaseline === b.id} onChange={() => setCmpBaseline(b.id)} /> مقایسه
                   </label>
                 </li>
@@ -360,7 +360,7 @@ export function PlanTreePage({ projectId, onBack }: { projectId: string; onBack:
             <div className="flex gap-1.5">
               <input value={tplName} onChange={(e) => setTplName(e.target.value)} placeholder="نام قالب"
                 className="min-w-0 flex-1 rounded border bg-black/20 px-1.5 py-1 text-[11px]" style={{ borderColor: 'var(--border-soft)' }} />
-              <button disabled={!tplName.trim() || nodes.length === 0} onClick={onSaveTemplate} className="rounded-lg bg-sky-500 px-2.5 text-[11px] font-bold text-white disabled:opacity-40">ذخیره</button>
+              <button disabled={!tplName.trim() || nodes.length === 0} onClick={onSaveTemplate} className="rounded-lg bg-sky-700 px-2.5 text-[11px] font-bold text-white disabled:opacity-40">ذخیره</button>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="plc-stat-sub shrink-0">شروع پروژهٔ جدید</span>

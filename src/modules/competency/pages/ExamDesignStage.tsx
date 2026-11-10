@@ -200,7 +200,7 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
           <div className="space-y-2.5">
             <div className="flex flex-wrap items-end gap-2">
               <label className="block min-w-[14rem] flex-1">
-                <span className="mb-1 block text-[10px] text-muted">الگو</span>
+                <span className="mb-1 block text-[11px] text-muted">الگو</span>
                 <select
                   value={selectedBlueprint?.id ?? ''}
                   onChange={(e) => setPickedBlueprintId(e.target.value)}
@@ -219,7 +219,7 @@ export function ExamDesignStage({ assessment, isDesigner, onContinue }: ExamDesi
                 <button
                   onClick={handleApplyBlueprint}
                   disabled={applying || !selectedBlueprint}
-                  className="flex items-center gap-1.5 rounded-xl bg-sky-500 px-4 py-2 text-xs font-bold text-white hover:bg-sky-400 disabled:opacity-40"
+                  className="flex items-center gap-1.5 rounded-xl bg-sky-700 px-4 py-2 text-xs font-bold text-white hover:bg-sky-800 disabled:opacity-40"
                 >
                   {applying ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} اعمال الگو
                 </button>
@@ -394,17 +394,17 @@ function BlueprintSummary({ blueprint, technicalTemplateTitle }: { blueprint: Co
         {BLUEPRINT_METHODS.map((m) => (
           <span
             key={m.key}
-            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
               blueprint[m.key] ? 'bg-sky-500/15 text-sky-200' : 'bg-white/5 text-muted line-through'
             }`}
           >
             {blueprint[m.key] && <CheckCircle2 size={10} />} {m.label}
           </span>
         ))}
-        <span className="num rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-muted">نسخه {blueprint.version.toLocaleString('fa-IR')}</span>
+        <span className="num rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-muted">نسخه {blueprint.version.toLocaleString('fa-IR')}</span>
       </div>
       {(blueprint.technicalTemplateId || blueprint.personalityTemplateId) && (
-        <p className="mt-2 text-[10px] text-muted">
+        <p className="mt-2 text-[11px] text-muted">
           {blueprint.technicalTemplateId && <>قالب آزمون فنی: {technicalTemplateTitle ?? '—'}</>}
           {blueprint.technicalTemplateId && blueprint.personalityTemplateId && ' · '}
           {blueprint.personalityTemplateId && <>دارای قالب آزمون شخصیت</>}
@@ -444,7 +444,7 @@ function ExamDesignToggle({
           </label>
         ) : (
           <span
-            className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
+            className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold"
             style={{ background: checked ? `${color}25` : 'rgba(255,255,255,0.06)', color: checked ? color : 'var(--text-muted)' }}
           >
             {checked && <CheckCircle2 size={11} />} {checked ? 'لازم است' : 'لازم نیست'}
@@ -452,7 +452,7 @@ function ExamDesignToggle({
         )}
       </div>
       <p className="text-[10.5px] leading-5 text-muted">{description}</p>
-      {!isDesigner && <p className="mt-1 text-[10px] text-muted/70">توسط طراح آزمون تنظیم می‌شود.</p>}
+      {!isDesigner && <p className="mt-1 text-[11px] text-muted/70">توسط طراح آزمون تنظیم می‌شود.</p>}
     </div>
   )
 }

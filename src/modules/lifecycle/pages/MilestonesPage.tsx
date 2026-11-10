@@ -96,7 +96,7 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
           action={
             <div className="flex items-center gap-2">
               {filter !== 'all' && (
-                <button onClick={() => setFilter('all')} className="rounded-full border px-2.5 py-1 text-[10px] font-medium text-sky-400 transition-colors hover:bg-white/5"
+                <button onClick={() => setFilter('all')} className="rounded-full border px-2.5 py-1 text-[11px] font-medium text-sky-400 transition-colors hover:bg-white/5"
                   style={{ borderColor: 'rgba(56,189,248,0.4)' }}>
                   پاک‌کردن پالایش ✕
                 </button>
@@ -118,7 +118,7 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                 style={{ borderColor: 'var(--border-soft)' }}
               />
               {bundle.stages.length > 0 && (
-                <label className="mb-2 block text-[10px] text-muted">
+                <label className="mb-2 block text-[11px] text-muted">
                   مرحله
                   <select value={draftStage} onChange={(e) => setDraft({ ...draft, stageKey: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }}>
@@ -127,12 +127,12 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                 </label>
               )}
               <div className="mb-2 grid grid-cols-2 gap-2">
-                <label className="text-[10px] text-muted">
+                <label className="text-[11px] text-muted">
                   تاریخ Baseline (میلادی)
                   <input type="date" value={draft.baselineDate} onChange={(e) => setDraft({ ...draft, baselineDate: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
                 </label>
-                <label className="text-[10px] text-muted">
+                <label className="text-[11px] text-muted">
                   پیش‌بینی (میلادی)
                   <input type="date" value={draft.forecastDate} onChange={(e) => setDraft({ ...draft, forecastDate: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
@@ -182,11 +182,11 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                           <div className="flex items-center gap-1.5">
                             {ms.isCritical && <Flag size={12} style={{ color: STATUS_TEXT_COLOR.red }} />}
                             <span className="text-[12px] font-bold">{ms.name}</span>
-                            <span className="rounded px-1.5 py-px text-[9px] text-muted" style={{ background: 'var(--border-soft)' }}>
+                            <span className="rounded px-1.5 py-px text-[11px] text-muted" style={{ background: 'var(--border-soft)' }}>
                               {MILESTONE_TYPE_LABEL_FA[ms.milestoneType]}
                             </span>
                             {ms.stageKey && (
-                              <span className="text-[10px] text-muted">{bundle.stages.find((st) => st.stageKey === ms.stageKey)?.nameFa ?? STAGE_LABEL_FA[ms.stageKey as StageKey] ?? ms.stageKey}</span>
+                              <span className="text-[11px] text-muted">{bundle.stages.find((st) => st.stageKey === ms.stageKey)?.nameFa ?? STAGE_LABEL_FA[ms.stageKey as StageKey] ?? ms.stageKey}</span>
                             )}
                           </div>
                           <div className="mt-1 flex flex-wrap gap-2 plc-stat-sub">
@@ -202,14 +202,14 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                               style={{ color: (variance ?? 0) > 0 ? STATUS_TEXT_COLOR.red : STATUS_TEXT_COLOR.green }}>
                               {faVariance(variance)}
                             </div>
-                            <div className="text-[10px]" style={{ color: STATUS_TEXT_COLOR[STATUS_TO_HEALTH[status]] }}>
+                            <div className="text-[11px]" style={{ color: STATUS_TEXT_COLOR[STATUS_TO_HEALTH[status]] }}>
                               {MILESTONE_STATUS_LABEL_FA[status]}
                             </div>
                           </div>
                         </div>
                       </div>
                       {drift?.isWorsening && (
-                        <p className="mt-1.5 flex items-center gap-1 text-[10px]" style={{ color: STATUS_TEXT_COLOR.red }}>
+                        <p className="mt-1.5 flex items-center gap-1 text-[11px]" style={{ color: STATUS_TEXT_COLOR.red }}>
                           <TrendingUp size={10} /> روند تأخیر فزاینده: {drift.series.map(faNum).join(' ← ')} روز
                         </p>
                       )}
@@ -222,7 +222,7 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                           {!ms.actualDate && (
                             <button
                               onClick={() => updateMilestone(ms, { actualDate: todayTehran(), status: 'achieved' })}
-                              className="rounded-lg px-2.5 py-1.5 text-[10px] font-medium text-white"
+                              className="rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-white"
                               style={{ background: STATUS_COLOR.green }}
                             >
                               ثبت تحقق امروز
@@ -230,14 +230,14 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                           )}
                           <button
                             onClick={() => setForecastEdit({ id: ms.id, date: ms.forecastDate ?? '', reason: '' })}
-                            className="rounded-lg border px-2.5 py-1.5 text-[10px]"
+                            className="rounded-lg border px-2.5 py-1.5 text-[11px]"
                             style={{ borderColor: 'var(--border-soft)' }}
                           >
                             تغییر تاریخ پیش‌بینی
                           </button>
                           <button
                             onClick={() => setActionDraft({ milestoneId: ms.id, title: '' })}
-                            className="rounded-lg border px-2.5 py-1.5 text-[10px]"
+                            className="rounded-lg border px-2.5 py-1.5 text-[11px]"
                             style={{ borderColor: 'var(--border-soft)' }}
                           >
                             ثبت اقدام برای این Milestone
@@ -261,7 +261,7 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                                 await updateMilestone(ms, { forecastDate: forecastEdit.date || null }, forecastEdit.reason)
                                 setForecastEdit(null)
                               }}
-                              className="rounded-lg px-2.5 py-1.5 text-[10px] font-medium text-white" style={{ background: '#3b82f6' }}
+                              className="rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-white" style={{ background: '#3b82f6' }}
                             >
                               ثبت تغییر
                             </button>
@@ -283,7 +283,7 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                                 })
                                 setActionDraft(null)
                               }}
-                              className="rounded-lg px-2.5 py-1.5 text-[10px] font-medium text-white disabled:opacity-40" style={{ background: '#3b82f6' }}
+                              className="rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-white disabled:opacity-40" style={{ background: '#3b82f6' }}
                             >
                               ثبت اقدام
                             </button>
@@ -291,13 +291,13 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                         )}
 
                         {/* Linked actions — the drill-down the spec asks for */}
-                        <h4 className="mb-1 text-[10px] font-bold text-muted">اقدامات مرتبط ({faNum(linkedActions.length)})</h4>
+                        <h4 className="mb-1 text-[11px] font-bold text-muted">اقدامات مرتبط ({faNum(linkedActions.length)})</h4>
                         {linkedActions.length === 0 ? (
                           <p className="plc-stat-sub">اقدامی برای این Milestone ثبت نشده است</p>
                         ) : (
                           <ul className="space-y-1">
                             {linkedActions.map((a) => (
-                              <li key={a.id} className="flex items-center justify-between gap-2 text-[10px]">
+                              <li key={a.id} className="flex items-center justify-between gap-2 text-[11px]">
                                 <span>{a.title}</span>
                                 <span className="text-muted">{a.dueDate ? fa(a.dueDate) : '—'}</span>
                               </li>

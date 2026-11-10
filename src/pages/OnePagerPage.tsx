@@ -130,7 +130,7 @@ export function OnePagerPage({ project }: { project: Project }) {
 
             {sections.linesTable && (
               <div className="rounded-lg overflow-hidden flex flex-col min-h-0" style={{ border: '1px solid #e2e8f0' }}>
-                <table className="w-full text-[10px]">
+                <table className="w-full text-[11px]">
                   <thead>
                     <tr style={{ background: '#f1f5f9', color: '#334155' }}>
                       <th className="p-1.5 text-right font-semibold">خط</th>
@@ -183,7 +183,7 @@ export function OnePagerPage({ project }: { project: Project }) {
           </div>
         )}
 
-        <p className="text-[9px] text-center" style={{ color: '#94a3b8' }}>
+        <p className="text-[11px] text-center" style={{ color: '#94a3b8' }}>
           تولید شده توسط PipePulse — {new Date().toLocaleString('fa-IR')}
         </p>
       </div>
@@ -209,7 +209,7 @@ function MiniKpi({ icon: Icon, label, value, color }: { icon: typeof Gauge; labe
         <Icon size={15} />
       </div>
       <div className="min-w-0">
-        <p className="text-[10px]" style={{ color: '#64748b' }}>
+        <p className="text-[11px]" style={{ color: '#64748b' }}>
           {label}
         </p>
         <p className="text-sm font-extrabold num" style={{ color: '#0f172a' }}>
@@ -225,7 +225,7 @@ function PrintLegend() {
   return (
     <div className="flex items-center gap-2">
       {(Object.keys(items) as (keyof typeof items)[]).map((k) => (
-        <span key={k} className="flex items-center gap-1 text-[9px]" style={{ color: '#475569' }}>
+        <span key={k} className="flex items-center gap-1 text-[11px]" style={{ color: '#475569' }}>
           <span className="inline-block h-1.5 w-3 rounded-full" style={{ background: STATUS_COLOR[k] }} />
           {items[k]}
         </span>

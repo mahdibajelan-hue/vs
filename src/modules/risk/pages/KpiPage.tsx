@@ -9,6 +9,7 @@ import { SIZE_BAND_LABEL_FA, compareProjects, computeKpis, effectivenessBy, type
 import { downloadXlsx } from '../lib/riskExport'
 import { todayIso } from '../lib/riskScore'
 import type { PageProps } from '../RiskApp'
+import { pressable } from '../../../lib/pressable'
 
 const TONE = { ok: '#22c55e', warn: '#f59e0b', bad: '#ef4444', na: '#94a3b8' } as const
 const fmt = (k: KpiResult) => (k.value === null ? '—' : k.unit === '%' ? k.value + '٪' : k.unit === '#' ? String(k.value) : `${k.value} ${k.unit}`)
@@ -38,7 +39,7 @@ export function KpiPage({ onOpenRisk }: PageProps) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, marginBottom: 18 }}>
         {kpis.map((k, i) => (
-          <div key={k.id} className="im-stat-card" style={{ ['--c' as string]: TONE[k.tone], ['--i' as string]: i, cursor: 'pointer' }} onClick={() => setOpen(open === k.id ? null : k.id)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setOpen(open === k.id ? null : k.id)} aria-expanded={open === k.id}>
+          <div key={k.id} className="im-stat-card" style={{ ['--c' as string]: TONE[k.tone], ['--i' as string]: i, cursor: 'pointer' }} {...pressable(() => setOpen(open === k.id ? null : k.id))} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setOpen(open === k.id ? null : k.id)} aria-expanded={open === k.id}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               {k.unit === '%' ? <Ring value={k.value} size={64} stroke={8} color={TONE[k.tone]} label="" suffix="" /> : null}
               <div style={{ minWidth: 0 }}><div className="im-num" style={{ color: TONE[k.tone] }}>{fmt(k)}</div><div className="im-lbl">{k.label}</div></div>

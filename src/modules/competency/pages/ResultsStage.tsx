@@ -504,7 +504,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
             <Mail size={14} /> ارسال به نامزد
           </button>
           {assessment.status !== 'completed' && (
-            <button onClick={() => setFinalizeOpen(true)} className="flex min-h-10 items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-500">
+            <button onClick={() => setFinalizeOpen(true)} className="flex min-h-10 items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-800">
               <CheckCircle2 size={14} /> ثبت نهایی ارزیابی
             </button>
           )}
@@ -692,7 +692,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
                         <div className="fx-track mt-1.5 h-1.5 overflow-hidden rounded-full">
                           <div className="h-full rounded-full" style={{ width: `${d.percentScore ?? 0}%`, background: `linear-gradient(90deg, ${accent}99, ${color})` }} />
                         </div>
-                        <p className="fx-muted num mt-1 text-[10px]">
+                        <p className="fx-muted num mt-1 text-[11px]">
                           {fa(d.answeredCount)}/{fa(d.totalCount)} سؤال {d.domain.weight > 0 ? `، وزن ٪${fa(d.domain.weight)}` : '، نمایشی'}
                         </p>
                       </div>
@@ -758,11 +758,11 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
                         <div className="fx-divider flex items-center justify-between gap-2 border-t pt-3 text-center">
                           <div className="flex-1">
                             <p className="num text-sm font-bold">{fa(avgOverall)}</p>
-                            <p className="fx-muted text-[10px]">میانگین کل</p>
+                            <p className="fx-muted text-[11px]">میانگین کل</p>
                           </div>
                           <div className="flex-1">
                             <p className="num text-sm font-bold">{fa(maxOverall)}</p>
-                            <p className="fx-muted text-[10px]">بالاترین امتیاز</p>
+                            <p className="fx-muted text-[11px]">بالاترین امتیاز</p>
                           </div>
                         </div>
                       </>
@@ -941,7 +941,7 @@ export function ResultsStage({ assessment, nav, onExitToHub, onNew, onGoToAiAnal
             onClick={handleApprove}
             disabled={settingApproval}
             className={`flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-colors disabled:opacity-50 ${
-              assessment.isApproved ? 'fx-sub' : isConditionalScore(overall) ? 'text-white hover:brightness-110' : 'bg-emerald-600 text-white hover:bg-emerald-500'
+              assessment.isApproved ? 'fx-sub' : isConditionalScore(overall) ? 'text-white hover:brightness-110' : 'bg-emerald-700 text-white hover:bg-emerald-800'
             }`}
             style={!assessment.isApproved && isConditionalScore(overall) ? { background: CONDITIONAL_COLOR } : undefined}
           >

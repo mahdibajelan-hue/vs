@@ -102,7 +102,7 @@
 }
 /* Competency / trait card with a colored accent bar on the left edge. */
 .fx-accent-bar {
-  border-left: 4px solid var(--tone, #a855f7);
+  border-left: 1px solid var(--tone, #a855f7);
 }
 .fx-btn-tone {
   background: var(--tone, #a855f7);

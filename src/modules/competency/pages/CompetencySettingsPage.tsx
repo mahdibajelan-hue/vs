@@ -207,7 +207,7 @@ function QuestionDesignerSection({
                     </label>
                   ))}
                 </div>
-                {h.sections.length === 0 && <p className="mt-1 text-[10px] text-amber-300">هنوز هیچ بخشی برای این کاربر فعال نشده — فعلاً به هیچ بانکی دسترسی ندارد.</p>}
+                {h.sections.length === 0 && <p className="mt-1 text-[11px] text-amber-300">هنوز هیچ بخشی برای این کاربر فعال نشده — فعلاً به هیچ بانکی دسترسی ندارد.</p>}
               </div>
             )
           })}
@@ -356,7 +356,7 @@ export function CompetencySettingsPage({ onExitToHub, nav }: CompetencySettingsP
                           else next.add(t)
                           updateJobRoleConfig(role, ALL_QUESTION_TYPES.filter((x) => next.has(x)))
                         }}
-                        className={`rounded-full px-2.5 py-1 text-[10px] font-bold transition-colors ${
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
                           isOn ? 'bg-amber-500/15 text-amber-300' : 'bg-white/5 text-muted hover:bg-white/10'
                         }`}
                       >
@@ -549,15 +549,15 @@ function JobRoleCatalogTab({
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">کلید شغل (انگلیسی، ثابت)</span>
+          <span className="mb-1 block text-[11px] text-muted">کلید شغل (انگلیسی، ثابت)</span>
           <input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="quality_inspector" className="input w-44 !py-1.5 text-[11px]" dir="ltr" />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">عنوان فارسی</span>
+          <span className="mb-1 block text-[11px] text-muted">عنوان فارسی</span>
           <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="کارشناس کنترل کیفیت" className="input w-48 !py-1.5 text-[11px]" />
         </label>
         <label className="block min-w-[10rem] flex-1">
-          <span className="mb-1 block text-[10px] text-muted">توضیح (اختیاری)</span>
+          <span className="mb-1 block text-[11px] text-muted">توضیح (اختیاری)</span>
           <input value={newDescription} onChange={(e) => setNewDescription(e.target.value)} className="input w-full !py-1.5 text-[11px]" />
         </label>
         <button
@@ -604,7 +604,7 @@ function JobRoleCatalogTab({
                   <td className="p-2 text-muted">{r.description || '—'}</td>
                   <td className="num p-2 text-center">{r.sortOrder.toLocaleString('fa-IR')}</td>
                   <td className="p-2 text-center">
-                    <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold ${r.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${r.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'}`}>
                       {r.active ? 'فعال' : 'غیرفعال'}
                     </span>
                   </td>
@@ -658,7 +658,7 @@ function JobRoleEditRow({
         />
       </td>
       <td className="p-1.5 text-center">
-        <label className="inline-flex items-center gap-1 text-[10px]">
+        <label className="inline-flex items-center gap-1 text-[11px]">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="h-3.5 w-3.5" /> فعال
         </label>
       </td>
@@ -723,15 +723,15 @@ function CompetencyCatalogTab({
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">کلید (انگلیسی، ثابت)</span>
+          <span className="mb-1 block text-[11px] text-muted">کلید (انگلیسی، ثابت)</span>
           <input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="risk_management" className="input w-40 !py-1.5 text-[11px]" dir="ltr" />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">عنوان فارسی</span>
+          <span className="mb-1 block text-[11px] text-muted">عنوان فارسی</span>
           <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="مدیریت ریسک" className="input w-44 !py-1.5 text-[11px]" />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">حوزه</span>
+          <span className="mb-1 block text-[11px] text-muted">حوزه</span>
           <select value={newDomain} onChange={(e) => setNewDomain(e.target.value as CompCompetencyDomain)} className="input w-32 !py-1.5 text-[11px]">
             {ALL_DOMAINS.map((d) => (
               <option key={d} value={d}>
@@ -741,7 +741,7 @@ function CompetencyCatalogTab({
           </select>
         </label>
         <label className="block min-w-[10rem] flex-1">
-          <span className="mb-1 block text-[10px] text-muted">توضیح (اختیاری)</span>
+          <span className="mb-1 block text-[11px] text-muted">توضیح (اختیاری)</span>
           <input value={newDescription} onChange={(e) => setNewDescription(e.target.value)} className="input w-full !py-1.5 text-[11px]" />
         </label>
         <button
@@ -794,7 +794,7 @@ function CompetencyCatalogTab({
                         <td className="p-2 text-muted">{c.description || '—'}</td>
                         <td className="p-2 text-center">{COMP_COMPETENCY_DOMAIN_LABEL_FA[c.domain]}</td>
                         <td className="p-2 text-center">
-                          <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold ${c.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'}`}>
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${c.active ? 'bg-emerald-500/12 text-emerald-300' : 'bg-white/5 text-muted'}`}>
                             {c.active ? 'فعال' : 'غیرفعال'}
                           </span>
                         </td>
@@ -803,7 +803,7 @@ function CompetencyCatalogTab({
                             <button
                               onClick={() => setExpandedId(expanded ? null : c.id)}
                               title="منابع شواهد این شایستگی"
-                              className={`flex items-center gap-1 rounded-lg border px-1.5 py-1 text-[10px] font-bold transition-colors ${
+                              className={`flex items-center gap-1 rounded-lg border px-1.5 py-1 text-[11px] font-bold transition-colors ${
                                 expanded ? 'border-sky-400/40 bg-sky-500/15 text-sky-200' : 'border-white/10 text-secondary hover:bg-white/5'
                               }`}
                             >
@@ -943,7 +943,7 @@ function EvidenceSourcesPanel({ competency }: { competency: CompCompetency }) {
 
       <div className="flex flex-wrap items-end gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-2.5">
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">نوع منبع</span>
+          <span className="mb-1 block text-[11px] text-muted">نوع منبع</span>
           <select
             value={sourceType}
             onChange={(e) => {
@@ -961,7 +961,7 @@ function EvidenceSourcesPanel({ competency }: { competency: CompCompetency }) {
         </label>
         {needsRef ? (
           <label className="block">
-            <span className="mb-1 block text-[10px] text-muted">مرجع</span>
+            <span className="mb-1 block text-[11px] text-muted">مرجع</span>
             <select value={sourceRef} onChange={(e) => setSourceRef(e.target.value)} className="input w-56 !py-1.5 text-[11px]">
               <option value="">{availableOptions.length === 0 ? 'گزینه‌ای باقی نمانده' : 'انتخاب…'}</option>
               {availableOptions.map((o) => (
@@ -975,7 +975,7 @@ function EvidenceSourcesPanel({ competency }: { competency: CompCompetency }) {
           <p className="pb-2 text-[10.5px] text-secondary">{STRUCTURED_INTERVIEW_REF_LABEL}</p>
         )}
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">وزن</span>
+          <span className="mb-1 block text-[11px] text-muted">وزن</span>
           <input
             type="number"
             min={0.1}
@@ -993,7 +993,7 @@ function EvidenceSourcesPanel({ competency }: { competency: CompCompetency }) {
         >
           <Plus size={12} /> افزودن منبع
         </button>
-        {isDuplicate && <p className="w-full text-[10px] text-amber-300">این منبع قبلاً برای این شایستگی ثبت شده است.</p>}
+        {isDuplicate && <p className="w-full text-[11px] text-amber-300">این منبع قبلاً برای این شایستگی ثبت شده است.</p>}
       </div>
 
       {rows.length === 0 ? (
@@ -1040,19 +1040,19 @@ function EvidenceSourceRow({
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px]">
-      <span className={`rounded-full px-2 py-0.5 text-[9.5px] font-bold ${SOURCE_TYPE_TONE[row.sourceType]}`}>
+      <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${SOURCE_TYPE_TONE[row.sourceType]}`}>
         {COMP_EVIDENCE_SOURCE_TYPE_LABEL_FA[row.sourceType]}
       </span>
       <span className="min-w-[8rem] flex-1 font-bold text-secondary">{refLabel}</span>
       {noBankRoles.length > 0 && (
         <span
-          className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[9.5px] font-bold text-amber-200"
+          className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-200"
           title={`بانک سؤال این مشاغل هیچ سؤال تأییدشده‌ای از این نوع ندارد: ${noBankRoles.join('، ')}. برای داوطلبان این مشاغل این منبع «قابل سنجش نیست» و از محاسبه پوشش کنار گذاشته می‌شود — برای استفاده از آن، سؤال این نوع را به بانک اضافه کنید.`}
         >
           منبع بدون سؤال در بانک ({noBankRoles.length.toLocaleString('fa-IR')} شغل)
         </span>
       )}
-      <span className="num text-[10px] text-muted">سهم {Math.round(share * 100)}٪</span>
+      <span className="num text-[11px] text-muted">سهم {Math.round(share * 100)}٪</span>
       <input
         type="number"
         min={0.1}
@@ -1113,7 +1113,7 @@ function CompetencyEditRow({
         </select>
       </td>
       <td className="p-1.5 text-center">
-        <label className="inline-flex items-center gap-1 text-[10px]">
+        <label className="inline-flex items-center gap-1 text-[11px]">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="h-3.5 w-3.5" /> فعال
         </label>
       </td>
@@ -1185,7 +1185,7 @@ function RequirementsTab({
   return (
     <div className="space-y-3">
       <label className="block max-w-xs">
-        <span className="mb-1 block text-[10px] text-muted">شغل</span>
+        <span className="mb-1 block text-[11px] text-muted">شغل</span>
         <select value={effectiveRole} onChange={(e) => setSelectedRole(e.target.value)} className="input">
           {roles.map((r) => (
             <option key={r.jobRole} value={r.jobRole}>
@@ -1200,7 +1200,7 @@ function RequirementsTab({
       ) : (
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
           <label className="block">
-            <span className="mb-1 block text-[10px] text-muted">شایستگی</span>
+            <span className="mb-1 block text-[11px] text-muted">شایستگی</span>
             <select value={competencyId} onChange={(e) => setCompetencyId(e.target.value)} className="input w-48 !py-1.5 text-[11px]">
               <option value="">انتخاب شایستگی…</option>
               {availableCompetencies.map((c) => (
@@ -1211,7 +1211,7 @@ function RequirementsTab({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-[10px] text-muted">سطح مورد نیاز</span>
+            <span className="mb-1 block text-[11px] text-muted">سطح مورد نیاز</span>
             <input
               type="number"
               min={0}
@@ -1222,7 +1222,7 @@ function RequirementsTab({
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-[10px] text-muted">وزن</span>
+            <span className="mb-1 block text-[11px] text-muted">وزن</span>
             <input
               type="number"
               min={0.1}
@@ -1423,7 +1423,7 @@ function BlueprintsTab({ jobRoleConfigs }: { jobRoleConfigs: CompJobRoleConfig[]
     <div className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <label className="block max-w-xs flex-1">
-          <span className="mb-1 block text-[10px] text-muted">شغل</span>
+          <span className="mb-1 block text-[11px] text-muted">شغل</span>
           <select
             value={effectiveRole}
             onChange={(e) => {
@@ -1490,13 +1490,13 @@ function BlueprintsTab({ jobRoleConfigs }: { jobRoleConfigs: CompJobRoleConfig[]
               <div key={b.id} className={`rounded-xl border border-white/10 p-3 ${!b.active ? 'opacity-50' : ''}`}>
                 <div className="mb-1.5 flex flex-wrap items-center gap-2">
                   <p className="text-[11.5px] font-bold">{b.title}</p>
-                  <span className="num rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">نسخه {b.version.toLocaleString('fa-IR')}</span>
+                  <span className="num rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-muted">نسخه {b.version.toLocaleString('fa-IR')}</span>
                   {b.isDefault && b.active && (
-                    <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[9.5px] font-bold text-amber-300">
+                    <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-bold text-amber-300">
                       <Star size={10} /> پیش‌فرض
                     </span>
                   )}
-                  {!b.active && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] font-bold text-muted">غیرفعال</span>}
+                  {!b.active && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-bold text-muted">غیرفعال</span>}
                   <button onClick={() => setEditingId(b.id)} className="mr-auto rounded-lg border border-white/10 p-1.5 text-secondary hover:bg-white/5">
                     <Pencil size={12} />
                   </button>
@@ -1506,7 +1506,7 @@ function BlueprintsTab({ jobRoleConfigs }: { jobRoleConfigs: CompJobRoleConfig[]
                   {BLUEPRINT_METHOD_FIELDS.map((m) => (
                     <span
                       key={m.key}
-                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                      className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
                         b[m.key] ? 'bg-sky-500/15 text-sky-200' : 'bg-white/5 text-muted line-through'
                       }`}
                     >
@@ -1515,7 +1515,7 @@ function BlueprintsTab({ jobRoleConfigs }: { jobRoleConfigs: CompJobRoleConfig[]
                   ))}
                 </div>
                 {(b.technicalTemplateId || b.personalityTemplateId) && (
-                  <p className="mt-1.5 text-[10px] text-muted">
+                  <p className="mt-1.5 text-[11px] text-muted">
                     {b.technicalTemplateId && <>قالب فنی: {technicalTemplates.find((t) => t.id === b.technicalTemplateId)?.title ?? '—'}</>}
                     {b.technicalTemplateId && b.personalityTemplateId && ' · '}
                     {b.personalityTemplateId && <>قالب شخصیت: {personalityTemplates.find((t) => t.id === b.personalityTemplateId)?.title ?? '—'}</>}
@@ -1569,11 +1569,11 @@ function BlueprintEditor({
     <div className="space-y-2.5 rounded-xl border border-sky-400/25 bg-sky-500/[0.05] p-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">عنوان</span>
+          <span className="mb-1 block text-[11px] text-muted">عنوان</span>
           <input value={draft.title} onChange={(e) => patch({ title: e.target.value })} className="input !py-1.5 text-[11px]" />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">توضیح</span>
+          <span className="mb-1 block text-[11px] text-muted">توضیح</span>
           <input value={draft.description} onChange={(e) => patch({ description: e.target.value })} className="input !py-1.5 text-[11px]" />
         </label>
       </div>
@@ -1589,7 +1589,7 @@ function BlueprintEditor({
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">قالب ترکیب آزمون فنی (اختیاری)</span>
+          <span className="mb-1 block text-[11px] text-muted">قالب ترکیب آزمون فنی (اختیاری)</span>
           <select
             value={draft.technicalTemplateId ?? ''}
             onChange={(e) => patch({ technicalTemplateId: e.target.value || null })}
@@ -1605,7 +1605,7 @@ function BlueprintEditor({
           </select>
         </label>
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">قالب ترکیب آزمون شخصیت (اختیاری)</span>
+          <span className="mb-1 block text-[11px] text-muted">قالب ترکیب آزمون شخصیت (اختیاری)</span>
           <select
             value={draft.personalityTemplateId ?? ''}
             onChange={(e) => patch({ personalityTemplateId: e.target.value || null })}

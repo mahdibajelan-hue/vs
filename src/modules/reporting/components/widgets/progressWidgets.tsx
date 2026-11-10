@@ -63,7 +63,7 @@ export const progressMilestonesWidget: WidgetDefinition<Milestone[] | null> = {
                 {m.percentComplete}%
               </div>
             </div>
-            <p className="text-[10px] leading-4 text-secondary">{m.label}</p>
+            <p className="text-[11px] leading-4 text-secondary">{m.label}</p>
           </div>
         ))}
       </div>

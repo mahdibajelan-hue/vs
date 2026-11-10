@@ -64,9 +64,9 @@ export function ProjectPickerPage({ onOpenProject }: { onOpenProject: (projectId
                 <button key={p.id} type="button" onClick={() => onOpenProject(p.id)} className="glass-panel group flex items-start justify-between gap-2 rounded-xl p-3 text-right transition-colors hover:border-sky-400/40">
                   <span className="min-w-0">
                     <span className="block truncate text-xs font-bold">{p.officialName}</span>
-                    <span className="mt-1 block text-[10px] text-muted">{stage ? `مرحله: ${stage}` : 'مرحلهٔ چرخهٔ عمر ثبت نشده'}</span>
+                    <span className="mt-1 block text-[11px] text-muted">{stage ? `مرحله: ${stage}` : 'مرحلهٔ چرخهٔ عمر ثبت نشده'}</span>
                     {s && (s.milestonesDelayed > 0 || s.overdueActions > 0) && (
-                      <span className="mt-1.5 flex flex-wrap gap-2 text-[10px]">
+                      <span className="mt-1.5 flex flex-wrap gap-2 text-[11px]">
                         {s.milestonesDelayed > 0 && <span className={s.criticalMilestonesDelayed ? 'text-red-300' : 'text-amber-300'}><Flag size={10} className="inline" /> {faNum(s.milestonesDelayed)} Milestone تأخیرکرده</span>}
                         {s.overdueActions > 0 && <span className={s.criticalOverdueActions ? 'text-red-300' : 'text-amber-300'}><ListChecks size={10} className="inline" /> {faNum(s.overdueActions)} اقدام معوق</span>}
                       </span>

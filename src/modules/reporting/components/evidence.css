@@ -22,7 +22,7 @@
 .ev-status > div { padding: .55rem .7rem; border-radius: .7rem; background: var(--bg-app); border: 1px solid var(--border-soft); display: grid; gap: .1rem; }
 .ev-status dt { font-size: 11px; color: var(--text-muted); }
 .ev-status dd { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.ev-status small { font-size: 10px; color: var(--text-muted); }
+.ev-status small { font-size: 11px; color: var(--text-muted); }
 
 .ev-changes ul { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .35rem; }
 .ev-changes li { display: inline-flex; align-items: center; gap: .25rem; font-size: 11.5px; padding: .2rem .55rem; border-radius: .5rem; background: var(--bg-app); border: 1px solid var(--border-soft); }
@@ -31,7 +31,7 @@
 .ev-changes li.is-same { color: var(--text-secondary); }
 
 .ev-findings, .ev-list, .ev-recs, .ev-trends { display: grid; gap: .55rem; list-style: none; margin: 0; padding: 0; }
-.ev-findings > li { padding: .6rem .75rem; border-radius: .7rem; border: 1px solid var(--border-soft); border-inline-start: 3px solid #22c55e; background: var(--bg-app); }
+.ev-findings > li { padding: .6rem .75rem; border-radius: .7rem; border: 1px solid var(--border-soft); border-inline-start: 1px solid #22c55e; background: var(--bg-app); }
 .ev-findings > li.is-material { border-inline-start-color: #ef4444; }
 .ev-findings > li.is-watch { border-inline-start-color: #f59e0b; }
 .ev-findings p, .ev-list p, .ev-trends p { font-size: 12.5px; line-height: 1.75; margin-top: .15rem; }
@@ -62,4 +62,4 @@
 .ev-ai { padding: .8rem 1rem; border-radius: .9rem; border: 1px dashed color-mix(in srgb, #a78bfa 55%, var(--border-soft)); background: color-mix(in srgb, #a78bfa 6%, var(--bg-panel-solid)); }
 .ev-ai header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; font-size: 12px; font-weight: 700; color: #a78bfa; }
 .ev-ai ul { margin: .4rem 0 0; display: grid; gap: .3rem; font-size: 13px; line-height: 1.8; list-style: none; padding: 0; }
-.ev-ai .ev-refs { font-size: 10px; color: var(--text-muted); margin-inline-start: .35rem; direction: ltr; unicode-bidi: isolate; }
+.ev-ai .ev-refs { font-size: 11px; color: var(--text-muted); margin-inline-start: .35rem; direction: ltr; unicode-bidi: isolate; }

@@ -70,7 +70,7 @@ export function LivePanel({ project, inputs, benchmarks, nowYear, onOpenResults 
       {/* phones: the same number pinned to the bottom */}
       <div className="est-live-bar no-print">
         <div className="min-w-0">
-          <div className="text-[10px]" style={{ color: MUTED_FG }}>برآورد زنده</div>
+          <div className="text-[11px]" style={{ color: MUTED_FG }}>برآورد زنده</div>
           <div className="est-mono text-base font-bold truncate" style={{ color: SAFETY }}><AnimatedNumber value={eur(results.grand)} format={fmtEUR} /></div>
         </div>
         <Btn kind="primary" onClick={onOpenResults}>گزارش <ArrowLeft size={14} /></Btn>
@@ -83,7 +83,7 @@ export function LivePanel({ project, inputs, benchmarks, nowYear, onOpenResults 
 function Mini({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="rounded-xl p-2" style={{ background: 'rgba(255,255,255,.03)', border: `1px solid ${BORDER}` }}>
-      <div className="flex items-center gap-1 text-[10px]" style={{ color: MUTED_FG }}>{icon}{label}</div>
+      <div className="flex items-center gap-1 text-[11px]" style={{ color: MUTED_FG }}>{icon}{label}</div>
       <div className="est-mono text-[12px] font-bold mt-0.5 truncate" style={{ color: INK }}>{value}</div>
     </div>
   )

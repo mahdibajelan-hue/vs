@@ -7,6 +7,7 @@ import { LINK_LABEL_FA, type SchActivity } from '../lib/types'
 import type { LiveModel } from '../store/useScheduleModel'
 import { Hint } from '../components/Hint'
 import type { SchTab } from '../SchedulingApp'
+import { pressable } from '../../../lib/pressable'
 
 const ROW = 28, HEAD = 40, LEFT = 330
 const d = (x: string | null) => (x ? jalaliText(x) : '—')
@@ -83,7 +84,7 @@ export function SchGantt({ m, go }: { projectId: string; m: LiveModel; go: (t: S
     const prog = actualByCode.get(a.code)?.actual ?? (r?.status === 'complete' ? 100 : null)
     const x1 = x(s), x2 = x(f) + px
     return (
-      <g key={a.id} onClick={() => setSel(a.id)} style={{ cursor: 'pointer' }}>
+      <g key={a.id} {...pressable(() => setSel(a.id))} style={{ cursor: 'pointer' }}>
         <rect x={0} y={y} width={W} height={ROW} fill={a.id === sel ? 'rgba(14,165,233,.14)' : 'transparent'} />
         {b?.plannedStart && b.plannedFinish && <rect x={x(b.plannedStart)} y={y + 19} width={Math.max(2, x(b.plannedFinish) + px - x(b.plannedStart))} height={4} rx={2} fill="#94a3b8" opacity={0.8}><title>خط مبنا: {d(b.plannedStart)} تا {d(b.plannedFinish)}</title></rect>}
         {a.type === 'milestone' ? <path d={`M${x1 + px / 2} ${y + 5} l7 7 l-7 7 l-7 -7 z`} fill={color}><title>{a.code} — {d(s)}</title></path> : (
@@ -138,10 +139,10 @@ export function SchGantt({ m, go }: { projectId: string; m: LiveModel; go: (t: S
               <div style={{ height: HEAD, position: 'sticky', top: 0, zIndex: 4, background: 'var(--bg-panel-solid, #fff)', borderBottom: '1px solid var(--im-line, #e2e8f0)', display: 'flex', alignItems: 'center', padding: '0 10px', fontSize: 11, fontWeight: 700 }} dir="rtl">فعالیت</div>
               <div style={{ position: 'relative', height: H }} dir="rtl">
                 {lines.slice(first, last).map((l, k) => { const i = first + k; return l.kind === 'group' ? (
-                  <div key={`g${l.key}`} onClick={() => toggle(l.key)} role="button" aria-expanded={!shut.has(l.key)} style={{ position: 'absolute', top: i * ROW, height: ROW, width: '100%', display: 'flex', alignItems: 'center', gap: 6, padding: '0 8px', fontWeight: 700, fontSize: 12, background: 'rgba(14,165,233,.08)', cursor: 'pointer', boxSizing: 'border-box' }}>
+                  <div key={`g${l.key}`} {...pressable(() => toggle(l.key))} role="button" aria-expanded={!shut.has(l.key)} style={{ position: 'absolute', top: i * ROW, height: ROW, width: '100%', display: 'flex', alignItems: 'center', gap: 6, padding: '0 8px', fontWeight: 700, fontSize: 12, background: 'rgba(14,165,233,.08)', cursor: 'pointer', boxSizing: 'border-box' }}>
                     {shut.has(l.key) ? <ChevronLeft size={13} /> : <ChevronDown size={13} />}{l.label}<small className="sub">({fa(l.count)})</small></div>
                 ) : (
-                  <div key={l.a.id} onClick={() => setSel(l.a.id)} style={{ position: 'absolute', top: i * ROW, height: ROW, width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '0 10px', fontSize: 12, cursor: 'pointer', boxSizing: 'border-box', background: l.a.id === sel ? 'rgba(14,165,233,.14)' : undefined, borderBottom: '1px solid rgba(148,163,184,.12)' }}>
+                  <div key={l.a.id} {...pressable(() => setSel(l.a.id))} style={{ position: 'absolute', top: i * ROW, height: ROW, width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '0 10px', fontSize: 12, cursor: 'pointer', boxSizing: 'border-box', background: l.a.id === sel ? 'rgba(14,165,233,.14)' : undefined, borderBottom: '1px solid rgba(148,163,184,.12)' }}>
                     <b className="fn-code" style={{ minWidth: 58 }}>{l.a.code}</b><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={l.a.name}>{l.a.name}</span>
                     {m.integration.get(l.a.uid)?.readiness === 'blocked' && <span title="مانع پیش‌نیاز" style={{ color: '#dc2626' }}>●</span>}</div>
                 ) })}

@@ -16,6 +16,7 @@ import { EpcGate } from '../components/epc/EpcBanner'
 import { ActivityLinks } from '../components/epc/ActivityLinks'
 import { PREREQ_KIND_LABEL_FA } from '../epcTypes'
 import type { PrereqKind, PrereqStatus } from '../lib/engine/readiness'
+import { pressable } from '../../../lib/pressable'
 
 const READY_TONE = { ready: 'good', at_risk: 'warn', blocked: 'bad', unknown: 'neutral' } as const
 const READY_FA = { ready: 'آماده', at_risk: 'آماده با محدودیت', blocked: 'غیرآماده', unknown: 'پیش‌نیازی تعریف نشده' } as const
@@ -89,7 +90,7 @@ function Readiness({ m, projectId, can, acts }: { m: ReturnType<typeof useEpcMod
       <p className="im-helper" style={{ margin: 0 }}>آمادگی فعالیت فقط از پیش‌نیازهای آن (مدارک مهندسی، مصالح، مجوز، زمین، بازرسی…) تعیین می‌شود؛ حضور نیرو و ماشین‌آلات به‌تنهایی به‌معنای آمادگی نیست. پیش‌نیاز وصل‌شده به مدرک مهندسی یا کالای ماژول تأمین، وضعیت واقعی همان را می‌گیرد.</p>
       <Section title="وضعیت آمادگی فعالیت‌های دارای کار باقیمانده" flush>
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><thead><tr><th>فعالیت</th><th>آمادگی</th><th>موانع</th><th className="num">پیش‌نیاز</th></tr></thead>
-          <tbody>{list.map((a) => { const r = m.insights.get(a.id)!.readiness; return <tr key={a.id} style={{ cursor: 'pointer' }} onClick={() => setSel(a.id)}><td>{a.title}</td><td><Chip tone={READY_TONE[r.state]}>{READY_FA[r.state]}</Chip></td><td className="sub">{r.blockers.join('؛ ') || (r.items.filter((i) => i.state === 'pending').map((i) => i.title).join('؛ ') || '—')}</td><td className="num">{fa(r.items.length)}</td></tr> })}</tbody></table></div>
+          <tbody>{list.map((a) => { const r = m.insights.get(a.id)!.readiness; return <tr key={a.id} style={{ cursor: 'pointer' }} {...pressable(() => setSel(a.id), { row: true })}><td>{a.title}</td><td><Chip tone={READY_TONE[r.state]}>{READY_FA[r.state]}</Chip></td><td className="sub">{r.blockers.join('؛ ') || (r.items.filter((i) => i.state === 'pending').map((i) => i.title).join('؛ ') || '—')}</td><td className="num">{fa(r.items.length)}</td></tr> })}</tbody></table></div>
       </Section>
       {cur && (
         <Section title={`پیش‌نیازهای «${m.ex.actById.get(cur.activityId)?.title}»`}>

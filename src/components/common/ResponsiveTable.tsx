@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { pressable } from '../../lib/pressable'
 
 export interface ResponsiveTableColumn<T> {
   key: string
@@ -52,7 +53,7 @@ export function ResponsiveTable<T>({
             {rows.map((row) => (
               <tr
                 key={rowKey(row)}
-                onClick={() => onRowClick?.(row)}
+                {...pressable(onRowClick ? () => onRowClick(row) : undefined, { row: true })}
                 className={onRowClick ? 'cursor-pointer hover:bg-white/[0.03] transition-colors' : ''}
               >
                 {columns.map((c) => (
@@ -70,7 +71,7 @@ export function ResponsiveTable<T>({
         {rows.map((row) => (
           <div
             key={rowKey(row)}
-            onClick={() => onRowClick?.(row)}
+            {...pressable(onRowClick ? () => onRowClick(row) : undefined)}
             className={`p-3 ${onRowClick ? 'cursor-pointer active:bg-white/[0.03] transition-colors' : ''}`}
           >
             {primaryCols.length > 0 && (

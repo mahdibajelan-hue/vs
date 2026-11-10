@@ -85,14 +85,14 @@ export function DocumentsGallery({
           <div key={category} className="space-y-1.5 rounded-xl border border-white/10 p-3">
             <p className="flex items-center gap-1.5 text-[12px] font-bold">
               <FolderOpen size={13} className="text-purple-300" /> {DOC_CATEGORY_LABEL_FA[category]}
-              <span className="num text-[10px] font-normal text-muted">({count.toLocaleString('fa-IR')})</span>
+              <span className="num text-[11px] font-normal text-muted">({count.toLocaleString('fa-IR')})</span>
             </p>
-            {category === 'OTHER' && <p className="text-[10px] text-muted">مدارکی که پیش از بارگذاری تفکیکی ثبت شده‌اند یا دسته‌ی خاصی ندارند.</p>}
+            {category === 'OTHER' && <p className="text-[11px] text-muted">مدارکی که پیش از بارگذاری تفکیکی ثبت شده‌اند یا دسته‌ی خاصی ندارند.</p>}
             {groups.map((g) => (
               <div key={g.key} className="space-y-1">
                 {g.label && <p className="text-[10.5px] text-secondary">{g.label}</p>}
                 {g.items.length === 0 ? (
-                  <p className="text-[10px] text-muted">— مدرکی پیوست نشده</p>
+                  <p className="text-[11px] text-muted">— مدرکی پیوست نشده</p>
                 ) : (
                   <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
                     {g.items.map((d) => (

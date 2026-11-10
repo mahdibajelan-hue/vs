@@ -57,7 +57,7 @@ export function MetricCard({
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <Icon size={12} style={{ color }} className="shrink-0" />
-          <span className="fin-text-secondary truncate text-[10px] font-semibold leading-4 tracking-[0.01em]">{label}</span>
+          <span className="fin-text-secondary truncate text-[11px] font-semibold leading-4 tracking-[0.01em]">{label}</span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {status && <span className="h-1.5 w-1.5 rounded-full" style={{ background: statusDot[status] }} />}
@@ -70,7 +70,7 @@ export function MetricCard({
       </div>
       <p className={`num fin-text truncate font-extrabold leading-tight ${emphasize ? 'text-xl' : 'text-lg'}`}>{value}</p>
       {trend && (
-        <p className="flex items-center gap-1 text-[10px] font-bold" style={{ color: trendGood ? 'var(--fin-good)' : 'var(--fin-bad)' }}>
+        <p className="flex items-center gap-1 text-[11px] font-bold" style={{ color: trendGood ? 'var(--fin-good)' : 'var(--fin-bad)' }}>
           {trendUp ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
           {Math.abs(trend.pct).toLocaleString('fa-IR', { maximumFractionDigits: 1 })}٪ نسبت به ماه قبل
         </p>
@@ -95,8 +95,8 @@ export function MiniStatCard({ icon: Icon, label, value, color, sub }: { icon: L
         <Icon size={13} style={{ color }} />
       </div>
       <p className="num fin-text text-lg font-extrabold">{value}</p>
-      <p className="fin-text-secondary text-[10px] font-medium leading-4">{label}</p>
-      {sub && <p className="num fin-text-muted text-[9px]">{sub}</p>}
+      <p className="fin-text-secondary text-[11px] font-medium leading-4">{label}</p>
+      {sub && <p className="num fin-text-muted text-[11px]">{sub}</p>}
     </div>
   )
 }
@@ -234,7 +234,7 @@ export function AlertFeed({ title, icon, items }: { title: string; icon?: ReactN
               <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: ALERT_TONE[a.severity] }} />
               <p className="min-w-0 flex-1 text-[11.5px] leading-5 fin-text">{a.text}</p>
               <span
-                className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold"
+                className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold"
                 style={{ background: `${ALERT_TONE[a.severity]}1a`, color: ALERT_TONE[a.severity] }}
               >
                 {a.daysLabel}
@@ -267,7 +267,7 @@ export function RankedProgressTable({ title, icon, rows, valueLabel }: { title: 
       ) : (
         <table className="w-full text-right text-[11px]">
           <thead>
-            <tr className="fin-text-muted text-[10px]">
+            <tr className="fin-text-muted text-[11px]">
               <th className="pb-2 font-medium">درصد پیشرفت</th>
               <th className="pb-2 font-medium">{valueLabel}</th>
               <th className="pb-2 font-medium">مورد</th>
@@ -314,7 +314,7 @@ export function SimpleTable<T extends { id: string }>({ title, icon, columns, ro
         <div className="overflow-x-auto">
           <table className="w-full min-w-[420px] text-right text-[11px]">
             <thead>
-              <tr className="fin-text-muted text-[10px]">
+              <tr className="fin-text-muted text-[11px]">
                 {columns.map((c) => (
                   <th key={c.key} className="pb-2 font-medium">
                     {c.label}

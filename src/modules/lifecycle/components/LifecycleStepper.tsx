@@ -47,7 +47,7 @@ export function LifecycleStepper({
                 style={{ background: bg, borderColor, cursor: onSelectStage ? 'pointer' : 'default' }}
               >
                 <div className="mb-1 flex items-center justify-between gap-1">
-                  <span className="text-[9px] text-muted">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="text-[11px] text-muted">{String(i + 1).padStart(2, '0')}</span>
                   {gate && (
                     <span
                       className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -65,7 +65,7 @@ export function LifecycleStepper({
                 <div className={`truncate text-[11px] leading-tight ${isCurrent ? 'font-extrabold' : 'font-medium'}`}>
                   {stage.nameFa || STAGE_LABEL_FA[stage.stageKey as StageKey] || stage.stageKey}
                 </div>
-                {isCurrent && <div className="mt-0.5 text-[9px] text-brand-400">مرحله جاری</div>}
+                {isCurrent && <div className="mt-0.5 text-[11px] text-brand-400">مرحله جاری</div>}
               </button>
             </li>
           )

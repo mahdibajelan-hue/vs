@@ -173,7 +173,7 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
               <SectionHeading icon={Target} accent="#8b5cf6">تحلیل شکاف شایستگی</SectionHeading>
               <div className="glass-panel rounded-2xl border border-violet-400/25 bg-violet-500/[0.04] p-4">
                 <p className="text-[11.5px] leading-7 text-secondary">{content.competency_gap_narrative}</p>
-                <p className="mt-2 text-[9.5px] text-muted">بر پایه همان اعداد جدول شکاف شایستگی در صفحه نتایج — «شواهد ناکافی» به‌عنوان نامعلوم تفسیر شده، نه ضعف.</p>
+                <p className="mt-2 text-[11px] text-muted">بر پایه همان اعداد جدول شکاف شایستگی در صفحه نتایج — «شواهد ناکافی» به‌عنوان نامعلوم تفسیر شده، نه ضعف.</p>
               </div>
             </>
           )}
@@ -266,7 +266,7 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
                         {d.evidence.length > 0 && (
                           <ul className="mt-1.5 space-y-0.5">
                             {d.evidence.map((e, ei) => (
-                              <li key={ei} className="flex items-start gap-1.5 text-[10px] leading-5 text-muted">
+                              <li key={ei} className="flex items-start gap-1.5 text-[11px] leading-5 text-muted">
                                 <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-sky-300" /> {e}
                               </li>
                             ))}
@@ -314,7 +314,7 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {content.training_recommendations.length > 0 && (
                   <div className="rounded-xl border border-teal-400/20 bg-teal-500/[0.06] p-3">
-                    <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold text-teal-200">
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold text-teal-200">
                       <GraduationCap size={12} /> پیشنهادهای آموزشی
                     </p>
                     <ul className="space-y-1">
@@ -328,7 +328,7 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
                 )}
                 {content.career_development_paths.length > 0 && (
                   <div className="rounded-xl border border-purple-400/20 bg-purple-500/[0.06] p-3">
-                    <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold text-purple-200">
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold text-purple-200">
                       <Compass size={12} /> مسیرهای توسعه شغلی
                     </p>
                     <ul className="space-y-1">
@@ -360,9 +360,9 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
                       </button>
                       {(q.competency || q.dimension_key) && (
                         <div className="mt-1 flex flex-wrap gap-1.5">
-                          {q.competency && <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-200">{q.competency}</span>}
+                          {q.competency && <span className="rounded-full border border-sky-400/25 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-200">{q.competency}</span>}
                           {q.dimension_key && (
-                            <span className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2 py-0.5 text-[10px] text-indigo-200">{q.dimension_key}</span>
+                            <span className="rounded-full border border-indigo-400/25 bg-indigo-500/10 px-2 py-0.5 text-[11px] text-indigo-200">{q.dimension_key}</span>
                           )}
                         </div>
                       )}
@@ -417,7 +417,7 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
               <div className="space-y-1.5">
                 {content.evidence.map((e, i) => (
                   <div key={i} className="rounded-lg border border-white/5 bg-white/[0.02] p-2 text-[10.5px] leading-6 text-secondary">
-                    <span className="ml-1.5 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-muted">{e.source_type}</span>
+                    <span className="ml-1.5 rounded-full bg-white/10 px-1.5 py-0.5 text-[11px] text-muted">{e.source_type}</span>
                     {e.note}
                   </div>
                 ))}
@@ -425,7 +425,7 @@ export function CandidateAiAnalysisStage({ assessment, nav, onExitToHub }: Candi
             </div>
           )}
 
-          <div className="flex items-center justify-between text-[10px] text-muted">
+          <div className="flex items-center justify-between text-[11px] text-muted">
             <span className="flex items-center gap-1">
               <BadgeCheck size={11} /> مدل: {analysis!.model} · سطح اطمینان: {content.confidence === 'high' ? 'بالا' : content.confidence === 'medium' ? 'متوسط' : 'پایین'}
             </span>
@@ -464,7 +464,7 @@ function DimensionRow({ label, dim, expanded, onToggle }: { label: string; dim: 
           {dim.evidence.length > 0 && (
             <ul className="space-y-0.5">
               {dim.evidence.map((e, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-[10px] leading-5 text-muted">
+                <li key={i} className="flex items-start gap-1.5 text-[11px] leading-5 text-muted">
                   <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-indigo-300" /> {e}
                 </li>
               ))}
@@ -486,7 +486,7 @@ function ListCard({ icon, title, items, tone }: { icon: React.ReactNode; title: 
   if (items.length === 0) return null
   return (
     <div className={`rounded-xl border p-3 ${toneClasses[tone]}`}>
-      <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold">
+      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold">
         {icon} {title}
       </p>
       <ul className="space-y-1">

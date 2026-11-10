@@ -25,7 +25,7 @@ export const decisionsRequiredWidget: WidgetDefinition<Decision[]> = {
             <div key={d.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2.5 py-1.5">
               <div className="min-w-0">
                 <p className="truncate text-xs font-medium">{d.title}</p>
-                <p className="text-[10px] text-muted">{DECISION_STATUS_LABEL_FA[d.status]}</p>
+                <p className="text-[11px] text-muted">{DECISION_STATUS_LABEL_FA[d.status]}</p>
               </div>
               {dueSoon ? <ToneBadge tone="critical" label="مهلت رسیده" /> : <ToneBadge tone="info" />}
             </div>
@@ -54,7 +54,7 @@ export const managementActionsWidget: WidgetDefinition<RastaAction[]> = {
             <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 px-2.5 py-1.5">
               <div className="min-w-0">
                 <p className="truncate text-xs font-medium">{a.title}</p>
-                <p className="text-[10px] text-muted">
+                <p className="text-[11px] text-muted">
                   {RASTA_ACTION_STATUS_LABEL_FA[a.status]} · اولویت {RASTA_ACTION_PRIORITY_LABEL_FA[a.priority]}
                 </p>
               </div>

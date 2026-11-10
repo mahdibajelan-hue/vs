@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { parseNum } from '../../../finance/components/fn'
+import { parseNum } from '../../../../lib/parseNum'
 
 /** Decimal field that keeps what is being typed («۰.», «۲٫۵۰»), accepts Persian digits and the Persian decimal mark, and reports the parsed number. */
 export function DecInput({ value, onValue, label, id, className, placeholder }: { value: number; onValue: (n: number) => void; label?: string; id?: string; className?: string; placeholder?: string }) {

@@ -85,10 +85,10 @@ function DecisionsTab({ masterProjectId }: { masterProjectId: string }) {
           <textarea value={form.impact} onChange={(e) => setForm({ ...form, impact: e.target.value })} placeholder="اثر/پیامد" className="input" rows={2} />
           <textarea value={form.recommendedAction} onChange={(e) => setForm({ ...form, recommendedAction: e.target.value })} placeholder="اقدام پیشنهادی" className="input" rows={2} />
           <label className="block">
-            <span className="mb-1 block text-[10px] text-muted">مهلت تصمیم‌گیری</span>
+            <span className="mb-1 block text-[11px] text-muted">مهلت تصمیم‌گیری</span>
             <input type="date" value={form.requiredBy} onChange={(e) => setForm({ ...form, requiredBy: e.target.value })} className="input" />
           </label>
-          <button onClick={submit} disabled={creating || !form.title.trim()} className="flex items-center gap-1.5 rounded-lg bg-teal-500 px-3 py-2 text-xs font-bold text-white hover:bg-teal-400 disabled:opacity-40">
+          <button onClick={submit} disabled={creating || !form.title.trim()} className="flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-2 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-40">
             {creating && <Loader2 size={12} className="animate-spin" />} ثبت تصمیم
           </button>
         </div>
@@ -105,10 +105,10 @@ function DecisionsTab({ masterProjectId }: { masterProjectId: string }) {
                   <p className="text-sm font-bold">{d.title}</p>
                   {d.description && <p className="mt-0.5 text-[11px] text-secondary">{d.description}</p>}
                 </div>
-                <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-muted">{DECISION_STATUS_LABEL_FA[d.status]}</span>
+                <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-muted">{DECISION_STATUS_LABEL_FA[d.status]}</span>
               </div>
               {d.recommendedAction && <p className="mt-1.5 text-[11px] text-secondary">پیشنهاد: {d.recommendedAction}</p>}
-              {d.requiredBy && <p className="mt-1 text-[10px] text-muted">مهلت: {formatJalali(d.requiredBy)}</p>}
+              {d.requiredBy && <p className="mt-1 text-[11px] text-muted">مهلت: {formatJalali(d.requiredBy)}</p>}
               {d.status === 'pending' || d.status === 'in_review' ? (
                 finalizing?.id === d.id ? (
                   <div className="mt-2 space-y-1.5">
@@ -124,7 +124,7 @@ function DecisionsTab({ masterProjectId }: { masterProjectId: string }) {
                       <button
                         onClick={submitFinal}
                         disabled={!rationale.trim()}
-                        className="rounded-full bg-teal-500 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-teal-400 disabled:opacity-40"
+                        className="rounded-full bg-teal-700 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-teal-800 disabled:opacity-40"
                       >
                         ثبت {DECISION_STATUS_LABEL_FA[finalizing.status]}
                       </button>
@@ -133,7 +133,7 @@ function DecisionsTab({ masterProjectId }: { masterProjectId: string }) {
                           setFinalizing(null)
                           setRationale('')
                         }}
-                        className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] text-secondary hover:bg-white/5"
+                        className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-secondary hover:bg-white/5"
                       >
                         انصراف
                       </button>
@@ -145,7 +145,7 @@ function DecisionsTab({ masterProjectId }: { masterProjectId: string }) {
                       <button
                         key={st}
                         onClick={() => setDecisionStatus(d.id, masterProjectId, st)}
-                        className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] text-secondary hover:bg-white/5"
+                        className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-secondary hover:bg-white/5"
                       >
                         {DECISION_STATUS_LABEL_FA[st]}
                       </button>
@@ -154,25 +154,25 @@ function DecisionsTab({ masterProjectId }: { masterProjectId: string }) {
                       <button
                         key={st}
                         onClick={() => setFinalizing({ id: d.id, status: st })}
-                        className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] text-secondary hover:bg-white/5"
+                        className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-secondary hover:bg-white/5"
                       >
                         {DECISION_STATUS_LABEL_FA[st]}
                       </button>
                     ))}
-                    <button onClick={() => { setCancelling(d.id); setCancelReason('') }} className="rounded-full border border-red-400/30 px-2.5 py-1 text-[10px] text-red-300 hover:bg-red-500/10">لغو با دلیل</button>
+                    <button onClick={() => { setCancelling(d.id); setCancelReason('') }} className="rounded-full border border-red-400/30 px-2.5 py-1 text-[11px] text-red-300 hover:bg-red-500/10">لغو با دلیل</button>
                     {cancelling === d.id && (
                       <div className="mt-1.5 w-full space-y-1.5">
                         <textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="چرا این تصمیم دیگر لازم نیست؟ تصمیم حذف نمی‌شود و دلیل لغو در سابقه می‌ماند." className="input" rows={2} autoFocus />
                         <div className="flex gap-1.5">
-                          <button disabled={!cancelReason.trim()} onClick={async () => { await cancelDecision(d.id, masterProjectId, cancelReason); setCancelling(null) }} className="rounded-full bg-red-500/80 px-2.5 py-1 text-[10px] font-bold text-white disabled:opacity-40">ثبت لغو</button>
-                          <button onClick={() => setCancelling(null)} className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] text-secondary">انصراف</button>
+                          <button disabled={!cancelReason.trim()} onClick={async () => { await cancelDecision(d.id, masterProjectId, cancelReason); setCancelling(null) }} className="rounded-full bg-red-500/80 px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-40">ثبت لغو</button>
+                          <button onClick={() => setCancelling(null)} className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-secondary">انصراف</button>
                         </div>
                       </div>
                     )}
                   </div>
                 )
               ) : (
-                <p className="mt-2 text-[10px] text-muted">
+                <p className="mt-2 text-[11px] text-muted">
                   نتیجه نهایی: {DECISION_STATUS_LABEL_FA[d.status]}
                   {d.decidedAt ? ` — ${formatJalali(d.decidedAt.slice(0, 10))}` : ''}
                   {d.finalDecision ? ` — ${d.finalDecision}` : ''}
@@ -229,11 +229,11 @@ function ActionsTab({ masterProjectId }: { masterProjectId: string }) {
           <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="عنوان اقدام" className="input" />
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-[10px] text-muted">مهلت</span>
+              <span className="mb-1 block text-[11px] text-muted">مهلت</span>
               <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} className="input" />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] text-muted">اولویت</span>
+              <span className="mb-1 block text-[11px] text-muted">اولویت</span>
               <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value as RastaActionPriority })} className="input">
                 {RASTA_ACTION_PRIORITIES.map((p) => (
                   <option key={p} value={p}>
@@ -243,7 +243,7 @@ function ActionsTab({ masterProjectId }: { masterProjectId: string }) {
               </select>
             </label>
           </div>
-          <button onClick={submit} disabled={creating || !form.title.trim()} className="flex items-center gap-1.5 rounded-lg bg-teal-500 px-3 py-2 text-xs font-bold text-white hover:bg-teal-400 disabled:opacity-40">
+          <button onClick={submit} disabled={creating || !form.title.trim()} className="flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-2 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-40">
             {creating && <Loader2 size={12} className="animate-spin" />} ثبت اقدام
           </button>
         </div>
@@ -262,7 +262,7 @@ function ActionsTab({ masterProjectId }: { masterProjectId: string }) {
               <div className="min-w-0">
                 <p className="truncate text-xs font-bold">{a.title}</p>
                 <MissionOriginChip recordId={a.id} className="mt-1" />
-                <p className="mt-0.5 text-[10px] text-muted">
+                <p className="mt-0.5 text-[11px] text-muted">
                   اولویت {RASTA_ACTION_PRIORITY_LABEL_FA[a.priority]}
                   {a.dueDate && ` · مهلت ${formatJalali(a.dueDate)}`}
                 </p>
@@ -272,7 +272,7 @@ function ActionsTab({ masterProjectId }: { masterProjectId: string }) {
                 <select
                   value={a.status}
                   onChange={(e) => setActionStatus(a.id, masterProjectId, e.target.value as RastaActionStatus)}
-                  className="rounded-lg bg-black/20 border border-white/10 px-2 py-1 text-[10px]"
+                  className="rounded-lg bg-black/20 border border-white/10 px-2 py-1 text-[11px]"
                 >
                   {RASTA_ACTION_STATUSES.map((st) => (
                     <option key={st} value={st}>
@@ -319,11 +319,11 @@ function DecisionRegister({ masterProjectId }: { masterProjectId: string }) {
       {!list.length ? <p className="py-8 text-center text-xs text-muted">تصمیمی در این دسته ثبت نشده است</p> : list.map((r) => (
         <div key={r.id} className={`glass-panel rounded-2xl p-3 ${r.voided ? 'opacity-60' : ''}`}>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ color: LEVEL_FA[r.level].c, background: `${LEVEL_FA[r.level].c}1f` }}>{LEVEL_FA[r.level].label}</span>
+            <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ color: LEVEL_FA[r.level].c, background: `${LEVEL_FA[r.level].c}1f` }}>{LEVEL_FA[r.level].label}</span>
             <b className="text-xs">{r.title}</b>
             {r.outcome && r.outcome !== r.title && <span className="text-[11px] text-secondary">— {r.outcome}</span>}
-            {r.voided && <span className="text-[10px] text-red-300">لغو/ابطال‌شده</span>}
-            <span className="ms-auto text-[10px] text-muted">{formatJalali(r.at.slice(0, 10))}{r.due_by ? ` · موعد ${formatJalali(r.due_by)}` : ''}</span>
+            {r.voided && <span className="text-[11px] text-red-300">لغو/ابطال‌شده</span>}
+            <span className="ms-auto text-[11px] text-muted">{formatJalali(r.at.slice(0, 10))}{r.due_by ? ` · موعد ${formatJalali(r.due_by)}` : ''}</span>
           </div>
           {r.rationale && <p className="mt-1 text-[11px] leading-5 text-secondary">{r.rationale}</p>}
         </div>

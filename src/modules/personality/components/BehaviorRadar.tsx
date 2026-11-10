@@ -91,7 +91,7 @@ export function BehaviorOverview({ rows, alignment, hasJobProfile, validityFacto
           <div key={f.familyKey} className="fx-sub p-2.5" style={tone(f.tone)}>
             <p className="fx-tone-text truncate text-[10.5px] font-bold">{f.familyLabelFa}</p>
             <p className="num text-lg font-black">{f.average == null ? '—' : fa(f.average)}</p>
-            <p className="fx-muted text-[10px]">{fa(f.count)} بُعد{f.below > 0 ? ` · ${fa(f.below)} زیر الزام` : ''}</p>
+            <p className="fx-muted text-[11px]">{fa(f.count)} بُعد{f.below > 0 ? ` · ${fa(f.below)} زیر الزام` : ''}</p>
           </div>
         ))}
       </div>

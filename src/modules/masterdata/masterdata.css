@@ -109,13 +109,12 @@ button.md-row { cursor: pointer; }
 }
 
 /* coloured section heads and rows */
-.md-sec { --c: var(--md-accent); border-inline-start: 3px solid var(--c); }
+.md-sec { --c: var(--md-accent); border-inline-start: 1px solid var(--c); }
 .md-sec .md-panel-head { background: linear-gradient(100deg, color-mix(in srgb, var(--c) 10%, transparent), transparent 70%); }
 .md-sec-ico { --tc: var(--c); display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 10px; background: color-mix(in srgb, var(--c) 16%, var(--md-surface)); color: var(--tc); }
-.md-stripe { border-inline-start: 3px solid var(--c, transparent); }
-.md-card[style*='--c'] { border-inline-start: 3px solid var(--c); }
+.md-stripe { border-inline-start: 1px solid var(--c, transparent); }
+.md-card[style*='--c'] { border-color: color-mix(in srgb, var(--c) 35%, var(--md-line, transparent)); }
 .md-tile { --c: var(--md-accent); position: relative; overflow: hidden; }
-.md-tile::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--c); }
 
 /* نظارت کارگاهی — compact list of the supervision crew */
 .md-table { border-collapse: collapse; }

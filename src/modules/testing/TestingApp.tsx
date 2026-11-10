@@ -23,6 +23,7 @@ import './testing.css'
 import { todayTehran } from '../../lib/today'
 import { useRemembered } from '../../lib/navMemory'
 import { NavScroller } from '../../components/common/NavScroller'
+import { pressable } from '../../lib/pressable'
 
 const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
@@ -227,7 +228,7 @@ function LineTab({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t: T
             <tbody>{st.sections.map((s) => {
               const bf = overlapKm(s.kmFrom, s.kmTo, st.backfilled) / (s.kmTo - s.kmFrom)
               return (
-                <tr key={s.id} className="is-click" onClick={() => onOpen(s.id)}>
+                <tr key={s.id} className="is-click" {...pressable(() => onOpen(s.id), { row: true })}>
                   <td><b className="ps-code" dir="ltr">{s.code}</b></td>
                   <td className="ps-nowrap">{fa(s.kmFrom, 2)} – {fa(s.kmTo, 2)}</td>
                   <td>{fa(s.kmTo - s.kmFrom, 2)}</td>

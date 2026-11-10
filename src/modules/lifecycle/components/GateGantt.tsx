@@ -16,7 +16,7 @@ export function GateGantt({ activities, windowStart, windowEnd }: { activities: 
   const today = todayTehran()
   return (
     <div className="space-y-1">
-      <div className="flex justify-between text-[10px] text-muted"><span>{fa(start)}</span><span>{fa(end)}</span></div>
+      <div className="flex justify-between text-[11px] text-muted"><span>{fa(start)}</span><span>{fa(end)}</span></div>
       {dated.map((a) => {
         const pct = progress.get(a.id) ?? 0
         const depth = (() => { let d = 0, p = a.parentId; while (p && d < 8) { d++; p = activities.find((x) => x.id === p)?.parentId ?? null } return d })()

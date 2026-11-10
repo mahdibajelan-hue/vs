@@ -39,7 +39,7 @@
 /* budget donut */
 .pd-budget-body { display: flex; align-items: center; gap: .9rem; margin-top: .3rem; }
 .pd-donut { width: 8rem; height: 8rem; flex: none; }
-.pd-donut-l { font-size: 9.5px; fill: var(--text-muted); }
+.pd-donut-l { font-size: 11px; fill: var(--text-muted); }
 .pd-donut-v { font-size: 13px; font-weight: 800; fill: var(--text-primary); }
 .pd-budget dl { display: grid; gap: .45rem; flex: 1; min-width: 0; }
 .pd-budget dt { display: flex; align-items: center; gap: .35rem; font-size: 11px; color: var(--text-muted); }
@@ -50,7 +50,7 @@
 /* risk heat map */
 .pd-heat { display: grid; grid-template-columns: auto 1fr; grid-template-rows: 1fr auto; gap: .35rem; direction: ltr; max-width: 30rem; margin-inline: auto; }
 .pd-heat-y { display: grid; grid-template-rows: auto repeat(5, 1fr); align-items: center; font-size: 10.5px; color: var(--text-muted); text-align: center; }
-.pd-heat-y span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 10px; }
+.pd-heat-y span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; }
 .pd-heat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
 .pd-heat-cell:active { transform: scale(.96); }
 .pd-heat-cell { aspect-ratio: 1.5; min-height: 2.1rem; border-radius: .45rem; background: var(--h); color: #fff; font-size: 13px; font-weight: 800; transition: transform 140ms ease-out; }
@@ -71,7 +71,7 @@
 .pd-map { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; align-items: center; }
 .pd-map svg { width: 100%; height: auto; max-height: 17rem; }
 .pd-map-land { fill: color-mix(in srgb, #0d9488 7%, var(--bg-app)); stroke: color-mix(in srgb, var(--text-muted) 55%, transparent); stroke-width: 1.2; stroke-linejoin: round; }
-.pd-map-sea { font-size: 10px; fill: #0ea5e9; text-anchor: middle; font-style: italic; }
+.pd-map-sea { font-size: 11px; fill: #0ea5e9; text-anchor: middle; font-style: italic; }
 .pd-dot { cursor: pointer; }
 .pd-dot circle { stroke: #fff; stroke-width: 1.6; transition: r 140ms ease-out; }
 .pd-dot:focus-visible circle { stroke: #2563eb; stroke-width: 2.5; }

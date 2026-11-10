@@ -116,7 +116,7 @@ export function FinalizeAssessmentDialog({
             <button
               onClick={handleConfirm}
               disabled={saving || !ratingsLoaded}
-              className="flex items-center gap-1.5 rounded-xl bg-green-500 px-3.5 py-2 text-xs font-bold text-white hover:bg-green-400 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-xl bg-green-700 px-3.5 py-2 text-xs font-bold text-white hover:bg-green-800 disabled:opacity-50"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
               {warnings.length > 0 ? 'ثبت نهایی با وجود هشدارها' : 'ثبت نهایی'}

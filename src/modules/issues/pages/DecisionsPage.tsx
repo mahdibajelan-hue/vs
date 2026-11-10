@@ -7,6 +7,7 @@ import { todayIso } from '../lib/issueRing'
 import { useScoped } from '../lib/useScoped'
 import { useUserDirectory } from '../lib/useUsers'
 import { Kpi, Segmented } from '../components/ui'
+import { pressable } from '../../../lib/pressable'
 
 const COLOR = { on_time: 'var(--im-mint)', due_soon: 'var(--im-amber)', overdue: 'var(--im-coral)', closed: 'var(--im-muted)' } as const
 
@@ -45,7 +46,7 @@ export function DecisionsPage({ onOpenIssue }: { onOpenIssue: (issueId: string) 
             const imp = delayImpact(d.id, tasks, today)
             const iss = issues.find((i) => i.id === d.issueId)
             return (
-              <tr key={d.id} className="row" onClick={() => d.issueId && onOpenIssue(d.issueId)}>
+              <tr key={d.id} className="row" {...pressable(() => d.issueId && onOpenIssue(d.issueId), { row: true })}>
                 <td><span className="im-code">{d.code}</span></td>
                 <td className="ttl" title={d.title}>{d.title}{iss && <div className="im-helper">{iss.code} · {iss.title}</div>}</td>
                 <td style={{ color: 'var(--im-muted)' }}>{projects.find((p) => p.id === d.projectId)?.name}</td>

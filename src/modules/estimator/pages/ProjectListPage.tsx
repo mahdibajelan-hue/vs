@@ -117,7 +117,7 @@ export function ProjectListPage({ onOpenLibrary }: { onOpenLibrary: () => void }
                       <div className="flex items-end justify-between gap-2 pt-2" style={{ borderTop: `1px dashed ${BORDER}` }}>
                         {sm ? (
                           <div>
-                            <div className="text-[10px]" style={{ color: MUTED_FG }}>آخرین برآورد · {formatJalali(sm.latestAt)}</div>
+                            <div className="text-[11px]" style={{ color: MUTED_FG }}>آخرین برآورد · {formatJalali(sm.latestAt)}</div>
                             <div className="est-mono text-base font-bold" style={{ color: SAFETY }}>{fmtEUR(sm.latestEur)}</div>
                           </div>
                         ) : (
@@ -202,7 +202,7 @@ function CreateProject({ onClose }: { onClose: () => void }) {
               <Workflow size={16} style={{ color: SECTION_COLOR.tieIn }} />
               <div>
                 <div className="text-sm font-medium" style={{ color: INK }}>ایستگاه‌های انشعاب</div>
-                <div className="text-[10px]" style={{ color: MUTED_FG }}>فرستنده/گیرنده توپک و شیرهای بین‌راهی در مرحلهٔ بعد از طول خط محاسبه می‌شوند.</div>
+                <div className="text-[11px]" style={{ color: MUTED_FG }}>فرستنده/گیرنده توپک و شیرهای بین‌راهی در مرحلهٔ بعد از طول خط محاسبه می‌شوند.</div>
               </div>
             </div>
             <Stepper value={draft.tieInCount} onChange={(v) => set('tieInCount', v)} max={20} />
@@ -253,7 +253,7 @@ function Legend({ color, label }: { color: string; label: string }) {
 
 function Badge({ icon, label }: { icon: ReactNode; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: SURFACE_2, color: INK_SOFT, border: `1px solid ${BORDER}` }}>
+    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ background: SURFACE_2, color: INK_SOFT, border: `1px solid ${BORDER}` }}>
       {icon} {label}
     </span>
   )

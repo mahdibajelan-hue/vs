@@ -280,7 +280,7 @@ button.uc-kpi[aria-pressed='true'] { border-color: var(--uc-accent); background:
 .uc-stack .uc-avatar:first-child { margin-inline-start: 0; }
 
 /* KPI = strong coloured quick filters: solid colour bar + solid icon tile */
-.uc-kpi { --k: var(--uc-accent); position: relative; overflow: hidden; border-radius: 14px; padding: 16px 16px 14px; box-shadow: var(--uc-shadow); gap: 2px; border-top: 4px solid var(--k); animation: uc-rise 380ms var(--uc-ease) both; animation-delay: calc(var(--i, 0) * 55ms); }
+.uc-kpi { --k: var(--uc-accent); position: relative; overflow: hidden; border-radius: 14px; padding: 16px 16px 14px; box-shadow: var(--uc-shadow); gap: 2px; border-top: 1px solid var(--k); animation: uc-rise 380ms var(--uc-ease) both; animation-delay: calc(var(--i, 0) * 55ms); }
 .uc-kpi-icon { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; margin-bottom: 8px; border-radius: 10px; color: #fff; background: var(--k); }
 .uc-kpi-value { font-size: 30px; font-weight: 800; color: var(--k); }
 .uc-kpi-label { font-weight: 700; color: var(--uc-ink); }

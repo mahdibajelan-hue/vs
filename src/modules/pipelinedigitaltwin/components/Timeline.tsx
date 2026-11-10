@@ -88,7 +88,7 @@ export function Timeline() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowMilestones((v) => !v)}
-            className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${showMilestones ? 'border-brand-400/50 bg-brand-500/15 text-brand-300' : 'border-white/10 text-muted'}`}
+            className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${showMilestones ? 'border-brand-400/50 bg-brand-500/15 text-brand-300' : 'border-white/10 text-muted'}`}
           >
             <Flag size={10} /> نقاط عطف
           </button>
@@ -97,7 +97,7 @@ export function Timeline() {
               <button
                 key={g.value}
                 onClick={() => setGranularity(g.value)}
-                className={`px-2 py-0.5 text-[10px] font-medium transition-colors ${granularity === g.value ? 'bg-brand-500 text-white' : 'text-muted hover:bg-white/5'}`}
+                className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${granularity === g.value ? 'bg-brand-500 text-white' : 'text-muted hover:bg-white/5'}`}
               >
                 {g.label}
               </button>

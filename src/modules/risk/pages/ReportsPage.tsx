@@ -15,6 +15,7 @@ import { RM_ACTION_STATUS_LABEL_FA, RM_ACTION_TYPE_LABEL_FA, RM_KRI_STATE_LABEL_
 import { useCategoryLabel } from '../components/rk'
 import { supabase } from '../../../lib/supabaseClient'
 import type { PageProps } from '../RiskApp'
+import { pressable } from '../../../lib/pressable'
 
 type Cell = string | number | null
 interface Rep { headers: string[]; rows: Cell[][]; riskIds: (string | null)[]; note?: string }
@@ -109,7 +110,7 @@ export function ReportsPage({ onOpenRisk }: PageProps) {
           {rep.note && <div className="im-helper" style={{ marginBottom: 8 }}>{rep.note}</div>}
           {rep.rows.length === 0 ? <div className="im-empty">دادهای برای این گزارش نیست.</div> : (
             <div className="im-table-wrap" style={{ maxHeight: '68vh', overflow: 'auto' }}><table className="im-table"><thead><tr>{rep.headers.map((h) => <th key={h}>{h}</th>)}</tr></thead><tbody>
-              {rep.rows.slice(0, 500).map((r, i) => <tr key={i} className={rep.riskIds[i] ? 'rk-row-click' : ''} onClick={() => rep.riskIds[i] && onOpenRisk(rep.riskIds[i]!)}>{r.map((c, j) => <td key={j} className={typeof c === 'number' ? '' : 'im-helper'} style={{ color: 'var(--im-text)', fontSize: 12 }}>{c === null ? '' : String(c)}</td>)}</tr>)}
+              {rep.rows.slice(0, 500).map((r, i) => <tr key={i} className={rep.riskIds[i] ? 'rk-row-click' : ''} {...pressable(() => rep.riskIds[i] && onOpenRisk(rep.riskIds[i]!), { row: true })}>{r.map((c, j) => <td key={j} className={typeof c === 'number' ? '' : 'im-helper'} style={{ color: 'var(--im-text)', fontSize: 12 }}>{c === null ? '' : String(c)}</td>)}</tr>)}
             </tbody></table></div>
           )}
           {rep.rows.length > 500 && <div className="im-helper" style={{ marginTop: 6 }}>۵۰۰ ردیف اول نمایش داده می‌شود؛ خروجی Excel/CSV/چاپ همهٔ ردیف‌هاست. ردیف‌های دارای پیوند را بزنید تا ریسک باز شود (Drill-down).</div>}

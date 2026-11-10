@@ -75,7 +75,7 @@ export function DevelopmentPlanSummary({
         <p className="flex items-center gap-1.5 text-sm font-bold">
           <Sprout size={15} className="text-teal-300" /> برنامه توسعه فردی
           {plan && (
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${PLAN_STATUS_META[plan.status].color}1f`, color: PLAN_STATUS_META[plan.status].color }}>
+            <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: `${PLAN_STATUS_META[plan.status].color}1f`, color: PLAN_STATUS_META[plan.status].color }}>
               {PLAN_STATUS_META[plan.status].label}
             </span>
           )}

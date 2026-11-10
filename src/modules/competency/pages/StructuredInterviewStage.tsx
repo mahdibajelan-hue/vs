@@ -301,7 +301,7 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
           {derivable.length > 0 && !readOnly && (
             <div className="flex flex-wrap items-center gap-2 text-[11.5px]">
               <span className="fx-text-2">{derivable.length.toLocaleString('fa-IR')} شایستگی را می‌توان از نمرهٔ سؤال‌های فنی شما پر کرد (بدون پرسش دوباره؛ قابل‌ویرایش).</span>
-              <button type="button" onClick={fillFromTechnical} className="flex min-h-9 items-center gap-1.5 rounded-lg bg-sky-600 px-3 text-[11.5px] font-bold text-white hover:bg-sky-500">پر کردن از پاسخ سؤال‌های فنی</button>
+              <button type="button" onClick={fillFromTechnical} className="flex min-h-9 items-center gap-1.5 rounded-lg bg-sky-700 px-3 text-[11.5px] font-bold text-white hover:bg-sky-800">پر کردن از پاسخ سؤال‌های فنی</button>
             </div>
           )}
           {minutes.all.total > COMFORTABLE_SESSION_MINUTES && !leanActive && <p className="text-[11.5px] font-bold" style={tone('#f59e0b')}><span className="fx-tone-text">این جلسه از ۹۰ دقیقه بیشتر است؛ تعداد سؤال‌های فنی را در طراحی آزمون کم کنید یا مصاحبه را فشرده نگه دارید.</span></p>}
@@ -427,7 +427,7 @@ export function StructuredInterviewStage({ assessment, isLead, onContinue }: Str
               data-no-leave-guard
               onClick={handleSaveAll}
               disabled={saving || saveable.length === 0}
-              className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-5 text-[13px] font-extrabold text-white shadow-lg shadow-sky-900/20 transition-colors hover:bg-sky-500 disabled:opacity-40 sm:flex-none"
+              className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-sky-700 px-5 text-[13px] font-extrabold text-white shadow-lg shadow-sky-900/20 transition-colors hover:bg-sky-800 disabled:opacity-40 sm:flex-none"
             >
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} ثبت امتیازها
               {saveable.length > 0 && <span className="num rounded-full bg-white/20 px-1.5 text-[11px]">{saveable.length.toLocaleString('fa-IR')}</span>}

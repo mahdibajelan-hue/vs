@@ -10,6 +10,7 @@ import { isOpenAction } from '../lib/riskState'
 import { LevelChip, ScoreTriple } from '../components/rk'
 import { RM_ACTION_STATUS_LABEL_FA, RM_ACTION_TYPE_LABEL_FA } from '../types'
 import type { PageProps } from '../RiskApp'
+import { pressable } from '../../../lib/pressable'
 
 const ST_COLOR: Record<string, string> = { not_started: '#94a3b8', in_progress: '#0ea5e9', completed: '#22c55e', blocked: '#ef4444', cancelled: '#64748b' }
 
@@ -90,7 +91,7 @@ export function ResponsePage({ onOpenRisk }: PageProps) {
               const r = riskOf.get(a.riskId)!
               const late = isOpenAction(a) && a.dueDate && a.dueDate < today ? Math.round((Date.parse(today) - Date.parse(a.dueDate)) / 86400000) : 0
               return (
-                <tr key={a.id} className="rk-row-click" onClick={() => onOpenRisk(r.id, 'response')}>
+                <tr key={a.id} className="rk-row-click" {...pressable(() => onOpenRisk(r.id, 'response'), { row: true })}>
                   <td><span className="im-code">{r.code}</span><div className="im-helper" style={{ fontSize: 10.5 }}>{r.title.slice(0, 40)}</div></td>
                   <td style={{ textDecoration: a.status === 'completed' ? 'line-through' : undefined, minWidth: 220 }}>{a.description}{a.status === 'blocked' && <div className="rk-flag" style={{ ['--c' as string]: '#ef4444' }}>{a.blockedReason}</div>}</td>
                   <td className="im-helper">{RM_ACTION_TYPE_LABEL_FA[a.actionType]}</td>

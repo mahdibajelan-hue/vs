@@ -96,13 +96,13 @@ export function ScheduleEditModal({ projectId, line, schedules, onClose }: Sched
                 <p className="text-sm font-bold">{ACTIVITY_LABEL_FA[kind]}</p>
                 <div className="flex items-center gap-1.5">
                   {existing?.consultantApprovedAt ? (
-                    <span className="flex items-center gap-1 rounded-full border border-green-400/40 bg-green-500/10 px-2 py-0.5 text-[10px] text-green-300">
+                    <span className="flex items-center gap-1 rounded-full border border-green-400/40 bg-green-500/10 px-2 py-0.5 text-[11px] text-green-300">
                       <Check size={10} /> تایید مشاور
                     </span>
                   ) : (
                     row.plannedStart &&
                     row.plannedEnd && (
-                      <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-muted">در انتظار تایید مشاور</span>
+                      <span className="rounded-full border border-white/15 px-2 py-0.5 text-[11px] text-muted">در انتظار تایید مشاور</span>
                     )
                   )}
                   <span

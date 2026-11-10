@@ -69,7 +69,7 @@ export function EvidencePanel({ item, onClose }: { item: ChecklistItem; onClose?
     >
       {/* Attached document */}
       <div>
-        <label className="mb-1 flex items-center gap-1.5 text-[10px] font-bold text-secondary">
+        <label className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-secondary">
           <Paperclip size={11} /> مدرک پشتیبان
           {item.requiresDocument && <span style={{ color: STATUS_COLOR.red }}>*</span>}
         </label>
@@ -78,13 +78,13 @@ export function EvidencePanel({ item, onClose }: { item: ChecklistItem; onClose?
           <div className="flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-1.5"
             style={{ borderColor: `${STATUS_COLOR.green}44`, background: `${STATUS_COLOR.green}0d` }}>
             <Check size={12} style={{ color: STATUS_COLOR.green }} />
-            <span className="min-w-0 flex-1 truncate text-[10px]">{item.evidenceLabel || 'مدرک پیوست‌شده'}</span>
-            <button onClick={openDoc} className="flex items-center gap-1 text-[10px] text-sky-400 hover:underline">
+            <span className="min-w-0 flex-1 truncate text-[11px]">{item.evidenceLabel || 'مدرک پیوست‌شده'}</span>
+            <button onClick={openDoc} className="flex items-center gap-1 text-[11px] text-sky-400 hover:underline">
               <Download size={11} /> دریافت
             </button>
             <button
               onClick={() => fileRef.current?.click()}
-              className="text-[10px] text-muted hover:text-primary"
+              className="text-[11px] text-muted hover:text-primary"
             >
               جایگزینی
             </button>
@@ -93,8 +93,8 @@ export function EvidencePanel({ item, onClose }: { item: ChecklistItem; onClose?
           <div className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5"
             style={{ borderColor: 'var(--border-soft)' }}>
             <FileUp size={12} className="text-sky-400" />
-            <span className="min-w-0 flex-1 truncate text-[10px]">{pendingFile.name}</span>
-            <span className="text-[9px] text-muted">{(pendingFile.size / 1024).toFixed(0)} KB</span>
+            <span className="min-w-0 flex-1 truncate text-[11px]">{pendingFile.name}</span>
+            <span className="text-[11px] text-muted">{(pendingFile.size / 1024).toFixed(0)} KB</span>
             <button onClick={() => setPendingFile(null)} className="text-muted hover:text-primary">
               <Trash2 size={11} />
             </button>
@@ -102,7 +102,7 @@ export function EvidencePanel({ item, onClose }: { item: ChecklistItem; onClose?
         ) : (
           <button
             onClick={() => fileRef.current?.click()}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed py-2.5 text-[10px] text-muted transition-colors hover:border-sky-400/60 hover:text-sky-400"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed py-2.5 text-[11px] text-muted transition-colors hover:border-sky-400/60 hover:text-sky-400"
             style={{ borderColor: 'var(--border-soft)' }}
           >
             <FileUp size={13} /> انتخاب فایل (PDF، تصویر، Word، Excel — حداکثر ۱۵ مگابایت)
@@ -123,7 +123,7 @@ export function EvidencePanel({ item, onClose }: { item: ChecklistItem; onClose?
       </div>
 
       {/* Human-readable title for the document */}
-      <label className="block text-[10px] text-muted">
+      <label className="block text-[11px] text-muted">
         عنوان مدرک
         <input
           value={label}
@@ -135,7 +135,7 @@ export function EvidencePanel({ item, onClose }: { item: ChecklistItem; onClose?
       </label>
 
       {/* The short explanatory note */}
-      <label className="block text-[10px] text-muted">
+      <label className="block text-[11px] text-muted">
         <span className="flex items-center gap-1.5 font-bold text-secondary">
           <MessageSquareText size={11} /> توضیح کوتاه کاربر
         </span>
@@ -148,22 +148,22 @@ export function EvidencePanel({ item, onClose }: { item: ChecklistItem; onClose?
           className="mt-1 w-full resize-none rounded-lg border bg-black/20 px-2.5 py-2 text-[11px] leading-relaxed outline-none focus:border-sky-400/60"
           style={{ borderColor: 'var(--border-soft)' }}
         />
-        <span className="mt-0.5 block text-left text-[9px] text-muted">{note.length}/۵۰۰</span>
+        <span className="mt-0.5 block text-left text-[11px] text-muted">{note.length}/۵۰۰</span>
       </label>
 
-      {error && <p className="text-[10px]" style={{ color: STATUS_COLOR.red }}>{error}</p>}
+      {error && <p className="text-[11px]" style={{ color: STATUS_COLOR.red }}>{error}</p>}
 
       <div className="flex items-center gap-2">
         <button
           disabled={busy || !dirty}
           onClick={save}
-          className="flex items-center gap-1.5 rounded-lg bg-sky-500 px-3 py-1.5 text-[11px] font-medium text-white transition-opacity disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-lg bg-sky-700 px-3 py-1.5 text-[11px] font-medium text-white transition-opacity disabled:opacity-40"
         >
           {busy ? <Loader2 size={12} className="animate-spin" /> : saved ? <Check size={12} /> : null}
           {busy ? 'در حال ذخیره...' : saved ? 'ذخیره شد' : 'ذخیره مدرک و توضیح'}
         </button>
         {onClose && (
-          <button onClick={onClose} className="text-[10px] text-muted hover:text-primary">بستن</button>
+          <button onClick={onClose} className="text-[11px] text-muted hover:text-primary">بستن</button>
         )}
       </div>
     </div>

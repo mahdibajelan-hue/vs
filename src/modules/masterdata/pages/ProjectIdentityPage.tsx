@@ -233,7 +233,7 @@ export function ProjectIdentityPage({ projectId, onBack }: { projectId: string; 
                 {project.projectIdCode}
               </span>
               {project.projectCode && <span className="text-[11px] text-muted">({project.projectCode})</span>}
-              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${TONE_CLASS[PROJECT_STATUS_TONE[project.status]]}`}>
+              <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${TONE_CLASS[PROJECT_STATUS_TONE[project.status]]}`}>
                 {PROJECT_STATUS_LABEL_FA[project.status]}
               </span>
             </div>
@@ -378,7 +378,7 @@ export function ProjectIdentityPage({ projectId, onBack }: { projectId: string; 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-medium truncate">{ph.name}</p>
-                          <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-secondary">
+                          <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-secondary">
                             {PHASE_STATUS_LABEL_FA[ph.status]}
                           </span>
                         </div>
@@ -390,7 +390,7 @@ export function ProjectIdentityPage({ projectId, onBack }: { projectId: string; 
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
                           <div className="h-full rounded-full bg-brand-400" style={{ width: `${ph.progress}%` }} />
                         </div>
-                        <p className="mt-1 text-left text-[10px] text-muted num">{ph.progress}٪</p>
+                        <p className="mt-1 text-left text-[11px] text-muted num">{ph.progress}٪</p>
                       </div>
                       <button
                         onClick={() => deletePhase(ph.id, project.id)}
@@ -482,7 +482,7 @@ function SectionCard({ icon: Icon, title, action, children }: { icon: typeof Fil
 function Field({ label, value, num, dir }: { label: string; value: string; num?: boolean; dir?: 'ltr' | 'rtl' }) {
   return (
     <div>
-      <p className="text-[10px] text-muted">{label}</p>
+      <p className="text-[11px] text-muted">{label}</p>
       <p className={`text-sm ${num ? 'num' : ''}`} dir={dir}>
         {value}
       </p>
@@ -531,7 +531,7 @@ function ProjectTeamSection({
         <div className="flex flex-wrap gap-1.5">
           {assignments.map((a) => (
             <span key={a.id} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs">
-              {userName(a.userId)} <span className="text-[10px] text-muted">— {roleName(a.projectRoleId)}</span>
+              {userName(a.userId)} <span className="text-[11px] text-muted">— {roleName(a.projectRoleId)}</span>
               <button onClick={() => onRemove(a.id)} className="text-muted hover:text-red-400 transition-colors">
                 <X size={11} />
               </button>
@@ -622,7 +622,7 @@ function DependenciesSection({
         <div className="flex flex-wrap gap-1.5">
           {dependencies.map((d) => (
             <span key={d.id} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs">
-              {projectName(d.dependsOnProjectId)} <span className="text-[10px] text-muted">— {DEPENDENCY_TYPE_LABEL_FA[d.dependencyType]}</span>
+              {projectName(d.dependsOnProjectId)} <span className="text-[11px] text-muted">— {DEPENDENCY_TYPE_LABEL_FA[d.dependencyType]}</span>
               <button onClick={() => onRemove(d.id)} className="text-muted hover:text-red-400 transition-colors">
                 <X size={11} />
               </button>

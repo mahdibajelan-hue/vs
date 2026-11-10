@@ -5,6 +5,7 @@ import { PARTY_ROLE_LABEL_FA, type PartyRole } from '../types'
 import { LEVEL_COLOR, PARTY_COLOR } from '../lib/colors'
 import { Empty, PageHead, initials } from '../components/md'
 import { PartiesEditor } from '../components/PartiesEditor'
+import { pressable } from '../../../lib/pressable'
 
 const MATRIX: PartyRole[] = ['employer', 'contractor', 'design_consultant', 'supervision_consultant']
 
@@ -28,7 +29,7 @@ export function PartiesPage({ onOpen }: { onOpen: (id: string) => void }) {
             <thead><tr style={{ color: 'var(--md-ink-3)' }}><th className="px-4 py-3 text-right font-semibold">پروژه</th>{MATRIX.map((r) => <th key={r} className="px-4 py-3 text-right font-semibold" style={{ color: PARTY_COLOR[r], boxShadow: `inset 0 -2px 0 ${PARTY_COLOR[r]}` }}>{PARTY_ROLE_LABEL_FA[r].split(' (')[0]}</th>)}</tr></thead>
             <tbody>
               {projects.map((p) => (
-                <tr key={p.id} className="cursor-pointer" style={{ borderTop: '1px solid var(--md-line)' }} onClick={() => { setPid(p.id); setView('edit') }}>
+                <tr key={p.id} className="cursor-pointer" style={{ borderTop: '1px solid var(--md-line)' }} {...pressable(() => { setPid(p.id); setView('edit') }, { row: true })}>
                   <td className="px-4 py-3 font-bold">{p.shortName || p.officialName}</td>
                   {MATRIX.map((r) => <td key={r} className="px-4 py-3">{names(p.id, r).length ? names(p.id, r).join('، ') : <span className="md-badge" data-tone="warn">تعیین نشده</span>}</td>)}
                 </tr>

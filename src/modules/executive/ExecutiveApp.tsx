@@ -86,7 +86,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           </div>
           <div className="leading-tight">
             <p className="text-sm font-extrabold">مدیریت سبد پروژه‌ها</p>
-            <p className="text-[10px] text-muted">اولویت، عملکرد و تصمیم در سطح سبد</p>
+            <p className="text-[11px] text-muted">اولویت، عملکرد و تصمیم در سطح سبد</p>
           </div>
         </div>
         <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setTab(tab === 'guide' ? 'dashboard' : 'guide')} guideActive={tab === 'guide'} />

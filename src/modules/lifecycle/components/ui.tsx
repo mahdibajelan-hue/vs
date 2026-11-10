@@ -92,7 +92,7 @@ export function StatusDot({ status, size = 8 }: { status: HealthStatus; size?: n
 export function StatusPill({ status, label }: { status: HealthStatus; label?: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
       style={{ background: STATUS_COLOR[status] }}
     >
       {label ?? HEALTH_STATUS_LABEL_FA[status]}
@@ -103,7 +103,7 @@ export function StatusPill({ status, label }: { status: HealthStatus; label?: st
 export function SeverityPill({ severity, label }: { severity: WarningSeverity; label: string }) {
   return (
     <span
-      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
       style={{ background: SEVERITY_COLOR[severity] }}
     >
       {label}

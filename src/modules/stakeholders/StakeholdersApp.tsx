@@ -21,6 +21,7 @@ import { StakeholderOrbit } from './components/StakeholderOrbit'
 import { useRemembered } from '../../lib/navMemory'
 import { NavScroller } from '../../components/common/NavScroller'
 import './stakeholders.css'
+import { pressable } from '../../lib/pressable'
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
@@ -253,7 +254,7 @@ function Register({ views, onOpen }: { views: StakeholderView[]; onOpen: (id: st
             <thead><tr><th>ذینفع</th><th>گروه</th><th>قدرت / علاقه</th><th>راهبرد</th><th>نگرش</th><th>تعامل فعلی ← مطلوب</th><th>آخرین تعامل</th><th>نگرانی باز</th><th>مسئول ارتباط</th></tr></thead>
             <tbody>
               {list.map((v) => (
-                <tr key={v.s.id} onClick={() => onOpen(v.s.id)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(v.s.id) }}>
+                <tr key={v.s.id} {...pressable(() => onOpen(v.s.id), { row: true })} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(v.s.id) }}>
                   <td><span className="sh-who"><Avatar s={v.s} /><span><b>{v.s.name}</b><small><span dir="ltr">{v.s.code}</span>{v.s.organization && ` · ${v.s.organization}`}{v.s.roleTitle && ` · ${v.s.roleTitle}`}</small></span></span></td>
                   <td className="sh-muted">{CATEGORY_FA[v.s.category]}</td>
                   <td><Dots power={v.s.power} interest={v.s.interest} /></td>
@@ -326,7 +327,7 @@ function EngagementMatrix({ views, onOpen }: { views: StakeholderView[]; onOpen:
             {act.map((v) => {
               const ci = ENGAGEMENT_ORDER.indexOf(v.s.current), di = ENGAGEMENT_ORDER.indexOf(v.s.desired)
               return (
-                <tr key={v.s.id} onClick={() => onOpen(v.s.id)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(v.s.id) }}>
+                <tr key={v.s.id} {...pressable(() => onOpen(v.s.id), { row: true })} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(v.s.id) }}>
                   <td><span className="sh-who"><Avatar s={v.s} /><span><b>{v.s.name}</b><small>{QUADRANT_FA[v.quadrant].name}</small></span></span></td>
                   {ENGAGEMENT_ORDER.map((e, i) => {
                     const between = i > Math.min(ci, di) && i < Math.max(ci, di)

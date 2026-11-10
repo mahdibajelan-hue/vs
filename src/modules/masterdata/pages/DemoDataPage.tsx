@@ -160,7 +160,7 @@ export function DemoDataPage() {
           {!confirming2 ? (
             <button
               onClick={() => setConfirming2(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-xs font-medium text-white hover:bg-amber-400 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg bg-amber-700 px-4 py-2 text-xs font-medium text-white hover:bg-amber-800 transition-colors"
             >
               <Plus size={13} /> افزودن داده نمایشی مالی و تامین کالا
             </button>
@@ -174,7 +174,7 @@ export function DemoDataPage() {
                 <button
                   onClick={runFinanceMaterial}
                   disabled={busy2}
-                  className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-xs font-medium text-white hover:bg-amber-400 disabled:opacity-40 transition-colors"
+                  className="flex items-center gap-1.5 rounded-lg bg-amber-700 px-4 py-2 text-xs font-medium text-white hover:bg-amber-800 disabled:opacity-40 transition-colors"
                 >
                   {busy2 ? <Loader2 size={13} className="animate-spin" /> : <RefreshCcw size={13} />}
                   {busy2 ? progress2 || 'در حال اجرا...' : 'تایید و اجرا'}

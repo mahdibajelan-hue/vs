@@ -117,7 +117,7 @@ export function SpecsPage({
               <Segmented full value={inputs.specs.compressor.driverType}
                 onChange={(dt) => patch((d) => ({ ...d, specs: { ...d.specs, compressor: { ...d.specs.compressor, driverType: dt } } }))}
                 options={[['gasTurbine', 'درایور توربین گازی'], ['electric', 'درایور الکتروموتور']]} />
-              <p className="text-[10px] mt-2 leading-relaxed" style={{ color: MUTED_FG }}>
+              <p className="text-[11px] mt-2 leading-relaxed" style={{ color: MUTED_FG }}>
                 قیمت تجهیزات دوار از منحنی هزینه بر حسب توان اسمی محاسبه و به هزینهٔ کل ایستگاه تعمیم داده می‌شود.
               </p>
             </Section>
@@ -156,7 +156,7 @@ export function SpecsPage({
           )}
 
           <Section title="چرخهٔ عمر و زمان‌بندی" subtitle="مدت هر فاز؛ جریان نقدینگی از همین ساخته می‌شود" icon={<CalendarRange size={17} />} accent="#9085e9" defaultOpen>
-            <p className="text-[10px] mb-2" style={{ color: MUTED_FG }}>جریان نقدینگی و مدت کل پروژه به‌صورت خودکار بر اساس این مدت‌ها محاسبه می‌شود.</p>
+            <p className="text-[11px] mb-2" style={{ color: MUTED_FG }}>جریان نقدینگی و مدت کل پروژه به‌صورت خودکار بر اساس این مدت‌ها محاسبه می‌شود.</p>
             <div className="grid grid-cols-2 gap-x-3">
               <Field label="انتخاب مشاور طراح" unit="ماه" value={inputs.lifecycle.consultantSelectionMonths}
                 onChange={(v) => patch((d) => ({ ...d, lifecycle: { ...d.lifecycle, consultantSelectionMonths: v } }))} />
@@ -170,7 +170,7 @@ export function SpecsPage({
           </Section>
 
           <Section title={`اقلام بلندمدت‌تأمین (${toFa(inputs.longLeadItems.length)})`} subtitle={lateLL ? `${toFa(lateLL)} قلم دیرتر از پایان طراحی پایه آماده می‌شود` : 'اقلامی که مدت تأمینشان زمان‌بندی را تعیین می‌کند'} icon={<PackageSearch size={17} />} accent={lateLL ? '#d03b3b' : '#c98500'}>
-            <p className="text-[10px] mb-2 leading-relaxed" style={{ color: MUTED_FG }}>
+            <p className="text-[11px] mb-2 leading-relaxed" style={{ color: MUTED_FG }}>
               اقلامی که سفارش و تحویل آن‌ها زمان زیادی می‌برد و باید خیلی زودتر از شروع اجرا آغاز شود؛ اگر مدت تأمین از مجموع «انتخاب مشاور + طراحی پایه» بیشتر باشد، سفارش باید همان ابتدای طراحی آغاز شود وگرنه اجرای پروژه عقب می‌افتد.
             </p>
             <div className="space-y-2">
@@ -186,7 +186,7 @@ export function SpecsPage({
                         onChange={(e) => updateLongLead(it.id, { leadTimeMonths: Math.max(0, Number(e.target.value) || 0) })}
                         className="est-input est-mono w-16 rounded-md px-2 py-1 text-xs text-center"
                         style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK, direction: 'ltr' }} />
-                      <span className="text-[10px]" style={{ color: MUTED_FG }}>ماه</span>
+                      <span className="text-[11px]" style={{ color: MUTED_FG }}>ماه</span>
                       <button onClick={() => removeLongLead(it.id)} className="shrink-0" style={{ color: MUTED_FG }}>
                         <Trash2 size={13} />
                       </button>
@@ -195,7 +195,7 @@ export function SpecsPage({
                       placeholder="توضیحات" className="est-input w-full rounded-md px-2 py-1 text-[11px]"
                       style={{ background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK_SOFT }} />
                     {atRisk && (
-                      <p className="text-[10px] mt-1.5 flex items-center gap-1" style={{ color: '#e66767' }}><AlertTriangle size={11} />
+                      <p className="text-[11px] mt-1.5 flex items-center gap-1" style={{ color: '#e66767' }}><AlertTriangle size={11} />
                         مدت تأمین ({toFa(it.leadTimeMonths)} ماه) از دوره مشاور+طراحی پایه ({toFa(designWindow)} ماه) بیشتر است — سفارش باید زودتر آغاز شود.
                       </p>
                     )}

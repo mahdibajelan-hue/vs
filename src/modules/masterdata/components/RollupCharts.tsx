@@ -46,7 +46,7 @@ function ChartShell({ title, icon, subtitle, children }: { title: string; icon?:
         {icon}
         {title}
       </p>
-      {subtitle && <p className="mb-1.5 text-[10px] text-muted">{subtitle}</p>}
+      {subtitle && <p className="mb-1.5 text-[11px] text-muted">{subtitle}</p>}
       {children}
     </div>
   )
@@ -147,7 +147,7 @@ export function BreakdownDonut({
           </svg>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
             <p className="num text-xl font-extrabold">{formatTotal ? formatTotal(total) : total}</p>
-            <p className="text-[9px]" style={{ color: theme.textMuted }}>
+            <p className="text-[11px]" style={{ color: theme.textMuted }}>
               مجموع
             </p>
           </div>
@@ -276,7 +276,7 @@ export function ChartDrillPanel({ title, count, onClose, children }: { title: st
         <p className="text-[11px] font-bold">
           {title} ({count})
         </p>
-        <button onClick={onClose} className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] text-muted hover:bg-white/5 transition-colors">
+        <button onClick={onClose} className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] text-muted hover:bg-white/5 transition-colors">
           <X size={11} /> پاک‌کردن فیلتر
         </button>
       </div>

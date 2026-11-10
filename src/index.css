@@ -29,7 +29,7 @@
   --border-soft: rgba(148, 163, 184, 0.14);
   --text-primary: #e5edf7;
   --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-muted: #8593a8 /* 5.7:1 on panel steel — was #64748b (3.7:1) */;
 }
 
 :root[data-theme="light"] {
@@ -40,7 +40,7 @@
   --border-soft: rgba(15, 23, 42, 0.1);
   --text-primary: #0f172a;
   --text-secondary: #475569;
-  --text-muted: #64748b;
+  --text-muted: #566376 /* 5.4:1 on the light hull */;
 }
 
 * {
@@ -229,6 +229,14 @@ body {
 :root[data-theme="light"] .input {
   background: rgba(15, 23, 42, 0.04);
 }
+
+/* Keyboard focus is always visible (WCAG 2.4.7). Tailwind's `outline-none` lives in a cascade layer, so this
+   unlayered rule wins over it for keyboard focus only; components that draw their own ring (.input and the
+   like) set `outline: none` with a class selector, which still outranks this zero-specificity :where(). */
+:where(a[href], button, input, select, textarea, summary, [role="button"], [role="tab"], [role="link"], [role="option"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--color-brand-400);
+  outline-offset: 2px;
+}
 /*
  * Defense in depth for native <select> dropdown popups. The popup box itself is drawn by the OS
  * and only respects `color-scheme`, not `background`/`color` — normally :root's color-scheme
@@ -371,10 +379,7 @@ select option {
   font-family: 'Montserrat', sans-serif;
   font-weight: 800;
   letter-spacing: 0.08em;
-  background: linear-gradient(90deg, #38bdf8, #a78bfa 55%, #c9a227);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #7dd3fc;
 }
 
 .rasta-brokenline {
@@ -396,7 +401,7 @@ select option {
   height: 5px;
   border-radius: 999px;
   background: #c9a227;
-  box-shadow: 0 0 8px rgba(201, 162, 39, 0.7);
+  box-shadow: 0 2px 6px rgba(201, 162, 39, 0.4);
 }
 
 .hub-stage {
@@ -595,7 +600,7 @@ select option {
 
 .eyebrow-en {
   font-family: 'Montserrat', sans-serif;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -900,7 +905,7 @@ select option {
 /* --- type scale ----------------------------------------------------------- */
 
 .plc-eyebrow {
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -1161,7 +1166,7 @@ select option {
   align-items: center;
   border-radius: 999px;
   padding: 1.5px 8px;
-  font-size: 8.5px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.03em;
   color: #2b1706;
@@ -1387,11 +1392,7 @@ select option {
 }
 
 .chg-title-gradient {
-  background: linear-gradient(90deg, var(--text-primary) 0%, var(--chg-accent) 45%, var(--chg-cyan) 75%, var(--chg-violet) 100%);
-  background-size: 140% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--text-primary);
 }
 
 .chg-card {
@@ -1484,7 +1485,7 @@ select option {
 .chg-list-row {
   position: relative;
   overflow: hidden;
-  border-inline-start: 3px solid color-mix(in srgb, var(--row-color, var(--chg-accent)) 70%, transparent);
+  border-inline-start: 1px solid color-mix(in srgb, var(--row-color, var(--chg-accent)) 70%, transparent);
   transition: box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
 }
 .chg-list-row:hover {
@@ -1745,7 +1746,7 @@ select option {
 }
 .lp-tile-no {
   font-family: ui-monospace, monospace;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.16em;
   color: color-mix(in srgb, var(--a) 80%, white);
@@ -1753,7 +1754,7 @@ select option {
 }
 .lp-tile-body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .lp-tile-title { font-size: 0.86rem; font-weight: 800; line-height: 1.5; color: var(--text-primary, #f1f5f9); }
-.lp-tile-en { font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; color: color-mix(in srgb, var(--a) 70%, var(--text-muted, #94a3b8)); opacity: 0.9; display: none; }
+.lp-tile-en { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; color: color-mix(in srgb, var(--a) 70%, var(--text-muted, #94a3b8)); opacity: 0.9; display: none; }
 .lp-tile-desc {
   display: none;
   margin-top: 0.15rem;
@@ -1766,7 +1767,7 @@ select option {
   -webkit-box-orient: vertical;
 }
 .lp-tile-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-.lp-tile-cta { white-space: nowrap; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; color: var(--a); }
+.lp-tile-cta { white-space: nowrap; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; color: var(--a); }
 .lp-tile-arrow { flex: none; color: var(--a); transition: transform 240ms ease; }
 .lp-tile:hover .lp-tile-arrow { transform: translateX(-4px); }
 
@@ -1815,7 +1816,7 @@ select option {
   .lp-tile.is-hero { padding: 1.1rem 1.15rem; }
   .lp-tile.is-hero .lp-tile-title { font-size: 1.35rem; }
   .lp-tile.is-hero .lp-tile-desc { font-size: 12px; -webkit-line-clamp: 4; margin-top: 0.4rem; }
-  .lp-tile.is-hero .lp-tile-en { display: block; font-size: 9.5px; }
+  .lp-tile.is-hero .lp-tile-en { display: block; font-size: 11px; }
   .lp-tile.is-hero .lp-tile-cta {
     padding: 0.35rem 0.75rem;
     border-radius: 999px;
@@ -1835,13 +1836,13 @@ select option {
 .launchpad-frame.is-authed {
   --text-primary: #0f172a;
   --text-secondary: #475569;
-  --text-muted: #64748b;
+  --text-muted: #566376;
   background:
     linear-gradient(180deg, #eef1f8 0%, #dfe4ef 100%) padding-box,
     linear-gradient(165deg, rgba(34, 211, 238, 0.8), rgba(255, 255, 255, 0.5) 35%, rgba(255, 255, 255, 0.5) 65%, rgba(148, 163, 184, 0.8)) border-box;
   box-shadow: 0 -18px 60px -30px rgba(34, 211, 238, 0.4), 0 34px 80px -34px rgba(0, 0, 0, 0.9);
 }
-.launchpad-frame.is-authed .lp-brand-farin { background-image: linear-gradient(180deg, #020617, #1e293b); font-weight: 800; }
+.launchpad-frame.is-authed .lp-brand-farin { color: #0f172a; font-weight: 800; }
 .launchpad-frame.is-authed .lp-brand-fa { color: #8a6508; font-weight: 900; }
 .launchpad-frame.is-authed .lp-brand-tag { color: #0f172a; font-weight: 700; font-size: 0.95rem; }
 .launchpad-frame.is-authed .lp-hint { color: #1e293b; font-weight: 600; }
@@ -1973,7 +1974,7 @@ select option {
   .tb-btn:hover { background: color-mix(in srgb, var(--text-primary) 8%, transparent); color: var(--text-primary); }
   .tb-btn-danger:hover { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
 }
-.tb-badge { position: absolute; top: -5px; inset-inline-start: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 99px; background: #ef4444; color: #fff; font-size: 9.5px; font-weight: 800; line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--bg-app); }
+.tb-badge { position: absolute; top: -5px; inset-inline-start: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 99px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 800; line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--bg-app); }
 .tb-pop { position: absolute; z-index: 70; top: calc(100% + 8px); inset-inline-end: 0; width: min(360px, 92vw); border-radius: 16px; border: 1px solid var(--border-soft); background: var(--bg-panel-solid); color: var(--text-primary); box-shadow: 0 24px 50px -16px rgba(0, 0, 0, 0.55); animation: tb-pop 170ms cubic-bezier(0.23, 1, 0.32, 1) both; transform-origin: top; }
 @keyframes tb-pop { from { opacity: 0; transform: scale(0.97) translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .tb-pop { animation-duration: 0.01ms; } }
@@ -1981,7 +1982,7 @@ select option {
 .tb-item { transition: background-color 0.15s; background: transparent; border: 0; color: inherit; font-family: inherit; cursor: pointer; }
 
 /* ───── Launchpad sign-in card: always a deep-navy plate with light type, so it stands out from the frame in both themes ───── */
-.login-card { position: relative; background: linear-gradient(160deg, #17315c 0%, #0c1a35 100%); color: #f1f5f9; border-color: rgba(56, 189, 248, 0.6); box-shadow: 0 18px 50px -12px rgba(2, 8, 23, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05) inset, 0 0 46px rgba(34, 211, 238, 0.14); }
+.login-card { position: relative; background: linear-gradient(160deg, #17315c 0%, #0c1a35 100%); color: #f1f5f9; border-color: rgba(56, 189, 248, 0.6); box-shadow: 0 18px 50px -12px rgba(2, 8, 23, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05) inset; }
 .login-card::before { content: ''; position: absolute; inset-inline: 22px; top: 0; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, #22d3ee, #c9a227, transparent); }
 .login-card .lc-title { color: #ffffff; font-size: 0.95rem; }
 .login-card .lc-label { color: #e2e8f0; font-weight: 600; font-size: 0.8rem; }
@@ -1999,7 +2000,7 @@ select option {
 .launchpad-header .tb-btn { color: #e2e8f0; border-color: rgba(148, 163, 184, 0.45); background: rgba(255, 255, 255, 0.07); }
 .launchpad-header .tb-btn:hover { background: rgba(255, 255, 255, 0.16); color: #fff; border-color: rgba(125, 211, 252, 0.8); }
 .launchpad-header .tb-badge { box-shadow: 0 0 0 2px #000; }
-.lp-menu { background: linear-gradient(180deg, #16284a 0%, #0d1a33 100%); color: #f1f5f9; border: 1px solid rgba(125, 211, 252, 0.55) !important; box-shadow: 0 24px 54px -14px rgba(0, 0, 0, 0.75), 0 0 28px rgba(34, 211, 238, 0.14); }
+.lp-menu { background: linear-gradient(180deg, #16284a 0%, #0d1a33 100%); color: #f1f5f9; border: 1px solid rgba(125, 211, 252, 0.55) !important; box-shadow: 0 24px 54px -14px rgba(0, 0, 0, 0.75); }
 @media (max-width: 640px) { .lp-menu { position: fixed !important; left: 12px !important; right: 12px !important; top: var(--lp-menu-top, 120px) !important; width: auto !important; margin-top: 0 !important; } }
 .lp-menu .lp-menu-mail { color: #a8b8cf; }
 .lp-menu .lp-menu-item { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(148, 163, 184, 0.5); color: #fff; font-weight: 600; transition: background-color 0.15s, border-color 0.15s, transform 0.12s; }
@@ -2038,7 +2039,7 @@ select option {
   .tb-act:hover .tb-ico { background: color-mix(in srgb, var(--acc) 24%, transparent); }
   .tb-act:hover .tb-cap { color: var(--text-primary); }
 }
-.tb-act .tb-badge { top: -7px; inset-inline-start: auto; inset-inline-end: -9px; min-width: 19px; height: 19px; line-height: 19px; font-size: 10px; }
+.tb-act .tb-badge { top: -7px; inset-inline-start: auto; inset-inline-end: -9px; min-width: 19px; height: 19px; line-height: 19px; font-size: 11px; }
 /* something is waiting: the inbox chip rings a few times when the page opens, then stays tinted */
 .tb-act[data-attn] .tb-ico { background: color-mix(in srgb, var(--acc) 24%, transparent); }
 .tb-act[data-attn] .tb-ico::after { content: ''; position: absolute; inset: -1px; border-radius: inherit; box-shadow: 0 0 0 0 color-mix(in srgb, var(--acc) 60%, transparent); animation: tb-ring 1.6s cubic-bezier(0.23, 1, 0.32, 1) 0.6s 3; pointer-events: none; }
@@ -2048,7 +2049,7 @@ select option {
   .tb-user { flex-direction: column; gap: 2px; padding: 3px 6px 2px !important; border-radius: 14px !important; }
   .tb-user img, .tb-user > span:first-child, .tb-user > div:first-child { width: 28px !important; height: 28px !important; }
 }
-@media (max-width: 380px) { .tb-act { min-width: 44px; padding-inline: 3px; } .tb-cap { font-size: 9.5px; } .tb-ico { width: 30px; } }
+@media (max-width: 380px) { .tb-act { min-width: 44px; padding-inline: 3px; } .tb-cap { font-size: 11px; } .tb-ico { width: 30px; } }
 
 /* «راهنما» — set apart at the far end of the shortcut row and filled, so it reads as a different kind of button */
 .tb-guide-btn { position: relative; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; height: 38px; margin-inline-start: 12px; padding: 0 13px 0 12px; border: 0; border-radius: 999px; color: #ffffff; font: inherit; font-size: 12.5px; font-weight: 800; white-space: nowrap; cursor: pointer;
@@ -2062,7 +2063,7 @@ select option {
 @media (hover: hover) and (pointer: fine) { .tb-guide-btn:hover { filter: brightness(1.08); box-shadow: 0 8px 20px -6px rgb(190 24 93 / 0.65), inset 0 1px 0 rgb(255 255 255 / 0.22); } }
 @media (prefers-reduced-motion: reduce) { .tb-guide-btn::after { animation: none; } }
 @media (max-width: 639px) {
-  .tb-guide-btn { flex-direction: column; justify-content: center; gap: 1px; height: auto; min-width: 42px; margin-inline-start: 7px; padding: 4px 6px 3px; border-radius: 13px; font-size: 9.5px; }
+  .tb-guide-btn { flex-direction: column; justify-content: center; gap: 1px; height: auto; min-width: 42px; margin-inline-start: 7px; padding: 4px 6px 3px; border-radius: 13px; font-size: 11px; }
   .tb-guide-btn::before { inset-inline-start: -4px; }
   /* when the shortcut row sits on its own line, the guide goes to the opposite (left) end of it */
   .tb-bar:has(.tb-guide-btn) { flex-grow: 1; }
@@ -2121,7 +2122,7 @@ select option {
   .tb-bar { gap: 1px !important; max-width: 100%; }
   .tb-act { min-width: 42px; padding: 3px 2px 2px; gap: 2px; }
   .tb-act .tb-ico { width: 28px; height: 26px; }
-  .tb-cap { font-size: 9.5px; }
+  .tb-cap { font-size: 11px; }
   .tb-user { padding: 3px 4px 2px !important; }
 }
 
@@ -2129,14 +2130,11 @@ select option {
 .lp-pmis-plate { display: inline-flex; align-items: center; align-self: center; padding: 0.14em 0.36em 0.12em; border-radius: 0.2em; line-height: 1;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(255, 255, 255, 0.04));
   box-shadow: inset 0 0.06em 0.1em rgba(0, 0, 0, 0.75), inset 0 -0.02em 0 rgba(255, 255, 255, 0.14), 0 0.02em 0 rgba(255, 255, 255, 0.1); }
-.lp-pmis-txt { font-size: 0.4em; font-weight: 700; letter-spacing: 0.06em; line-height: 1; color: transparent; -webkit-background-clip: text; background-clip: text;
-  background-image: linear-gradient(180deg, #ffffff, #d4d4d8 45%, #71717a);
-  filter: drop-shadow(0 -0.02em 0 rgba(0, 0, 0, 0.7)) drop-shadow(0 0.02em 0 rgba(255, 255, 255, 0.2)); }
+.lp-pmis-txt { font-size: 0.4em; font-weight: 700; letter-spacing: 0.06em; line-height: 1; color: #e4e4e7; }
 /* on the light signed-in card the wordmark is dark ink; the plate is pressed into the paper */
 .launchpad-frame.is-authed .lp-pmis-plate { background: linear-gradient(180deg, rgba(15, 23, 42, 0.09), rgba(15, 23, 42, 0.02));
   box-shadow: inset 0 0.06em 0.1em rgba(15, 23, 42, 0.32), inset 0 -0.03em 0 rgba(255, 255, 255, 0.95), 0 0.02em 0 rgba(255, 255, 255, 0.9); }
-.launchpad-frame.is-authed .lp-pmis-txt { font-weight: 800; background-image: linear-gradient(180deg, #020617, #1e293b);
-  filter: drop-shadow(0 0.025em 0 rgba(255, 255, 255, 0.9)); }
+.launchpad-frame.is-authed .lp-pmis-txt { font-weight: 800; color: #0f172a; }
 /* short laptop screens (≈768px tall): drop the tagline under the wordmark and tighten the top row so the home needs no scroll */
 @media (min-width: 1024px) and (max-height: 820px) {
   .launchpad-frame.is-authed .lp-brand-tag { display: none; }

@@ -484,7 +484,7 @@ export function ThreeViewer({
       )}
       {modelReady && !error && (
         <div
-          className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-black/60 px-2.5 py-1.5 text-[10px] leading-relaxed text-white/70 backdrop-blur-sm"
+          className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-black/60 px-2.5 py-1.5 text-[11px] leading-relaxed text-white/70 backdrop-blur-sm"
           dir="rtl"
         >
           چرخش: کلیک چپ و بکشید · جابه‌جایی خطی: کلیک راست (یا Shift+کلیک چپ) و بکشید · زوم: چرخ ماوس

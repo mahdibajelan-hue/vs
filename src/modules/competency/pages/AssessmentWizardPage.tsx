@@ -313,7 +313,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
       <AssessmentChainNav assessment={assessment} onOpen={(id) => openAssessment(id, 'profile')} />
       <User size={13} className="text-purple-300" />
       <span className="font-bold text-primary">{myName ?? '—'}</span>
-      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${isLead ? 'bg-amber-500/15 text-amber-300' : 'bg-purple-500/20 text-purple-200'}`}>
+      <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${isLead ? 'bg-amber-500/15 text-amber-300' : 'bg-purple-500/20 text-purple-200'}`}>
         {isLead ? 'مسئول ارزیابی' : 'داور'}
       </span>
     </div>
@@ -368,7 +368,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
               <div className="flex items-center gap-3">
                 <CandidatePhoto path={assessment.photoUrl} size={64} openToWork={assessment.workStatus === 'open_to_work'} notQualified={isNotQualified(assessment)} />
                 <p className="text-sm font-bold">مشخصات و سوابق نامزد</p>
-                {isNotQualified(assessment) && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-bold text-red-300 ring-1 ring-red-400/40">✕ Reject · {NOT_QUALIFIED_LABEL}</span>}
+                {isNotQualified(assessment) && <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-bold text-red-300 ring-1 ring-red-400/40">✕ Reject · {NOT_QUALIFIED_LABEL}</span>}
               </div>
               {/* Only the lead can save the profile (comp_assessments update = comp_is_lead). */}
               {isLead && (
@@ -496,7 +496,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
                     <button
                       key={sec.key}
                       onClick={() => setRoleSectionIndex(i)}
-                      className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors ${
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                         i === roleSectionIndex ? 'bg-purple-500/25 text-purple-300' : 'bg-white/5 text-secondary hover:bg-white/10'
                       }`}
                     >
@@ -568,7 +568,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
                   <button
                     key={d.key}
                     onClick={() => setDomainIndex(i)}
-                    className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors ${
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                       i === domainIndex ? 'bg-purple-500/25 text-purple-300' : 'bg-white/5 text-secondary hover:bg-white/10'
                     }`}
                   >
@@ -577,7 +577,7 @@ export function AssessmentWizardPage({ assessmentId, onDone, onExitToHub, onNew,
                 ))}
                 <button
                   onClick={() => setDomainIndex(COMPETENCY_DOMAINS.length)}
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors ${
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                     onCapstoneStep ? 'bg-amber-500/25 text-amber-300' : 'bg-white/5 text-secondary hover:bg-white/10'
                   }`}
                 >

@@ -144,7 +144,7 @@ export function ProjectJourneyTimeline({
                   {isCurrent && (
                     <div className="pointer-events-none absolute -top-8 flex flex-col items-center">
                       <span
-                        className="flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-extrabold text-white shadow-lg"
+                        className="flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-extrabold text-white shadow-lg"
                         style={{ background: isEpc ? 'var(--plc-amber-deep)' : '#0ea5e9', boxShadow: `0 4px 12px ${isEpc ? 'rgba(180,116,26,0.35)' : 'rgba(14,165,233,0.3)'}` }}
                       >
                         <MapPin size={9} /> اینجا هستیم
@@ -170,7 +170,7 @@ export function ProjectJourneyTimeline({
                         </>
                       )}
                       <span
-                        className="relative flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 text-[10px] font-extrabold transition-colors"
+                        className="relative flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 text-[11px] font-extrabold transition-colors"
                         style={
                           isCurrent
                             ? isEpc
@@ -210,7 +210,7 @@ export function ProjectJourneyTimeline({
                     </span>
 
                     <span
-                      className={`mt-1 line-clamp-2 text-center text-[10px] leading-tight ${
+                      className={`mt-1 line-clamp-2 text-center text-[11px] leading-tight ${
                         isCurrent ? 'font-extrabold text-primary' : isPast ? 'font-medium text-secondary' : 'text-muted'
                       }`}
                       style={isEpc && !isCurrent && !isPast ? { color: 'var(--plc-amber)' } : undefined}
@@ -251,7 +251,7 @@ export function ProjectJourneyTimeline({
       </div>
 
       {/* legend — small, because the rail should be self-evident */}
-      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[9px] text-muted">
+      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
         <LegendItem swatch={<Diamond size={9} fill={STATUS_COLOR.green} style={{ color: STATUS_COLOR.green }} />} label="گیت تصویب‌شده" />
         <LegendItem swatch={<Diamond size={9} style={{ color: STATUS_COLOR.yellow }} />} label="گیت باز" />
         <LegendItem swatch={<Diamond size={9} style={{ color: STATUS_COLOR.red }} />} label="گیت مسدود / رد‌شده" />
@@ -307,7 +307,7 @@ function ScheduleRibbon({
 
   if (!model) {
     return (
-      <p className="mt-4 rounded-lg border border-dashed p-3 text-center text-[10px] text-muted"
+      <p className="mt-4 rounded-lg border border-dashed p-3 text-center text-[11px] text-muted"
         style={{ borderColor: 'var(--border-soft)' }}>
         برای رسم نوار زمانی، تاریخ Baseline مراحل یا Milestoneها باید ثبت شده باشد.
       </p>
@@ -326,7 +326,7 @@ function ScheduleRibbon({
     <div className="mt-5 border-t pt-4" style={{ borderColor: 'var(--border-soft)' }}>
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[11px] font-bold">نوار زمانی تقویمی</span>
-        <span className="text-[10px] text-muted">
+        <span className="text-[11px] text-muted">
           {fa(model.start)} تا {fa(model.end)}
           {model.overrunDays > 0 && (
             <span style={{ color: STATUS_COLOR.red }}> · {faNum(model.overrunDays)} روز فراتر از Baseline</span>
@@ -341,7 +341,7 @@ function ScheduleRibbon({
         {/* lane 1 (0–20px): today flag */}
         {model.insideWindow && (
           <div className="absolute top-0 z-10 flex -translate-x-1/2 flex-col items-center" style={{ left: `${model.todayPct}%` }}>
-            <span className="whitespace-nowrap rounded px-1 py-px text-[8px] font-extrabold text-white"
+            <span className="whitespace-nowrap rounded px-1 py-px text-[11px] font-extrabold text-white"
               style={{ background: STATUS_COLOR.yellow }}>
               امروز
             </span>
@@ -393,12 +393,12 @@ function ScheduleRibbon({
           <div className="absolute flex -translate-x-1/2 flex-col items-center"
             style={{ left: `${model.baseEndPct}%`, top: 58 }}>
             <span className="w-px" style={{ height: 8, background: 'rgba(148,163,184,0.45)' }} />
-            <span className="whitespace-nowrap text-[8px] text-muted">پایان Baseline · {fa(model.baseEnd)}</span>
+            <span className="whitespace-nowrap text-[11px] text-muted">پایان Baseline · {fa(model.baseEnd)}</span>
           </div>
         )}
       </div>
 
-      <p className="mt-1 text-[9px] text-muted">
+      <p className="mt-1 text-[11px] text-muted">
         لوزی سفیدحاشیه = Milestone بحرانی · نوار هاشورخورده قرمز = تأخیر پیش‌بینی‌شده فراتر از Baseline
       </p>
     </div>
@@ -409,7 +409,7 @@ function ScheduleRibbon({
 
 function MetaChip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-full border px-2 py-0.5 text-[10px] text-secondary"
+    <span className="rounded-full border px-2 py-0.5 text-[11px] text-secondary"
       style={{ borderColor: 'var(--border-soft)', background: 'rgba(255,255,255,0.02)' }}>
       {children}
     </span>

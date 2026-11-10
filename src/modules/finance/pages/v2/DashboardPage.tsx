@@ -15,6 +15,7 @@ import { contractFile, daysBetween } from '../../lib/financeControl'
 import { ChartTip, Donut, HBars, PB, Ring, Tile, Waterfall, axisProps, gridProps } from '../../components/charts'
 import { JALALI_MONTHS } from '../../../../lib/jalali'
 import { todayTehran } from '../../../../lib/today'
+import { pressable } from '../../../../lib/pressable'
 
 const ROLES: { id: Role; label: string; icon: LucideIcon; blurb: string; portfolio: boolean }[] = [
   { id: 'ceo', label: 'مدیرعامل', icon: Briefcase, blurb: 'تصویر کلان سبد: بودجه، تعهد، هزینهٔ نهایی و پروژه‌هایی که تصمیم می‌خواهند', portfolio: true },
@@ -198,7 +199,7 @@ export function DashboardPage({ projectId, onProject, onGo }: { projectId: strin
           <Section title={`موارد نیازمند تصمیم (${exc.length.toLocaleString('fa-IR')})`} hint="مرتب‌شده بر اساس شدت" action={<button className="im-btn im-btn-ghost im-btn-sm" onClick={() => onGo('attention')}>همه و ثبت اقدام</button>} flush>
             <div className="fn-tbl-wrap"><table className="fn-tbl"><tbody>
               {exc.slice(0, 6).map((e) => (
-                <tr key={e.key} className="click" onClick={() => { onProject(e.masterProjectId); onGo('attention') }}>
+                <tr key={e.key} className="click" {...pressable(() => { onProject(e.masterProjectId); onGo('attention') }, { row: true })}>
                   <td style={{ width: 90 }}><Chip tone={e.severity === 'critical' ? 'bad' : e.severity === 'high' ? 'warn' : 'neutral'}>{e.severity === 'critical' ? 'بحرانی' : e.severity === 'high' ? 'زیاد' : 'متوسط'}</Chip></td>
                   <td><span className="strong">{e.title}</span><span className="sub">{rows.find((r) => r.id === e.masterProjectId)?.name} · {e.detail}</span></td>
                 </tr>

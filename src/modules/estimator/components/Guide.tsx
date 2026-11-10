@@ -92,7 +92,7 @@ const GUIDE_STYLE = `
   .est-guide-n { position: absolute; top: .55rem; left: .7rem; font-size: 1.6rem; font-weight: 900; color: rgba(242,183,5,.2); line-height: 1; }
   .est-guide-sic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: ${SAFETY}; background: rgba(242,183,5,.1); }
   .est-guide-h { font-size: 12.5px; font-weight: 800; color: ${INK}; margin: 1.1rem 0 .55rem; }
-  .est-guide-m { display: flex; gap: .7rem; padding: .8rem .9rem; border-radius: 14px; background: ${SURFACE_2}; border: 1px solid ${BORDER}; border-inline-start: 3px solid var(--mc); }
+  .est-guide-m { display: flex; gap: .7rem; padding: .8rem .9rem; border-radius: 14px; background: ${SURFACE_2}; border: 1px solid ${BORDER}; border-inline-start: 1px solid var(--mc); }
   .est-guide-m b { font-size: 12.5px; color: ${INK}; }
   .est-guide-m p { font-size: 11.5px; line-height: 1.85; color: ${INK_SOFT}; }
   .est-guide-when { color: ${MUTED_FG} !important; }

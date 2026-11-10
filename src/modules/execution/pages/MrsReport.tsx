@@ -5,6 +5,7 @@ import { useMaterialStore } from '../../material/store/useMaterialStore'
 import { PIPE_STAGE_FA, PIPE_STAGE_OF_FORM, pipeProgress, type PipeStage } from '../lib/registers'
 import { Chip, KpiCard, Section, fmtD } from '../../finance/components/fn'
 import { Empty, fa } from '../components/common'
+import { pressable } from '../../../lib/pressable'
 
 /** Pipes received into the site warehouse, grouped by MRS (the warehouse receipt created in the Material module) with where each pipe has got to — all read from shared records. */
 export function MrsReport({ projectId }: { projectId: string }) {
@@ -40,7 +41,7 @@ export function MrsReport({ projectId }: { projectId: string }) {
           <div className="fn-tbl-wrap" style={{ maxHeight: 620 }}><table className="ex-lines"><thead><tr><th>MRS</th><th>تاریخ</th><th className="num">تعداد لوله</th><th className="num">طول کل (m)</th><th>مصرف‌شده</th><th /></tr></thead>
             <tbody>{mrs.map((r) => { const ps = pipes.filter((p) => p.receiptId === r.id), len = ps.reduce((s, p) => s + (p.lengthM ?? 0), 0), u = ps.filter((p) => stageOf(p.key) !== 'received').length
               return (<Fragment key={r.id}>
-                <tr onClick={() => setOpen(open === r.id ? '' : r.id)} style={{ cursor: 'pointer' }}><td dir="ltr"><b>{r.receiptNumber}</b></td><td>{fmtD(r.receiptDate)}</td><td className="num">{fa(ps.length)}</td><td className="num">{fa(Math.round(len * 10) / 10, 1)}</td><td>{fa(u)} از {fa(ps.length)}</td><td className="sub">{r.notes}</td></tr>
+                <tr {...pressable(() => setOpen(open === r.id ? '' : r.id), { row: true })} style={{ cursor: 'pointer' }}><td dir="ltr"><b>{r.receiptNumber}</b></td><td>{fmtD(r.receiptDate)}</td><td className="num">{fa(ps.length)}</td><td className="num">{fa(Math.round(len * 10) / 10, 1)}</td><td>{fa(u)} از {fa(ps.length)}</td><td className="sub">{r.notes}</td></tr>
                 {open === r.id && <tr><td colSpan={6}><table className="ex-lines"><thead><tr><th>شمارهٔ لوله</th><th>Heat</th><th className="num">قطر</th><th className="num">ضخامت</th><th className="num">طول</th><th>بارنامه</th><th>وضعیت</th><th>پیشرفت</th></tr></thead>
                   <tbody>{ps.map((p) => <tr key={p.id}><td dir="ltr"><b>{p.raw}</b></td><td dir="ltr">{p.heatNo || '—'}</td><td className="num">{p.odIn ?? '—'}</td><td className="num">{p.wtIn ?? '—'}</td><td className="num">{p.lengthM ?? '—'}</td><td dir="ltr">{p.wayBill || '—'}</td><td>{p.status === 'in_stock' ? 'سالم' : <Chip tone="warn">{p.status === 'rejected' ? 'مردود' : 'اسقاط'}</Chip>}</td><td><Chip tone={stageOf(p.key) === 'welded' ? 'good' : 'neutral'}>{PIPE_STAGE_FA[stageOf(p.key)]}</Chip></td></tr>)}</tbody></table></td></tr>}
               </Fragment>) })}

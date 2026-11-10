@@ -90,7 +90,7 @@ export function OpenToWorkRing({
 export function WorkStatusChip({ status, projectName, className = '' }: { status: WorkStatus; projectName: string; className?: string }) {
   if (status === 'open_to_work') {
     return (
-      <span className={`inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300 ring-1 ring-emerald-400/40 ${className}`} dir="ltr">
+      <span className={`inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-bold text-emerald-300 ring-1 ring-emerald-400/40 ${className}`} dir="ltr">
         <span className="h-1.5 w-1.5 rounded-full" style={{ background: OPEN_TO_WORK_GREEN }} aria-hidden />
         Open to work
       </span>
@@ -98,7 +98,7 @@ export function WorkStatusChip({ status, projectName, className = '' }: { status
   }
   if (status === 'on_project') {
     return (
-      <span className={`inline-flex max-w-[11rem] shrink-0 items-center truncate rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-bold text-sky-300 ring-1 ring-sky-400/40 ${className}`} title={`شاغل در پروژه ${projectName}`}>
+      <span className={`inline-flex max-w-[11rem] shrink-0 items-center truncate rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[11px] font-bold text-sky-300 ring-1 ring-sky-400/40 ${className}`} title={`شاغل در پروژه ${projectName}`}>
         <span className="truncate">شاغل در پروژه {projectName}</span>
       </span>
     )

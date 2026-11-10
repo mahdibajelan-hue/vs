@@ -3,7 +3,6 @@ import { useMasterDataStore } from './modules/masterdata/store/useMasterDataStor
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { useAppThemeSync } from './components/common/useAppTheme'
 import { PROJECT_SCOPED_MODULES, useModuleStore } from './store/useModuleStore'
-import { ProjectWorkspace } from './components/Auth/radar/ProjectWorkspace'
 import { PortfolioReturn } from './modules/executive/PortfolioReturn'
 import { useAuthStore } from './store/useAuthStore'
 import { hasModuleAccess, useModuleAccessStore } from './store/useModuleAccessStore'
@@ -12,10 +11,6 @@ import { Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
 import { SetOwnPassword, mustSetPassword } from './components/Auth/SetOwnPassword'
 import { ProfileForm } from './components/Auth/ProfileForm'
 import { createSupabaseRepo as createLandRepo } from './modules/landacq/repo/supabaseRepo'
-import { CandidateSelfServicePage } from './modules/competency/pages/CandidateSelfServicePage'
-import { PublicResultsPage } from './modules/competency/pages/PublicResultsPage'
-import { PersonalityCandidatePage } from './modules/personality/pages/PersonalityCandidatePage'
-import { McqCandidatePage } from './modules/competency/pages/McqCandidatePage'
 import { InboxOverlay } from './modules/inbox/components/InboxOverlay'
 import { GlobalSearch } from './components/search/GlobalSearch'
 
@@ -49,6 +44,13 @@ const moduleLoaders = {
   App: () => import('./App').then((m) => ({ default: m.default })),
 }
 const App = lazy(moduleLoaders.App)
+// public token pages and the project workspace stay out of the first download: the sign-in screen needs none of them
+const ProjectWorkspace = lazy(() => import('./components/Auth/radar/ProjectWorkspace').then((m) => ({ default: m.ProjectWorkspace })))
+const CandidateSelfServicePage = lazy(() => import('./modules/competency/pages/CandidateSelfServicePage').then((m) => ({ default: m.CandidateSelfServicePage })))
+const PublicResultsPage = lazy(() => import('./modules/competency/pages/PublicResultsPage').then((m) => ({ default: m.PublicResultsPage })))
+const PersonalityCandidatePage = lazy(() => import('./modules/personality/pages/PersonalityCandidatePage').then((m) => ({ default: m.PersonalityCandidatePage })))
+const McqCandidatePage = lazy(() => import('./modules/competency/pages/McqCandidatePage').then((m) => ({ default: m.McqCandidatePage })))
+const pageWait = <div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)' }}><Loader2 size={26} className="animate-spin text-brand-400" /></div>
 const RiskApp = lazy(moduleLoaders.RiskApp)
 const ChangeApp = lazy(moduleLoaders.ChangeApp)
 const IssuesApp = lazy(moduleLoaders.IssuesApp)
@@ -125,12 +127,12 @@ export function RootApp() {
   // straight from an emailed link. Checked after the hooks above (Rules of Hooks) but before any
   // auth-gated rendering below, since it must never require a FARIN login.
   const candidateToken = new URLSearchParams(window.location.search).get('candidate')
-  if (candidateToken) return <CandidateSelfServicePage token={candidateToken} />
+  if (candidateToken) return <Suspense fallback={pageWait}><CandidateSelfServicePage token={candidateToken} /></Suspense>
 
   // Public "view results online" link (?results=<token>) — same idea, but for sharing a read-only
   // results report with anyone holding the link, never requiring a FARIN login either.
   const resultsToken = new URLSearchParams(window.location.search).get('results')
-  if (resultsToken) return <PublicResultsPage token={resultsToken} />
+  if (resultsToken) return <Suspense fallback={pageWait}><PublicResultsPage token={resultsToken} /></Suspense>
 
   // The personality module's own candidate-taking link (?p_candidate=<token>) — same reasoning as
   // the competency links above, kept as a separate query param so the two modules' tokens never
@@ -141,13 +143,13 @@ export function RootApp() {
   // old public "view results online" link (?p_results=<token>, PersonalityPublicResultsPage) is no
   // longer routed — staff now view personality results inline in the competency wizard instead.
   const personalityCandidateToken = new URLSearchParams(window.location.search).get('p_candidate')
-  if (personalityCandidateToken) return <PersonalityCandidatePage token={personalityCandidateToken} />
+  if (personalityCandidateToken) return <Suspense fallback={pageWait}><PersonalityCandidatePage token={personalityCandidateToken} /></Suspense>
 
   // The competency module's online technical MCQ test link (?mcq=<token>, schema.sql Section 56) —
   // the second ONLINE part of the candidate's plan next to the personality link above, on its own
   // query param so the three candidate tokens never collide.
   const mcqCandidateToken = new URLSearchParams(window.location.search).get('mcq')
-  if (mcqCandidateToken) return <McqCandidatePage token={mcqCandidateToken} />
+  if (mcqCandidateToken) return <Suspense fallback={pageWait}><McqCandidatePage token={mcqCandidateToken} /></Suspense>
 
   if (authLoading || (isAuthed && profileLoading)) {
     return (

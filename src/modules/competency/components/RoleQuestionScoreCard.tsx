@@ -43,13 +43,13 @@ export function RoleQuestionScoreCard({ index, question: q, answer, editable, on
     <div className="rounded-xl border-[1.5px] border-white/15 bg-white/[0.02] p-3.5 shadow-sm">
       <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
         <span
-          className="rounded-full px-2 py-0.5 text-[9.5px] font-bold"
+          className="rounded-full px-2 py-0.5 text-[11px] font-bold"
           style={{ background: `${QUESTION_DIFFICULTY_COLOR[q.difficulty]}1c`, color: QUESTION_DIFFICULTY_COLOR[q.difficulty] }}
         >
           {QUESTION_DIFFICULTY_LABEL_FA[q.difficulty]}
         </span>
-        <span className="rounded-full bg-purple-500/12 px-2 py-0.5 text-[9.5px] font-bold text-purple-200">{QUESTION_TYPE_LABEL_FA[q.category]}</span>
-        {q.subCategory && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[9.5px] text-muted">{q.subCategory}</span>}
+        <span className="rounded-full bg-purple-500/12 px-2 py-0.5 text-[11px] font-bold text-purple-200">{QUESTION_TYPE_LABEL_FA[q.category]}</span>
+        {q.subCategory && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-muted">{q.subCategory}</span>}
       </div>
 
       <p className="text-xs leading-6">
@@ -83,7 +83,7 @@ export function RoleQuestionScoreCard({ index, question: q, answer, editable, on
           <p className="text-[11px] leading-6 text-secondary">{q.referenceAnswer}</p>
           {q.keyPoints.length > 0 && (
             <div>
-              <p className="mb-1 text-[10px] font-bold text-purple-200">نکات کلیدی مورد انتظار</p>
+              <p className="mb-1 text-[11px] font-bold text-purple-200">نکات کلیدی مورد انتظار</p>
               <ul className="space-y-0.5">
                 {q.keyPoints.map((k, i) => (
                   <li key={i} className="flex items-start gap-1.5 text-[10.5px] leading-5 text-secondary">
@@ -95,7 +95,7 @@ export function RoleQuestionScoreCard({ index, question: q, answer, editable, on
           )}
           {q.excellentAnswerIndicators.length > 0 && (
             <div>
-              <p className="mb-1 flex items-center gap-1 text-[10px] font-bold text-emerald-300">
+              <p className="mb-1 flex items-center gap-1 text-[11px] font-bold text-emerald-300">
                 <Sparkles size={11} /> نشانه‌های پاسخ ممتاز (۵)
               </p>
               <ul className="space-y-0.5">
@@ -109,7 +109,7 @@ export function RoleQuestionScoreCard({ index, question: q, answer, editable, on
           )}
           {q.commonMistakes.length > 0 && (
             <div>
-              <p className="mb-1 flex items-center gap-1 text-[10px] font-bold text-red-300">
+              <p className="mb-1 flex items-center gap-1 text-[11px] font-bold text-red-300">
                 <XCircle size={11} /> خطاهای رایج
               </p>
               <ul className="space-y-0.5">
@@ -122,7 +122,7 @@ export function RoleQuestionScoreCard({ index, question: q, answer, editable, on
             </div>
           )}
           {q.standardReference && (
-            <p className="flex items-center gap-1.5 text-[10px] text-muted">
+            <p className="flex items-center gap-1.5 text-[11px] text-muted">
               <ShieldAlert size={11} /> مرجع/استاندارد: <span className="font-bold text-secondary">{q.standardReference}</span>
             </p>
           )}
@@ -132,10 +132,10 @@ export function RoleQuestionScoreCard({ index, question: q, answer, editable, on
       {panelVotes && panelVotes.length > 0 && (
         <div className={`mt-2.5 rounded-lg border p-2.5 ${diverged ? 'border-amber-400/30 bg-amber-500/[0.08]' : 'border-purple-400/20 bg-purple-500/[0.06]'}`}>
           <div className="mb-1.5 flex items-center justify-between">
-            <span className={`flex items-center gap-1 text-[10px] font-bold ${diverged ? 'text-amber-200' : 'text-purple-200'}`}>
+            <span className={`flex items-center gap-1 text-[11px] font-bold ${diverged ? 'text-amber-200' : 'text-purple-200'}`}>
               {diverged && <AlertTriangle size={11} />} نظر داوران {diverged && '— اختلاف نظر قابل توجه'}
             </span>
-            <span className="num text-[10px] text-purple-200">میانگین: {average != null ? average.toLocaleString('fa-IR') : '—'}</span>
+            <span className="num text-[11px] text-purple-200">میانگین: {average != null ? average.toLocaleString('fa-IR') : '—'}</span>
           </div>
           <div className="space-y-1">
             {panelVotes.map((v) => (
@@ -169,7 +169,7 @@ export function RoleQuestionScoreCard({ index, question: q, answer, editable, on
             {s}
           </button>
         ))}
-        <span className="mr-1 text-[10px] text-muted">{score != null ? SCORE_LABELS_FA[score] : 'ثبت‌نشده'}</span>
+        <span className="mr-1 text-[11px] text-muted">{score != null ? SCORE_LABELS_FA[score] : 'ثبت‌نشده'}</span>
         {score != null && <CheckCircle2 size={12} className="text-emerald-300" />}
       </div>
       {criteria && (

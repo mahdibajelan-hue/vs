@@ -46,7 +46,7 @@
 .comp-h3 { margin: 0 0 8px; font-size: 13px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
 .comp-levels { display: grid; gap: 9px; }
 .comp-level { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) 62px; gap: 8px; align-items: center; font-size: 12.5px; }
-.comp-level .l em, .comp-gaps em { font-style: normal; font-size: 10px; font-weight: 800; color: var(--im-coral); margin-inline-start: 6px; }
+.comp-level .l em, .comp-gaps em { font-style: normal; font-size: 11px; font-weight: 800; color: var(--im-coral); margin-inline-start: 6px; }
 .comp-level .t { position: relative; height: 12px; border-radius: 4px; background: color-mix(in srgb, var(--im-text) 8%, transparent); }
 .comp-level .t i { position: absolute; inset-block: 2px; inset-inline-start: 0; border-radius: 3px; transition: width .4s var(--im-ease); }
 .comp-level .t u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--im-text); }
@@ -90,7 +90,7 @@
 .comp-row-static { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 4px; }
 .comp-form { display: grid; gap: 12px; }
 .comp-form-row { display: grid; grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.4fr); gap: 10px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--im-line); }
-.comp-form-row small { display: block; color: var(--im-muted); font-size: 11px; } .comp-form-row .crit { font-style: normal; font-size: 10px; font-weight: 800; color: var(--im-coral); margin-inline-start: 6px; }
+.comp-form-row small { display: block; color: var(--im-muted); font-size: 11px; } .comp-form-row .crit { font-style: normal; font-size: 11px; font-weight: 800; color: var(--im-coral); margin-inline-start: 6px; }
 .comp-scale { display: inline-flex; gap: 4px; } .comp-scale button { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--im-line-2); font-weight: 800; transition: background-color .15s, transform 160ms var(--im-ease); }
 .comp-scale button:active { transform: scale(.94); } .comp-scale button.on { background: var(--im-accent); color: #fff; border-color: var(--im-accent); }
 @media (max-width: 800px) { .comp-form-row { grid-template-columns: 1fr; } }

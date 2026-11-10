@@ -95,7 +95,7 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
             <span className="num text-xl font-black leading-none" style={{ color: overallColor }}>
               {fa(test.scorePercent, 0)}
             </span>
-            <span className="fx-muted text-[9px]">از ۱۰۰</span>
+            <span className="fx-muted text-[11px]">از ۱۰۰</span>
           </RingChart>
           <p className="fx-muted flex items-center gap-1 text-[10.5px] font-bold">
             <Gauge size={11} /> درصد کل آزمون تستی
@@ -201,12 +201,12 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
           {test.items.map((item) => (
             <div key={item.questionId} className="fx-card p-3.5" style={tone(item.isCorrect ? '#34d399' : '#f87171')}>
               <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                <span className="num fx-muted text-[9.5px]">#{fa(item.order)}</span>
-                <span className="fx-sub px-2 py-0.5 text-[9.5px] font-bold text-secondary">{QUESTION_TYPE_LABEL_FA[item.category] ?? item.category}</span>
-                <span className="fx-sub px-2 py-0.5 text-[9.5px] text-muted">{item.topic}</span>
-                <span className="fx-sub px-2 py-0.5 text-[9.5px] text-muted">{MCQ_DIFFICULTY_LABEL_FA[item.difficulty]}</span>
-                {item.itemType && item.itemType !== 'SINGLE' && <span className="fx-sub px-2 py-0.5 text-[9.5px] font-bold text-secondary">{MCQ_ITEM_TYPE_LABEL_FA[item.itemType]}</span>}
-                <span className="fx-tone-bg fx-tone-text mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-bold">
+                <span className="num fx-muted text-[11px]">#{fa(item.order)}</span>
+                <span className="fx-sub px-2 py-0.5 text-[11px] font-bold text-secondary">{QUESTION_TYPE_LABEL_FA[item.category] ?? item.category}</span>
+                <span className="fx-sub px-2 py-0.5 text-[11px] text-muted">{item.topic}</span>
+                <span className="fx-sub px-2 py-0.5 text-[11px] text-muted">{MCQ_DIFFICULTY_LABEL_FA[item.difficulty]}</span>
+                {item.itemType && item.itemType !== 'SINGLE' && <span className="fx-sub px-2 py-0.5 text-[11px] font-bold text-secondary">{MCQ_ITEM_TYPE_LABEL_FA[item.itemType]}</span>}
+                <span className="fx-tone-bg fx-tone-text mr-auto flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold">
                   {item.isCorrect ? <CheckCircle2 size={11} /> : <XCircle size={11} />} {item.isCorrect ? 'پاسخ درست' : item.itemType && item.itemType !== 'SINGLE' ? (item.credit ? `نمرهٔ جزئی ${fa((item.credit ?? 0) * 100, 0)}٪` : item.answer == null ? 'بدون پاسخ' : 'پاسخ نادرست') : item.chosenOption == null ? 'بدون پاسخ' : 'پاسخ نادرست'}
                   {item.responseTimeMs != null && <span className="num"> — {Math.round(item.responseTimeMs / 1000).toLocaleString('fa-IR')} ثانیه</span>}
                 </span>
@@ -234,7 +234,7 @@ export function McqResultsSection({ assessmentId }: { assessmentId: string }) {
                         isCorrectOpt ? 'bg-emerald-500/12 font-bold text-emerald-300' : isChosen ? 'bg-red-500/12 text-red-300' : 'text-secondary'
                       }`}
                     >
-                      <span className="mt-0.5 shrink-0 text-[9.5px] text-muted">{isOrder ? `${fa(rankKey)}→${rankAns ? fa(rankAns) : '—'}` : `${MCQ_OPTION_LETTERS[i]}.`}</span>
+                      <span className="mt-0.5 shrink-0 text-[11px] text-muted">{isOrder ? `${fa(rankKey)}→${rankAns ? fa(rankAns) : '—'}` : `${MCQ_OPTION_LETTERS[i]}.`}</span>
                       <span className="flex-1">{opt}</span>
                       {isCorrectOpt && <CheckCircle2 size={12} className="mt-0.5 shrink-0" />}
                       {isChosen && !isCorrectOpt && <XCircle size={12} className="mt-0.5 shrink-0" />}
@@ -257,7 +257,7 @@ function StatTile({ label, value, tone: toneColor, icon: Icon }: { label: string
     <div className="fx-sub flex flex-col items-center justify-center gap-1 p-3 text-center" style={toneColor ? tone(toneColor) : undefined}>
       {Icon && <Icon size={13} className={toneColor ? 'fx-tone-text' : 'fx-muted'} />}
       <p className={`num text-lg font-black leading-none ${toneColor ? 'fx-tone-text' : ''}`}>{value}</p>
-      <p className="fx-muted text-[10px] font-bold">{label}</p>
+      <p className="fx-muted text-[11px] font-bold">{label}</p>
     </div>
   )
 }

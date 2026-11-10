@@ -99,7 +99,7 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-400/30 bg-teal-500/10"><BarChart3 size={18} className="text-teal-400" /></div>
           <div className="hidden leading-tight sm:block">
             <p className="text-sm font-extrabold">گزارش هوشمند و تحلیل</p>
-            <p className="text-[10px] text-muted">گزارش‌های دوره‌ای · گزارش‌ساز · مرکز تحلیل · دستیار</p>
+            <p className="text-[11px] text-muted">گزارش‌های دوره‌ای · گزارش‌ساز · مرکز تحلیل · دستیار</p>
           </div>
           {projectLevel && (
             <>
@@ -151,7 +151,7 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
 
       <nav className="no-print fixed inset-x-0 bottom-0 z-30 flex items-center justify-around overflow-x-auto border-t bg-[var(--bg-panel-solid)] py-1.5 lg:hidden" style={{ borderColor: 'var(--border-soft)' }} aria-label="بخش‌های ماژول">
         {NAV.map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setSection(id)} aria-current={section === id ? 'page' : undefined} className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1 text-[10px] shrink-0 ${section === id ? 'text-teal-400' : 'text-muted'}`}>
+          <button key={id} onClick={() => setSection(id)} aria-current={section === id ? 'page' : undefined} className={`flex flex-col items-center gap-0.5 rounded-lg px-2 py-1 text-[11px] shrink-0 ${section === id ? 'text-teal-400' : 'text-muted'}`}>
             <Icon size={17} /><span className="max-w-[4.5rem] truncate">{label}</span>
           </button>
         ))}

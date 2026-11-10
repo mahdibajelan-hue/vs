@@ -29,7 +29,7 @@ export function JointInfoCard({ joint, lineLabel, equipment3d, editable, onEdit,
 
   return (
     <div
-      className="flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[10px] shadow-lg backdrop-blur-md"
+      className="flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] shadow-lg backdrop-blur-md"
       style={{ background: done ? 'rgba(46,204,113,0.14)' : 'rgba(231,76,60,0.14)', border: `1px solid ${color}66` }}
     >
       <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} />

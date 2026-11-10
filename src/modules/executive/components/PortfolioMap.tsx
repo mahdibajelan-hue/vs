@@ -9,6 +9,7 @@ import { classBreaks, classOf, provinceAt, provinceBox, provinceStats, routeProv
 import { IRAN_PROVINCES } from '../lib/iranProvinces'
 import { useTabIndicator } from '../../../components/common/useTabIndicator'
 import { faNum, fmtMoney } from './pfUi'
+import { pressable } from '../../../lib/pressable'
 
 const W = 600
 const H = mapHeight(W)
@@ -232,7 +233,7 @@ export function PortfolioMap({ views, byId, footer }: { views: PfProjectView[]; 
             {layers.lines && (
               <g className="pm-lines">
                 {lines.map((m, i) => (
-                  <g key={m.v.input.id} className={`pm-line${sel === m.v.input.id ? ' is-on' : ''}`} style={{ '--c': STATUS_FA[m.status].tone, '--d': `${i * 120}ms` } as CSSProperties} onClick={(e) => { e.stopPropagation(); setSel(m.v.input.id) }}>
+                  <g key={m.v.input.id} className={`pm-line${sel === m.v.input.id ? ' is-on' : ''}`} style={{ '--c': STATUS_FA[m.status].tone, '--d': `${i * 120}ms` } as CSSProperties} {...pressable((e) => { e.stopPropagation(); setSel(m.v.input.id) })}>
                     <path className="pm-line-hit" d={m.route!.d} />
                     <path className="pm-line-glow" d={m.route!.d} />
                     <path className="pm-line-case" d={m.route!.d} />

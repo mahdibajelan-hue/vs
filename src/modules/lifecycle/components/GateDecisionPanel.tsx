@@ -53,7 +53,7 @@ export function GateDecisionPanel({ gate, items, progress, canDecide }: {
   return (
     <div className="space-y-2.5">
       {readiness.badge && (
-        <span className="inline-block rounded-full px-2.5 py-1 text-[10px] font-bold"
+        <span className="inline-block rounded-full px-2.5 py-1 text-[11px] font-bold"
           style={{ background: `${STATUS_COLOR.red}22`, color: STATUS_TEXT_COLOR.red }}>
           {readiness.badge}
         </span>

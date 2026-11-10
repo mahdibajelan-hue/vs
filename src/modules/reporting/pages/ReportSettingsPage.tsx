@@ -67,7 +67,7 @@ export function ReportSettingsPage({ masterProjectId, projectName }: { masterPro
         <div className="grid gap-2 sm:grid-cols-2">
           {FIELDS.map((f) => (
             <label key={f.key} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/10 px-3 py-2">
-              <span className="min-w-0"><span className="block text-xs font-bold">{f.label}</span><span className="block text-[10px] text-muted">{f.hint} · پیش‌فرض {DEFAULT_THRESHOLDS[f.key].toLocaleString('fa-IR')}</span></span>
+              <span className="min-w-0"><span className="block text-xs font-bold">{f.label}</span><span className="block text-[11px] text-muted">{f.hint} · پیش‌فرض {DEFAULT_THRESHOLDS[f.key].toLocaleString('fa-IR')}</span></span>
               <input type="number" step={f.step} min={f.min} max={f.max} disabled={!canConfigure} value={draft[f.key]} onChange={(e) => setDraft({ ...draft, [f.key]: Number(e.target.value) })} className="w-24 rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-xs" dir="ltr" />
             </label>
           ))}
@@ -76,7 +76,7 @@ export function ReportSettingsPage({ masterProjectId, projectName }: { masterPro
         {error && <p className="mt-2 text-[11px] text-red-300">{error}</p>}
         <div className="mt-3 flex items-center gap-2">
           {canConfigure ? (
-            <button onClick={() => void save()} disabled={saving || !!invalid} className="flex items-center gap-1 rounded-lg bg-teal-500 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">
+            <button onClick={() => void save()} disabled={saving || !!invalid} className="flex items-center gap-1 rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">
               {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} {saved ? 'ذخیره شد' : 'ذخیره و افزایش نسخه'}
             </button>
           ) : <span className="flex items-center gap-1 text-[11px] text-muted"><Lock size={12} /> تغییر آستانه‌ها فقط با دسترسی «پیکربندی» گزارش‌گیری</span>}
@@ -124,7 +124,7 @@ function QualityPanel() {
           ['یافتهٔ بازبینی‌شده', `${stats.n.toLocaleString('fa-IR')} از ${issued.findings.toLocaleString('fa-IR')}`],
           ['تأییدشده', pct(stats.confirmed)],
           ['ردشده', pct(stats.rejected)],
-        ].map(([l, v]) => <div key={l} className="rounded-xl border border-white/10 bg-black/10 p-2.5"><p className="text-[10px] text-muted">{l}</p><p className="mt-0.5 text-base font-extrabold">{v}</p></div>)}
+        ].map(([l, v]) => <div key={l} className="rounded-xl border border-white/10 bg-black/10 p-2.5"><p className="text-[11px] text-muted">{l}</p><p className="mt-0.5 text-base font-extrabold">{v}</p></div>)}
       </div>
       {stats.kind.length > 0 ? (
         <ul className="mt-3 space-y-1 text-[11.5px]">

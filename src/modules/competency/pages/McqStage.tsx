@@ -86,7 +86,7 @@ export function McqStage({ assessment, isDesigner, onContinue }: McqStageProps) 
               <span className="num text-base font-black leading-none" style={{ color: scoreColor }}>
                 {mcqTest.scorePercent.toLocaleString('fa-IR')}
               </span>
-              <span className="fx-muted text-[8px]">از ۱۰۰</span>
+              <span className="fx-muted text-[11px]">از ۱۰۰</span>
             </RingChart>
           )}
         </div>
@@ -151,7 +151,7 @@ function McqGeneratePanel({ assessment, mcqTest, onGenerated }: { assessment: Co
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">تعداد سؤال</span>
+          <span className="mb-1 block text-[11px] text-muted">تعداد سؤال</span>
           <input
             type="number"
             min={5}
@@ -162,7 +162,7 @@ function McqGeneratePanel({ assessment, mcqTest, onGenerated }: { assessment: Co
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-[10px] text-muted">زمان (دقیقه)</span>
+          <span className="mb-1 block text-[11px] text-muted">زمان (دقیقه)</span>
           <input
             type="number"
             min={5}
@@ -175,7 +175,7 @@ function McqGeneratePanel({ assessment, mcqTest, onGenerated }: { assessment: Co
         <button
           onClick={handleGenerateClick}
           disabled={generating}
-          className="flex items-center gap-1.5 rounded-xl bg-teal-500 px-4 py-2 text-xs font-bold text-white hover:bg-teal-400 disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-xl bg-teal-700 px-4 py-2 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-40"
         >
           {generating ? <Loader2 size={13} className="animate-spin" /> : started ? <RotateCw size={13} /> : <Wand2 size={13} />}
           {started ? 'تولید مجدد آزمون' : 'تولید آزمون'}
@@ -217,7 +217,7 @@ function McqGeneratePanel({ assessment, mcqTest, onGenerated }: { assessment: Co
                 setCopied(true)
                 setTimeout(() => setCopied(false), 2000)
               }}
-              className="flex items-center gap-1.5 rounded-lg bg-teal-500 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-teal-400"
+              className="flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-teal-800"
             >
               <Copy size={12} /> {copied ? 'کپی شد' : 'کپی لینک'}
             </button>

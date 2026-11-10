@@ -25,7 +25,7 @@ export function GateHero({ stage, gate, index, total, status, actual, planned, o
     <div className="rounded-2xl p-4 md:p-5" style={{ background: 'radial-gradient(ellipse 100% 120% at 100% 0%, #123159 0%, #060b16 75%)', border: '1px solid rgba(255,255,255,.08)' }}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold" style={{ color: '#93c5fd' }}>
+          <p className="text-[11px] font-bold" style={{ color: '#93c5fd' }}>
             مرحله {faNum(index + 1)} از {faNum(total)}{meta ? ` · ${PHASE_LABEL_FA[gate?.phaseGroup ?? meta.phase]}` : ''}
           </p>
           <h2 className="mt-1 text-lg font-extrabold text-white">
@@ -63,7 +63,7 @@ function Big({ label, value, color }: { label: string; value: string; color: str
   return (
     <div className="rounded-xl px-3 py-2.5 text-center" style={{ background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)' }}>
       <p className="text-2xl font-extrabold leading-none md:text-3xl" style={{ color }}>{value}</p>
-      <p className="mt-1 text-[10px]" style={{ color: '#94a3b8' }}>{label}</p>
+      <p className="mt-1 text-[11px]" style={{ color: '#94a3b8' }}>{label}</p>
     </div>
   )
 }

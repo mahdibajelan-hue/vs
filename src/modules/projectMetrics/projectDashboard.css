@@ -83,7 +83,7 @@
 .pdb-donut { display: grid; gap: 0.5rem; }
 .pdb-donut-chart { position: relative; }
 .pdb-donut-total { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; font-size: 15px; font-weight: 900; pointer-events: none; }
-.pdb-donut-total small { display: block; font-size: 10px; font-weight: 600; color: var(--text-muted); }
+.pdb-donut-total small { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); }
 .pdb-donut-legend { display: grid; gap: 0.3rem; font-size: 12px; }
 .pdb-donut-legend li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.45rem; }
 .pdb-donut-legend i { width: 0.65rem; height: 0.65rem; border-radius: 3px; }
@@ -169,7 +169,7 @@
 .pdb-meter-one { position: absolute; top: -0.2rem; bottom: -0.2rem; width: 2px; margin-left: -1px; background: var(--text-primary); opacity: 0.5; border-radius: 2px; }
 .pdb-meter-mark { position: absolute; top: 50%; width: 0.85rem; height: 0.85rem; margin: -0.425rem 0 0 -0.425rem; border-radius: 99px; background: var(--bg-panel-solid); border: 3px solid var(--ac); box-shadow: 0 1px 4px rgba(0,0,0,.25); transition: left 600ms cubic-bezier(0.23, 1, 0.32, 1); }
 .pdb-meter-mark.is-out { border-style: double; }
-.pdb-meter-scale { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.pdb-meter-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .pdb-meter-note { font-size: 10.5px; line-height: 1.6; color: var(--text-secondary); }
 
 /* lifecycle phases: a vertical timeline of cards */
@@ -177,7 +177,7 @@
 .pdb-ph-list { position: relative; display: grid; gap: 0.6rem; }
 .pdb-ph-list::before { content: ''; position: absolute; top: 1rem; bottom: 1rem; inset-inline-start: 1.05rem; width: 2px; background: linear-gradient(var(--border-soft), color-mix(in srgb, var(--border-soft) 30%, transparent)); }
 .pdb-ph-item { position: relative; display: grid; grid-template-columns: 2.1rem minmax(0, 1fr); gap: 0.6rem; align-items: start; animation: pdb-in 420ms cubic-bezier(0.23, 1, 0.32, 1) both; }
-.pdb-ph-node { position: relative; z-index: 1; display: grid; place-items: center; width: 2.1rem; height: 2.1rem; margin-top: 0.55rem; border-radius: 99px; font-size: 10px; font-weight: 900; color: var(--ph); background: var(--bg-panel-solid); border: 2px solid var(--ph); }
+.pdb-ph-node { position: relative; z-index: 1; display: grid; place-items: center; width: 2.1rem; height: 2.1rem; margin-top: 0.55rem; border-radius: 99px; font-size: 11px; font-weight: 900; color: var(--ph); background: var(--bg-panel-solid); border: 2px solid var(--ph); }
 .pdb-ph-item.is-done .pdb-ph-node { background: var(--ph); color: #fff; font-size: 13px; }
 .pdb-ph-item.is-current .pdb-ph-node { box-shadow: 0 0 0 5px color-mix(in srgb, var(--ph) 22%, transparent); }
 .pdb-ph-card { display: grid; gap: 0.45rem; padding: 0.7rem 0.85rem; border-radius: 0.95rem; border: 1px solid var(--border-soft); background: var(--bg-panel-solid); transition: border-color 160ms ease, transform 160ms ease; }

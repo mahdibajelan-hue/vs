@@ -27,7 +27,7 @@ export const issueTopWidget: WidgetDefinition<ImIssue[] | null> = {
             <p className="min-w-0 truncate text-xs font-medium">{issue.title}</p>
             <div className="flex shrink-0 items-center gap-1.5">
               {isIssueOverdue(issue) && <ToneBadge tone="critical" label="معوق" />}
-              <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: IM_PRIORITY_COLOR[issue.priority] }}>
+              <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: IM_PRIORITY_COLOR[issue.priority] }}>
                 {IM_PRIORITY_LABEL_FA[issue.priority]}
               </span>
             </div>
@@ -53,15 +53,15 @@ export const issueClosureWidget: WidgetDefinition<IssueMetrics | null> = {
           <p className="text-lg font-extrabold" style={{ color: data.onTimeRate >= 70 ? '#2ecc71' : data.onTimeRate >= 40 ? '#f1c40f' : '#e74c3c' }}>
             {data.onTimeRate}%
           </p>
-          <p className="text-[10px] text-muted">پیگیری به‌موقع</p>
+          <p className="text-[11px] text-muted">پیگیری به‌موقع</p>
         </div>
         <div>
           <p className="text-lg font-extrabold">{data.closedRatio}%</p>
-          <p className="text-[10px] text-muted">نسبت بسته‌شده</p>
+          <p className="text-[11px] text-muted">نسبت بسته‌شده</p>
         </div>
         <div>
           <p className="text-lg font-extrabold">{Math.round(data.avgDays)}</p>
-          <p className="text-[10px] text-muted">میانگین روز تا بستن</p>
+          <p className="text-[11px] text-muted">میانگین روز تا بستن</p>
         </div>
       </div>
     )
@@ -156,10 +156,10 @@ export const issueLifecycleOriginWidget: WidgetDefinition<LifecycleIssueSummary 
               <p className="min-w-0 truncate text-xs font-medium">{issue.title}</p>
               <div className="flex shrink-0 items-center gap-1.5">
                 {isIssueOverdue(issue) && <ToneBadge tone="critical" label="معوق" />}
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: IM_PRIORITY_COLOR[issue.priority] }}>
+                <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: IM_PRIORITY_COLOR[issue.priority] }}>
                   {IM_PRIORITY_LABEL_FA[issue.priority]}
                 </span>
-                <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-secondary">
+                <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-secondary">
                   {IM_STATUS_LABEL_FA[issue.status]}
                 </span>
               </div>

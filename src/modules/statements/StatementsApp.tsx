@@ -16,6 +16,7 @@ import { useRemembered } from '../../lib/navMemory'
 import { NavScroller } from '../../components/common/NavScroller'
 import '../pssr/pssr.css'
 import './statements.css'
+import { pressable } from '../../lib/pressable'
 
 type Tab = 'dash' | 'list' | 'new' | 'pay' | 'reports' | 'settings'
 const TABS: Tab[] = ['dash', 'list', 'new', 'pay', 'reports', 'settings']
@@ -150,7 +151,7 @@ function List({ onOpen }: { onOpen: (id: string) => void }) {
           <thead><tr><th>قرارداد</th><th>بخش</th><th>شماره</th><th>دوره</th><th>این ماه (ناخالص)</th><th>کسور</th><th>خالص</th><th>تجمعی</th><th>وضعیت</th></tr></thead>
           <tbody>
             {rows.map((s) => (
-              <tr key={s.id} className="is-click" onClick={() => onOpen(s.id)} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(s.id) }}>
+              <tr key={s.id} className="is-click" {...pressable(() => onOpen(s.id), { row: true })} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(s.id) }}>
                 <td dir="ltr" style={{ textAlign: 'right' }}>{cOf(s.contractId)?.no}</td><td><PartChip part={s.part} /></td><td>{s.part}-{fa(s.no)}</td><td>{periodOf(s.periodKey).label}</td>
                 <td className="pst-num">{short(s.thisAmount)}</td><td className="pst-num">{short(s.deductions.total)}</td><td className="pst-num"><b>{short(s.payable)}</b></td><td className="pst-num">{short(s.cumAmount)}</td><td><StatusChip status={s.status} /></td>
               </tr>

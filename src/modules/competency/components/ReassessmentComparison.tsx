@@ -92,7 +92,7 @@ export function ReassessmentComparison({ assessment, onOpenPrevious }: { assessm
       <div className="glass-panel overflow-x-auto rounded-2xl">
         <table className="w-full min-w-[720px] text-right text-[11px]">
           <thead>
-            <tr className="border-b border-white/10 text-[10px] text-muted">
+            <tr className="border-b border-white/10 text-[11px] text-muted">
               <th className="px-3 py-2.5 font-bold">شایستگی</th>
               <th className="px-2 py-2.5 text-center font-bold">الزامی</th>
               <th className="px-2 py-2.5 font-bold">ارزیابی قبلی</th>
@@ -121,20 +121,20 @@ export function ReassessmentComparison({ assessment, onOpenPrevious }: { assessm
                     <DeltaCell delta={c.levelDelta} scoreDelta={c.scoreDelta} />
                   </td>
                   <td className="px-2 py-2.5">
-                    <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: `${outcome.color}1c`, color: outcome.color }}>
+                    <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: `${outcome.color}1c`, color: outcome.color }}>
                       {outcome.label}
                     </span>
                   </td>
                   <td className="px-3 py-2.5">
                     {c.actions.total === 0 ? (
-                      <span className="text-[10px] text-muted">—</span>
+                      <span className="text-[11px] text-muted">—</span>
                     ) : (
                       <div className="space-y-0.5">
                         <span className="num text-[10.5px] font-bold text-teal-200">
                           {c.actions.done.toLocaleString('fa-IR')} از {c.actions.total.toLocaleString('fa-IR')} انجام شد
                         </span>
                         {c.actions.items.map((a) => (
-                          <p key={a.id} className="flex items-center gap-1 text-[9.5px] text-muted">
+                          <p key={a.id} className="flex items-center gap-1 text-[11px] text-muted">
                             <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: ACTION_STATUS_META[a.status].color }} />
                             <span className="truncate">{a.title}</span>
                           </p>
@@ -148,7 +148,7 @@ export function ReassessmentComparison({ assessment, onOpenPrevious }: { assessm
           </tbody>
         </table>
       </div>
-      <p className="text-[9.5px] leading-5 text-muted">
+      <p className="text-[11px] leading-5 text-muted">
         تغییر سطح فقط وقتی نمایش داده می‌شود که هر دو ارزیابی برای آن شایستگی شواهد داشته باشند؛ «نامعلوم» یعنی در یکی از دو ارزیابی شواهد کافی ثبت نشده و نباید
         آن را بهبود یا افت تلقی کرد. «شکاف‌های بسته‌شده با اقدام انجام‌شده»: {s.closedWithDoneActions.toLocaleString('fa-IR')}.
       </p>
@@ -157,17 +157,17 @@ export function ReassessmentComparison({ assessment, onOpenPrevious }: { assessm
 }
 
 function SideCell({ side }: { side: CompReassessmentSide | null }) {
-  if (!side) return <span className="text-[10px] italic text-muted">ارزیابی نشده</span>
+  if (!side) return <span className="text-[11px] italic text-muted">ارزیابی نشده</span>
   return (
     <span className="flex flex-col items-start gap-1">
-      <span className="num text-[11.5px] font-bold">{side.actualLevel != null ? formatLevel(side.actualLevel) : <span className="text-[10px] font-normal italic text-muted">نامعلوم</span>}</span>
+      <span className="num text-[11.5px] font-bold">{side.actualLevel != null ? formatLevel(side.actualLevel) : <span className="text-[11px] font-normal italic text-muted">نامعلوم</span>}</span>
       <StatusBadge status={side.status} />
     </span>
   )
 }
 
 function DeltaCell({ delta, scoreDelta }: { delta: number | null; scoreDelta: number | null }) {
-  if (delta == null) return <span className="text-[10px] italic text-muted">نامعلوم</span>
+  if (delta == null) return <span className="text-[11px] italic text-muted">نامعلوم</span>
   const title = scoreDelta != null ? `تغییر امتیاز: ${scoreDelta > 0 ? '+' : ''}${scoreDelta.toLocaleString('fa-IR')}` : undefined
   if (delta > 0)
     return (
@@ -195,8 +195,8 @@ function Tile({ icon: Icon, color, label, value, hint, dashed }: { icon: typeof 
       <p className="num text-lg font-black leading-none" style={{ color }}>
         {value}
       </p>
-      <p className="mt-1 text-[10px] font-bold text-secondary">{label}</p>
-      {hint && <p className="text-[9px] text-muted">{hint}</p>}
+      <p className="mt-1 text-[11px] font-bold text-secondary">{label}</p>
+      {hint && <p className="text-[11px] text-muted">{hint}</p>}
     </div>
   )
 }

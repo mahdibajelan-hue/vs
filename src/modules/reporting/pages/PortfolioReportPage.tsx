@@ -203,7 +203,7 @@ export function PortfolioReportPage() {
           <div className="space-y-3">
             {CATEGORY_ORDER.map((cat) => (
               <div key={cat}>
-                <p className="mb-1 text-[10px] font-bold text-muted">{WIDGET_CATEGORY_LABEL_FA[cat]}</p>
+                <p className="mb-1 text-[11px] font-bold text-muted">{WIDGET_CATEGORY_LABEL_FA[cat]}</p>
                 <div className="space-y-1">
                   {(byCategory[cat] ?? []).map((w) => (
                     <label key={w.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-xs hover:bg-white/5">
@@ -215,7 +215,7 @@ export function PortfolioReportPage() {
               </div>
             ))}
           </div>
-          <p className="mt-2 text-[10px] leading-5 text-muted">
+          <p className="mt-2 text-[11px] leading-5 text-muted">
             ویجت‌های وابسته به داده PipePulse تک‌پروژه‌ای (نمودار S و نقاط عطف) در سطح پورتفولیو/طرح داده‌ای برای نمایش ندارند — این محدودیت شناخته‌شده است، چون میانگین یا مجموع چند نمودار S معنای مدیریتی روشنی ندارد.
           </p>
         </div>
@@ -239,7 +239,7 @@ export function PortfolioReportPage() {
           <button
             onClick={handleExportPdf}
             disabled={exporting || !bundle}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-teal-500 px-3 py-2 text-xs font-bold text-white hover:bg-teal-400 disabled:opacity-40"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-teal-700 px-3 py-2 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-40"
           >
             {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} خروجی PDF
           </button>

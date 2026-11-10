@@ -106,7 +106,7 @@ export function SchedulePage({ project }: { project: Project }) {
             <div className="flex-1 overflow-y-auto p-2 space-y-3">
               {[...equipmentByCategory.entries()].map(([category, items]) => (
                 <div key={category}>
-                  <p className="mb-1 px-1 text-[10px] font-bold" style={{ color: SYMBOL_CATEGORY_COLOR[category] }}>
+                  <p className="mb-1 px-1 text-[11px] font-bold" style={{ color: SYMBOL_CATEGORY_COLOR[category] }}>
                     {SYMBOL_CATEGORY_LABEL[category]} ({items.length})
                   </p>
                   <div className="space-y-0.5">

@@ -189,7 +189,7 @@ export function ExamDesignCard({ model, assessment: a }: { model: ResultsModel; 
             </span>
             <div className="min-w-0">
               <p className="text-[11.5px] font-bold leading-5">{m.label}</p>
-              <p className="fx-muted text-[10px]">{m.enabled ? 'در طرح ارزیابی' : 'در طرح نیست'}</p>
+              <p className="fx-muted text-[11px]">{m.enabled ? 'در طرح ارزیابی' : 'در طرح نیست'}</p>
             </div>
           </div>
         ))}
@@ -248,8 +248,8 @@ export function MaturityCard({ model, roleLabel }: { model: ResultsModel; roleLa
           <span className="fx-tone-text">{model.status.recommendation.reason}</span>
         </p>
       )}
-      {i.source === 'template' && <p className="fx-muted mt-2 text-[10px]">متن پیش‌فرض خانواده شغلی — قابل ویرایش توسط ادمین ماژول (جدول تفسیر بلوغ نقش‌ها).</p>}
-      <p className="fx-muted mt-2 text-[10px] leading-5">
+      {i.source === 'template' && <p className="fx-muted mt-2 text-[11px]">متن پیش‌فرض خانواده شغلی — قابل ویرایش توسط ادمین ماژول (جدول تفسیر بلوغ نقش‌ها).</p>}
+      <p className="fx-muted mt-2 text-[11px] leading-5">
         این سطح بلوغ فقط بر پایه‌ی امتیاز فنی-تخصصی محاسبه می‌شود؛ برای برآورد آمادگی کلی از ترکیب همه روش‌های ارزیابی، به «آمادگی برای الزامات شغل» در تحلیل شکاف شایستگی
         (پایین همین بخش) مراجعه کنید.
       </p>
@@ -272,7 +272,7 @@ export function PatternCard({ paragraphs }: { paragraphs: string[] }) {
           </p>
         ))}
       </div>
-      <p className="fx-muted mt-2 text-[10px]">این تحلیل صرفاً از الگوی امتیازات فنی ثبت‌شده در همین ارزیابی ساخته شده و جایگزین قضاوت حرفه‌ای ارزیاب نیست.</p>
+      <p className="fx-muted mt-2 text-[11px]">این تحلیل صرفاً از الگوی امتیازات فنی ثبت‌شده در همین ارزیابی ساخته شده و جایگزین قضاوت حرفه‌ای ارزیاب نیست.</p>
     </div>
   )
 }
@@ -487,7 +487,7 @@ export function InterviewResults({ rows, inDesign }: { rows: InterviewSummaryRow
               <p className="text-[12.5px] font-bold leading-6">
                 {r.labelFa}
                 {r.isCritical && (
-                  <span className="mr-1.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold" style={tone('#ef4444')}>
+                  <span className="mr-1.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold" style={tone('#ef4444')}>
                     <span className="fx-tone-text">حیاتی</span>
                   </span>
                 )}

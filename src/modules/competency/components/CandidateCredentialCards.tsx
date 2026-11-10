@@ -17,12 +17,12 @@ export function EducationCards({ value }: { value: EducationEntry[] }) {
           {e.field && <span className="text-secondary">— {e.field}</span>}
           {e.institution && <span className="text-muted">({e.institution})</span>}
           {e.verified && (
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-emerald-300" title={e.verifiedByName ? `تأیید ${e.verifiedByName}` : undefined}>
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-bold text-emerald-300" title={e.verifiedByName ? `تأیید ${e.verifiedByName}` : undefined}>
               <BadgeCheck size={10} /> اصالت تأییدشده
             </span>
           )}
           {e.year && (
-            <span className="num mr-auto rounded-full bg-white/5 px-1.5 py-0.5 text-[9.5px] text-muted">
+            <span className="num mr-auto rounded-full bg-white/5 px-1.5 py-0.5 text-[11px] text-muted">
               {e.year}
             </span>
           )}
@@ -45,7 +45,7 @@ export function EmploymentCards({ value }: { value: EmploymentEntry[] }) {
             <span className="num text-muted">
               ({formatJalali(e.startDate) || '—'} تا {formatJalali(e.endDate) || 'اکنون'} — {formatDurationFa(duration)})
             </span>
-            {e.isPipelineRole && <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-emerald-300">خط لوله</span>}
+            {e.isPipelineRole && <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[11px] font-bold text-emerald-300">خط لوله</span>}
           </li>
         )
       })}
@@ -86,7 +86,7 @@ function CategoryCard({
     <div className="rounded-xl border p-2.5" style={{ borderColor: `${accent}35`, background: `linear-gradient(135deg, ${accent}12, transparent 65%)` }}>
       <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold" style={{ color: accent }}>
         <Icon size={12} /> {title}
-        <span className="num rounded-full bg-white/5 px-1.5 py-0.5 text-[9.5px] text-muted">{count.toLocaleString('fa-IR')}</span>
+        <span className="num rounded-full bg-white/5 px-1.5 py-0.5 text-[11px] text-muted">{count.toLocaleString('fa-IR')}</span>
       </p>
       <ul className="space-y-1 text-[11px] leading-5">{children}</ul>
     </div>

@@ -361,7 +361,7 @@ function DimensionRow({ dim: d }: { dim: FingerprintDimensionRow }) {
         </span>
         <span className="flex shrink-0 items-center gap-1.5">
           {below && (
-            <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={tone('#ef4444')}>
+            <span className="rounded-full px-1.5 py-0.5 text-[11px] font-bold" style={tone('#ef4444')}>
               <span className="fx-tone-text">زیر حداقل</span>
             </span>
           )}
@@ -371,7 +371,7 @@ function DimensionRow({ dim: d }: { dim: FingerprintDimensionRow }) {
         </span>
       </div>
       <ThresholdBar value={d.score} color={color} min={d.minThreshold} preferredMin={d.preferredMin} preferredMax={d.preferredMax} height={9} />
-      <p className="fx-muted num mt-0.5 flex flex-wrap gap-x-3 text-[10px]">
+      <p className="fx-muted num mt-0.5 flex flex-wrap gap-x-3 text-[11px]">
         {d.minThreshold != null && <span>حداقل الزام شغل: {d.minThreshold.toLocaleString('fa-IR')}</span>}
         {d.rawPercent != null && d.score != null && Math.round(d.rawPercent) !== Math.round(d.score) && <span>خام: {Math.round(d.rawPercent).toLocaleString('fa-IR')}</span>}
         <span>{d.coverageCount.toLocaleString('fa-IR')} گویه{d.confidence === 'LOW' ? ' — اطمینان پایین' : ''}</span>

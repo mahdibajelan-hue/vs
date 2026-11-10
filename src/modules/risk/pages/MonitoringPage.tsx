@@ -16,6 +16,7 @@ import { ScoreTriple, useCategoryLabel } from '../components/rk'
 import { RM_CONTROL_EFFECT_LABEL_FA, RM_CONTROL_TYPE_LABEL_FA, type RmKri } from '../types'
 import type { PageProps } from '../RiskApp'
 import { ModalPortal } from '../../../components/common/ModalPortal'
+import { pressable } from '../../../lib/pressable'
 
 type Sub = 'kri' | 'effect' | 'controls'
 const KRI_RANK = { critical: 0, warn: 1, normal: 2, no_data: 3 } as const
@@ -93,7 +94,7 @@ export function MonitoringPage({ onOpenRisk }: PageProps) {
             {bad.length === 0 ? <div className="im-notice ok">همهٔ اقدام‌های تکمیل‌شده یا اثر تأییدشده دارند یا هنوز در مهلت ارزیابی مجدد هستند.</div> : (
               <div className="im-table-wrap"><table className="im-table"><thead><tr><th>ریسک</th><th>اقدام</th><th>مسئول</th><th>تکمیل</th><th>امتیاز</th><th>وضعیت اثر</th></tr></thead><tbody>
                 {bad.slice(0, 80).map((e) => { const r = riskOf.get(e.action.riskId)!; return (
-                  <tr key={e.action.id} className="rk-row-click" onClick={() => onOpenRisk(r.id, 'response')}>
+                  <tr key={e.action.id} className="rk-row-click" {...pressable(() => onOpenRisk(r.id, 'response'), { row: true })}>
                     <td><span className="im-code">{r.code}</span></td><td>{e.action.description}</td><td className="im-helper">{dir.name(e.action.ownerId)}</td>
                     <td className="im-helper">{formatJalali((e.action.completedAt ?? e.action.updatedAt).slice(0, 10))}</td>
                     <td>{e.before !== null && e.after !== null ? <span>{e.before} ← <b>{e.after}</b></span> : <span className="im-helper">{e.before ?? '—'}</span>}</td>
@@ -120,7 +121,7 @@ export function MonitoringPage({ onOpenRisk }: PageProps) {
           {ctlRows.length === 0 ? <div className="im-empty">کنترلی برای نمایش نیست. کنترل‌ها را در تب «کنترل‌ها»ی هر ریسک ثبت کنید.</div> : (
             <div className="im-table-wrap"><table className="im-table"><thead><tr><th>کنترل</th><th>ریسک</th><th>نوع</th><th>مسئول</th><th>آخرین آزمون</th><th>اثربخشی</th></tr></thead><tbody>
               {ctlRows.slice(0, 150).map(({ c, r, problem }) => (
-                <tr key={c.id} className="rk-row-click" onClick={() => onOpenRisk(r.id, 'controls')}>
+                <tr key={c.id} className="rk-row-click" {...pressable(() => onOpenRisk(r.id, 'controls'), { row: true })}>
                   <td><b>{c.name}</b> {c.isCritical && <span className="rk-flag" style={{ ['--c' as string]: '#ef4444' }}>حیاتی</span>} {problem && <span className="rk-flag" style={{ ['--c' as string]: '#f59e0b' }}>نیازمند آزمون/تمدید</span>}</td>
                   <td><span className="im-code">{r.code}</span> <ScoreTriple state={d.states.get(r.id)!} policy={d.policyFor(r.projectId)} /></td>
                   <td className="im-helper">{RM_CONTROL_TYPE_LABEL_FA[c.controlType]}</td><td className="im-helper">{dir.name(c.ownerId)}</td>

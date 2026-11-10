@@ -132,11 +132,11 @@ export function ReportBuilderPage({ masterProjectId }: { masterProjectId: string
 
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-[10px] text-muted">شروع دوره</span>
+              <span className="mb-1 block text-[11px] text-muted">شروع دوره</span>
               <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="w-full rounded-lg bg-black/20 border border-white/10 px-2 py-1.5 text-xs" />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] text-muted">پایان دوره</span>
+              <span className="mb-1 block text-[11px] text-muted">پایان دوره</span>
               <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="w-full rounded-lg bg-black/20 border border-white/10 px-2 py-1.5 text-xs" />
             </label>
           </div>
@@ -147,7 +147,7 @@ export function ReportBuilderPage({ masterProjectId }: { masterProjectId: string
           <div className="space-y-3">
             {CATEGORY_ORDER.map((cat) => (
               <div key={cat}>
-                <p className="mb-1 text-[10px] font-bold text-muted">{WIDGET_CATEGORY_LABEL_FA[cat]}</p>
+                <p className="mb-1 text-[11px] font-bold text-muted">{WIDGET_CATEGORY_LABEL_FA[cat]}</p>
                 <div className="space-y-1">
                   {(byCategory[cat] ?? []).map((w) => (
                     <label key={w.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-xs hover:bg-white/5">
@@ -200,7 +200,7 @@ export function ReportBuilderPage({ masterProjectId }: { masterProjectId: string
           <button
             onClick={handleGenerate}
             disabled={generating || widgetIds.length === 0 || !bundle}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-teal-500 px-3 py-2 text-xs font-bold text-white hover:bg-teal-400 disabled:opacity-40"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-teal-700 px-3 py-2 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-40"
           >
             {generating ? <Loader2 size={13} className="animate-spin" /> : <FileOutput size={13} />} تولید گزارش (Snapshot)
           </button>

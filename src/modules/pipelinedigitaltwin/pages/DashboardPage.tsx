@@ -145,7 +145,7 @@ export function DashboardPage({ initialLayer = null, official }: { initialLayer?
           )}
           <button
             onClick={() => setDockOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-full border border-white/15 bg-[rgba(10,14,20,0.85)] px-4 py-1 text-[10px] font-medium text-white/80 backdrop-blur-md hover:bg-white/10"
+            className="flex items-center gap-1.5 rounded-full border border-white/15 bg-[rgba(10,14,20,0.85)] px-4 py-1 text-[11px] font-medium text-white/80 backdrop-blur-md hover:bg-white/10"
           >
             {dockOpen ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
             {dockOpen ? 'بستن پروفایل و جدول زمانی' : 'نمایش پروفایل و جدول زمانی'}

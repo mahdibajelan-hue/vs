@@ -19,7 +19,7 @@ function BrandName({ className = '', compact }: { className?: string; compact?: 
     return (
       <div className={`flex items-center justify-center gap-3 ${className}`}>
         <span dir="ltr" className="flex items-center gap-2.5">
-          <span className="lp-brand-farin bg-gradient-to-b from-white via-zinc-300 to-zinc-500 bg-clip-text text-4xl font-bold tracking-tight text-transparent md:text-3xl">FARIN</span>
+          <span className="lp-brand-farin text-4xl font-bold tracking-tight text-zinc-100 md:text-3xl">FARIN</span>
           <PmisMark className="text-4xl md:text-3xl" />
         </span>
         <span className="lp-brand-fa text-3xl font-extrabold leading-tight text-[#c9a227] md:text-2xl">{FARIN_NAME_FA}</span>
@@ -29,7 +29,7 @@ function BrandName({ className = '', compact }: { className?: string; compact?: 
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
       <span dir="ltr" className="flex items-center gap-3">
-        <span className="bg-gradient-to-b from-white via-zinc-300 to-zinc-600 bg-clip-text text-6xl font-bold tracking-tight text-transparent drop-shadow-md md:text-5xl">FARIN</span>
+        <span className="text-6xl font-bold tracking-tight text-zinc-100 drop-shadow-md md:text-5xl">FARIN</span>
         <PmisMark className="text-6xl md:text-5xl" />
       </span>
       <span className="text-5xl font-extrabold leading-tight text-[#c9a227] md:text-4xl">{FARIN_NAME_FA}</span>

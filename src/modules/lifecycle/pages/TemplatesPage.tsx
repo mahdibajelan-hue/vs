@@ -45,14 +45,14 @@ export function TemplatesPage() {
           <div className="rounded-lg border p-4 text-center" style={{ borderColor: 'var(--border-soft)' }}>
             <Sparkles size={22} className="mx-auto mb-2 text-muted" />
             <p className="mb-1 text-xs font-bold">هنوز قالبی ایجاد نشده است</p>
-            <p className="mb-3 text-[10px] text-muted">
+            <p className="mb-3 text-[11px] text-muted">
               سه قالب پیش‌فرض (خط لوله EPC، ایستگاه تقویت فشار، ساختمانی) با {faNum(DEFAULT_TEMPLATE_STAGES.length)} مرحله
               و چک‌لیست کامل پیش‌پروژه ساخته می‌شوند.
             </p>
             <button
               onClick={seedTemplates}
               disabled={saving}
-              className="rounded-lg bg-sky-500 px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+              className="rounded-lg bg-sky-700 px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
             >
               {saving ? 'در حال ایجاد...' : 'ایجاد قالب‌های پیش‌فرض'}
             </button>
@@ -64,9 +64,9 @@ export function TemplatesPage() {
                 <div className="flex items-center gap-2">
                   <Layers size={14} className="text-muted" />
                   <span className="text-sm font-bold">{t.name}</span>
-                  {t.isDefault && <span className="rounded bg-sky-500/15 px-1.5 py-px text-[9px] text-sky-400">پیش‌فرض</span>}
+                  {t.isDefault && <span className="rounded bg-sky-500/15 px-1.5 py-px text-[11px] text-sky-400">پیش‌فرض</span>}
                 </div>
-                <p className="mt-1 text-[10px] leading-relaxed text-muted">{t.description}</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted">{t.description}</p>
               </li>
             ))}
           </ul>
@@ -80,7 +80,7 @@ export function TemplatesPage() {
           ) : (
             <>
               <div className="mb-3 grid gap-2 sm:grid-cols-2">
-                <label className="text-[10px] text-muted">
+                <label className="text-[11px] text-muted">
                   پروژه
                   <select
                     value={selectedProject}
@@ -99,7 +99,7 @@ export function TemplatesPage() {
                     </optgroup>
                   </select>
                 </label>
-                <label className="text-[10px] text-muted">
+                <label className="text-[11px] text-muted">
                   قالب
                   <select
                     value={selectedTemplate}
@@ -114,7 +114,7 @@ export function TemplatesPage() {
               </div>
 
               {selectedProject && allLifecycles.some((l) => l.projectId === selectedProject) && (
-                <p className="mb-2 text-[10px]" style={{ color: '#fab219' }}>
+                <p className="mb-2 text-[11px]" style={{ color: '#fab219' }}>
                   این پروژه از قبل چرخه عمر دارد — تخصیص مجدد، بندهای چک‌لیست را دوباره اضافه می‌کند.
                 </p>
               )}
@@ -125,7 +125,7 @@ export function TemplatesPage() {
                   await instantiateTemplate(selectedProject, selectedTemplate)
                   setDone(true)
                 }}
-                className="flex items-center gap-1.5 rounded-lg bg-sky-500 px-4 py-2 text-xs font-medium text-white disabled:opacity-40"
+                className="flex items-center gap-1.5 rounded-lg bg-sky-700 px-4 py-2 text-xs font-medium text-white disabled:opacity-40"
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : done ? <Check size={13} /> : null}
                 {saving ? 'در حال تخصیص...' : done ? 'تخصیص انجام شد' : 'تخصیص قالب به پروژه'}
@@ -141,7 +141,7 @@ export function TemplatesPage() {
           دوباره نمی‌سازد. پروژه‌ها در مراحل مختلف (پیش‌پروژه تا اختتام) و وضعیت‌های متفاوت
           (در مسیر، در معرض ریسک، تأخیرکرده، مسدود) توزیع می‌شوند تا همه حالت‌های داشبورد قابل آزمایش باشد.
         </p>
-        {seedMessage && <p className="mb-2 text-[10px] text-muted">{seedMessage}</p>}
+        {seedMessage && <p className="mb-2 text-[11px] text-muted">{seedMessage}</p>}
         <div className="flex flex-wrap gap-2">
           <button
             disabled={seedBusy}
@@ -159,7 +159,7 @@ export function TemplatesPage() {
               }
               setSeedBusy(false)
             }}
-            className="flex items-center gap-1.5 rounded-lg bg-sky-500 px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg bg-sky-700 px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
           >
             {seedBusy ? <Loader2 size={13} className="animate-spin" /> : <Database size={13} />}
             ایجاد داده نمونه
@@ -188,10 +188,10 @@ export function TemplatesPage() {
             <li key={s.stageKey} className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-[11px]"
               style={{ borderColor: 'var(--border-soft)' }}>
               <span className="flex items-center gap-2">
-                <span className="text-[9px] text-muted">{faNum(String(i + 1).padStart(2, '0'))}</span>
+                <span className="text-[11px] text-muted">{faNum(String(i + 1).padStart(2, '0'))}</span>
                 {STAGE_LABEL_FA[s.stageKey as StageKey]}
               </span>
-              <span className="flex items-center gap-2 text-[10px] text-muted">
+              <span className="flex items-center gap-2 text-[11px] text-muted">
                 {s.gateName && <span className="rounded bg-sky-500/10 px-1.5 py-px text-sky-400">{s.gateName}</span>}
                 <span>{faNum(s.checklist.length)} بند</span>
               </span>

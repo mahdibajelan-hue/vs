@@ -127,7 +127,7 @@ export function RadarDisplay({
         return (
           <span
             key={deg}
-            className="num absolute -translate-x-1/2 -translate-y-1/2 text-[9px]"
+            className="num absolute -translate-x-1/2 -translate-y-1/2 text-[11px]"
             style={{ left: `${x}%`, top: `${y}%`, color: 'var(--radar-grid-text)' }}
           >
             {deg}
@@ -188,7 +188,7 @@ export function RadarDisplay({
             {isHovered && selected?.id !== signal.id && (
               <span
                 dir="rtl"
-                className="pointer-events-none absolute bottom-full mb-1.5 whitespace-nowrap rounded-lg border px-2 py-1 text-[10px] font-bold"
+                className="pointer-events-none absolute bottom-full mb-1.5 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-bold"
                 style={{ borderColor: 'var(--border-soft)', background: 'var(--bg-panel-solid)', color: 'var(--text-primary)' }}
               >
                 {signal.title} · {signal.subject}
@@ -214,7 +214,7 @@ export function RadarDisplay({
         >
           <div className="mb-2 flex items-start justify-between gap-2">
             <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-extrabold"
+              className="rounded-full px-2 py-0.5 text-[11px] font-extrabold"
               style={{ background: `color-mix(in srgb, ${SEVERITY_COLOR[selected.severity]} 18%, transparent)`, color: SEVERITY_COLOR[selected.severity] }}
             >
               {SIGNAL_CATEGORY_LABEL_FA[selected.category]} · {SEVERITY_LABEL_FA[selected.severity]}

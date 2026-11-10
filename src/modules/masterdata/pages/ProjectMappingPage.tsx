@@ -47,7 +47,7 @@ export function ProjectMappingPage() {
               const source = sourceProjects.find((sp) => sp.sourceModule === m.sourceModule && sp.sourceProjectId === m.sourceProjectId)
               return (
                 <div key={m.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-secondary">
+                  <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-secondary">
                     {MAPPING_SOURCE_MODULE_LABEL_FA[m.sourceModule]}
                   </span>
                   <p className="min-w-0 flex-1 truncate text-sm">{source?.name ?? m.aliasName ?? '—'}</p>
@@ -116,7 +116,7 @@ function UnmappedRow({
 
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 py-2.5">
-      <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-secondary">
+      <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-secondary">
         {MAPPING_SOURCE_MODULE_LABEL_FA[source.sourceModule as keyof typeof MAPPING_SOURCE_MODULE_LABEL_FA]}
       </span>
       <p className="min-w-0 flex-1 truncate text-sm">{source.name}</p>

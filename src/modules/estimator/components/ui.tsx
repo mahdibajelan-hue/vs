@@ -21,7 +21,7 @@ export function Field({
     <label className="est-field block mb-3">
       <div className="flex items-baseline justify-between mb-1 gap-2">
         <span className="text-xs font-medium" style={{ color: INK_SOFT }}>{label}</span>
-        {(unit || percent) && <span className="text-[10px] shrink-0" style={{ color: MUTED_FG }}>{percent ? '٪' : unit}</span>}
+        {(unit || percent) && <span className="text-[11px] shrink-0" style={{ color: MUTED_FG }}>{percent ? '٪' : unit}</span>}
       </div>
       <input
         type="number"
@@ -32,7 +32,7 @@ export function Field({
         className="est-input est-mono w-full rounded-lg px-2.5 py-2 text-sm"
         style={{ direction: 'ltr', textAlign: 'left', background: SURFACE_2, border: `1px solid ${BORDER}`, color: INK }}
       />
-      {hint && <div className="text-[10px] mt-1 leading-relaxed" style={{ color: MUTED_FG }}>{hint}</div>}
+      {hint && <div className="text-[11px] mt-1 leading-relaxed" style={{ color: MUTED_FG }}>{hint}</div>}
     </label>
   )
 }
@@ -59,7 +59,7 @@ export function Toggle({ label, value, onChange, hint }: { label: string; value:
     <div className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 mb-2" style={{ background: SURFACE_2, border: `1px solid ${BORDER}` }}>
       <div>
         <div className="text-sm font-medium" style={{ color: INK }}>{label}</div>
-        {hint && <div className="text-[10px] mt-0.5" style={{ color: MUTED_FG }}>{hint}</div>}
+        {hint && <div className="text-[11px] mt-0.5" style={{ color: MUTED_FG }}>{hint}</div>}
       </div>
       <Segmented value={value ? 'y' : 'n'} onChange={(v) => onChange(v === 'y')} options={[['y', 'بله'], ['n', 'خیر']]} />
     </div>

@@ -38,7 +38,7 @@
 .tw-num { padding: .65rem .7rem; border-radius: .85rem; border: 1px solid var(--border-soft); }
 .tw-num small { display: block; font-size: 10.5px; color: var(--text-muted); }
 .tw-num b { display: block; font-size: 1.55rem; font-weight: 900; line-height: 1.15; font-variant-numeric: tabular-nums; }
-.tw-num em { font-style: normal; font-size: 10px; color: var(--text-muted); }
+.tw-num em { font-style: normal; font-size: 11px; color: var(--text-muted); }
 .tw-num.is-acc b { color: var(--acc); }
 .tw-gap { font-size: 11px; padding: .45rem .6rem; border-radius: .6rem; background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--warn); line-height: 1.7; }
 

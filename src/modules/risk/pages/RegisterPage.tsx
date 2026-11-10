@@ -16,6 +16,7 @@ import { LevelChip, PersonSelect, ScoreTriple, StatusChip, useCategoryLabel } fr
 import type { PageProps } from '../RiskApp'
 import { ModalPortal } from '../../../components/common/ModalPortal'
 import { todayTehran } from '../../../lib/today'
+import { pressable } from '../../../lib/pressable'
 
 interface Filter { q: string; project: string; status: string; level: string; zone: string; category: string; owner: string; source: string; attention: boolean; reviewOverdue: boolean; cell: { p: number; i: number } | null }
 const EMPTY: Filter = { q: '', project: 'all', status: 'active', level: 'all', zone: 'all', category: 'all', owner: 'all', source: 'all', attention: false, reviewOverdue: false, cell: null }
@@ -142,7 +143,7 @@ export function RegisterPage({ onOpenRisk, onNew }: PageProps) {
             </tr></thead>
             <tbody>
               {list.slice(0, 400).map(({ risk: r, state: s }) => (
-                <tr key={r.id} className="rk-row-click" onClick={() => onOpenRisk(r.id)}>
+                <tr key={r.id} className="rk-row-click" {...pressable(() => onOpenRisk(r.id), { row: true })}>
                   <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`انتخاب ${r.code}`} checked={sel.has(r.id)} onChange={(e) => setSel((o) => { const n = new Set(o); if (e.target.checked) n.add(r.id); else n.delete(r.id); return n })} /></td>
                   <td><span className="im-code">{r.code}</span>{d.scope === 'all' && <div className="im-helper" style={{ fontSize: 10 }}>{projName(r.projectId).slice(0, 22)}</div>}</td>
                   <td style={{ minWidth: 260 }}>

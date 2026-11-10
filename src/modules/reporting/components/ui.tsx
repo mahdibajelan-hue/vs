@@ -24,7 +24,7 @@ export function ToneBadge({ tone, label }: { tone: SemanticTone; label?: string 
   const color = SEMANTIC_TONE_COLOR[tone]
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold"
+      className="inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold"
       style={{ color, borderColor: `${color}55`, background: `${color}15` }}
     >
       <Icon size={11} />
@@ -56,9 +56,9 @@ export function KpiCard({
       </p>
       <div className="mt-1.5 flex items-center gap-1.5">
         <ToneBadge tone={tone} />
-        {trend && <span className="text-[10px] text-muted">{trend}</span>}
+        {trend && <span className="text-[11px] text-muted">{trend}</span>}
       </div>
-      {sublabel && <p className="mt-1 text-[10px] text-muted">{sublabel}</p>}
+      {sublabel && <p className="mt-1 text-[11px] text-muted">{sublabel}</p>}
     </div>
   )
 }
@@ -81,7 +81,7 @@ export function UnmappedNotice({ moduleLabel }: { moduleLabel: string }) {
   return (
     <div className="flex h-24 flex-col items-center justify-center gap-1 text-center">
       <p className="text-xs text-muted">این پروژه به {moduleLabel} نگاشت نشده است</p>
-      <p className="text-[10px] text-muted">از بخش «نگاشت پروژه‌ها» در داده پایه اقدام کنید</p>
+      <p className="text-[11px] text-muted">از بخش «نگاشت پروژه‌ها» در داده پایه اقدام کنید</p>
     </div>
   )
 }

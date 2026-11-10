@@ -51,7 +51,7 @@ export function SymbolPalette({ mode, onModeChange }: SymbolPaletteProps) {
                   }`}
                 >
                   <SymbolPreview type={s.type} />
-                  <span className="text-[10px] leading-tight text-center">{s.label}</span>
+                  <span className="text-[11px] leading-tight text-center">{s.label}</span>
                 </button>
               )
             })}

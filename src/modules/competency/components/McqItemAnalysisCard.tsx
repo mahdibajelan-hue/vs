@@ -38,7 +38,7 @@ export function McqItemAnalysisCard() {
           <span className="rounded-lg border border-white/10 px-2.5 py-1">دارای دادهٔ کافی: <b className="num">{fa(sum.measured)}</b></span>
           <span className="rounded-lg border border-white/10 px-2.5 py-1" style={{ color: sum.easy ? '#f59e0b' : undefined }}>بسیار آسان: <b className="num">{fa(sum.easy)}</b></span>
           <span className="rounded-lg border border-white/10 px-2.5 py-1">بسیار دشوار: <b className="num">{fa(sum.hard)}</b></span>
-          <button className="mr-auto flex items-center gap-1.5 rounded-xl bg-amber-600 px-3 py-1.5 text-[11.5px] font-bold text-white disabled:opacity-40" disabled={busy || sum.easy === 0} onClick={() => void retire()}><Archive size={13} /> کنار گذاشتن سؤال‌های بسیار آسان</button>
+          <button className="mr-auto flex items-center gap-1.5 rounded-xl bg-amber-700 px-3 py-1.5 text-[11.5px] font-bold text-white disabled:opacity-40" disabled={busy || sum.easy === 0} onClick={() => void retire()}><Archive size={13} /> کنار گذاشتن سؤال‌های بسیار آسان</button>
         </div>
       )}
       {rows != null && sum.measured === 0 && <p className="mt-2 text-[11px] text-muted">هنوز هیچ سؤالی به {fa(MIN_N)} آزمون ثبت‌شده نرسیده است؛ تحلیل با افزایش آزمون‌ها فعال می‌شود ({fa(sum.sittings)} پاسخ ثبت شده).</p>}
