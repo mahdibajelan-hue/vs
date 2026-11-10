@@ -44,7 +44,10 @@ export function AboutPage() {
             </p>
             <p className="mt-3 text-xs text-muted">by</p>
             <img
-              src={`${import.meta.env.BASE_URL}signature-mahdi.png`}
+              src={`${import.meta.env.BASE_URL}signature-mahdi.webp`}
+        width={400}
+        height={248}
+        decoding="async"
               alt="Mahdi Bajelan"
               className="h-28 w-auto"
               onError={(e) => {

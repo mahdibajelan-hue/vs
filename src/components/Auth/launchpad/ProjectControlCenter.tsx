@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react'
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
+import { Loader2 } from 'lucide-react'
 import { useModuleStore, type ModuleKey } from '../../../store/useModuleStore'
 import { useAuthStore } from '../../../store/useAuthStore'
-import { ProjectRadarPage } from '../radar/ProjectRadarPage'
 import { LampContainer } from '@/components/ui/lamp'
 import { Header } from './Header'
 import { ModuleLaunchpad } from './ModuleLaunchpad'
@@ -58,14 +58,29 @@ function BrandTitle({ centered, nameOnDesktopOnly, children }: { centered?: bool
  * Project Radar is the one entry point that isn't RBAC-gated like the rest (see
  * ModuleLaunchpad's REGULAR_MODULES list); picking it opens ProjectRadarPage in its place.
  */
+// The radar and its live-data loaders (execution, schedule, materials, finance, Stage-Gate) are only needed after
+// sign-in, so they stay out of the sign-in page's download and are fetched in the background once signed in.
+const loadRadar = () => import('../radar/ProjectRadarPage')
+const ProjectRadarPage = lazy(() => loadRadar().then((m) => ({ default: m.ProjectRadarPage })))
+
 export function ProjectControlCenter({ onEnterModule }: { onEnterModule: (key: ModuleKey) => void }) {
   const radarOpen = useModuleStore((s) => s.radarOpen)
   const openRadar = useModuleStore((s) => s.openRadar)
   const exitToHub = useModuleStore((s) => s.exitToHub)
   const isAuthed = useAuthStore((s) => s.isAuthed)
+  useEffect(() => {
+    if (!isAuthed) return
+    const idle = (window as unknown as { requestIdleCallback?: (f: () => void) => number }).requestIdleCallback
+    const go = () => { void loadRadar().catch(() => undefined) }
+    if (idle) idle(go); else setTimeout(go, 800)
+  }, [isAuthed])
 
   if (radarOpen) {
-    return <ProjectRadarPage onBack={exitToHub} />
+    return (
+      <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)' }}><Loader2 size={26} className="animate-spin text-brand-400" /></div>}>
+        <ProjectRadarPage onBack={exitToHub} />
+      </Suspense>
+    )
   }
 
   const handleSelect = (key: 'radar' | ModuleKey) => {

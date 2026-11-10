@@ -2,7 +2,7 @@
 export function Logo({ size = 36, className = '' }: { size?: number; className?: string }) {
   return (
     <img
-      src={`${import.meta.env.BASE_URL}logo-icon.png`}
+      src={`${import.meta.env.BASE_URL}logo-icon.webp`}
       alt="لوگوی PipePulse"
       width={size}
       height={size}
@@ -16,7 +16,7 @@ export function Logo({ size = 36, className = '' }: { size?: number; className?:
 export function LogoFull({ width = 220, className = '' }: { width?: number; className?: string }) {
   return (
     <img
-      src={`${import.meta.env.BASE_URL}logo-full.png`}
+      src={`${import.meta.env.BASE_URL}logo-full.webp`}
       alt="PipePulse — Piping Progress Intelligence"
       width={width}
       className={`object-contain ${className}`}

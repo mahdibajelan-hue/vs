@@ -28,7 +28,10 @@ export function AboutNote() {
       </p>
 
       <img
-        src={`${import.meta.env.BASE_URL}signature-mahdi.png`}
+        src={`${import.meta.env.BASE_URL}signature-mahdi.webp`}
+        width={400}
+        height={248}
+        decoding="async"
         alt="Mahdi Bajelan — Software Engineer"
         className="mt-1 h-24 w-auto self-center opacity-80 sm:h-28 md:h-16"
         onError={(e) => {

@@ -11,8 +11,6 @@ import { Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
 import { SetOwnPassword, mustSetPassword } from './components/Auth/SetOwnPassword'
 import { ProfileForm } from './components/Auth/ProfileForm'
 import { createSupabaseRepo as createLandRepo } from './modules/landacq/repo/supabaseRepo'
-import { InboxOverlay } from './modules/inbox/components/InboxOverlay'
-import { GlobalSearch } from './components/search/GlobalSearch'
 
 // Every module is its own chunk: the hub opens without parsing them all, and each is warmed in the background once the hub is idle.
 const moduleLoaders = {
@@ -44,6 +42,11 @@ const moduleLoaders = {
   App: () => import('./App').then((m) => ({ default: m.default })),
 }
 const App = lazy(moduleLoaders.App)
+// signed-in overlays: the inbox pulls in several module stores, so neither belongs in the sign-in page's download
+const InboxOverlayLazy = lazy(() => import('./modules/inbox/components/InboxOverlay').then((m) => ({ default: m.InboxOverlay })))
+const GlobalSearchLazy = lazy(() => import('./components/search/GlobalSearch').then((m) => ({ default: m.GlobalSearch })))
+const InboxOverlay = () => <Suspense fallback={null}><InboxOverlayLazy /></Suspense>
+const GlobalSearch = () => <Suspense fallback={null}><GlobalSearchLazy /></Suspense>
 // public token pages and the project workspace stay out of the first download: the sign-in screen needs none of them
 const ProjectWorkspace = lazy(() => import('./components/Auth/radar/ProjectWorkspace').then((m) => ({ default: m.ProjectWorkspace })))
 const CandidateSelfServicePage = lazy(() => import('./modules/competency/pages/CandidateSelfServicePage').then((m) => ({ default: m.CandidateSelfServicePage })))

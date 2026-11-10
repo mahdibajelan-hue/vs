@@ -43,22 +43,22 @@ export const LampContainer = ({
       >
         <div className={cn('relative isolate z-0 flex h-[24rem] w-full shrink-0 scale-y-125 items-center justify-center', lightClassName)}>
           <motion.div
-            initial={{ opacity: 0.5, width: '15rem' }}
-            whileInView={{ opacity: 1, width: '30rem' }}
+            initial={{ opacity: 0.5, scaleX: 0.5 }}
+            whileInView={{ opacity: 1, scaleX: 1 }}
             viewport={{ once: true }}
             transition={reveal}
-            style={{ backgroundImage: `conic-gradient(from 70deg at center top, ${color}, transparent, transparent)` }}
+            style={{ transformOrigin: 'right center', backgroundImage: `conic-gradient(from 70deg at center top, ${color}, transparent, transparent)` }}
             className="absolute inset-auto right-1/2 h-56 w-[30rem] overflow-visible"
           >
             <div className="absolute bottom-0 left-0 z-20 h-40 w-full bg-[var(--lamp-bg,#020617)] [mask-image:linear-gradient(to_top,white,transparent)]" />
             <div className="absolute bottom-0 left-0 z-20 h-full w-40 bg-[var(--lamp-bg,#020617)] [mask-image:linear-gradient(to_right,white,transparent)]" />
           </motion.div>
           <motion.div
-            initial={{ opacity: 0.5, width: '15rem' }}
-            whileInView={{ opacity: 1, width: '30rem' }}
+            initial={{ opacity: 0.5, scaleX: 0.5 }}
+            whileInView={{ opacity: 1, scaleX: 1 }}
             viewport={{ once: true }}
             transition={reveal}
-            style={{ backgroundImage: `conic-gradient(from 290deg at center top, transparent, transparent, ${color})` }}
+            style={{ transformOrigin: 'left center', backgroundImage: `conic-gradient(from 290deg at center top, transparent, transparent, ${color})` }}
             className="absolute inset-auto left-1/2 h-56 w-[30rem]"
           >
             <div className="absolute bottom-0 right-0 z-20 h-full w-40 bg-[var(--lamp-bg,#020617)] [mask-image:linear-gradient(to_left,white,transparent)]" />
@@ -71,16 +71,16 @@ export const LampContainer = ({
             style={{ background: color }}
           />
           <motion.div
-            initial={{ width: '8rem' }}
-            whileInView={{ width: '16rem' }}
+            initial={{ scaleX: 0.5 }}
+            whileInView={{ scaleX: 1 }}
             viewport={{ once: true }}
             transition={reveal}
             className="absolute inset-auto z-30 h-36 w-64 -translate-y-[6rem] rounded-full blur-2xl"
             style={{ background: glowColor }}
           />
           <motion.div
-            initial={{ width: '15rem' }}
-            whileInView={{ width: '30rem' }}
+            initial={{ scaleX: 0.5 }}
+            whileInView={{ scaleX: 1 }}
             viewport={{ once: true }}
             transition={reveal}
             className="absolute inset-auto z-50 h-0.5 w-[30rem] -translate-y-[7rem]"
