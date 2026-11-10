@@ -107,9 +107,10 @@ export function StageOrbit({ stages, gates, gateStatuses, currentStageKey, onSel
     }
   }), [ordered, n, gateByStage, gateStatuses, progressInfo])
 
+  // read before the early return: when the stages arrive after an empty first render, a hook below the return would change the hook count and React would throw
+  const P: Palette = useStore((st) => st.theme) === 'light' ? PALETTE.light : PALETTE.dark
   if (n === 0) return null
 
-  const P: Palette = useStore((st) => st.theme) === 'light' ? PALETTE.light : PALETTE.dark
   const summary = executiveSummary(stages, progressInfo, gateStatuses, currentStageKey)
   const overallActual = summary.actual
   const overallPlanned = summary.planned

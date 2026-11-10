@@ -40,3 +40,6 @@ backups/
 .impeccable/config.local.json
 .impeccable/hook.cache.json
 .impeccable/*.pending*
+
+# Upload packages from scripts/package-host.mjs — built artifacts, never committed.
+release/

@@ -1,0 +1,28 @@
+# فرین PMIS — Apache / LiteSpeed (cPanel, DirectAdmin, Plesk on Linux)
+# The app is one page: every screen is index.html plus query strings, so no rewrite rules are needed.
+
+DirectoryIndex index.html
+Options -Indexes
+
+<IfModule mod_mime.c>
+  AddType application/wasm .wasm
+  AddType image/webp .webp
+  AddType application/json .json
+  AddType text/javascript .js .mjs
+  AddCharset utf-8 .js .css .html .json
+</IfModule>
+
+# gzip text files (most shared hosts have mod_deflate)
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json image/svg+xml application/wasm
+</IfModule>
+
+# index.html must always be fresh (it names the current build's files and drives the in-app «نسخهٔ جدید» notice);
+# files under assets/ carry a content hash in their names; assets/.htaccess caches them for a year.
+<IfModule mod_headers.c>
+  <FilesMatch "^index\.html$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

@@ -17,7 +17,9 @@ const cesium = (cesiumPluginModule as unknown as { default: (options?: Record<st
 export default defineConfig({
   define: { __BUILD_ID__: JSON.stringify(buildId) },
   // GitHub Pages serves this repo under /vs/ (a project site, not a username.github.io root site).
-  base: process.env.GH_PAGES ? '/vs/' : '/',
+  // HOST_BUILD (npm run package:host): relative URLs, so the same files work at a domain root or in any sub-folder of
+  // an ordinary web host. The app has no path routing (state lives in query strings), so nothing else depends on the base.
+  base: process.env.GH_PAGES ? '/vs/' : process.env.HOST_BUILD ? './' : '/',
   // vite-plugin-cesium copies Cesium's static Assets/Widgets/Workers into the build and points
   // CESIUM_BASE_URL at them — needed once, used only by the Pipeline Digital Twin module. Default
   // mode marks 'cesium' as external and injects a global <script> tag straight into index.html,

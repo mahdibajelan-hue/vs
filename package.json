@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "test": "node --disable-warning=ExperimentalWarning scripts/run-tests.mjs",
     "preview": "vite preview",
+    "package:host": "node scripts/package-host.mjs",
     "lint:boundaries": "node scripts/check-module-boundaries.mjs"
   },
   "dependencies": {
