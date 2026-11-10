@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Download, FileSpreadsheet, Plus, Printer, Search, Upload } from 'lucide-react'
-import { formatJalali } from '../../../lib/jalali'
+import { formatJalaliFa } from '../../../lib/jalali'
 import { JalaliDateField } from '../../issues/components/JalaliDateField'
 import { HelpButton } from '../../issues/components/Help'
 import { useRiskData, useRiskDirectory, useRiskRole } from '../lib/useRiskData'
@@ -97,7 +97,7 @@ export function RegisterPage({ onOpenRisk, onNew }: PageProps) {
   return (
     <div className="im-page">
       <div className="im-topbar">
-        <div><div className="im-page-title">شناسایی و ثبت ریسک</div><div className="im-page-sub">{list.length} از {d.risks.length} ریسک</div></div>
+        <div><div className="im-page-title">شناسایی و ثبت ریسک</div><div className="im-page-sub">{list.length.toLocaleString('fa-IR')} از {d.risks.length.toLocaleString('fa-IR')} ریسک</div></div>
         <div className="im-actions">
           <HelpButton content={RK_HELP.register} />
           <button className="im-btn im-btn-ghost im-btn-sm" disabled={!list.length} onClick={() => printTable('رجیستر ریسک', 'بر اساس فیلترهای اعمال‌شده', filterSummary(), REGISTER_HEADERS, rowsOut()) || window.alert('مرورگر پنجرهٔ چاپ را مسدود کرد.')}><Printer size={14} /> چاپ / PDF</button>
@@ -160,7 +160,7 @@ export function RegisterPage({ onOpenRisk, onNew }: PageProps) {
                   <td><div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}><ScoreTriple state={s} policy={d.policyFor(r.projectId)} /><LevelChip level={s.level} /></div></td>
                   <td className="hide-sm"><StatusChip status={r.status} /></td>
                   <td className="im-helper hide-sm">{r.ownerId ? dir.name(r.ownerId) : <span style={{ color: 'var(--im-coral)' }}>بدون مالک</span>}</td>
-                  <td className="im-helper hide-sm" style={{ color: s.reviewOverdue ? 'var(--im-coral)' : undefined, fontWeight: s.reviewOverdue ? 700 : 400 }}>{r.status === 'closed' ? '—' : formatJalali(s.reviewDue)}</td>
+                  <td className="im-helper hide-sm" style={{ color: s.reviewOverdue ? 'var(--im-coral)' : undefined, fontWeight: s.reviewOverdue ? 700 : 400 }}>{r.status === 'closed' ? '—' : formatJalaliFa(s.reviewDue)}</td>
                 </tr>
               ))}
             </tbody>

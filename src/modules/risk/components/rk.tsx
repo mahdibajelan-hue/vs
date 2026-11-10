@@ -22,7 +22,7 @@ export function StatusChip({ status }: { status: RmRisk['status'] }) {
 }
 
 export function ScoreBox({ score, label, policy = DEFAULT_POLICY }: { score: number; label?: string; policy?: RmPolicy }) {
-  return <span className={`rk-sc rk-lv-${levelOf(score, policy)}`}>{score}{label && <small>{label}</small>}</span>
+  return <span className={`rk-sc rk-lv-${levelOf(score, policy)}`}>{score.toLocaleString('fa-IR')}{label && <small>{label}</small>}</span>
 }
 
 /** Inherent → current → residual, side by side; the three are different numbers with different meaning and are never merged. */

@@ -2,16 +2,17 @@ import type { ReactNode } from 'react'
 import { STATUS_COLOR, STATUS_FA, type ChangeStatus } from '../types'
 import { todayTehran } from '../../../lib/today'
 
-export const nf = (n: number | null | undefined) => (n === null || n === undefined ? '—' : Math.round(n).toLocaleString('en-US'))
-export const pct = (n: number | null | undefined) => (n === null || n === undefined ? '—' : `${(Math.round(n * 100) / 100).toLocaleString('en-US')}٪`)
+/** Display formatters: Persian digits on screen. Exports (changeExport.ts) keep their own Latin formatting. */
+export const nf = (n: number | null | undefined) => (n === null || n === undefined ? '—' : Math.round(n).toLocaleString('fa-IR'))
+export const pct = (n: number | null | undefined) => (n === null || n === undefined ? '—' : `${(Math.round(n * 100) / 100).toLocaleString('fa-IR')}٪`)
 /** Rial amounts read as millions/billions in lists; the exact figure is always available in the detail. */
 export const money = (n: number | null | undefined) => {
   if (n === null || n === undefined) return '—'
   const a = Math.abs(n), s = n < 0 ? '−' : ''
-  if (a >= 1e12) return `${s}${(a / 1e12).toLocaleString('en-US', { maximumFractionDigits: 2 })} همت`
-  if (a >= 1e9) return `${s}${(a / 1e9).toLocaleString('en-US', { maximumFractionDigits: 1 })} میلیارد`
-  if (a >= 1e6) return `${s}${(a / 1e6).toLocaleString('en-US', { maximumFractionDigits: 1 })} میلیون`
-  return `${s}${a.toLocaleString('en-US')}`
+  if (a >= 1e12) return `${s}${(a / 1e12).toLocaleString('fa-IR', { maximumFractionDigits: 2 })} همت`
+  if (a >= 1e9) return `${s}${(a / 1e9).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} میلیارد`
+  if (a >= 1e6) return `${s}${(a / 1e6).toLocaleString('fa-IR', { maximumFractionDigits: 1 })} میلیون`
+  return `${s}${a.toLocaleString('fa-IR')}`
 }
 export const faDigits = (v: string) => v.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
 export const parseMoney = (v: string): number => { const t = faDigits(v).replace(/[^\d-]/g, ''); const neg = t.startsWith('-'); const n = Number(t.replace(/-/g, '')) || 0; return neg ? -n : n }

@@ -92,13 +92,21 @@ export function Ring({ pct, color = PB.teal, label, size = 112 }: { pct: number 
 }
 
 /** Horizontal bars with the value at the end — for rankings and aging buckets. */
+interface BarLabelProps { x?: number | string; y?: number | string; width?: number | string; height?: number | string; value?: number | string }
+/** Value at the outer end of a horizontal bar: right of a positive bar, left of a negative one, so it never sits on the category names. */
+function BarEndLabel({ x = 0, y = 0, width = 0, height = 0, value, fmt }: BarLabelProps & { fmt: (v: number) => string }) {
+  const v = Number(value), x0 = Number(x), w = Number(width)
+  const end = v < 0 ? Math.min(x0, x0 + w) - 6 : Math.max(x0, x0 + w) + 6
+  return <text x={end} y={Number(y) + Number(height) / 2} dy={4} textAnchor={v < 0 ? 'end' : 'start'} style={{ fontSize: 11, fill: 'var(--im-text)', fontWeight: 700 }}>{fmt(v)}</text>
+}
 export function HBars({ data, fmt, h }: { data: { name: string; value: number; color?: string }[]; fmt: (v: number) => string; h?: number }) {
+  const neg = data.some((d) => d.value < 0)
   return (
     <div style={{ height: h ?? Math.max(120, data.length * 38 + 20) }} dir="ltr"><ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 70, left: 8, bottom: 4 }} barCategoryGap="28%">
-        <XAxis type="number" hide /><YAxis type="category" dataKey="name" {...axisProps} width={96} tick={{ fontSize: 11, fill: 'var(--im-muted-2)' }} />
+        <XAxis type="number" hide domain={neg ? [(m: number) => Math.min(0, m * 1.45), (m: number) => Math.max(0, m)] : undefined} /><YAxis type="category" dataKey="name" {...axisProps} width={96} tick={{ fontSize: 11, fill: 'var(--im-muted-2)' }} />
         <Tooltip cursor={{ fill: 'color-mix(in srgb, var(--im-text) 5%, transparent)' }} content={<ChartTip fmt={fmt} />} />
-        <Bar dataKey="value" radius={[0, 6, 6, 0]} isAnimationActive>{data.map((d, i) => <Cell key={d.name} fill={d.color ?? PB_SERIES[i % PB_SERIES.length]} />)}<LabelList dataKey="value" position="right" formatter={(v) => fmt(Number(v))} style={{ fontSize: 11, fill: 'var(--im-text)', fontWeight: 700 }} /></Bar>
+        <Bar dataKey="value" radius={[0, 6, 6, 0]} isAnimationActive>{data.map((d, i) => <Cell key={d.name} fill={d.color ?? PB_SERIES[i % PB_SERIES.length]} />)}<LabelList dataKey="value" content={(p) => <BarEndLabel {...(p as BarLabelProps)} fmt={fmt} />} /></Bar>
       </BarChart>
     </ResponsiveContainer></div>
   )

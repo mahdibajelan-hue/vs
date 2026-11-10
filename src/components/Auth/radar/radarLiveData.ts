@@ -14,7 +14,7 @@
  * project never looks broken, just not-yet-connected.
  */
 import { supabase, isSupabaseConfigured } from '../../../lib/supabaseClient'
-import { formatJalali } from '../../../lib/jalali'
+import { formatJalali, formatJalaliFa } from '../../../lib/jalali'
 import { fetchProjectIntelligence } from '../../../modules/reporting/lib/dataAdapter'
 import { currentState, riskLevel } from '../../../modules/risk/lib/riskScore'
 import type { RmRisk, RmRiskAssessment } from '../../../modules/risk/types'
@@ -101,7 +101,7 @@ function issueToSignal(issue: ImIssue, index: number, total: number): RadarSigna
     id: `issue-${issue.id}`,
     category: 'issue',
     severity,
-    title: issue.title, subject: issue.deadlineDate, detail: issue.status,
+    title: issue.title, subject: issue.deadlineDate ? `مهلت ${formatJalaliFa(issue.deadlineDate)}` : '', detail: issue.status,
     impact: issue.description || '—', rootCause: '—', recommendedAction: '—',
     titleEn: issue.title, subjectEn: issue.deadlineDate, detailEn: issue.status,
     impactEn: issue.description || '—', rootCauseEn: '—', recommendedActionEn: '—',
@@ -545,7 +545,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
       result = applyScheduleSection(result, sum)
       const [rMin, rMax] = SEVERITY_RADIUS_RANGE.low
       const ms: RadarSignal[] = sum.milestones.slice(0, 8).map((m, i, arr) => ({
-        id: `ms-${i}`, category: 'milestone', severity: m.critical ? 'medium' : 'low', title: m.name, subject: `سررسید ${formatJalali(m.date)}`, detail: m.code,
+        id: `ms-${i}`, category: 'milestone', severity: m.critical ? 'medium' : 'low', title: m.name, subject: `سررسید ${formatJalaliFa(m.date)}`, detail: m.code,
         impact: m.critical ? 'روی مسیر بحرانی است؛ تأخیر آن پایان پروژه را جابه‌جا می‌کند' : 'نقطهٔ عطف برنامهٔ زمان‌بندی', rootCause: '—', recommendedAction: 'پیگیری پیش‌نیازها در «برنامه‌ریزی و کنترل زمان»',
         titleEn: m.name, subjectEn: m.date, detailEn: m.code, impactEn: '', rootCauseEn: '—', recommendedActionEn: '',
         angle: Math.round(300 + (i / Math.max(1, arr.length)) * 50), radius: spreadRadius(rMin, rMax, i),

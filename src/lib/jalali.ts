@@ -151,3 +151,9 @@ export function jalaliWeekday(jy: number, jm: number, jd: number): number {
   const gregDay = new Date(gy, gm - 1, gd).getDay() // 0=Sun..6=Sat
   return (gregDay + 1) % 7
 }
+
+/** formatJalali for display: the same yyyy/mm/dd in Persian digits. Keep formatJalali for values that are parsed back (inputs, CSV). */
+export function formatJalaliFa(iso: string | null | undefined): string {
+  if (!iso) return ''
+  return formatJalali(iso.slice(0, 10)).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])
+}

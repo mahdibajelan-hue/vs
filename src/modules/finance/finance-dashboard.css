@@ -352,7 +352,7 @@
 .fn-root { --pb-teal: #01b8aa; --pb-blue: #4f8ef7; --pb-coral: #fd625e; --pb-yellow: #f2c80f; --pb-violet: #a66999; }
 .fn-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 18px; }
 @media (max-width: 1100px) { .fn-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } } @media (max-width: 700px) { .fn-tiles { grid-template-columns: 1fr; } }
-.fn-tile { grid-column: span 1; background: var(--im-panel); border: 1px solid var(--im-line); border-radius: 18px; padding: 14px 16px 12px; box-shadow: var(--im-shadow); animation: im-rise 320ms var(--im-ease) backwards; position: relative; overflow: hidden; }
+.fn-tile { container-type: inline-size; grid-column: span 1; background: var(--im-panel); border: 1px solid var(--im-line); border-radius: 18px; padding: 14px 16px 12px; box-shadow: var(--im-shadow); animation: im-rise 320ms var(--im-ease) backwards; position: relative; overflow: hidden; }
 .fn-tile.s2 { grid-column: span 2; } .fn-tile.s3 { grid-column: 1 / -1; }
 @media (max-width: 1100px) { .fn-tile.s2, .fn-tile.s3 { grid-column: 1 / -1; } } @media (max-width: 700px) { .fn-tile { grid-column: 1 / -1; } }
 .fn-tile > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; } .fn-tile h3 { margin: 0; font-size: 13.5px; font-weight: 800; } .fn-tile header p { margin: 1px 0 0; font-size: 11.5px; color: var(--im-muted); }
@@ -363,6 +363,8 @@
 .fn-kpi .delta { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 800; color: var(--c); }
 .fn-donut { display: grid; grid-template-columns: minmax(150px, 190px) 1fr; gap: 12px; align-items: center; } @media (max-width: 700px) { .fn-donut { grid-template-columns: 1fr; } }
 .fn-donut-c { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; } .fn-donut-c b { font-size: 20px; font-weight: 800; line-height: 1.3; } .fn-donut-c span { font-size: 11px; color: var(--im-muted); }
+/* a donut in a narrow tile: the legend goes under the ring, or its names and amounts run into each other */
+@container (max-width: 460px) { .fn-donut { grid-template-columns: 1fr; } .fn-donut > div:first-child { max-width: 200px; width: 100%; justify-self: center; } }
 .fn-legend-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; font-size: 12px; } .fn-legend-list li { display: grid; grid-template-columns: 10px 1fr auto 40px; gap: 8px; align-items: center; } .fn-legend-list i { width: 10px; height: 10px; border-radius: 3px; } .fn-legend-list b { font-variant-numeric: normal; } .fn-legend-list em { font-style: normal; color: var(--im-muted); text-align: end; font-variant-numeric: normal; }
 .fn-ring { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--im-muted-2); text-align: center; }
 .fn-rings { display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-around; padding: 6px 0; }

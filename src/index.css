@@ -2007,6 +2007,10 @@ select option {
 .launchpad-header .tb-btn { color: #e2e8f0; border-color: rgba(148, 163, 184, 0.45); background: rgba(255, 255, 255, 0.07); }
 .launchpad-header .tb-btn:hover { background: rgba(255, 255, 255, 0.16); color: #fff; border-color: rgba(125, 211, 252, 0.8); }
 .launchpad-header .tb-badge { box-shadow: 0 0 0 2px #000; }
+/* The launchpad stays dark in both themes, so its toolbar text cannot follow the light theme's dark text tokens. */
+.launchpad-header .tb-act { color: #e2e8f0; }
+.launchpad-header .tb-cap { color: #cbd5e1; }
+.launchpad-header .tb-act:hover .tb-cap, .launchpad-header .tb-act.is-on .tb-cap { color: #fff; }
 .lp-menu { background: linear-gradient(180deg, #16284a 0%, #0d1a33 100%); color: #f1f5f9; border: 1px solid rgba(125, 211, 252, 0.55) !important; box-shadow: 0 24px 54px -14px rgba(0, 0, 0, 0.75); }
 @media (max-width: 640px) { .lp-menu { position: fixed !important; left: 12px !important; right: 12px !important; top: var(--lp-menu-top, 120px) !important; width: auto !important; margin-top: 0 !important; } }
 .lp-menu .lp-menu-mail { color: #a8b8cf; }

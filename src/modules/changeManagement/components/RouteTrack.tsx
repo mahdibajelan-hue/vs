@@ -1,7 +1,7 @@
 import { AlertTriangle, Ban, Check, CornerUpLeft, Hourglass, Landmark, MessageSquareText, Stamp, X } from 'lucide-react'
 import type { ResolvedStep, StepKind, StepStatus, Basis, RouteResolution } from '../types'
 import { STEP_KIND_FA, STEP_STATUS_FA } from '../types'
-import { formatJalali } from '../../../lib/jalali'
+import { formatJalaliFa } from '../../../lib/jalali'
 import { money, nf, pct } from './cm'
 
 export interface TrackStep { key: string; label: string; role: string; kind: StepKind; status: StepStatus | 'preview'; meta?: string; who?: string }
@@ -29,7 +29,7 @@ export function RouteTrack({ steps }: { steps: TrackStep[] }) {
 }
 
 export const stepsFromResolved = (st: ResolvedStep[]): TrackStep[] => st.map((s, i) => ({ key: 'p' + i, label: s.label, role: s.role, kind: s.kind, status: 'preview', meta: s.sla_days ? `مهلت ${s.sla_days} روز` : undefined }))
-export const jd = (iso: string | null | undefined) => (iso ? formatJalali(iso.slice(0, 10)) : '')
+export const jd = (iso: string | null | undefined) => formatJalaliFa(iso)
 
 const SRC: Record<string, string> = { contract: 'قرارداد', project: 'پروژه', manual: 'ورود دستی', none: 'نامشخص' }
 

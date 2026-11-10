@@ -8,7 +8,7 @@ import { STATUS_FA, STATUS_ORDER, TYPE_FA, TYPE_ORDER, type ChangeRequest, type 
 import { CM_HELP } from '../lib/help'
 import { downloadXlsx, printTable } from '../lib/changeExport'
 import { jd } from '../components/RouteTrack'
-import { StatusChip, money, pct } from '../components/cm'
+import { StatusChip, money, nf, pct } from '../components/cm'
 import { OPEN_STATUSES } from '../types'
 import type { PageProps } from '../ChangeApp'
 import { pressable } from '../../../lib/pressable'
@@ -57,7 +57,7 @@ export function RequestsPage({ onOpen, onNew }: PageProps) {
   return (
     <div className="im-page" style={{ display: 'grid', gap: 14 }}>
       <div className="im-row" style={{ justifyContent: 'space-between' }}>
-        <div><div className="im-page-title">درخواست‌های تغییر</div><div className="im-page-sub">{list.length} از {base.length} درخواست</div></div>
+        <div><div className="im-page-title">درخواست‌های تغییر</div><div className="im-page-sub">{nf(list.length)} از {nf(base.length)} درخواست</div></div>
         <div className="im-actions"><HelpButton content={CM_HELP.list} />
           <button className="im-btn" onClick={() => downloadXlsx('change-requests', [{ name: 'درخواست‌ها', headers: REQUEST_HEADERS, rows: rows() }])}><FileSpreadsheet size={14} /> Excel</button>
           <button className="im-btn" onClick={() => printTable('فهرست درخواست‌های تغییر', scope === 'all' ? 'همهٔ پروژه‌ها' : ctx.projectName(scope), filters, REQUEST_HEADERS, rows())}><Printer size={14} /> چاپ / PDF</button>
@@ -89,7 +89,7 @@ export function RequestsPage({ onOpen, onNew }: PageProps) {
               <tr key={r.id} {...pressable(() => onOpen(r.id, 'flow'), { row: true })} style={{ cursor: 'pointer' }}>
                 <td><span className="im-code">{r.crNumber}</span></td><td className="ttl">{r.title}</td><td className="hide-sm"><div style={{ fontSize: 12 }}>{ctx.projectName(r.masterProjectId)}</div><div className="im-helper">{ctx.contractLabel(r)}</div></td>
                 <td className="hide-sm">{r.changeType ? TYPE_FA[r.changeType] : '—'}</td><td><StatusChip status={r.status} />{r.routeStatus === 'blocked' && <div className="cm-chip" style={{ ['--c' as string]: '#ef4444', marginTop: 3 }}>متوقف</div>}</td>
-                <td className="cm-mono">{money(r.proposedCost)}</td><td className="cm-mono hide-sm">{r.proposedDays ? r.proposedDays + ' روز' : '—'}</td><td className="cm-mono hide-sm">{pct(cp)}</td>
+                <td className="cm-mono">{money(r.proposedCost)}</td><td className="cm-mono hide-sm">{r.proposedDays ? nf(r.proposedDays) + ' روز' : '—'}</td><td className="cm-mono hide-sm">{pct(cp)}</td>
                 <td className="hide-sm" style={{ fontSize: 12 }}>{cur.length ? cur.map((s) => s.roleName).join('، ') : '—'}</td><td className="im-helper hide-sm">{jd(r.createdAt)}</td>
               </tr>)
           })}

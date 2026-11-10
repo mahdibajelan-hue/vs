@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../../store/useModuleStore'
-import { formatJalali } from '../../../lib/jalali'
+import { formatJalaliFa } from '../../../lib/jalali'
 import { HEALTH_VERDICT_FA, HealthGuideButton, healthColor as healthColorOf } from '../../../modules/projectMetrics/HealthGuide'
 import { HEALTH_DIMENSION_LABEL_FA } from '../../../modules/lifecycle/types'
 import { ModuleHeaderActions } from '../../common/ModuleHeaderActions'
@@ -24,7 +24,7 @@ import './radarCockpit.css'
  */
 const fa = (v: number, d = 0) => v.toLocaleString('fa-IR', { maximumFractionDigits: d, minimumFractionDigits: d })
 const pct = (v: number | null | undefined, d = 1) => (v == null || !Number.isFinite(v) ? '—' : `${fa(v, d)}٪`)
-const jd = (iso: string | null | undefined) => (iso ? formatJalali(iso.slice(0, 10)) : '—')
+const jd = (iso: string | null | undefined) => (iso ? formatJalaliFa(iso) : '—')
 const SEV_RANK: Record<SignalSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3 }
 const CAT_ICON: Record<SignalCategory, LucideIcon> = { risk: AlertTriangle, issue: CircleAlert, delay: Clock3, change: RefreshCw, milestone: Flag, contract: FileText, gate: ShieldCheck }
 const CAT_ORDER: SignalCategory[] = ['risk', 'issue', 'delay', 'change', 'contract', 'gate', 'milestone']
