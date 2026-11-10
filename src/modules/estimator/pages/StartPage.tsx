@@ -144,7 +144,7 @@ const START_STYLE = `
   .est-rate-icon { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; color: #1A1400; background: ${SAFETY}; box-shadow: 0 10px 26px -10px rgba(242,183,5,.7); }
   .est-rate-input { display: flex; align-items: center; gap: .5rem; padding: .35rem .9rem; border-radius: 14px; background: ${SURFACE_2}; border: 1px solid ${BORDER}; min-width: min(100%, 270px); }
   .est-rate-input:focus-within { border-color: ${SAFETY}; box-shadow: 0 0 0 3px rgba(242,183,5,.18); }
-  .est-rate-input input { flex: 1; min-width: 0; background: transparent; outline: none; font-family: 'Fira Code', ui-monospace, monospace; font-size: 1.6rem; font-weight: 700; color: ${SAFETY}; text-align: left; padding: .2rem 0; }
+  .est-rate-input input { flex: 1; min-width: 0; background: transparent; outline: none; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 1.6rem; font-weight: 700; color: ${SAFETY}; text-align: left; padding: .2rem 0; }
   .est-rate-input span { font-size: 12px; color: ${MUTED_FG}; }
   .est-rate-err { flex-basis: 100%; font-size: 12px; font-weight: 600; color: #f08a8a; }
   .est-panel { padding: 1.2rem 1.3rem; border-radius: 20px; background: ${SURFACE}; border: 1px solid ${BORDER}; }

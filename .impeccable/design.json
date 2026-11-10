@@ -193,7 +193,11 @@
       },
       "numeric": {
         "displayName": "Numeric",
-        "purpose": "Tabular numbers inside dense tables only."
+        "purpose": "JetBrains Mono for codes and dense numeric tables; the only monospace in the product."
+      },
+      "latin-tag": {
+        "displayName": "Latin Tag",
+        "purpose": "Montserrat for the hub's English module tags and Latin wordmarks only."
       }
     },
     "shadows": [
@@ -348,7 +352,7 @@
       },
       {
         "name": "The Tabular Rule",
-        "body": "Numbers that line up in columns use tabular figures. JetBrains Mono is used only inside dense tables; on cards, numbers stay in Vazirmatn so the Persian digits match the text around them.",
+        "body": "Vazirmatn's Persian digits are proportional («۱» is half the width of «۸»), so every number that lines up or changes in place (table cells, KPI values, counters) sets `font-variant-numeric: tabular-nums`; table cells get it globally. JetBrains Mono is the only monospace and is used only for codes and dense numeric tables; on cards, numbers stay in Vazirmatn so the Persian digits match the text around them.",
         "section": "typography"
       },
       {
@@ -365,6 +369,11 @@
         "name": "The Hairline Rule",
         "body": "Borders are 1px. A coloured border thicker than 1px on one side of a card, list item or alert is not part of this system.",
         "section": "shapes"
+      },
+      {
+        "name": "The Even Break Rule",
+        "body": "Headings use `text-wrap: balance` and running text `text-wrap: pretty` (set globally). Break a heading by hand only between phrases.",
+        "section": "typography"
       }
     ],
     "dos": [

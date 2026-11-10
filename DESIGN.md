@@ -53,6 +53,11 @@ typography:
     fontSize: "11.5px"
     fontWeight: 700
     lineHeight: 1.5
+  latin-tag:
+    fontFamily: "Montserrat, Segoe UI, sans-serif"
+    fontSize: "11px"
+    fontWeight: 700
+    letterSpacing: "0.08em"
   numeric:
     fontFamily: "JetBrains Mono, monospace"
     fontSize: "12px"
@@ -168,7 +173,11 @@ A night palette of navy and steel, lit by signal colours that each carry one mea
 ### Named Rules
 **The Persian Digit Rule.** Every number a person reads, including chart axes, tick labels, heat-map cells and dates, is written in Persian digits, and dates are Jalali. Format through the shared helpers (`faNum`, `faDigits`, `formatJalali`); a Latin digit on screen is a defect.
 
-**The Tabular Rule.** Numbers that line up in columns use tabular figures. JetBrains Mono is used only inside dense tables; on cards, numbers stay in Vazirmatn so the Persian digits match the text around them.
+**The Tabular Rule.** Vazirmatn's Persian digits are proportional («۱» is half the width of «۸»), so every number that lines up or changes in place (table cells, KPI values, counters) sets `font-variant-numeric: tabular-nums`; table cells get it globally. JetBrains Mono is the only monospace and is used only for codes and dense numeric tables; on cards, numbers stay in Vazirmatn so the Persian digits match the text around them.
+
+**The Even Break Rule.** Headings use `text-wrap: balance` and running text `text-wrap: pretty` (set globally). Break a heading by hand only between phrases.
+
+**Deliberate exceptions.** Paper-form replicas in Execution (daily welding report, technical forms) are set in Times New Roman because they copy a printed sheet; printed reports keep their own sizes. No other family is introduced.
 
 ## Layout
 

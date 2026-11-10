@@ -97,7 +97,7 @@ export function printReportElement(el: HTMLElement, title: string) {
   const w = window.open('', '_blank', 'width=900,height=1200')
   if (!w) return false
   w.document.write(`<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>${title.replace(/</g, '&lt;')}</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap">
 <style>@page{size:A4;margin:0}html,body{margin:0;background:#E5E9EF}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .est-page{margin:12px auto;box-shadow:0 6px 24px rgba(15,47,65,.18)}
 @media print{html,body{background:#fff}.est-page{margin:0;box-shadow:none;break-after:page;page-break-after:always}.est-page:last-child{break-after:auto;page-break-after:auto}}</style>

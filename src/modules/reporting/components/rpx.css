@@ -41,7 +41,7 @@
 .rpx-kpis { display: grid; gap: .55rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); }
 .rpx-kpi { position: relative; padding: .65rem .8rem .7rem; border-radius: .85rem; border: 1px solid var(--border-soft); background: var(--bg-app); overflow: hidden; }
 .rpx-kpi dt { font-size: 11px; color: var(--text-muted); }
-.rpx-kpi dd { font-size: 1.35rem; font-weight: 800; margin-top: .1rem; color: var(--c, var(--text-primary)); }
+.rpx-kpi dd { font-variant-numeric: tabular-nums; font-size: 1.35rem; font-weight: 800; margin-top: .1rem; color: var(--c, var(--text-primary)); }
 .rpx-kpi small { display: block; font-size: 10.5px; color: var(--text-muted); margin-top: .05rem; }
 
 /* tables */

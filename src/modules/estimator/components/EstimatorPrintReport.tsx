@@ -28,7 +28,7 @@ const PAGE: React.CSSProperties = {
   width: 794, height: 1123, boxSizing: 'border-box', padding: '0 0 0 0', background: '#FFFFFF', color: INK, position: 'relative', overflow: 'hidden',
   fontFamily: "'Vazirmatn', Tahoma, Arial, sans-serif",
 }
-const num: React.CSSProperties = { fontFamily: "'Fira Code', ui-monospace, monospace", fontVariantNumeric: 'tabular-nums' }
+const num: React.CSSProperties = { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontVariantNumeric: 'tabular-nums' }
 
 function riskBand(score: number) {
   if (score <= 4) return { label: 'کم', color: STATUS.good }

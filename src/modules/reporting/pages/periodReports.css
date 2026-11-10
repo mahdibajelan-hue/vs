@@ -28,7 +28,7 @@
 .prx-period span { font-weight: 500; color: var(--text-muted); }
 .prx-status { display: flex; gap: .4rem; }
 .prx-status span { --c: #64748b; display: grid; justify-items: center; min-width: 4.6rem; padding: .45rem .6rem; border-radius: .8rem; font-size: 10.5px; color: var(--text-secondary); background: color-mix(in srgb, var(--c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); }
-.prx-status b { font-size: 1.25rem; font-weight: 900; color: var(--c); line-height: 1.3; }
+.prx-status b { font-variant-numeric: tabular-nums; font-size: 1.25rem; font-weight: 900; color: var(--c); line-height: 1.3; }
 .prx-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-inline-end: .3rem; vertical-align: middle; }
 
 .prx-highlights { padding: .85rem 1rem; border-radius: 1rem; border: 1px solid var(--border-soft); background: var(--bg-panel-solid); }

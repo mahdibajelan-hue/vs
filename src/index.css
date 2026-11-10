@@ -74,6 +74,13 @@ body {
   }
 }
 
+/* Line breaks: headings wrap into even lines, running text avoids a lone last word. Both are progressive —
+   a browser without support keeps its default wrap. */
+h1, h2, h3, h4 { text-wrap: balance; }
+p, li, dd, figcaption, blockquote { text-wrap: pretty; }
+/* Vazirmatn's Persian digits are proportional (۱ is half the width of ۸): table columns and counters need tabular figures */
+td, th { font-variant-numeric: tabular-nums; }
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
