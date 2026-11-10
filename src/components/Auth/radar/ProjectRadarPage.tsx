@@ -12,6 +12,9 @@ import { useInboxWork } from '../../../modules/inbox/store/useInboxWork'
 import { recordVisit } from './projectVisits'
 import './radarShell.css'
 import { RadarCockpit } from './RadarCockpit'
+import { useRadarPeek } from './radarPeek'
+
+const MENU_KEY = 'farin.workspace.sidebar'
 import { blankRadarData, buildRadarData } from './radarLiveData'
 import { DEFAULT_RADAR_DATA, buildMockRadarData, type RadarData } from './radarTypes'
 
@@ -57,7 +60,7 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
     setRefreshing(true)
     let cancelled = false
     buildRadarData(selectedProject.id, selectedProject.officialName, projectIdCode).then((live) => {
-      if (!cancelled) setData(live)
+      if (!cancelled) { setData(live); useRadarPeek.getState().put(selectedProject.id, live) }
     }).finally(() => { if (!cancelled) setRefreshing(false) })
     return () => {
       cancelled = true
@@ -66,10 +69,13 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
 
   // Below the `lg` breakpoint the sidebar overlays the page instead of pushing it, and starts closed
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024)
-  const [sidebarOpen, setSidebarOpen] = useState(isDesktop)
+  // same menu as inside the modules: a strip on desktop (pinned = full panel, remembered), a drawer below 1024px
+  const [pinned, setPinned] = useState(() => { try { return localStorage.getItem(MENU_KEY) === 'pinned' } catch { return false } })
+  const pin = (v: boolean) => { setPinned(v); try { localStorage.setItem(MENU_KEY, v ? 'pinned' : 'rail') } catch { /* private mode */ } }
+  const [drawer, setDrawer] = useState(false)
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')
-    const onChange = (e: MediaQueryListEvent) => { setIsDesktop(e.matches); setSidebarOpen(e.matches) }
+    const onChange = (e: MediaQueryListEvent) => { setIsDesktop(e.matches); setDrawer(false) }
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
   }, [])
@@ -84,7 +90,7 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
 
   const isVisible = (key: ModuleKey) => hasModuleAccess(accessibleModules, key)
   const handleNavClick = (item: ProjectNavItem) => {
-    if (!isDesktop) setSidebarOpen(false)
+    if (!isDesktop) setDrawer(false)
     if (!item.module) { window.scrollTo({ top: 0, behavior: 'smooth' }); return }
     useModuleStore.getState().enterModule(item.module, 'project')
   }
@@ -101,13 +107,13 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="relative min-h-screen w-screen overflow-x-clip" style={{ background: 'var(--bg-app)' }}>
-      <div className="relative z-10 transition-[margin] duration-300" style={{ marginRight: isDesktop && sidebarOpen ? '17rem' : 0 }}>
+      <div className="relative z-10 transition-[margin] duration-300" style={{ marginRight: isDesktop ? (pinned ? 'var(--pm-pinned, 320px)' : 'var(--pm-rail, 88px)') : 0 }}>
         <RadarCockpit
           data={data}
           projectName={selectedProject?.officialName ?? data.projectName}
           projectCode={selectedProject ? selectedProject.projectIdCode || selectedProject.projectCode : data.projectIdCode}
-          sidebarOpen={sidebarOpen}
-          onOpenSidebar={() => setSidebarOpen(true)}
+          sidebarOpen={isDesktop || drawer}
+          onOpenSidebar={() => setDrawer(true)}
           onBack={onBack}
           onOpen={(m) => useModuleStore.getState().enterModule(m, 'project')}
           onRefresh={() => setReloadKey((k) => k + 1)}
@@ -116,8 +122,8 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
         />
       </div>
       {selectedProject && (
-        <RadarSidebar project={selectedProject} active="overview" canSee={isVisible} badgeFor={badgeFor} open={sidebarOpen} overlay={!isDesktop}
-          onItem={handleNavClick} onSwitch={() => pickProject(null)} onHome={onBack} onClose={() => setSidebarOpen(false)} />
+        <RadarSidebar project={selectedProject} active="overview" canSee={isVisible} badgeFor={badgeFor} desktop={isDesktop} pinned={pinned} onPin={pin}
+          mobileOpen={drawer} onMobileClose={() => setDrawer(false)} onItem={handleNavClick} onSwitch={() => pickProject(null)} onHome={onBack} />
       )}
     </div>
   )

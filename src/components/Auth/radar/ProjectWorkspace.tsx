@@ -26,34 +26,33 @@ export function ProjectWorkspace({ children }: { children: ReactNode }) {
   const projectOf = useNotificationStore((s) => s.projectOf)
   const work = useInboxWork()
   const [desktop, setDesktop] = useState(wide)
-  const [open, setOpen] = useState(() => {
-    if (!wide()) return false
-    try { return localStorage.getItem(KEY) !== 'closed' } catch { return true }
-  })
+  // desktop: the strip is always there; pinned keeps the full panel open (remembered). Below 1024px: a drawer.
+  const [pinned, setPinned] = useState(() => { try { return localStorage.getItem(KEY) === 'pinned' } catch { return false } })
+  const [drawer, setDrawer] = useState(false)
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')
-    const on = (e: MediaQueryListEvent) => { setDesktop(e.matches); if (!e.matches) setOpen(false) }
+    const on = (e: MediaQueryListEvent) => { setDesktop(e.matches); setDrawer(false) }
     mq.addEventListener('change', on)
     return () => mq.removeEventListener('change', on)
   }, [])
-  const setOpenSaved = (v: boolean) => { setOpen(v); if (desktop) try { localStorage.setItem(KEY, v ? 'open' : 'closed') } catch { /* private mode */ } }
+  const pin = (v: boolean) => { setPinned(v); try { localStorage.setItem(KEY, v ? 'pinned' : 'rail') } catch { /* private mode */ } }
 
   if (!project) return <>{children}</>
 
   const activeId = PROJECT_NAV.flatMap((g) => g.items).find((i) => active && i.module === navModule(active))?.id ?? ''
   const onItem = (item: ProjectNavItem) => {
-    if (!desktop) setOpen(false)
+    if (!desktop) setDrawer(false)
     const store = useModuleStore.getState()
     if (item.id === 'overview') store.backToRadar()
     else if (item.module && item.module !== (active && navModule(active))) store.enterModule(item.module, 'project')
   }
 
   return (
-    <div className={`pws-main ${open && desktop ? 'is-pushed' : ''}`}>
+    <div className={`pws-main ${desktop ? (pinned ? 'is-pinned' : 'is-rail') : ''}`}>
       {children}
-      {!open && (
-        <button type="button" className="pws-tab" onClick={() => setOpenSaved(true)} title={`منوی پروژه — ${project.officialName}`} aria-label="باز کردن منوی پروژه">
+      {!desktop && !drawer && (
+        <button type="button" className="pws-tab" onClick={() => setDrawer(true)} title={`منوی پروژه — ${project.officialName}`} aria-label="باز کردن منوی پروژه">
           <PanelRightOpen size={15} aria-hidden />
           <span>منوی پروژه</span>
         </button>
@@ -63,12 +62,14 @@ export function ProjectWorkspace({ children }: { children: ReactNode }) {
         active={activeId}
         canSee={(k) => hasModuleAccess(access, k)}
         badgeFor={projectBadges(notifications, projectOf, projectId, work)}
-        open={open}
-        overlay={!desktop}
+        desktop={desktop}
+        pinned={pinned}
+        onPin={pin}
+        mobileOpen={drawer}
+        onMobileClose={() => setDrawer(false)}
         onItem={onItem}
         onSwitch={() => { useProjectContextStore.getState().clear(); useModuleStore.getState().backToRadar() }}
         onHome={() => useModuleStore.getState().exitToHub()}
-        onClose={() => setOpenSaved(false)}
       />
     </div>
   )

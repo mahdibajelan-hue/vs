@@ -181,62 +181,6 @@
 @media (hover: none) { .rpk-go { opacity: 1; transform: none; } }
 .rpk-empty { max-width: 32rem; margin: 2rem auto; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 2rem; text-align: center; border-radius: 1.1rem; border: 1px dashed var(--border-soft); color: var(--text-secondary); }
 
-/* ── sidebar ────────────────────────────────────────────────────────────── */
-.rs-side {
-  position: fixed; top: 0; bottom: 0; right: 0; z-index: 40; width: min(17rem, 86vw);
-  display: flex; flex-direction: column; gap: 0.75rem; padding: 0.85rem 0.7rem;
-  overflow-y: auto; overscroll-behavior: contain;
-  background: var(--bg-panel-solid); border-left: 1px solid var(--border-soft);
-  box-shadow: -18px 0 40px -28px rgba(0, 0, 0, 0.6);
-  transform: translateX(100%); visibility: hidden;
-  transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 260ms;
-}
-.rs-side.is-open { transform: none; visibility: visible; transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1); }
-.rs-scrim { position: fixed; inset: 0; z-index: 39; background: rgba(2, 6, 23, 0.55); cursor: default; }
-
-.rs-project {
-  --tone: #94a3b8;
-  padding: 0.75rem; border-radius: 1rem; border: 1px solid color-mix(in srgb, var(--radar-green) 28%, var(--border-soft));
-  background:
-    repeating-radial-gradient(circle at 0% 100%, transparent 0 18px, color-mix(in srgb, var(--radar-green) 9%, transparent) 18px 19px),
-    color-mix(in srgb, var(--radar-green) 5%, var(--bg-panel-solid));
-}
-.rs-project-row { display: flex; align-items: center; justify-content: space-between; }
-.rs-status { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 10.5px; font-weight: 800; color: var(--tone); }
-.rs-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.9rem; height: 1.9rem; border-radius: 0.6rem; color: var(--text-muted); }
-.rs-icon:hover { background: color-mix(in srgb, var(--text-muted) 12%, transparent); color: var(--text-primary); }
-.rs-project-name { margin-top: 0.35rem; font-size: 13.5px; font-weight: 800; line-height: 1.6; }
-.rs-project-code { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-muted); text-align: right; }
-.rs-switch {
-  margin-top: 0.6rem; width: 100%; height: 2.2rem; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
-  border-radius: 0.7rem; font-size: 11.5px; font-weight: 800; color: var(--radar-green);
-  border: 1px solid color-mix(in srgb, var(--radar-green) 40%, transparent); transition: background-color 160ms ease, transform 120ms ease;
-}
-.rs-switch:hover { background: color-mix(in srgb, var(--radar-green) 10%, transparent); }
-.rs-switch:active { transform: scale(0.97); }
-
-.rs-nav { display: flex; flex-direction: column; gap: 0.6rem; }
-.rs-group { display: flex; flex-direction: column; gap: 0.1rem; }
-.rs-group-label { padding: 0 0.6rem 0.2rem; font-size: 11px; font-weight: 800; color: var(--text-muted); letter-spacing: 0.02em; }
-.rs-item {
-  --a: #38bdf8;
-  position: relative; display: flex; align-items: center; gap: 0.6rem; min-height: 2.5rem; padding: 0.3rem 0.5rem;
-  border-radius: 0.75rem; text-align: right; font-size: 12.5px; font-weight: 700; color: var(--text-secondary);
-  transition: background-color 140ms ease, color 140ms ease;
-}
-.rs-item:hover { background: color-mix(in srgb, var(--a) 9%, transparent); color: var(--text-primary); }
-.rs-item:focus-visible { outline: 2px solid var(--a); outline-offset: 1px; }
-.rs-item.is-on { background: color-mix(in srgb, var(--radar-green) 12%, transparent); color: var(--text-primary); }
-.rs-item.is-on::before { content: ''; position: absolute; right: -0.7rem; top: 0.5rem; bottom: 0.5rem; width: 3px; border-radius: 3px 0 0 3px; background: var(--radar-green); }
-.rs-item-ico { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.85rem; height: 1.85rem; border-radius: 0.6rem; color: var(--a); background: color-mix(in srgb, var(--a) 14%, transparent); }
-.rs-item-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rs-badge { flex: none; min-width: 1.35rem; height: 1.35rem; padding: 0 0.35rem; border-radius: 99px; display: inline-flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 800; color: #fff; background: #ef4444; }
-.rs-home {
-  margin-top: auto; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; min-height: 2.4rem;
-  border-radius: 0.75rem; border: 1px solid var(--border-soft); font-size: 11.5px; font-weight: 700; color: var(--text-secondary);
-}
-.rs-home:hover { color: var(--text-primary); background: color-mix(in srgb, var(--text-muted) 10%, transparent); }
-
 .rs-open {
   display: inline-flex; align-items: center; gap: 0.4rem; height: 2.4rem; padding: 0 0.9rem; border-radius: 0.8rem;
   font-size: 12px; font-weight: 800; color: var(--radar-green);
@@ -248,14 +192,14 @@
   .rpk-sweep { animation: none; opacity: 0.5; }
   .rpk-card, .rpk-card.is-skel, .rpk-seg-fill, .rpk-dial.is-loading .rpk-seg-track, .rpk-needle, .rpk-dial-core,
   .rpk-seg.is-current .rpk-seg-track, .rpk-track > span { animation: none; }
-  .rs-side, .rs-side.is-open { transition: none; }
 }
 
 /* ── project workspace: a module beside the project sidebar ─────────────── */
 .pws-main { min-height: 100dvh; transition: margin-right 260ms cubic-bezier(0.32, 0.72, 0, 1); }
-.pws-main.is-pushed { margin-right: 17rem; }
-/* modules size themselves to the viewport; inside the workspace they take the space left of the sidebar */
-.pws-main.is-pushed .w-screen { width: 100% !important; }
+.pws-main.is-rail { margin-right: 88px; }
+.pws-main.is-pinned { margin-right: 320px; }
+/* modules size themselves to the viewport; inside the workspace they take the space left of the menu */
+.pws-main.is-rail .w-screen, .pws-main.is-pinned .w-screen { width: 100% !important; }
 /* the project is chosen in the sidebar — a module's own project picker would contradict it */
 .pws-main select[aria-label="پروژه"] { display: none !important; }
 .pws-tab {
@@ -269,7 +213,7 @@
 .pws-tab:hover { padding-left: 0.6rem; }
 @media (prefers-reduced-motion: reduce) { .pws-main { transition: none; } }
 /* light theme: the neon radar green is unreadable on white — use a deep green for the sidebar chrome */
-:root[data-theme="light"] .rs-side, :root[data-theme="light"] .pws-tab { --radar-green: #047857; }
+:root[data-theme="light"] .pws-tab { --radar-green: #047857; }
 @media (max-width: 639px) { .pws-tab { padding: 0.55rem 0.35rem; } .pws-tab span { display: none; } }
 
 /* ── mobile radar (< 768px): one calm column ────────────────────────────── */
