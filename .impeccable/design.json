@@ -1,0 +1,386 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-10T14:23:18Z",
+  "title": "Design System: فرین PMIS",
+  "extensions": {
+    "colorMeta": {
+      "night-hull": {
+        "role": "neutral",
+        "displayName": "Night Hull",
+        "canonical": "#070b14",
+        "tonalRamp": [
+          "#020306",
+          "#04060a",
+          "#05080e",
+          "#060a12",
+          "#070b14",
+          "#51545a",
+          "#8f9195",
+          "#cdced0"
+        ]
+      },
+      "panel-steel": {
+        "role": "neutral",
+        "displayName": "Panel Steel",
+        "canonical": "#101826",
+        "tonalRamp": [
+          "#05070b",
+          "#080c13",
+          "#0b111b",
+          "#0e1521",
+          "#101826",
+          "#585d67",
+          "#93979d",
+          "#cfd1d4"
+        ]
+      },
+      "ink-bright": {
+        "role": "neutral",
+        "displayName": "Ink Bright",
+        "canonical": "#e5edf7",
+        "tonalRamp": [
+          "#45474a",
+          "#72767c",
+          "#a0a6ad",
+          "#cad1d9",
+          "#e5edf7",
+          "#edf2f9",
+          "#f3f7fb",
+          "#fafbfd"
+        ]
+      },
+      "signal-sky": {
+        "role": "primary",
+        "displayName": "Signal Sky",
+        "canonical": "#38bdf8",
+        "tonalRamp": [
+          "#11394a",
+          "#1c5e7c",
+          "#2784ae",
+          "#31a6da",
+          "#38bdf8",
+          "#74d1fa",
+          "#a5e1fc",
+          "#d7f2fe"
+        ]
+      },
+      "portfolio-indigo": {
+        "role": "secondary",
+        "displayName": "Portfolio Indigo (module accent example)",
+        "canonical": "#6366f1",
+        "tonalRamp": [
+          "#1e1f48",
+          "#323378",
+          "#4547a9",
+          "#575ad4",
+          "#6366f1",
+          "#9294f5",
+          "#b9baf9",
+          "#e0e0fc"
+        ]
+      },
+      "radar-green": {
+        "role": "tertiary",
+        "displayName": "Radar Green",
+        "canonical": "#22ff9e",
+        "tonalRamp": [
+          "#0a4c2f",
+          "#11804f",
+          "#18b26f",
+          "#1ee08b",
+          "#22ff9e",
+          "#64ffbb",
+          "#9cffd3",
+          "#d3ffec"
+        ]
+      },
+      "radar-amber": {
+        "role": "tertiary",
+        "displayName": "Radar Amber",
+        "canonical": "#f0a836",
+        "tonalRamp": [
+          "#483210",
+          "#78541b",
+          "#a87626",
+          "#d39430",
+          "#f0a836",
+          "#f4c272",
+          "#f8d8a5",
+          "#fceed7"
+        ]
+      },
+      "health-green": {
+        "role": "status",
+        "displayName": "Health Green",
+        "canonical": "#22c55e",
+        "tonalRamp": [
+          "#0a3b1c",
+          "#11622f",
+          "#188a42",
+          "#1ead53",
+          "#22c55e",
+          "#64d68e",
+          "#9ce5b7",
+          "#d3f3df"
+        ]
+      },
+      "health-yellow": {
+        "role": "status",
+        "displayName": "Health Yellow",
+        "canonical": "#f5b31b",
+        "tonalRamp": [
+          "#4a3608",
+          "#7a5a0e",
+          "#ac7d13",
+          "#d89e18",
+          "#f5b31b",
+          "#f8ca5f",
+          "#fadd98",
+          "#fdf0d1"
+        ]
+      },
+      "health-high": {
+        "role": "status",
+        "displayName": "Health High",
+        "canonical": "#f97316",
+        "tonalRamp": [
+          "#4b2207",
+          "#7c3a0b",
+          "#ae500f",
+          "#db6513",
+          "#f97316",
+          "#fb9d5c",
+          "#fcc096",
+          "#fee3d0"
+        ]
+      },
+      "health-red": {
+        "role": "status",
+        "displayName": "Health Red",
+        "canonical": "#ef4444",
+        "tonalRamp": [
+          "#481414",
+          "#782222",
+          "#a73030",
+          "#d23c3c",
+          "#ef4444",
+          "#f47c7c",
+          "#f8abab",
+          "#fcdada"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "KPI values and gauge/donut centres."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Module name in its header."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel titles with an accent icon."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Panel text, table cells, hints (max 80ch)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "KPI labels, chips, legends, tab and picker captions."
+      },
+      "numeric": {
+        "displayName": "Numeric",
+        "purpose": "Tabular numbers inside dense tables only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "glass-ambient",
+        "value": "0 8px 32px rgba(2, 6, 23, 0.28)",
+        "purpose": "Glass panel and shell bars."
+      },
+      {
+        "name": "popover",
+        "value": "0 22px 44px -20px rgb(15 23 42 / 0.45)",
+        "purpose": "Picker lists and dropdowns."
+      },
+      {
+        "name": "accent-lift",
+        "value": "0 10px 26px -16px color-mix(in srgb, var(--c) 70%, transparent)",
+        "purpose": "Open picker or pressed selection, tinted from the module accent."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-strong",
+        "value": "cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Every entrance, press and value change."
+      },
+      {
+        "name": "tab-slide",
+        "value": "260ms",
+        "purpose": "Sliding tab indicator."
+      },
+      {
+        "name": "press",
+        "value": "scale(0.97) over 120–160ms",
+        "purpose": "Button and tile press feedback."
+      },
+      {
+        "name": "popover-in",
+        "value": "170ms",
+        "purpose": "Picker list entrance."
+      },
+      {
+        "name": "gauge-needle",
+        "value": "1000ms cubic-bezier(.34, 1.3, .64, 1)",
+        "purpose": "Gauge needle settles with a slight instrument overshoot."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ],
+    "effects": [
+      {
+        "name": "glass",
+        "value": "backdrop-filter: blur(18px) saturate(140%)",
+        "purpose": "Shell surfaces over the night background."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action inside a module; filled with the module accent.",
+      "html": "<button class=\"ds-btn-primary\">ثبت تصمیم</button>",
+      "css": ".ds-btn-primary { font-family: Vazirmatn, 'Segoe UI', sans-serif; display:inline-flex; align-items:center; gap:.35rem; min-height:34px; padding:0 .8rem; border-radius:.6rem; font-size:12px; font-weight:700; color:#fff; border:1px solid transparent; background:linear-gradient(135deg,#6366f1,#4f46e5); cursor:pointer; transition:transform 120ms cubic-bezier(.23,1,.32,1); } .ds-btn-primary:active { transform:scale(.97); } .ds-btn-primary:focus-visible { outline:2px solid #6366f1; outline-offset:2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Neutral action on steel with a hairline border.",
+      "html": "<button class=\"ds-btn-secondary\">ذخیرهٔ سناریو</button>",
+      "css": ".ds-btn-secondary { font-family: Vazirmatn, 'Segoe UI', sans-serif; display:inline-flex; align-items:center; min-height:34px; padding:0 .8rem; border-radius:.6rem; font-size:12px; font-weight:700; color:#e5edf7; border:1px solid rgba(148,163,184,.14); background:#101826; cursor:pointer; transition:transform 120ms cubic-bezier(.23,1,.32,1), border-color 150ms ease; } .ds-btn-secondary:hover { border-color:rgba(148,163,184,.35); } .ds-btn-secondary:active { transform:scale(.97); } .ds-btn-secondary:focus-visible { outline:2px solid #6366f1; outline-offset:2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Shared .input field; sky focus ring.",
+      "html": "<input class=\"ds-input\" dir=\"rtl\" placeholder=\"جستجوی نام پروژه\" />",
+      "css": ".ds-input { font-family: Vazirmatn, 'Segoe UI', sans-serif; width:100%; border-radius:.5rem; background:rgba(0,0,0,.2); border:1px solid rgba(148,163,184,.14); padding:.5rem .75rem; font-size:.875rem; color:#e5edf7; outline:none; transition:border-color 150ms ease, box-shadow 200ms ease; } .ds-input:focus { border-color:#38bdf8; box-shadow:0 0 0 3px rgba(56,189,248,.16); }"
+    },
+    {
+      "name": "Module Tabs",
+      "kind": "nav",
+      "refersTo": "tab",
+      "description": "Scrolling tab row with one sliding accent pill under the active tab.",
+      "html": "<nav class=\"ds-tabs\" dir=\"rtl\"><button class=\"is-on\">داشبورد</button><button>نمای کلی</button><button>ریسک و وابستگی</button></nav>",
+      "css": ".ds-tabs { display:flex; gap:.15rem; padding:.45rem; background:rgba(17,25,40,.72); border-radius:.9rem; } .ds-tabs button { font-family: Vazirmatn, 'Segoe UI', sans-serif; min-height:40px; padding:.55rem .8rem; border-radius:.7rem; border:0; background:transparent; font-size:12.5px; font-weight:700; color:#94a3b8; cursor:pointer; transition:color 180ms ease, background-color 150ms ease, transform 140ms cubic-bezier(.23,1,.32,1); } .ds-tabs button:hover { color:#e5edf7; } .ds-tabs button:active { transform:scale(.97); } .ds-tabs button.is-on { color:#fff; background:#6366f1; } .ds-tabs button:focus-visible { outline:2px solid #6366f1; outline-offset:2px; }"
+    },
+    {
+      "name": "Health Chip",
+      "kind": "chip",
+      "refersTo": "chip-health",
+      "description": "Pill with a dot; colour is the shared health meaning.",
+      "html": "<span class=\"ds-chip\" style=\"--c:#ef4444\"><i></i>بحرانی</span>",
+      "css": ".ds-chip { font-family: Vazirmatn, 'Segoe UI', sans-serif; display:inline-flex; align-items:center; gap:.3rem; padding:.12rem .5rem; border-radius:999px; font-size:11px; font-weight:700; color:var(--c); background:color-mix(in srgb, var(--c) 14%, transparent); border:1px solid color-mix(in srgb, var(--c) 35%, transparent); } .ds-chip i { width:7px; height:7px; border-radius:99px; background:var(--c); }"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Solid steel working panel with accent-icon title and hint.",
+      "html": "<section class=\"ds-panel\" dir=\"rtl\"><h3><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7z\"/></svg>ریسک و وابستگی</h3><p>سطح هر ریسک از ارزیابی جاری آن در ماژول مدیریت ریسک.</p></section>",
+      "css": ".ds-panel { font-family: Vazirmatn, 'Segoe UI', sans-serif; padding:1rem 1.05rem; border-radius:1rem; border:1px solid rgba(148,163,184,.14); background:#101826; color:#e5edf7; } .ds-panel h3 { display:flex; align-items:center; gap:.4rem; margin:0; font-size:13.5px; font-weight:900; } .ds-panel h3 svg { color:#6366f1; } .ds-panel p { margin:.2rem 0 0; font-size:11.5px; line-height:1.8; color:#94a3b8; }"
+    },
+    {
+      "name": "KPI Tile",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "Control-room readout: tinted icon chip, label, heavy value, sub line; no side stripe.",
+      "html": "<button class=\"ds-kpi\" dir=\"rtl\" style=\"--c:#ef4444\"><span class=\"ds-kpi-top\"><i>!</i>پروژه‌های بحرانی</span><b>۲</b><small>از ۲ پروژه</small></button>",
+      "css": ".ds-kpi { font-family: Vazirmatn, 'Segoe UI', sans-serif; display:grid; gap:.25rem; min-width:12rem; min-height:7.2rem; padding:.85rem .9rem; border-radius:1rem; text-align:right; color:#e5edf7; cursor:pointer; border:1px solid color-mix(in srgb, var(--c) 22%, rgba(148,163,184,.14)); background:radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--c) 16%, transparent), transparent 60%), #101826; transition:transform 200ms cubic-bezier(.23,1,.32,1); } .ds-kpi:active { transform:scale(.98); } .ds-kpi:focus-visible { outline:2px solid var(--c); outline-offset:2px; } .ds-kpi-top { display:flex; align-items:center; gap:.4rem; font-size:11.5px; font-weight:700; color:#94a3b8; } .ds-kpi-top i { display:grid; place-items:center; width:1.7rem; height:1.7rem; border-radius:.55rem; font-style:normal; color:var(--c); background:color-mix(in srgb, var(--c) 15%, transparent); } .ds-kpi b { font-size:1.55rem; font-weight:900; line-height:1.2; } .ds-kpi small { font-size:11px; color:#94a3b8; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Control Room",
+    "overview": "فرین PMIS looks and behaves like the control room of a gas transmission network. The room is dark and quiet, the instruments are lit, and nothing moves or glows unless a reading needs attention. Every party to a project, whether employer, consultant, contractor or supervisor, sits in the same room and reads the same instruments. Gauges, the radar, health chips and S-curves carry the story; prose explains what an instrument means, never what it should have said.\n\nDensity is high, the way an operator's console is high: 12–13px Persian body text, compact panels, numbers set large and heavy. Translucent glass sits over the night background on the shell (top bar, hub, radar, floating layers). Solid steel panels carry the working content. Each module has exactly one accent colour that identifies its room, while the status and health colours are shared and mean the same thing in every room. A light \"daylight\" theme mirrors the whole system for office and outdoor use.\n\nThe interface is right to left throughout, with Persian digits and Jalali dates on every number and axis. Latin script appears only for established technical terms (EVM, CPI, SPI, BAC, EAC, Stage-Gate) and codes.",
+    "keyCharacteristics": [
+      "Dark night background by default, with a full light mirror under `data-theme=\"light\"`.",
+      "Glass on the shell, solid steel for working panels.",
+      "One accent per module; shared status and health colours.",
+      "Numbers lead: heavy weight, tabular figures, Persian digits.",
+      "One fast ease-out easing for every movement; reduced motion turns movement off."
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "A module shows exactly one accent colour. A second hue on a module screen must come from the status or health set and must mean a state.",
+        "section": "colors"
+      },
+      {
+        "name": "The Shared Meaning Rule",
+        "body": "Green, yellow, orange and red mean the same thing in every module. Never use a health colour as decoration or as a module accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Persian Digit Rule",
+        "body": "Every number a person reads, including chart axes, tick labels, heat-map cells and dates, is written in Persian digits, and dates are Jalali. Format through the shared helpers (`faNum`, `faDigits`, `formatJalali`); a Latin digit on screen is a defect.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Numbers that line up in columns use tabular figures. JetBrains Mono is used only inside dense tables; on cards, numbers stay in Vazirmatn so the Persian digits match the text around them.",
+        "section": "typography"
+      },
+      {
+        "name": "The Two-Desk Rule",
+        "body": "Every screen is designed for both the office desktop and the site phone. A flow used on site must be complete at 390px wide; a management view must hold its grid at 1440px.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-Panel Rule",
+        "body": "Working panels have no shadow at rest. A shadow means the layer floats: glass shell, open list or dialog.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Hairline Rule",
+        "body": "Borders are 1px. A coloured border thicker than 1px on one side of a card, list item or alert is not part of this system.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** give each module exactly one accent and use it only for its icon, active tab, panel-title icons, primary button and focus outline.",
+      "**Do** write every visible number in Persian digits and every date in Jalali, including chart axes and ticks.",
+      "**Do** keep a minus sign attached to its number inside RTL text (an LTR isolate), as `fmtMoney` does.",
+      "**Do** use glass for the shell and floating layers and solid steel for working panels.",
+      "**Do** make drill-down tiles, donut slices and heat-map cells real buttons with press feedback and a visible focus ring.",
+      "**Do** design every flow at 390px and 1440px, and keep reduced motion working."
+    ],
+    "donts": [
+      "**Don't** add a 3px coloured stripe to the side of a card, list item or log row.",
+      "**Don't** use a status or health colour as decoration or as a module accent.",
+      "**Don't** show Latin digits or Gregorian dates in the interface.",
+      "**Don't** mix spellings of the same term within the product (one spelling per concept, for example «پورتفولیو»).",
+      "**Don't** fill empty or unapproved data with estimates that look real; show the empty state instead."
+    ]
+  }
+}
