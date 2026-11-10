@@ -12,7 +12,8 @@ export function InboxButton() {
   const setOpen = useInboxStore((s) => s.setOpen)
   const n = useInboxStore((s) => selectVisible(s).length)
   useEffect(() => {
-    void refresh(); void refreshNotes()
+    // a header mounts with every module: read again only if the lists are older than a minute
+    void useInboxStore.getState().refreshIfStale(); void useNotificationStore.getState().refreshIfStale()
     const t = setInterval(() => { if (document.visibilityState === 'visible') { void refresh(); void refreshNotes() } }, 2 * 60_000)
     return () => clearInterval(t)
   }, [refresh, refreshNotes])

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Printer } from 'lucide-react'
 import { ModalPortal } from '../../../components/common/ModalPortal'
 import { fmtD } from '../../finance/components/fn'
@@ -38,6 +38,10 @@ const optLabel = (form: FormDef, key: string, v: unknown): string => {
 /** The printable, archive-ready paper of a report: title, number/date/status, info grid, table, counters, resources, signatures. */
 export function ReportPaper({ c }: { c: PaperCtx }) {
   const templates = useEpcStore((s) => s.templates)
+  // the list read leaves the frozen letterhead out: read it for this paper (undefined = not read yet, null = none frozen)
+  const storedLh = useExecutionStore((s) => s.reports.find((r) => r.id === c.report.id)?.letterhead)
+  const letterhead = c.report.letterhead !== undefined ? c.report.letterhead : storedLh
+  useEffect(() => { if (letterhead === undefined) void useExecutionStore.getState().loadLetterhead(c.report.id) }, [letterhead, c.report.id])
   const settings = useExecutionStore((s) => s.settingsByProject.get(c.report.projectId))
   const [preview, setPreview] = useState(false)
   const approved = c.form ? templates.find((t) => t.formKey === c.form!.key && t.status === 'approved') : undefined
@@ -65,7 +69,9 @@ export function ReportPaper({ c }: { c: PaperCtx }) {
           <button type="button" className="im-btn im-btn-sm" onClick={() => setPreview(true)}>پیش‌نمایش آزمایشی با قالب مصوب</button>
         </div>
       )}
-      <PaperFrame projectId={c.report.projectId} letterhead={c.report.letterhead}><ReportPaperBody c={c} /><SignatureStrip signatures={c.signatures} /></PaperFrame>
+      {letterhead === undefined
+        ? <p className="im-helper" role="status" style={{ padding: 16 }}>در حال خواندن سربرگ گزارش…</p>
+        : <PaperFrame projectId={c.report.projectId} letterhead={letterhead}><ReportPaperBody c={c} /><SignatureStrip signatures={c.signatures} /></PaperFrame>}
     </>
   )
 }

@@ -35,6 +35,9 @@ interface InboxState {
   /** key → epoch ms until which the item is hidden («بعداً یادآوری کن») */
   snoozed: Record<string, number>
   refresh: () => Promise<void>
+  /** refresh unless the list is younger than a minute: every module header asks on mount, so moving between modules does not re-read it */
+  refreshIfStale: () => Promise<void>
+  lastAt: number
   setOpen: (open: boolean, select?: string | null, tab?: 'inbox' | 'notes') => void
   select: (key: string | null) => void
   setFilter: (p: Partial<InboxFilter>) => void
@@ -45,9 +48,11 @@ interface InboxState {
 
 export const useInboxStore = create<InboxState>()((set, get) => ({
   items: [], loading: false, loadedOnce: false, error: null, open: false, tab: 'inbox', setTab: (t) => set({ tab: t }), selected: null, filter: EMPTY_FILTER, snoozed: liveSnooze(readSnooze()),
+  lastAt: 0,
+  refreshIfStale: async () => { if (Date.now() - get().lastAt > 60_000) await get().refresh() },
   refresh: async () => {
     if (get().loading) return
-    set({ loading: true })
+    set({ loading: true, lastAt: Date.now() })
     const [main, delays, fin, work, people] = await Promise.all([supabase.rpc('inbox_my_items'), supabase.rpc('inbox_my_delays'), supabase.rpc('inbox_my_finance'), supabase.rpc('inbox_my_project_work'), supabase.rpc('inbox_my_stakeholder_work')])
     if (main.error) { set({ loading: false, loadedOnce: true, error: friendlyErrorMessage(main.error) }); return }
     // the delay register, the finance list and the project modules' work (statements, PSSR, testing) are optional extras: if it fails the rest of the inbox still shows

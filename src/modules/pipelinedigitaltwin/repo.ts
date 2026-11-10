@@ -31,8 +31,19 @@ export const assetOf = (r: Row): Asset => ({ id: r.id, projectId: r.master_proje
 export const eventOf = (r: Row): AssetEvent => ({ id: r.id, assetId: r.asset_id, kind: r.kind, at: s(r.at), result: s(r.result), condition: r.condition ?? null, opState: r.op_state ?? null, note: s(r.note), by: s(r.by_user) })
 const jointRowOf = (r: Row): JointRow => ({ joint_no: Number(r.joint_no), welding: r.welding, welding_at: r.welding_at, ndt: r.ndt, ndt_at: r.ndt_at, coating: r.coating, coating_at: r.coating_at, lowering: r.lowering, lowering_at: r.lowering_at, backfill: r.backfill, backfill_at: r.backfill_at, welders: r.welders ?? [], weld_ref: s(r.weld_ref), notes: s(r.notes), updated_by: r.updated_by, updated_at: r.updated_at })
 
+/** a project's joint rows, kept for five minutes: the twin and the test module both read them, and a write here clears it */
+const jointCache = new Map<string, { at: number; rows: Promise<JointRow[]> }>()
+const JOINT_TTL = 5 * 60_000
+function allJointRows(projectId: string): Promise<JointRow[]> {
+  const hit = jointCache.get(projectId)
+  if (hit && Date.now() - hit.at < JOINT_TTL) return hit.rows
+  const rows = readJointRows(projectId)
+  jointCache.set(projectId, { at: Date.now(), rows })
+  rows.catch(() => jointCache.delete(projectId))
+  return rows
+}
 /** reads every joint row of a project (they can be tens of thousands: paged) */
-async function allJointRows(projectId: string): Promise<JointRow[]> {
+async function readJointRows(projectId: string): Promise<JointRow[]> {
   const out: JointRow[] = []
   for (let from = 0; ; from += 1000) {
     const { data, error } = await supabase.from('pdt_joints').select('*').eq('master_project_id', projectId).order('joint_no').range(from, from + 999)
@@ -92,6 +103,7 @@ export async function saveRoute(projectId: string, pts: GeoPoint[], name: string
 }
 
 export async function upsertJointRows(projectId: string, rows: JointRow[], by: string) {
+  jointCache.delete(projectId)
   const at = new Date().toISOString()
   for (let i = 0; i < rows.length; i += 500) {
     const chunk = rows.slice(i, i + 500).map((r) => ({ master_project_id: projectId, joint_no: r.joint_no, welding: r.welding, welding_at: r.welding_at, ndt: r.ndt, ndt_at: r.ndt_at, coating: r.coating, coating_at: r.coating_at, lowering: r.lowering, lowering_at: r.lowering_at, backfill: r.backfill, backfill_at: r.backfill_at, welders: r.welders, weld_ref: r.weld_ref, notes: r.notes, updated_by: by, updated_at: at }))

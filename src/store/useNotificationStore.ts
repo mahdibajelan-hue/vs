@@ -22,6 +22,9 @@ interface NotificationState {
   loading: boolean
   loadedOnce: boolean
   refresh: () => Promise<void>
+  /** refresh unless the list is younger than a minute: every module header asks on mount, so moving between modules does not re-read it */
+  refreshIfStale: () => Promise<void>
+  lastAt: number
 }
 
 /** The bell's data: computed on the server by my_notifications() (the user's own missions, issues, risks) and my_finance_notifications() (guarantees, certificates, claims, retention; RLS + finance permission apply). */
@@ -30,9 +33,11 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
   projectOf: {},
   loading: false,
   loadedOnce: false,
+  lastAt: 0,
+  refreshIfStale: async () => { if (Date.now() - get().lastAt > 60_000) await get().refresh() },
   refresh: async () => {
     if (get().loading) return
-    set({ loading: true })
+    set({ loading: true, lastAt: Date.now() })
     try {
       const [main, fin, land, chg, mat, eng, exe, sv] = await Promise.all([supabase.rpc('my_notifications'), supabase.rpc('my_finance_notifications'), supabase.rpc('my_land_notifications'), supabase.rpc('cm_my_notifications'), supabase.rpc('my_material_notifications'), supabase.rpc('my_engineering_notifications'), supabase.rpc('my_execution_notifications'), supabase.rpc('my_supervision_notifications')])
       if (main.error && fin.error) throw main.error

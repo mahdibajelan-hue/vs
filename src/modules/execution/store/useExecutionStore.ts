@@ -46,6 +46,8 @@ interface State {
   coverage: { core: Coverage; full: Coverage }
   /** re-reads only the given reports (row, lines, resources, stoppages, history) — the daily save / send / review path, instead of reloading every project */
   reloadReports: (ids: string[]) => Promise<void>
+  /** reads one report's frozen letterhead (left out of the list read) when its paper is shown */
+  loadLetterhead: (id: string) => Promise<void>
   myRoles: (projectId: string) => ExRole[]
   can: (projectId: string, action: string) => boolean
   settings: (projectId: string) => ExSettings
@@ -92,7 +94,9 @@ async function archiveIfDone(r: { id: string; formKey: string; status: string } 
 const initial = { loaded: false, coreLoaded: false, loading: false, coverage: { core: EMPTY_COVERAGE, full: EMPTY_COVERAGE }, roles: [], settingsByProject: new Map<string, ExSettings>(), books: [], priceItems: [], activities: [], baselines: [], blines: [], reports: [], lines: [], resources: [], stoppages: [], history: [], maps: [], gaps: [], people: new Map<string, string>(), focusReportId: null as string | null, focusTab: null as 'review' | 'daily' | 'gaps' | 'delays' | null }
 
 const actRow = (r: Row): Activity => ({ id: r.id, projectId: r.project_id, priceItemId: r.price_item_id, itemNo: r.item_no ?? '', title: r.title, unit: r.unit ?? '', chapter: r.chapter ?? '', kind: r.kind, baseQty: n(r.base_qty), unitPrice: n(r.unit_price), weight: n(r.weight), weightGroup: r.weight_group ?? '', metric: r.metric ?? '', area: r.area ?? '', front: r.front ?? '', station: r.station ?? '', kmFrom: nn(r.km_from), kmTo: nn(r.km_to), plannedStart: r.planned_start, plannedEnd: r.planned_end, active: !!r.active, approval: r.approval, approvalNote: r.approval_note ?? '', sort: r.sort ?? 0, note: r.note ?? '', rowNo: r.row_no ?? '', spec: r.spec ?? '', remark: r.remark ?? '', chapterNo: r.chapter_no ?? '', parentActivityId: r.parent_activity_id, surchargePct: nn(r.surcharge_pct), bookId: r.book_id })
-export const repRow = (r: Row): Report => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, reportNo: r.report_no, reportDate: r.report_date, contractorOrgId: r.contractor_org_id, front: r.front ?? '', station: r.station ?? '', shift: r.shift ?? 'day', status: r.status, data: r.data ?? {}, notes: r.notes ?? '', missing: Array.isArray(r.missing) ? r.missing : [], completionOf: r.completion_of, dueDate: r.due_date, createdBy: r.created_by, createdAt: r.created_at, submittedBy: r.submitted_by, submittedAt: r.submitted_at, reviewedBy: r.reviewed_by, reviewedAt: r.reviewed_at, reviewNote: r.review_note ?? '', letterhead: r.letterhead ?? null })
+/** the report columns a list needs; `letterhead` is read only when a report's paper is shown */
+const REPORT_LIST_COLS = 'id,project_id,form_key,report_no,report_date,contractor_org_id,front,station,shift,status,data,notes,missing,completion_of,due_date,created_by,created_at,submitted_by,submitted_at,reviewed_by,reviewed_at,review_note,updated_at,template_id'
+export const repRow = (r: Row): Report => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, reportNo: r.report_no, reportDate: r.report_date, contractorOrgId: r.contractor_org_id, front: r.front ?? '', station: r.station ?? '', shift: r.shift ?? 'day', status: r.status, data: r.data ?? {}, notes: r.notes ?? '', missing: Array.isArray(r.missing) ? r.missing : [], completionOf: r.completion_of, dueDate: r.due_date, createdBy: r.created_by, createdAt: r.created_at, submittedBy: r.submitted_by, submittedAt: r.submitted_at, reviewedBy: r.reviewed_by, reviewedAt: r.reviewed_at, reviewNote: r.review_note ?? '', letterhead: 'letterhead' in r ? r.letterhead ?? null : undefined })
 export const lineRow = (r: Row): ReportLine => ({ id: r.id, reportId: r.report_id, lineNo: r.line_no ?? 0, activityId: r.activity_id, qty: n(r.qty), kmFrom: nn(r.km_from), kmTo: nn(r.km_to), location: r.location ?? '', note: r.note ?? '', detail: r.detail ?? {}, status: r.status, approvedQty: nn(r.approved_qty), reviewNote: r.review_note ?? '', sourceReportId: r.source_report_id, employerStatus: r.employer_status ?? null, employerQty: nn(r.employer_qty), employerNote: r.employer_note ?? '' })
 
 const resRow = (r: Row): ReportResource => ({ id: r.id, reportId: r.report_id, kind: r.kind, section: r.section ?? '', name: r.name, totalQty: n(r.total_qty), activeQty: n(r.active_qty), idleQty: n(r.idle_qty), leaveQty: n(r.leave_qty), stoppedQty: n(r.stopped_qty), nativeQty: n(r.native_qty), nonnativeQty: n(r.nonnative_qty), repairQty: n(r.repair_qty), hours: n(r.hours), note: r.note ?? '' })
@@ -108,12 +112,13 @@ export const useExecutionStore = create<State>((set, get) => ({
     // inside a project only that project is read; other projects already in memory stay (see lib/projectScope)
     const sc = resolveScope(opts?.scope)
     set({ loading: true })
-    const t = (name: string, col = 'project_id') => { const q = supabase.from(name).select('*'); return sc ? q.eq(col, sc) : q }
+    const t = (name: string, col = 'project_id', sel = '*') => { const q = supabase.from(name).select(sel as '*'); return sc ? q.eq(col, sc) : q }
     const child = (name: string, parent: string, fk: string) => { const q = supabase.from(name).select(viaParent('*', parent, fk, 'project_id', sc)); return sc ? q.eq('__p.project_id', sc) : q }
     const none = Promise.resolve({ data: [] as Row[], error: null })
     const [roles, sets, books, items, acts, bases, blines, reps, lns, res, stp, his, maps, gaps, profs] = await Promise.all([
       t('ex_project_roles'), t('ex_settings'), lite ? none : t('ex_price_books').order('created_at'), lite ? none : child('ex_price_items', 'ex_price_books', 'ex_price_items_book_id_fkey'), t('ex_activities').order('sort'), t('ex_baselines').order('version'), child('ex_baseline_lines', 'ex_baselines', 'ex_baseline_lines_baseline_id_fkey'),
-      t('ex_reports').order('report_date', { ascending: false }), child('ex_report_lines', 'ex_reports', 'ex_report_lines_report_id_fkey').order('line_no'), child('ex_report_resources', 'ex_reports', 'ex_report_resources_report_id_fkey'), child('ex_report_stoppages', 'ex_reports', 'ex_report_stoppages_report_id_fkey'), lite ? none : child('ex_report_history', 'ex_reports', 'ex_report_history_report_id_fkey').order('at', { ascending: false }).limit(2000), t('ex_form_activity_map'), lite ? none : t('ex_gap_items'),
+      // every column except the frozen letterhead (≈4 KB of a 4.5 KB row): the printed paper loads it on demand (loadLetterhead)
+      t('ex_reports', 'project_id', REPORT_LIST_COLS).order('report_date', { ascending: false }), child('ex_report_lines', 'ex_reports', 'ex_report_lines_report_id_fkey').order('line_no'), child('ex_report_resources', 'ex_reports', 'ex_report_resources_report_id_fkey'), child('ex_report_stoppages', 'ex_reports', 'ex_report_stoppages_report_id_fkey'), lite ? none : child('ex_report_history', 'ex_reports', 'ex_report_history_report_id_fkey').order('at', { ascending: false }).limit(2000), t('ex_form_activity_map'), lite ? none : t('ex_gap_items'),
       lite ? none : supabase.from('profiles').select('id, full_name'),
     ])
     // an un-migrated database leaves these empty rather than breaking the module
@@ -156,6 +161,13 @@ export const useExecutionStore = create<State>((set, get) => ({
       coverage,
       loaded: covers(coverage.full, sc), coreLoaded: true, loading: false,
     })
+  },
+
+  loadLetterhead: async (id) => {
+    const { data, error } = await supabase.from('ex_reports').select('letterhead').eq('id', id).maybeSingle()
+    if (error) return
+    const lh = (data?.letterhead ?? null) as Report['letterhead']
+    set({ reports: get().reports.map((r) => (r.id === id ? { ...r, letterhead: lh } : r)) })
   },
 
   reloadReports: async (ids) => {
