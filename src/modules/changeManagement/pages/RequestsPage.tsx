@@ -12,6 +12,7 @@ import { StatusChip, money, pct } from '../components/cm'
 import { OPEN_STATUSES } from '../types'
 import type { PageProps } from '../ChangeApp'
 import { pressable } from '../../../lib/pressable'
+import { usePhoneFilters } from '../../../components/common/usePhoneFilters'
 
 export const requestRows = (reqs: ChangeRequest[], steps: ChangeStep[], c: ReturnType<typeof useChangeCtx>) => reqs.map((r) => {
   const cur = steps.filter((s) => s.requestId === r.id && s.attempt === r.attempt && s.status === 'active').map((s) => s.roleName).join('، ')
@@ -52,6 +53,7 @@ export function RequestsPage({ onOpen, onNew }: PageProps) {
   const filters = [status !== 'all' ? 'وضعیت: ' + (status === 'open' ? 'باز' : STATUS_FA[status]) : '', type ? 'نوع: ' + TYPE_FA[type] : '', role ? 'مرجع: ' + role : '', from ? 'از ' + jd(from) : '', to ? 'تا ' + jd(to) : '', q ? 'جستجو: ' + q : ''].filter(Boolean)
   const rows = () => requestRows(list, steps, ctx)
 
+  const pf = usePhoneFilters([type, contract, role, from, to].filter(Boolean).length + (mine ? 1 : 0) + (status !== 'all' ? 1 : 0))
   return (
     <div className="im-page" style={{ display: 'grid', gap: 14 }}>
       <div className="im-row" style={{ justifyContent: 'space-between' }}>
@@ -64,30 +66,31 @@ export function RequestsPage({ onOpen, onNew }: PageProps) {
       <div className="im-card" style={{ display: 'grid', gap: 10 }}>
         <div className="im-row">
           <div style={{ position: 'relative', flex: '2 1 220px' }}><Search size={14} aria-hidden style={{ position: 'absolute', insetInlineStart: 11, top: 11, color: 'var(--im-muted)' }} /><input style={{ paddingInlineStart: 32 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="جستجو در شماره، عنوان، شرح…" aria-label="جستجو" /></div>
-          <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} aria-label="وضعیت"><option value="all">همهٔ وضعیت‌ها</option><option value="open">باز (در جریان)</option>{STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_FA[s]}</option>)}</select>
+          {pf.toggle}
+          {pf.show && <><select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} aria-label="وضعیت"><option value="all">همهٔ وضعیت‌ها</option><option value="open">باز (در جریان)</option>{STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_FA[s]}</option>)}</select>
           <select value={type} onChange={(e) => setType(e.target.value as typeof type)} aria-label="نوع"><option value="">همهٔ انواع</option>{TYPE_ORDER.map((t) => <option key={t} value={t}>{TYPE_FA[t]}</option>)}</select>
           <select value={contract} onChange={(e) => setContract(e.target.value)} aria-label="قرارداد"><option value="">همهٔ قراردادها</option>{contractOpts.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
-          <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="مرجع جاری"><option value="">همهٔ مراجع</option>{roles.map((r) => <option key={r} value={r}>{r}</option>)}</select>
+          <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="مرجع جاری"><option value="">همهٔ مراجع</option>{roles.map((r) => <option key={r} value={r}>{r}</option>)}</select></>}
         </div>
-        <div className="im-row" style={{ alignItems: 'flex-end' }}>
+        {pf.show && <div className="im-row" style={{ alignItems: 'flex-end' }}>
           <div style={{ minWidth: 150 }}><div className="im-helper">از تاریخ ثبت</div><JalaliDateField value={from} onChange={setFrom} /></div>
           <div style={{ minWidth: 150 }}><div className="im-helper">تا تاریخ</div><JalaliDateField value={to} onChange={setTo} /></div>
           <label className="im-check"><input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> منتظر تصمیم من</label>
           <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="مرتب‌سازی"><option value="date">جدیدترین</option><option value="cost">بیشترین مبلغ</option><option value="pct">بیشترین درصد تجمعی</option></select>
           {(q || type || contract || role || from || to || mine || status !== 'all') && <button className="im-btn im-btn-ghost" onClick={() => { setQ(''); setType(''); setContract(''); setRole(''); setFrom(''); setTo(''); setMine(false); setStatus('all') }}>پاک‌کردن فیلترها</button>}
-        </div>
+        </div>}
       </div>
       {list.length === 0 ? <div className="im-empty">درخواستی با این فیلترها پیدا نشد.</div> : (
-        <div className="im-table-wrap"><table className="im-table"><thead><tr><th>شماره</th><th>عنوان</th><th>پروژه · قرارداد</th><th>نوع</th><th>وضعیت</th><th>مبلغ</th><th>تمدید</th><th>تجمعی</th><th>مرحلهٔ جاری</th><th>تاریخ</th></tr></thead><tbody>
+        <div className="im-table-wrap"><table className="im-table"><thead><tr><th>شماره</th><th>عنوان</th><th className="hide-sm">پروژه · قرارداد</th><th className="hide-sm">نوع</th><th>وضعیت</th><th>مبلغ</th><th className="hide-sm">تمدید</th><th className="hide-sm">تجمعی</th><th className="hide-sm">مرحلهٔ جاری</th><th className="hide-sm">تاریخ</th></tr></thead><tbody>
           {list.map((r) => {
             const cur = steps.filter((s) => s.requestId === r.id && s.attempt === r.attempt && s.status === 'active')
             const cp = (r.routeSnapshot?.basis ?? ctx.preview(r).basis).cum_pct
             return (
               <tr key={r.id} {...pressable(() => onOpen(r.id, 'flow'), { row: true })} style={{ cursor: 'pointer' }}>
-                <td><span className="im-code">{r.crNumber}</span></td><td className="ttl">{r.title}</td><td><div style={{ fontSize: 12 }}>{ctx.projectName(r.masterProjectId)}</div><div className="im-helper">{ctx.contractLabel(r)}</div></td>
-                <td>{r.changeType ? TYPE_FA[r.changeType] : '—'}</td><td><StatusChip status={r.status} />{r.routeStatus === 'blocked' && <div className="cm-chip" style={{ ['--c' as string]: '#ef4444', marginTop: 3 }}>متوقف</div>}</td>
-                <td className="cm-mono">{money(r.proposedCost)}</td><td className="cm-mono">{r.proposedDays ? r.proposedDays + ' روز' : '—'}</td><td className="cm-mono">{pct(cp)}</td>
-                <td style={{ fontSize: 12 }}>{cur.length ? cur.map((s) => s.roleName).join('، ') : '—'}</td><td className="im-helper">{jd(r.createdAt)}</td>
+                <td><span className="im-code">{r.crNumber}</span></td><td className="ttl">{r.title}</td><td className="hide-sm"><div style={{ fontSize: 12 }}>{ctx.projectName(r.masterProjectId)}</div><div className="im-helper">{ctx.contractLabel(r)}</div></td>
+                <td className="hide-sm">{r.changeType ? TYPE_FA[r.changeType] : '—'}</td><td><StatusChip status={r.status} />{r.routeStatus === 'blocked' && <div className="cm-chip" style={{ ['--c' as string]: '#ef4444', marginTop: 3 }}>متوقف</div>}</td>
+                <td className="cm-mono">{money(r.proposedCost)}</td><td className="cm-mono hide-sm">{r.proposedDays ? r.proposedDays + ' روز' : '—'}</td><td className="cm-mono hide-sm">{pct(cp)}</td>
+                <td className="hide-sm" style={{ fontSize: 12 }}>{cur.length ? cur.map((s) => s.roleName).join('، ') : '—'}</td><td className="im-helper hide-sm">{jd(r.createdAt)}</td>
               </tr>)
           })}
         </tbody></table></div>

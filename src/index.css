@@ -2176,3 +2176,22 @@ select option {
 @supports (padding: env(safe-area-inset-left)) {
   #root { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
 }
+
+/* Touch screens (site phones): the remaining small controls in project modules reach the 44px target —
+   project-dashboard source chips, health-center actions, stakeholder tabs and buttons, material pills,
+   help and date-filter buttons; table checkboxes grow to 24px. */
+@media (pointer: coarse) {
+  /* :root raises specificity so these win over each module's own rule, whatever order the CSS loads in */
+  :root .pdb-src, :root .phc-btn, :root .sh-tab, :root .sh-btn, :root .mt-pill, :root .im-help-btn, :root .im-datef-btn { min-height: 44px; }
+  :root .im-help-btn, :root .im-datef-btn { min-width: 44px; }
+  :root .im-seg button, :root .im-select-pill { min-height: 44px; }
+  :root .im-table input[type="checkbox"], :root .ps-table input[type="checkbox"] { width: 24px; height: 24px; }
+}
+
+/* «فیلترها» — the phone-only button that folds a page's filters (usePhoneFilters) */
+.ph-filter-btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 44px; padding: 0 .9rem; border-radius: .7rem; border: 1px solid var(--border-soft); background: var(--bg-panel-solid); color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; flex: 1 1 auto; transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), border-color 150ms ease; }
+.ph-filter-btn:active { transform: scale(0.98); }
+.ph-filter-btn[aria-expanded="true"] { border-color: var(--color-brand-400); }
+.ph-filter-chev { transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+.ph-filter-btn[aria-expanded="true"] .ph-filter-chev { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .ph-filter-btn, .ph-filter-chev { transition: none; } }

@@ -375,6 +375,7 @@ button.im-stat-card:active, .im-kpi-grid > button:active .im-stat-card { transfo
   .im-tiles { grid-template-columns: 1fr; }
   .im-drawer { width: 100%; }
   .im-table .hide-sm { display: none; }
+  .im-table .ttl { white-space: normal; max-width: none; min-width: 9rem; } /* on a phone the title wraps instead of running off the side */
   .im-fab { display: inline-flex; }
   .im-head-new { display: none; } /* the floating button takes over on small screens */
   .im-banner { padding: 22px 16px; border-radius: 18px; }

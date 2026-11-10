@@ -17,6 +17,7 @@ import type { PageProps } from '../RiskApp'
 import { ModalPortal } from '../../../components/common/ModalPortal'
 import { todayTehran } from '../../../lib/today'
 import { pressable } from '../../../lib/pressable'
+import { usePhoneFilters } from '../../../components/common/usePhoneFilters'
 
 interface Filter { q: string; project: string; status: string; level: string; zone: string; category: string; owner: string; source: string; attention: boolean; reviewOverdue: boolean; cell: { p: number; i: number } | null }
 const EMPTY: Filter = { q: '', project: 'all', status: 'active', level: 'all', zone: 'all', category: 'all', owner: 'all', source: 'all', attention: false, reviewOverdue: false, cell: null }
@@ -64,6 +65,8 @@ export function RegisterPage({ onOpenRisk, onNew }: PageProps) {
   }, [d.risks, d.states, f, sort])
 
   const activeFilters = Object.entries(f).filter(([k, v]) => v !== (EMPTY as never)[k] && v !== false && v !== null).length
+
+  const pf = usePhoneFilters(activeFilters)
   const allSel = list.length > 0 && list.every((p) => sel.has(p.risk.id))
   const exportCtx = { project: projName, user: dir.name, category: catLabel, states: d.states }
   const filterSummary = (): string[] => {
@@ -107,6 +110,8 @@ export function RegisterPage({ onOpenRisk, onNew }: PageProps) {
 
       <div className="im-filters" role="search">
         <div style={{ position: 'relative', flex: '2 1 200px' }}><Search size={14} style={{ position: 'absolute', right: 11, top: 11, color: 'var(--im-muted)' }} /><input style={{ paddingInlineStart: 32 }} placeholder="جستجو در کد، عنوان، علت، رویداد، پیمانکار، ایستگاه…" value={f.q} onChange={(e) => set('q', e.target.value)} aria-label="جستجو" /></div>
+        {pf.toggle}
+        {pf.show && <>
         {d.scope === 'all' && <select value={f.project} onChange={(e) => set('project', e.target.value)} aria-label="پروژه"><option value="all">همه پروژه‌ها</option>{d.allProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
         <select value={f.status} onChange={(e) => set('status', e.target.value)} aria-label="وضعیت"><option value="active">فعال (باز)</option><option value="all">همهٔ وضعیت‌ها</option>{Object.entries(RM_RISK_STATUS_LABEL_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
         <select value={f.level} onChange={(e) => set('level', e.target.value)} aria-label="سطح"><option value="all">همهٔ سطوح</option>{(['critical', 'high', 'medium', 'low'] as const).map((l) => <option key={l} value={l}>{RISK_LEVEL_LABEL_FA[l]}</option>)}</select>
@@ -115,6 +120,7 @@ export function RegisterPage({ onOpenRisk, onNew }: PageProps) {
         <select value={f.owner} onChange={(e) => set('owner', e.target.value)} aria-label="مالک"><option value="all">همهٔ مالکان</option><option value="none">بدون مالک</option>{dir.all.map((p) => <option key={p.userId} value={p.userId}>{p.name}</option>)}</select>
         <select value={f.source} onChange={(e) => set('source', e.target.value)} aria-label="منبع"><option value="all">همهٔ منابع</option>{(Object.keys(RM_SOURCE_LABEL_FA) as RmSource[]).map((s) => <option key={s} value={s}>{RM_SOURCE_LABEL_FA[s]}</option>)}</select>
         <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="مرتب‌سازی"><option value="priority">اولویت (ناحیه ← KRI ← روند)</option><option value="current">امتیاز فعلی</option><option value="residual">امتیاز باقیمانده</option><option value="review">موعد بازنگری</option><option value="code">کد</option></select>
+        </>}
       </div>
       <div className="im-actions" style={{ marginBottom: 12 }}>
         <label className="im-chip" style={{ cursor: 'pointer', margin: 0 }}><input type="checkbox" style={{ width: 'auto', marginInlineEnd: 6 }} checked={f.attention} onChange={(e) => set('attention', e.target.checked)} />نیازمند توجه</label>
@@ -139,22 +145,22 @@ export function RegisterPage({ onOpenRisk, onNew }: PageProps) {
           <table className="im-table">
             <thead><tr>
               <th style={{ width: 30 }}><input type="checkbox" aria-label="انتخاب همه" checked={allSel} onChange={(e) => setSel(e.target.checked ? new Set(list.map((p) => p.risk.id)) : new Set())} /></th>
-              <th>کد</th><th>عنوان و نشانه‌ها</th><th>دسته</th><th>ذاتی ← فعلی ← باقیمانده</th><th>وضعیت</th><th>مالک</th><th>موعد بازنگری</th>
+              <th>کد</th><th>عنوان و نشانه‌ها</th><th className="hide-sm">دسته</th><th>ذاتی ← فعلی ← باقیمانده</th><th className="hide-sm">وضعیت</th><th className="hide-sm">مالک</th><th className="hide-sm">موعد بازنگری</th>
             </tr></thead>
             <tbody>
               {list.slice(0, 400).map(({ risk: r, state: s }) => (
                 <tr key={r.id} className="rk-row-click" {...pressable(() => onOpenRisk(r.id), { row: true })}>
                   <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`انتخاب ${r.code}`} checked={sel.has(r.id)} onChange={(e) => setSel((o) => { const n = new Set(o); if (e.target.checked) n.add(r.id); else n.delete(r.id); return n })} /></td>
                   <td><span className="im-code">{r.code}</span>{d.scope === 'all' && <div className="im-helper" style={{ fontSize: 11 }}>{projName(r.projectId).slice(0, 22)}</div>}</td>
-                  <td style={{ minWidth: 260 }}>
+                  <td style={{ minWidth: 'min(260px, 46vw)' }}>
                     <div style={{ fontWeight: 700, fontSize: 13 }}>{r.title}{shared.has(r.id) && <SharedBadge info={shared.get(r.id)!} projName={projName} />}</div>
                     {r.status !== 'closed' && s.attention.length > 0 && <div className="rk-flags">{s.attention.slice(0, 3).map((a) => <span key={a} className="rk-flag" style={{ ['--c' as string]: '#f59e0b' }}>{a}</span>)}{s.attention.length > 3 && <span className="rk-flag" style={{ ['--c' as string]: '#94a3b8' }}>+{s.attention.length - 3}</span>}</div>}
                   </td>
-                  <td className="im-helper">{catLabel(r.category)}</td>
+                  <td className="im-helper hide-sm">{catLabel(r.category)}</td>
                   <td><div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}><ScoreTriple state={s} policy={d.policyFor(r.projectId)} /><LevelChip level={s.level} /></div></td>
-                  <td><StatusChip status={r.status} /></td>
-                  <td className="im-helper">{r.ownerId ? dir.name(r.ownerId) : <span style={{ color: 'var(--im-coral)' }}>بدون مالک</span>}</td>
-                  <td className="im-helper" style={{ color: s.reviewOverdue ? 'var(--im-coral)' : undefined, fontWeight: s.reviewOverdue ? 700 : 400 }}>{r.status === 'closed' ? '—' : formatJalali(s.reviewDue)}</td>
+                  <td className="hide-sm"><StatusChip status={r.status} /></td>
+                  <td className="im-helper hide-sm">{r.ownerId ? dir.name(r.ownerId) : <span style={{ color: 'var(--im-coral)' }}>بدون مالک</span>}</td>
+                  <td className="im-helper hide-sm" style={{ color: s.reviewOverdue ? 'var(--im-coral)' : undefined, fontWeight: s.reviewOverdue ? 700 : 400 }}>{r.status === 'closed' ? '—' : formatJalali(s.reviewDue)}</td>
                 </tr>
               ))}
             </tbody>
