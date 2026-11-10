@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { addCoverage, covers, EMPTY_COVERAGE, mergePatch, onScopeChange, resolveScope, type Coverage, type ScopeRequest } from '../../../lib/projectScope'
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
@@ -41,7 +42,9 @@ interface State {
   savePlan: (p: CashPlan) => Promise<boolean>
   saveClearance: (c: Clearance) => Promise<boolean>
   reviewInsight: (key: string, projectId: string, decision: 'accepted' | 'dismissed', note?: string) => Promise<boolean>
-  fetchAll: () => Promise<void>
+  fetchAll: (opts?: { scope?: ScopeRequest }) => Promise<void>
+  /** which projects are in memory (lib/projectScope) */
+  coverage: Coverage
   loadLandLedger: (projectId: string) => Promise<LandLedgerRow[]>
   loadAudit: (projectId: string | null, limit?: number) => Promise<FinAuditEntry[]>
   saveBudgetLine: (b: { id?: string | null; projectId: string; code: string; title: string; costCategory: string; kind: 'general' | 'land'; amount: number; currency: string; notes?: string; active?: boolean }) => Promise<boolean>
@@ -52,6 +55,7 @@ interface State {
 
 export const useFinanceControlStore = create<State>()((set, get) => ({
   loaded: false,
+  coverage: EMPTY_COVERAGE,
   loading: false,
   budgetLines: [],
   settingsVersions: [],
@@ -65,18 +69,20 @@ export const useFinanceControlStore = create<State>()((set, get) => ({
   clearances: [],
   reviews: new Map(),
 
-  fetchAll: async () => {
+  fetchAll: async (opts) => {
+    // inside a project only that project is read; other projects already in memory stay (lib/projectScope)
+    const sc = resolveScope(opts?.scope)
     set({ loading: true })
     const [lines, versions, items, links, changes, log, routes, plans, clearances, reviews] = await Promise.all([
-      supabase.from('fin_budget_lines').select('*').order('code'),
+      (sc ? supabase.from('fin_budget_lines').select('*').eq('master_project_id', sc) : supabase.from('fin_budget_lines').select('*')).order('code'),
       supabase.from('fin_settings_versions').select('*').order('version'),
       supabase.from('fin_config_items').select('*').order('sort'),
-      supabase.from('fin_links').select('*').order('created_at', { ascending: false }),
-      supabase.from('chg_change_requests').select('id, master_project_id, contract_id, cr_number, title, status, currency, proposed_change_amount, approved_change_amount, proposed_schedule_impact_days, approved_schedule_impact_days, approved_at').not('contract_id', 'is', null),
-      supabase.from('fin_sync_log').select('*').order('id', { ascending: false }).limit(60),
-      supabase.from('la_routes').select('master_project_id'),
-      supabase.from('fin_cashflow_plans').select('*'),
-      supabase.from('fin_clearances').select('*'),
+      (sc ? supabase.from('fin_links').select('*').eq('master_project_id', sc) : supabase.from('fin_links').select('*')).order('created_at', { ascending: false }),
+      (sc ? supabase.from('chg_change_requests').select('id, master_project_id, contract_id, cr_number, title, status, currency, proposed_change_amount, approved_change_amount, proposed_schedule_impact_days, approved_schedule_impact_days, approved_at').eq('master_project_id', sc) : supabase.from('chg_change_requests').select('id, master_project_id, contract_id, cr_number, title, status, currency, proposed_change_amount, approved_change_amount, proposed_schedule_impact_days, approved_schedule_impact_days, approved_at')).not('contract_id', 'is', null),
+      (sc ? supabase.from('fin_sync_log').select('*').eq('master_project_id', sc) : supabase.from('fin_sync_log').select('*')).order('id', { ascending: false }).limit(60),
+      (sc ? supabase.from('la_routes').select('master_project_id').eq('master_project_id', sc) : supabase.from('la_routes').select('master_project_id')),
+      (sc ? supabase.from('fin_cashflow_plans').select('*').eq('master_project_id', sc) : supabase.from('fin_cashflow_plans').select('*')),
+      (sc ? supabase.from('fin_clearances').select('*, __p:fin_contracts!inner(master_project_id)').eq('__p.master_project_id', sc) : supabase.from('fin_clearances').select('*, __p:fin_contracts!inner(master_project_id)')),
       supabase.from('fin_insight_reviews').select('insight_key, decision'),
     ])
     // the new objects may not exist yet on an un-migrated database: the module keeps working without them
@@ -97,21 +103,22 @@ export const useFinanceControlStore = create<State>()((set, get) => ({
     const targets = new Map<string, LinkTarget>()
     for (const r of ok<Row>(iss as never)) targets.set(r.id, { id: r.id, kind: 'issue', title: r.title ?? '', status: r.status ?? '', code: r.code ?? '' })
     for (const r of ok<Row>(rsk as never)) targets.set(r.id, { id: r.id, kind: 'risk', title: r.title ?? '', status: r.status ?? '', code: r.code ?? '' })
-    set({
+    const prev = get()
+    set(mergePatch(prev, {
       budgetLines: lineRows.map((r): FinBudgetLine => ({ id: r.id, masterProjectId: r.master_project_id, code: r.code, title: r.title, costCategory: r.cost_category ?? '', kind: r.kind, approvedAmount: Number(r.approved_amount), currency: r.currency, notes: r.notes ?? '', isActive: !!r.is_active })),
       settingsVersions: ok<Row>(versions).map((r): SettingsVersion => ({ version: r.version, validFrom: r.valid_from, note: r.note ?? '', values: r.values_json ?? {} })),
       configItems: ok<Row>(items).map((r): FinConfigItem => ({ id: r.id, kind: r.kind, key: r.key, label: r.label, sort: r.sort, active: !!r.active })),
       links: linkRows.map((r): FinLink => ({ id: r.id, masterProjectId: r.master_project_id, sourceType: r.source_type, sourceId: r.source_id, targetType: r.target_type, targetId: r.target_id, label: r.label ?? '', createdAt: r.created_at })),
-      linkTargets: targets,
+      linkTargets: new Map([...(sc ? prev.linkTargets : []), ...targets]),
       changes: ok<Row>(changes).map((r): FinChangeRequest => ({ id: r.id, masterProjectId: r.master_project_id, contractId: r.contract_id, crNumber: r.cr_number ?? '', title: r.title ?? '', status: r.status, currency: r.currency ?? '', proposedAmount: Number(r.proposed_change_amount ?? 0), approvedAmount: r.approved_change_amount == null ? null : Number(r.approved_change_amount), proposedDays: Number(r.proposed_schedule_impact_days ?? 0), approvedDays: r.approved_schedule_impact_days == null ? null : Number(r.approved_schedule_impact_days), approvedAt: r.approved_at ?? null })),
       syncLog: ok<Row>(log).map((r): FinSyncEntry => ({ id: r.id, at: r.at, source: r.source, outcome: r.outcome, detail: r.detail ?? '', masterProjectId: r.master_project_id })),
       plans: ok<Row>(plans).map((r): CashPlan => ({ projectId: r.master_project_id, contractId: r.contract_id ?? null, kind: r.kind, fund: r.fund, currency: r.currency, jalaliYear: r.jalali_year, jalaliMonth: r.jalali_month, amount: Number(r.amount) })),
-      clearances: ok<Row>(clearances).map((r): Clearance => ({ contractId: r.contract_id, kind: r.kind, status: r.status, number: r.number ?? '', issueDate: r.issue_date, expiryDate: r.expiry_date, note: r.note ?? '' })),
+      clearances: ok<Row>(clearances).map((r): Clearance => ({ projectId: (r.__p as Row | null)?.master_project_id ?? null, contractId: r.contract_id, kind: r.kind, status: r.status, number: r.number ?? '', issueDate: r.issue_date, expiryDate: r.expiry_date, note: r.note ?? '' })),
       reviews: new Map(ok<Row>(reviews).map((r) => [r.insight_key as string, r.decision as 'accepted' | 'dismissed'])),
-      land: new Map(landEntries.filter((e): e is readonly [string, LandSummary] => !!e)),
-      loaded: true,
-      loading: false,
-    })
+      land: new Map([...(sc ? [...prev.land].filter(([k]) => k !== sc) : []), ...landEntries.filter((e): e is readonly [string, LandSummary] => !!e)]),
+    }, sc))
+    const coverage = addCoverage(get().coverage, sc)
+    set({ coverage, loaded: covers(coverage, sc), loading: false })
   },
 
   loadLandLedger: async (projectId) => {
@@ -177,3 +184,6 @@ export const useFinanceControlStore = create<State>()((set, get) => ({
 }))
 
 export type { PendingChange }
+
+// entering another project (or the portfolio view): read again unless that scope is already in memory
+onScopeChange((sc) => { useFinanceControlStore.setState({ loaded: covers(useFinanceControlStore.getState().coverage, sc) }) })

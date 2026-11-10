@@ -1,4 +1,5 @@
 import { useExecutionStore } from '../execution/store/useExecutionStore'
+import { covers, insideProject } from '../../lib/projectScope'
 import { STOPPAGE_CATEGORY_FA } from '../execution/lib/formCatalog'
 import { ensureEpcStores, epcProgressOf, epcWindowOf } from '../epc/epcProgressLoader'
 import { weightsFromReport } from '../epc/epcProgress'
@@ -19,13 +20,20 @@ import { todayTehran } from '../../lib/today'
 const ACTIVE_RISK = new Set(['open', 'monitoring', 'escalated'])
 const LEVELS: [string, string][] = [['critical', 'بحرانی'], ['high', 'بالا'], ['medium', 'متوسط'], ['low', 'کم']]
 
-// one in-flight load for every caller: a portfolio page asks for all its projects at once
-let financeLoading: Promise<void> | null = null
-function ensureFinance(): Promise<void> {
+// one in-flight load per scope: inside a project only that project; a portfolio page reads every project at once
+const financeLoading = new Map<string, Promise<void>>()
+function ensureFinance(projectId?: string): Promise<void> {
+  const sc = insideProject() ? (projectId ?? insideProject()) : null
   const f = useFinanceStore.getState(), c = useFinanceControlStore.getState()
-  if (f.loaded && c.loaded) return Promise.resolve()
-  financeLoading ??= Promise.all([f.loaded ? null : f.fetchAll(), c.loaded ? null : c.fetchAll()]).then(() => undefined, () => undefined).finally(() => { financeLoading = null })
-  return financeLoading
+  const needF = !covers(f.coverage, sc), needC = !covers(c.coverage, sc)
+  if (!needF && !needC) return Promise.resolve()
+  const key = sc ?? '*', req = sc ?? 'all'
+  let p = financeLoading.get(key)
+  if (!p) {
+    p = Promise.all([needF ? f.fetchAll({ scope: req }) : null, needC ? c.fetchAll({ scope: req }) : null]).then(() => undefined, () => undefined).finally(() => { financeLoading.delete(key) })
+    financeLoading.set(key, p)
+  }
+  return p
 }
 
 const OPEN_ISSUE = new Set(['open', 'in_progress', 'pending_approval'])
@@ -59,7 +67,7 @@ export function perfOf(m: ProjectMetrics): NonNullable<ExternalCounts['perf']> {
 
 /** Everything the project dashboard shows, from the modules' own data and engines. */
 export async function loadProjectMetrics(masterProjectId: string): Promise<ProjectSnapshot | null> {
-  const [lc, risk, bundle] = await Promise.all([loadLifecycleInputs(masterProjectId), riskPicture(masterProjectId), loadStageGateBundle(masterProjectId).catch(() => null), ensureEpcStores(masterProjectId), ensureFinance()])
+  const [lc, risk, bundle] = await Promise.all([loadLifecycleInputs(masterProjectId), riskPicture(masterProjectId), loadStageGateBundle(masterProjectId).catch(() => null), ensureEpcStores(masterProjectId), ensureFinance(masterProjectId)])
   if (!lc) return null
   const today = todayTehran()
   const weights = weightsFromReport(lc.clientReport)

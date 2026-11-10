@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { addCoverage, covers, EMPTY_COVERAGE, mergePatch, onScopeChange, resolveScope, type Coverage, type ScopeRequest } from '../../../lib/projectScope'
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
 import { useSystemStore } from '../../../store/useSystemStore'
@@ -62,7 +63,9 @@ interface FinanceState {
   loading: boolean
   loaded: boolean
 
-  fetchAll: () => Promise<void>
+  fetchAll: (opts?: { scope?: ScopeRequest }) => Promise<void>
+  /** which projects are in memory (lib/projectScope) */
+  coverage: Coverage
 
   upsertBudget: (masterProjectId: string, data: Partial<FinBudget>) => Promise<void>
   addBudgetChange: (masterProjectId: string, data: Partial<FinBudgetChange>) => Promise<void>
@@ -104,6 +107,12 @@ interface FinanceState {
   deleteCashflowForecast: (id: string) => Promise<void>
 }
 
+/** lists that belong to a project through a contract (or a certificate): [field, parent list] */
+const CHILDREN: Record<string, [string, string]> = {
+  amendments: ['contractId', 'contracts'], certificates: ['contractId', 'contracts'], guarantees: ['contractId', 'contracts'], claims: ['contractId', 'contracts'],
+  retentionReleases: ['contractId', 'contracts'], cashflowForecasts: ['contractId', 'contracts'], payments: ['certificateId', 'certificates'],
+}
+
 export const useFinanceStore = create<FinanceState>()((set, get) => ({
   budgets: [],
   budgetChanges: [],
@@ -119,14 +128,17 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
   profiles: [],
   loading: false,
   loaded: false,
+  coverage: EMPTY_COVERAGE,
 
-  fetchAll: async () => {
+  fetchAll: async (opts) => {
+    // inside a project only that project is read; other projects already in memory stay (lib/projectScope)
+    const sc = resolveScope(opts?.scope)
     set({ loading: true })
     const [{ data: budgets, error: e1 }, { data: changes, error: e2 }, { data: contracts, error: e3 }, { data: annualBudgets, error: e7 }, { data: profileRows }] = await Promise.all([
-      supabase.from('fin_budgets').select('*'),
-      supabase.from('fin_budget_changes').select('*').order('change_date'),
-      supabase.from('fin_contracts').select('*').order('created_at', { ascending: false }),
-      supabase.from('fin_annual_budgets').select('*').order('jalali_year'),
+      (sc ? supabase.from('fin_budgets').select('*').eq('master_project_id', sc) : supabase.from('fin_budgets').select('*')),
+      (sc ? supabase.from('fin_budget_changes').select('*').eq('master_project_id', sc) : supabase.from('fin_budget_changes').select('*')).order('change_date'),
+      (sc ? supabase.from('fin_contracts').select('*').eq('master_project_id', sc) : supabase.from('fin_contracts').select('*')).order('created_at', { ascending: false }),
+      (sc ? supabase.from('fin_annual_budgets').select('*').eq('master_project_id', sc) : supabase.from('fin_annual_budgets').select('*')).order('jalali_year'),
       supabase.from('profiles').select('id, full_name'),
     ])
     if (reportError('بارگذاری داده‌های مالی', e1 ?? e2 ?? e3 ?? e7)) {
@@ -144,12 +156,12 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
     ] =
       contractIds.length > 0
         ? await Promise.all([
-            supabase.from('fin_contract_amendments').select('*').in('contract_id', contractIds).order('amendment_date'),
-            supabase.from('fin_payment_certificates').select('*').in('contract_id', contractIds).order('certificate_date'),
-            supabase.from('fin_guarantees').select('*').in('contract_id', contractIds).order('expiry_date'),
-            supabase.from('fin_claims').select('*').in('contract_id', contractIds).order('submitted_date'),
-            supabase.from('fin_retention_releases').select('*').in('contract_id', contractIds).order('planned_date'),
-            supabase.from('fin_cashflow_forecasts').select('*').in('contract_id', contractIds).order('jalali_year').order('jalali_month'),
+            (sc ? supabase.from('fin_contract_amendments').select('*').in('contract_id', contractIds) : supabase.from('fin_contract_amendments').select('*')).order('amendment_date'),
+            (sc ? supabase.from('fin_payment_certificates').select('*').in('contract_id', contractIds) : supabase.from('fin_payment_certificates').select('*')).order('certificate_date'),
+            (sc ? supabase.from('fin_guarantees').select('*').in('contract_id', contractIds) : supabase.from('fin_guarantees').select('*')).order('expiry_date'),
+            (sc ? supabase.from('fin_claims').select('*').in('contract_id', contractIds) : supabase.from('fin_claims').select('*')).order('submitted_date'),
+            (sc ? supabase.from('fin_retention_releases').select('*').in('contract_id', contractIds) : supabase.from('fin_retention_releases').select('*')).order('planned_date'),
+            (sc ? supabase.from('fin_cashflow_forecasts').select('*').in('contract_id', contractIds) : supabase.from('fin_cashflow_forecasts').select('*')).order('jalali_year').order('jalali_month'),
           ])
         : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }]
     if (reportError('بارگذاری داده‌های مالی', e4 ?? e5 ?? e6 ?? e9 ?? e10 ?? e11)) {
@@ -158,12 +170,12 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
     }
     const certificateIds = ((certificates ?? []) as { id: string }[]).map((c) => c.id)
     const { data: payments, error: e8 } =
-      certificateIds.length > 0 ? await supabase.from('fin_payments').select('*').in('certificate_id', certificateIds).order('payment_date') : { data: [], error: null }
+      certificateIds.length > 0 ? await (sc ? supabase.from('fin_payments').select('*').in('certificate_id', certificateIds) : supabase.from('fin_payments').select('*')).order('payment_date') : { data: [], error: null }
     if (reportError('بارگذاری سوابق پرداخت', e8)) {
       set({ loading: false })
       return
     }
-    set({
+    set(mergePatch(get(), {
       budgets: (budgets ?? []).map(finBudgetFromRow),
       budgetChanges: (changes ?? []).map(finBudgetChangeFromRow),
       annualBudgets: (annualBudgets ?? []).map(finAnnualBudgetFromRow),
@@ -176,9 +188,9 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
       retentionReleases: (retentionReleases ?? []).map(finRetentionReleaseFromRow),
       cashflowForecasts: (cashflowForecasts ?? []).map(finCashflowForecastFromRow),
       profiles: ((profileRows ?? []) as { id: string; full_name: string }[]).map((p) => ({ id: p.id, fullName: p.full_name })),
-      loading: false,
-      loaded: true,
-    })
+    }, sc, CHILDREN))
+    const coverage = addCoverage(get().coverage, sc)
+    set({ coverage, loading: false, loaded: covers(coverage, sc) })
   },
 
   upsertBudget: async (masterProjectId, data) => {
@@ -354,3 +366,6 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
     set((s) => ({ cashflowForecasts: s.cashflowForecasts.filter((f) => f.id !== id) }))
   },
 }))
+
+// entering another project (or the portfolio view): read again unless that scope is already in memory
+onScopeChange((sc) => { useFinanceStore.setState({ loaded: covers(useFinanceStore.getState().coverage, sc) }) })

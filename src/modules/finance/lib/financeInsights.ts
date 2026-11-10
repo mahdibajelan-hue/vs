@@ -1,7 +1,7 @@
 import type { FinContract, FinContractAmendment, FinPaymentCertificate } from '../types'
 import { contractFile, daysBetween } from './financeControl'
 
-export interface Clearance { contractId: string; kind: 'social_security' | 'insurance' | 'tax'; status: 'pending' | 'issued' | 'expired'; number: string; issueDate: string | null; expiryDate: string | null; note: string }
+export interface Clearance { /** the contract's project (lets one project's clearances be replaced on their own) */ projectId?: string | null; contractId: string; kind: 'social_security' | 'insurance' | 'tax'; status: 'pending' | 'issued' | 'expired'; number: string; issueDate: string | null; expiryDate: string | null; note: string }
 export const CLEARANCE_FA: Record<Clearance['kind'], string> = { social_security: 'مفاصاحساب تأمین اجتماعی', insurance: 'بیمه', tax: 'مفاصاحساب مالیاتی' }
 
 export interface AdvanceStatus { advance: number; recovered: number; balance: number; recoveredPct: number; certifiedPct: number; behind: boolean }
