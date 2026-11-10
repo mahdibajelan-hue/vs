@@ -239,3 +239,6 @@ button.la-kpi:active { transform: scale(0.98); }
 .la-reg-issue::before { top: 40%; background: #f59e0b; }
 .la-reg-risk::after { top: 58%; background: #e11d48; }
 .la-reg-issue > *, .la-reg-risk > * { opacity: 0.62; }
+
+/* touch screens (site phones): steps, tabs and the help button reach the 44px target */
+@media (pointer: coarse) { .la-tab, .la-step { min-height: 44px; } .la-help-btn { min-height: 44px; min-width: 44px; } }

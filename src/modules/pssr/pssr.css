@@ -260,4 +260,4 @@
 }
 
 /* touch screens (site phones): shared buttons used by PSSR, testing and station piping reach 44px */
-@media (pointer: coarse) { .ps-btn { height: auto; min-height: 44px; } }
+@media (pointer: coarse) { .ps-btn, .ps-tab { height: auto; min-height: 44px; } }

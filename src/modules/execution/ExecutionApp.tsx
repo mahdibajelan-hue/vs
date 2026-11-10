@@ -123,7 +123,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
           </div>
           <div className="im-actions" style={{ minWidth: 0 }}>
             {projects.length > 0 && (locked
-              ? <span className="im-select-pill" style={{ pointerEvents: 'none' }}>{projects.find((p) => p.id === projectId)?.officialName}</span>
+              ? <span className="im-select-pill" style={{ pointerEvents: 'none' }} title={projects.find((p) => p.id === projectId)?.officialName}>{projects.find((p) => p.id === projectId)?.officialName}</span>
               : <select className="im-select-pill" value={projectId ?? ''} onChange={(e) => setProjectId(e.target.value || null)} aria-label="پروژه">{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select>)}
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setGuide((g) => !g)} guideActive={guide} />
           </div>

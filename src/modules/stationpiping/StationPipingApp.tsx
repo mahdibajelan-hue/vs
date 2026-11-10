@@ -291,9 +291,9 @@ function Daily() {
             <tbody>{items.map((i) => {
               const d = done.get(i.id) ?? 0, head = last !== i.discipline; last = i.discipline
               return [head && <tr key={`h-${i.discipline}`} className="spx-group"><td colSpan={7}><i style={{ background: DISC_COLOR[i.discipline] }} />{DISC_FA[i.discipline]}</td></tr>,
-                <tr key={i.id}><td>{i.title}</td><td>{i.unit}</td><td>{fa(i.qty, 2)}</td><td>{fa(d, 2)} <small className="ps-meta">({pct(i.qty ? (d / i.qty) * 100 : 0, 0)})</small></td><td>{fa(Math.max(0, i.qty - d), 2)}</td>
-                  <td><input type="number" step="0.01" dir="ltr" value={q[i.id]?.qty ?? ''} onChange={(e) => setQ({ ...q, [i.id]: { qty: e.target.value, note: q[i.id]?.note ?? '' } })} aria-label={`مقدار امروز ${i.title}`} /></td>
-                  <td><input value={q[i.id]?.note ?? ''} onChange={(e) => setQ({ ...q, [i.id]: { qty: q[i.id]?.qty ?? '', note: e.target.value } })} aria-label="توضیح" /></td></tr>]
+                <tr key={i.id}><td>{i.title}</td><td data-label="واحد">{i.unit}</td><td data-label="کل">{fa(i.qty, 2)}</td><td data-label="انجام‌شده">{fa(d, 2)} <small className="ps-meta">({pct(i.qty ? (d / i.qty) * 100 : 0, 0)})</small></td><td data-label="باقی‌مانده">{fa(Math.max(0, i.qty - d), 2)}</td>
+                  <td data-label="مقدار امروز"><input type="number" inputMode="decimal" step="0.01" dir="ltr" value={q[i.id]?.qty ?? ''} onChange={(e) => setQ({ ...q, [i.id]: { qty: e.target.value, note: q[i.id]?.note ?? '' } })} aria-label={`مقدار امروز ${i.title}`} /></td>
+                  <td data-label="توضیح"><input value={q[i.id]?.note ?? ''} onChange={(e) => setQ({ ...q, [i.id]: { qty: q[i.id]?.qty ?? '', note: e.target.value } })} aria-label="توضیح" /></td></tr>]
             })}</tbody>
           </table></div>
         )}

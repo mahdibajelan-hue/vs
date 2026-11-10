@@ -2158,3 +2158,21 @@ select option {
 .shamsi-clear { position: absolute; inset-inline-end: 1.9rem; top: 50%; transform: translateY(-50%); display: inline-grid; place-items: center; width: 1.4rem; height: 1.4rem; border-radius: .4rem; color: var(--text-muted); }
 .shamsi-clear:hover { background: rgba(148, 163, 184, .15); color: var(--text-primary); }
 .shamsi-dt { display: grid; grid-template-columns: minmax(0, 1fr) 6.5rem; gap: .35rem; }
+
+/* Small phones (≤400px, common on site): the eight shortcuts and the module guide do not fit with captions, so
+   captions become screen-reader-only (every button keeps its aria-label and title) and each shortcut is a 40px icon.
+   The bar may still scroll sideways as a last resort, so nothing is ever clipped. */
+@media (max-width: 400px) {
+  .tb-bar { overflow-x: auto; scrollbar-width: none; }
+  .tb-bar::-webkit-scrollbar { display: none; }
+  .tb-bar .tb-cap, .tb-guide-btn span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tb-act { min-width: 40px; min-height: 40px; padding: 4px; }
+  .tb-act .tb-ico { width: 32px; height: 30px; }
+  .tb-user { min-height: 40px; padding: 4px !important; }
+  .tb-guide-btn { min-width: 40px; min-height: 40px; padding: 0 9px; margin-inline-start: 6px; }
+}
+
+/* Notched phones: content clears the rounded corners and the home indicator in landscape and full-screen use */
+@supports (padding: env(safe-area-inset-left)) {
+  #root { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
+}
