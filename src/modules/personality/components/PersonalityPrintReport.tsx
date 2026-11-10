@@ -107,7 +107,7 @@ export function PersonalityPrintReport({
             {validityResult ? PERSONALITY_VALIDITY_STATUS_LABEL_FA[validityResult.overallStatus] : '—'}
           </p>
           {validityResult?.completionSeconds != null && (
-            <p style={{ margin: '4px 0 0', fontSize: 10, color: sub }}>
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: sub }}>
               زمان تکمیل: {Math.round(validityResult.completionSeconds / 60).toLocaleString('fa-IR')} دقیقه
             </p>
           )}
@@ -172,7 +172,7 @@ export function PersonalityPrintReport({
               </div>
             )
           })}
-          <p style={{ margin: '6px 0 0', fontSize: 9.5, color: '#94a3b8' }}>خط عمودی: حداقل الزام شغلی — ★: بعد حیاتی برای این شغل</p>
+          <p style={{ margin: '6px 0 0', fontSize: 11, color: '#94a3b8' }}>خط عمودی: حداقل الزام شغلی — ★: بعد حیاتی برای این شغل</p>
         </div>
       )}
 
@@ -214,7 +214,7 @@ export function PersonalityPrintReport({
         </div>
       )}
 
-      <p style={{ marginTop: 26, fontSize: 9.5, color: '#94a3b8' }}>تهیه‌شده توسط فرین (FARIN) — راهکار جامع مدیریت پروژه و توسعه نیروی انسانی، ماژول ارزیابی شخصیت و رفتاری.</p>
+      <p style={{ marginTop: 26, fontSize: 11, color: '#94a3b8' }}>تهیه‌شده توسط فرین (FARIN) — راهکار جامع مدیریت پروژه و توسعه نیروی انسانی، ماژول ارزیابی شخصیت و رفتاری.</p>
     </div>
   )
 }

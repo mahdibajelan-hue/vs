@@ -25,7 +25,7 @@ export function Header() {
       style={{ borderColor: 'var(--border-soft)', animationDelay: '0ms' }}
     >
       <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/95 p-1.5 shadow-[0_0_24px_rgba(201,162,39,0.25)]">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/95 p-1.5 shadow-[0_6px_16px_-6px_rgba(201,162,39,0.35)]">
           <FarinMark size={30} />
         </div>
         <div className="leading-tight">

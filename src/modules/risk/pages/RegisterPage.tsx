@@ -145,7 +145,7 @@ export function RegisterPage({ onOpenRisk, onNew }: PageProps) {
               {list.slice(0, 400).map(({ risk: r, state: s }) => (
                 <tr key={r.id} className="rk-row-click" {...pressable(() => onOpenRisk(r.id), { row: true })}>
                   <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`انتخاب ${r.code}`} checked={sel.has(r.id)} onChange={(e) => setSel((o) => { const n = new Set(o); if (e.target.checked) n.add(r.id); else n.delete(r.id); return n })} /></td>
-                  <td><span className="im-code">{r.code}</span>{d.scope === 'all' && <div className="im-helper" style={{ fontSize: 10 }}>{projName(r.projectId).slice(0, 22)}</div>}</td>
+                  <td><span className="im-code">{r.code}</span>{d.scope === 'all' && <div className="im-helper" style={{ fontSize: 11 }}>{projName(r.projectId).slice(0, 22)}</div>}</td>
                   <td style={{ minWidth: 260 }}>
                     <div style={{ fontWeight: 700, fontSize: 13 }}>{r.title}{shared.has(r.id) && <SharedBadge info={shared.get(r.id)!} projName={projName} />}</div>
                     {r.status !== 'closed' && s.attention.length > 0 && <div className="rk-flags">{s.attention.slice(0, 3).map((a) => <span key={a} className="rk-flag" style={{ ['--c' as string]: '#f59e0b' }}>{a}</span>)}{s.attention.length > 3 && <span className="rk-flag" style={{ ['--c' as string]: '#94a3b8' }}>+{s.attention.length - 3}</span>}</div>}

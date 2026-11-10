@@ -36,7 +36,7 @@ export function AgingChart({ buckets }: { buckets: AgingBucket[] }) {
     <div dir="ltr" style={{ height: 230 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={data} margin={{ top: 18, right: 6, left: 0, bottom: 0 }}>
       <CartesianGrid {...gridProps} /><XAxis dataKey="name" {...axisProps} interval={0} tick={{ fontSize: 10, fill: 'var(--im-muted)' }} /><YAxis {...axisProps} width={34} tickFormatter={(x: number) => fa(x)} />
       <Tooltip cursor={{ fill: 'color-mix(in srgb, var(--im-text) 5%, transparent)' }} content={<ChartTip unit=" میلیارد" />} />
-      <Bar dataKey="value" name="ارزش کسری" radius={[6, 6, 0, 0]}>{data.map((d) => <Cell key={d.key} fill={AGING_COLORS[d.key]} />)}<LabelList dataKey="count" position="top" formatter={(v) => (Number(v) ? `${fa(Number(v))} قلم` : '')} style={{ fontSize: 10, fill: 'var(--im-muted-2)' }} /></Bar>
+      <Bar dataKey="value" name="ارزش کسری" radius={[6, 6, 0, 0]}>{data.map((d) => <Cell key={d.key} fill={AGING_COLORS[d.key]} />)}<LabelList dataKey="count" position="top" formatter={(v) => (Number(v) ? `${fa(Number(v))} قلم` : '')} style={{ fontSize: 11, fill: 'var(--im-muted-2)' }} /></Bar>
     </BarChart></ResponsiveContainer></div>
   )
 }
@@ -76,7 +76,7 @@ export function DeadlineChart({ rows }: { rows: OrderDeadline[] }) {
     <div dir="ltr" style={{ height: 230 }}><ResponsiveContainer width="100%" height="100%"><BarChart data={b} margin={{ top: 18, right: 6, left: 0, bottom: 0 }}>
       <CartesianGrid {...gridProps} /><XAxis dataKey="name" {...axisProps} interval={0} /><YAxis {...axisProps} width={34} allowDecimals={false} tickFormatter={(x: number) => fa(x)} />
       <Tooltip cursor={{ fill: 'color-mix(in srgb, var(--im-text) 5%, transparent)' }} content={<ChartTip unit=" قلم" />} />
-      <Bar dataKey="count" name="تعداد قلم" radius={[6, 6, 0, 0]}>{b.map((d) => <Cell key={d.name} fill={d.color} />)}<LabelList dataKey="value" position="top" formatter={(v) => (Number(v) ? `${fa(Number(v), 1)} م` : '')} style={{ fontSize: 10, fill: 'var(--im-muted-2)' }} /></Bar>
+      <Bar dataKey="count" name="تعداد قلم" radius={[6, 6, 0, 0]}>{b.map((d) => <Cell key={d.name} fill={d.color} />)}<LabelList dataKey="value" position="top" formatter={(v) => (Number(v) ? `${fa(Number(v), 1)} م` : '')} style={{ fontSize: 11, fill: 'var(--im-muted-2)' }} /></Bar>
     </BarChart></ResponsiveContainer></div>
   )
 }

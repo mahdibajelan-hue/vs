@@ -99,7 +99,7 @@ export function EstimatorPrintReport({
               <div style={{ fontSize: 11, opacity: 0.75 }}>برآورد کل هزینهٔ سرمایه‌ای</div>
               <div style={{ ...num, fontSize: 32, fontWeight: 700, color: '#FFD15C', marginTop: 2 }}>{fmtEUR(eur(results.grand))}</div>
               <div style={{ ...num, fontSize: 13, opacity: 0.9 }}>{fmtRial(results.grand * rialRate)}</div>
-              <div style={{ marginTop: 12, fontSize: 10, opacity: 0.8 }}>بازهٔ برآورد ({fmtPct(rg.lowPct)} تا +{fmtPct(rg.highPct)})</div>
+              <div style={{ marginTop: 12, fontSize: 11, opacity: 0.8 }}>بازهٔ برآورد ({fmtPct(rg.lowPct)} تا +{fmtPct(rg.highPct)})</div>
               <div style={{ position: 'relative', height: 7, borderRadius: 9, marginTop: 5, background: 'linear-gradient(270deg,#5B9BE8,#FFD15C 40%,#F08A8A)' }}>
                 <span style={{ position: 'absolute', top: -4, right: `${(-rg.lowPct / ((rg.highPct - rg.lowPct) || 1)) * 100}%`, width: 4, height: 15, background: '#fff', borderRadius: 2 }} />
               </div>
@@ -122,7 +122,7 @@ export function EstimatorPrintReport({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginTop: 12 }}>
               {methods.map((x) => (
                 <div key={x.method} style={{ borderRadius: 10, padding: '7px 10px', border: `1.5px solid ${x.method === chosen ? METHOD_META[x.method].color : LINE}`, background: x.method === chosen ? '#FFF8E6' : '#F7F9FC' }}>
-                  <div style={{ fontSize: 9.5, color: MUTED, display: 'flex', alignItems: 'center', gap: 4 }}><i style={{ width: 7, height: 7, borderRadius: 2, background: METHOD_META[x.method].color, display: 'inline-block' }} />{METHOD_META[x.method].short}{x.method === chosen ? ' · مبنا' : ''}</div>
+                  <div style={{ fontSize: 11, color: MUTED, display: 'flex', alignItems: 'center', gap: 4 }}><i style={{ width: 7, height: 7, borderRadius: 2, background: METHOD_META[x.method].color, display: 'inline-block' }} />{METHOD_META[x.method].short}{x.method === chosen ? ' · مبنا' : ''}</div>
                   <div style={{ ...num, fontSize: 13, fontWeight: 700, color: x.available ? NAVY : MUTED }}>{x.available ? fmtEURm(x.eur) : 'بدون داده'}</div>
                 </div>
               ))}
@@ -158,7 +158,7 @@ export function EstimatorPrintReport({
               <div style={{ fontSize: 10.5, color: MUTED, marginBottom: 8 }}>سهم هر بخش از هزینهٔ مستقیم</div>
               {shares.map((s) => (
                 <div key={s.key} style={{ marginBottom: 6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#3B4A5A', marginBottom: 2 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#3B4A5A', marginBottom: 2 }}>
                     <span>{s.chartLabel}</span><span style={num}>{fmtPct(s.totalUsd / (results.direct || 1))}</span>
                   </div>
                   <div style={{ height: 8, background: '#EEF2F6', borderRadius: 5, overflow: 'hidden' }}>
@@ -166,7 +166,7 @@ export function EstimatorPrintReport({
                   </div>
                 </div>
               ))}
-              <div style={{ marginTop: 14, padding: '10px 12px', borderRadius: 10, background: '#F7F9FC', border: `1px solid ${LINE}`, fontSize: 10, lineHeight: 1.9, color: '#3B4A5A' }}>
+              <div style={{ marginTop: 14, padding: '10px 12px', borderRadius: 10, background: '#F7F9FC', border: `1px solid ${LINE}`, fontSize: 11, lineHeight: 1.9, color: '#3B4A5A' }}>
                 <b>مبنای ارزی:</b> هر دلار = <span style={num}>{eurRate}</span> یورو = <span style={num}>{Math.round(rialRate).toLocaleString('en-US')}</span> ریال.
                 {k.lengthKm > 0 && <> طول کل خط <span style={num}>{toFa(k.lengthKm)}</span> کیلومتر.</>}
               </div>
@@ -183,12 +183,12 @@ export function EstimatorPrintReport({
           <SectionHead>چرخهٔ عمر و نیاز نقدینگی</SectionHead>
           <div style={{ display: 'flex', height: 22, borderRadius: 7, overflow: 'hidden' }} dir="ltr">
             {phases.map((p) => (
-              <div key={p.key} style={{ width: `${(p.months / Math.max(1, k.totalMonths)) * 100}%`, background: p.color, color: p.key === 'execution' ? '#1A1400' : '#fff', fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div key={p.key} style={{ width: `${(p.months / Math.max(1, k.totalMonths)) * 100}%`, background: p.color, color: p.key === 'execution' ? '#1A1400' : '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {p.months > 0 ? `${toFa(p.months)} ماه` : ''}
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 6, fontSize: 9.5, color: '#3B4A5A' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 6, fontSize: 11, color: '#3B4A5A' }}>
             {phases.map((p) => <span key={p.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 8, height: 8, borderRadius: 9, background: p.color, display: 'inline-block' }} />{LIFECYCLE_PHASE_LABEL[p.key]}</span>)}
           </div>
 
@@ -229,7 +229,7 @@ export function EstimatorPrintReport({
           <div style={{ display: 'flex', gap: 22 }}>
             <div style={{ flex: 1 }}>
               <SectionHead>اقلام بلندمدت‌تأمین</SectionHead>
-              {longLead.length === 0 ? <p style={{ fontSize: 10, color: MUTED }}>قلمی ثبت نشده است.</p> : (
+              {longLead.length === 0 ? <p style={{ fontSize: 11, color: MUTED }}>قلمی ثبت نشده است.</p> : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.5 }}>
                   <tbody>
                     {longLead.map((it) => {
@@ -238,7 +238,7 @@ export function EstimatorPrintReport({
                         <tr key={it.id} style={{ borderBottom: `1px solid ${LINE}` }}>
                           <td style={{ padding: '4px 2px' }}>{it.title || '—'}</td>
                           <td style={{ textAlign: 'left', padding: '4px 2px', whiteSpace: 'nowrap' }}>
-                            <span style={{ display: 'inline-block', padding: '1px 7px', borderRadius: 9, fontSize: 9.5, fontWeight: 700, color: '#fff', background: late ? STATUS.critical : STATUS.good }}>{toFa(it.leadTimeMonths)} ماه</span>
+                            <span style={{ display: 'inline-block', padding: '1px 7px', borderRadius: 9, fontSize: 11, fontWeight: 700, color: '#fff', background: late ? STATUS.critical : STATUS.good }}>{toFa(it.leadTimeMonths)} ماه</span>
                           </td>
                         </tr>
                       )
@@ -246,14 +246,14 @@ export function EstimatorPrintReport({
                   </tbody>
                 </table>
               )}
-              <p style={{ fontSize: 9, color: MUTED, lineHeight: 1.7, margin: '6px 0 0' }}>قرمز: مدت تأمین از دورهٔ انتخاب مشاور و طراحی پایه ({toFa(designWindow)} ماه) بیشتر است و سفارش باید زودتر آغاز شود.</p>
+              <p style={{ fontSize: 11, color: MUTED, lineHeight: 1.7, margin: '6px 0 0' }}>قرمز: مدت تأمین از دورهٔ انتخاب مشاور و طراحی پایه ({toFa(designWindow)} ماه) بیشتر است و سفارش باید زودتر آغاز شود.</p>
             </div>
             <div style={{ flex: 1 }}>
               <SectionHead>حساسیت برآورد</SectionHead>
-              <p style={{ fontSize: 9, color: MUTED, lineHeight: 1.7, margin: '0 0 6px' }}>دامنهٔ تغییر جمع کل اگر هر فرضیه به‌تنهایی {toFa(Math.round(SENSITIVITY_PCT * 100))}٪ کم یا زیاد شود.</p>
+              <p style={{ fontSize: 11, color: MUTED, lineHeight: 1.7, margin: '0 0 6px' }}>دامنهٔ تغییر جمع کل اگر هر فرضیه به‌تنهایی {toFa(Math.round(SENSITIVITY_PCT * 100))}٪ کم یا زیاد شود.</p>
               {sens.map((s) => (
                 <div key={s.key} style={{ marginBottom: 7 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#3B4A5A', marginBottom: 2 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#3B4A5A', marginBottom: 2 }}>
                     <span>{s.label}</span><span style={num}>±{fmtEURm(eur(s.swingUsd / 2))}</span>
                   </div>
                   <div style={{ height: 7, background: '#EEF2F6', borderRadius: 4 }}>
@@ -279,7 +279,7 @@ export function EstimatorPrintReport({
                 return (
                   <tr key={r.id} style={{ borderBottom: `1px solid ${LINE}` }}>
                     <td style={{ padding: '4px' }}>{r.title || '—'}</td>
-                    <td style={{ textAlign: 'center', padding: 4 }}><span style={{ display: 'inline-block', padding: '1px 8px', borderRadius: 9, fontSize: 9.5, fontWeight: 700, color: '#fff', background: b.color }}>{b.label} ({toFa(r.likelihood * r.impact)})</span></td>
+                    <td style={{ textAlign: 'center', padding: 4 }}><span style={{ display: 'inline-block', padding: '1px 8px', borderRadius: 9, fontSize: 11, fontWeight: 700, color: '#fff', background: b.color }}>{b.label} ({toFa(r.likelihood * r.impact)})</span></td>
                     <td style={{ padding: '4px', color: '#3B4A5A' }}>{r.mitigation || '—'}</td>
                   </tr>
                 )
@@ -289,7 +289,7 @@ export function EstimatorPrintReport({
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 22 }}>
             {['تهیه‌کننده (برآورد)', 'مدیر پروژه', 'برنامه‌ریزی و کنترل پروژه', 'مجری طرح'].map((t) => (
-              <div key={t} style={{ border: `1px solid ${LINE}`, borderRadius: 10, height: 78, padding: '7px 9px', fontSize: 10, color: MUTED }}>{t}<div style={{ marginTop: 34, borderTop: `1px dashed ${LINE}`, paddingTop: 3, fontSize: 9 }}>نام، تاریخ و امضا</div></div>
+              <div key={t} style={{ border: `1px solid ${LINE}`, borderRadius: 10, height: 78, padding: '7px 9px', fontSize: 11, color: MUTED }}>{t}<div style={{ marginTop: 34, borderTop: `1px dashed ${LINE}`, paddingTop: 3, fontSize: 11 }}>نام، تاریخ و امضا</div></div>
             ))}
           </div>
         </div>
@@ -322,7 +322,7 @@ function Header({ project, page, today, versionLabel, maturity, rate }: { projec
 
 function Footer({ page }: { page: number }) {
   return (
-    <div style={{ position: 'absolute', left: 40, right: 40, bottom: 18, display: 'flex', justifyContent: 'space-between', fontSize: 9, color: MUTED, borderTop: `1px solid ${LINE}`, paddingTop: 7 }}>
+    <div style={{ position: 'absolute', left: 40, right: 40, bottom: 18, display: 'flex', justifyContent: 'space-between', fontSize: 11, color: MUTED, borderTop: `1px solid ${LINE}`, paddingTop: 7 }}>
       <span>برآورد پارامتریک بر پایهٔ مبانی محاسباتی سازمان؛ پیش از تصمیم سرمایه‌گذاری با استعلام بازار و فهرست‌بهای روز راستی‌آزمایی شود.</span>
       <span style={num}>{toFa(page)} / ۲</span>
     </div>
@@ -342,9 +342,9 @@ function SectionHead({ children }: { children: ReactNode }) {
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: '10px 12px', background: '#F7F9FC' }}>
-      <div style={{ fontSize: 10, color: MUTED }}>{label}</div>
+      <div style={{ fontSize: 11, color: MUTED }}>{label}</div>
       <div style={{ ...num, fontSize: 17, fontWeight: 700, color: NAVY, marginTop: 2 }}>{value}</div>
-      {sub && <div style={{ fontSize: 9.5, color: MUTED }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 11, color: MUTED }}>{sub}</div>}
     </div>
   )
 }

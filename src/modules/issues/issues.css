@@ -423,3 +423,9 @@ button.im-stat-card:active, .im-kpi-grid > button:active .im-stat-card { transfo
 .im-portal .im-overlay { z-index: 1000; }
 .im-modal.is-dragging { cursor: grabbing; transition: none; box-shadow: 0 40px 90px -24px rgba(0, 0, 0, 0.8); }
 .im-modal.is-dragging .im-modal-head { cursor: grabbing; }
+
+/* touch screens (site phones): the shared buttons and filter chips reach the 44px target */
+@media (pointer: coarse) {
+  .im-btn { min-height: 44px; }
+  button.im-chip, .sv-chips .im-chip { min-height: 36px; }
+}

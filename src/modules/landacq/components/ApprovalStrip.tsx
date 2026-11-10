@@ -45,7 +45,7 @@ export function ApprovalStrip({ p }: { p: Parcel }) {
                 {done ? <Check size={14} strokeWidth={3} /> : i + 1}
               </span>
               <span className="text-[11px] font-bold leading-4" style={{ color: now ? 'var(--la-ink)' : 'var(--la-ink-2)' }}>{s.label}</span>
-              <span className="la-eyebrow leading-4" style={{ fontSize: 10 }}>{s.who}</span>
+              <span className="la-eyebrow leading-4" style={{ fontSize: 11 }}>{s.who}</span>
             </li>
           )
         })}

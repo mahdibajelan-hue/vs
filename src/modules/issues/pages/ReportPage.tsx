@@ -50,7 +50,7 @@ export function ReportPage({ onSelectIssue }: { onSelectIssue: (id: string) => v
                 >
                   <div style={{ color: severity, fontWeight: 900, fontSize: 13, textAlign: 'center' }}>
                     {delayDays}
-                    <div style={{ fontSize: 9, fontWeight: 700 }}>روز</div>
+                    <div style={{ fontSize: 11, fontWeight: 700 }}>روز</div>
                   </div>
                 </div>
                 <div className="im-issue-main">

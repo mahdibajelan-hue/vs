@@ -73,7 +73,7 @@ export function ExecutiveReportPrint({
           </div>
         ))}
       </div>
-      <p style={{ marginTop: 26, fontSize: 9.5, color: '#94a3b8' }}>تهیه‌شده توسط سامانه مدیریت پروژه RASTA — گزارش اجرایی خلاصه، جهت ارائه به مدیرعامل/هیئت‌مدیره.</p>
+      <p style={{ marginTop: 26, fontSize: 11, color: '#94a3b8' }}>تهیه‌شده توسط سامانه مدیریت پروژه RASTA — گزارش اجرایی خلاصه، جهت ارائه به مدیرعامل/هیئت‌مدیره.</p>
     </div>
   )
 }

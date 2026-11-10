@@ -86,7 +86,7 @@ function Section({ n, title, children, breakable, style }: { n: number; title: s
 }
 
 function Empty({ children = 'هنوز داده‌ای ثبت نشده' }: { children?: ReactNode }) {
-  return <p style={{ margin: 0, fontSize: 10, color: MUTED, border: `1px dashed ${LINE}`, borderRadius: 8, padding: '8px 10px' }}>{children}</p>
+  return <p style={{ margin: 0, fontSize: 11, color: MUTED, border: `1px dashed ${LINE}`, borderRadius: 8, padding: '8px 10px' }}>{children}</p>
 }
 
 function KV({ rows }: { rows: [string, ReactNode][] }) {
@@ -172,7 +172,7 @@ function CategoryBanner({ title, subtitle, color }: { title: string; subtitle?: 
   return (
     <div data-pdf-block="" style={{ margin: '18px 0 2px', padding: '9px 12px', borderRadius: 10, borderRight: `5px solid ${color}`, background: `${color}0f` }}>
       <p style={{ margin: 0, fontSize: 15.5, fontWeight: 800, color: inkTone(color) }}>{title}</p>
-      {subtitle && <p style={{ margin: '2px 0 0', fontSize: 9.5, color: SUB }}>{subtitle}</p>}
+      {subtitle && <p style={{ margin: '2px 0 0', fontSize: 11, color: SUB }}>{subtitle}</p>}
     </div>
   )
 }
@@ -201,7 +201,7 @@ function PrintDonut({ slices, size = 118, strokeWidth = 18 }: { slices: { label:
       </svg>
       <div style={{ flex: 1, minWidth: 0 }}>
         {arcs.map((a) => (
-          <div key={a.label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 9.5, padding: '2.5px 0' }}>
+          <div key={a.label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, padding: '2.5px 0' }}>
             <span style={{ width: 8, height: 8, borderRadius: 99, background: a.color, flexShrink: 0 }} />
             <span style={{ flex: 1, color: SUB }}>{a.label}</span>
             <b style={{ color: INK }}>٪{fa(a.pct)}</b>
@@ -269,11 +269,11 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
     >
       {/* Running header — only drawn at the top of pages 2+ of the PDF (hidden on screen/print). */}
       <div data-pdf-running="" style={{ display: 'none', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '4px 0 6px', borderBottom: `1.5px solid ${ACCENT}` }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 800 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800 }}>
           <img src={logoUrl} alt="" width={18} height={18} style={{ objectFit: 'contain' }} crossOrigin="anonymous" />
           فرین | FARIN
         </span>
-        <span style={{ fontSize: 9.5, color: SUB }}>
+        <span style={{ fontSize: 11, color: SUB }}>
           گزارش کامل ارزیابی شایستگی — {a.candidateName} — {roleLabel}
         </span>
       </div>
@@ -287,12 +287,12 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
               <p style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>
                 فرین <span style={{ color: GOLD, fontWeight: 800 }}>FARIN</span>
               </p>
-              <p style={{ margin: 0, fontSize: 9.5, color: SUB }}>راهکار جامع مدیریت پروژه و توسعه نیروی انسانی</p>
+              <p style={{ margin: 0, fontSize: 11, color: SUB }}>راهکار جامع مدیریت پروژه و توسعه نیروی انسانی</p>
             </div>
           </div>
           <div style={{ textAlign: 'left' }}>
             <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: ACCENT }}>گزارش کامل ارزیابی شایستگی</p>
-            <p style={{ margin: '2px 0 0', fontSize: 9.5, color: SUB }}>تاریخ تهیه گزارش: {formatJalali(generatedAt)}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 11, color: SUB }}>تاریخ تهیه گزارش: {formatJalali(generatedAt)}</p>
           </div>
         </div>
 
@@ -301,7 +301,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
             {photoUrl ? (
               <img src={photoUrl} alt="" crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
-              <span style={{ fontSize: 9, color: MUTED }}>بدون عکس</span>
+              <span style={{ fontSize: 11, color: MUTED }}>بدون عکس</span>
             )}
           </div>
           <div style={{ flex: 1.3, minWidth: 0 }}>
@@ -317,7 +317,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
             />
           </div>
           <div style={{ flex: 1, border: `1.5px solid ${status.state === 'final' ? statusInk : LINE}`, borderRadius: 12, padding: '8px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <p style={{ margin: 0, fontSize: 9.5, color: SUB }}>امتیاز کلی فنی {status.state === 'provisional' ? '(موقت)' : ''}</p>
+            <p style={{ margin: 0, fontSize: 11, color: SUB }}>امتیاز کلی فنی {status.state === 'provisional' ? '(موقت)' : ''}</p>
             <p style={{ margin: 0, fontSize: 26, fontWeight: 800, color: status.state === 'final' ? toneForPercent(m.overall) : MUTED, lineHeight: 1.2 }}>
               {m.overall != null ? `٪${fa(m.overall)}` : '—'}
             </p>
@@ -325,7 +325,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
               <span style={{ color: SUB }}>وضعیت: </span>
               <b style={{ color: statusInk }}>{status.label}</b>
             </p>
-            <p style={{ margin: '2px 0 0', fontSize: 9, color: SUB }}>{status.detail}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 11, color: SUB }}>{status.detail}</p>
           </div>
         </div>
       </header>
@@ -353,7 +353,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
             <span
               key={x.key}
               style={{
-                fontSize: 9.5,
+                fontSize: 11,
                 fontWeight: 700,
                 borderRadius: 999,
                 padding: '3px 10px',
@@ -390,7 +390,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
           <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
             <div style={{ width: 320, flexShrink: 0 }}>
               <PrintRadar labels={allDomains.map((d) => d.domain.shortTitle)} values={allDomains.map((d) => d.percentScore)} size={250} />
-              <p style={{ margin: 0, textAlign: 'center', fontSize: 9, color: MUTED }}>
+              <p style={{ margin: 0, textAlign: 'center', fontSize: 11, color: MUTED }}>
                 {fa(m.completion.answered)} از {fa(m.completion.total)} سؤال امتیازدهی‌شده (٪{fa(m.completion.percent)})
                 {peers.rank != null && `، رتبه ${fa(peers.rank)} از ${fa(peers.total)} متقاضی این شغل`}
               </p>
@@ -434,7 +434,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
           <div style={{ marginTop: 8 }}>
             <p style={{ margin: '0 0 2px', fontSize: 10.5, fontWeight: 800 }}>تحلیل الگوی پاسخ‌های فنی</p>
             {patternParagraphs.map((p, i) => (
-              <p key={i} style={{ margin: '0 0 3px', fontSize: 10, color: SUB }}>
+              <p key={i} style={{ margin: '0 0 3px', fontSize: 11, color: SUB }}>
                 {p}
               </p>
             ))}
@@ -495,15 +495,15 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
                   .filter((p) => p.strengths || p.developmentAreas)
                   .map((p) => (
                     <div key={p.userId} style={{ border: `1px solid ${LINE}`, borderRadius: 8, padding: '6px 9px', breakInside: 'avoid' }}>
-                      <p style={{ margin: 0, fontSize: 10, fontWeight: 800 }}>{p.name}</p>
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 800 }}>{p.name}</p>
                       {p.strengths && (
-                        <p style={{ margin: '2px 0 0', fontSize: 9.5, color: SUB }}>
+                        <p style={{ margin: '2px 0 0', fontSize: 11, color: SUB }}>
                           <b style={{ color: PRINT_TONE.good }}>قوت: </b>
                           {p.strengths}
                         </p>
                       )}
                       {p.developmentAreas && (
-                        <p style={{ margin: '2px 0 0', fontSize: 9.5, color: SUB }}>
+                        <p style={{ margin: '2px 0 0', fontSize: 11, color: SUB }}>
                           <b style={{ color: PRINT_TONE.warn }}>قابل بهبود: </b>
                           {p.developmentAreas}
                         </p>
@@ -519,7 +519,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
             <p style={{ margin: 0, fontSize: 10.5, fontWeight: 800 }}>
               سناریوی پایانی (بحران چندوجهی): <span style={{ color: toneForPercent(m.capstone.score * 20) }}>{fa(m.capstone.score, 1)} / ۵</span>
             </p>
-            {m.capstone.note && <p style={{ margin: '2px 0 0', fontSize: 9.5, color: SUB }}>{m.capstone.note}</p>}
+            {m.capstone.note && <p style={{ margin: '2px 0 0', fontSize: 11, color: SUB }}>{m.capstone.note}</p>}
           </div>
         )}
       </Section>
@@ -617,17 +617,17 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
           />
           <MiniList title="گواهینامه‌ها و دوره‌ها" items={a.certifications.map((c) => `${c.title}${c.issuer ? ` — ${c.issuer}` : ''}`)} />
         </div>
-        {a.notableProjects && <p style={{ margin: '0 0 8px', fontSize: 9.5, color: SUB }}>پروژه‌های شاخص: {a.notableProjects}</p>}
+        {a.notableProjects && <p style={{ margin: '0 0 8px', fontSize: 11, color: SUB }}>پروژه‌های شاخص: {a.notableProjects}</p>}
         {qualification.some((q) => q.value != null) && (
           <>
-            <p style={{ margin: '4px 0 6px', fontSize: 10, fontWeight: 800 }}>کارت امتیاز صلاحیت</p>
+            <p style={{ margin: '4px 0 6px', fontSize: 11, fontWeight: 800 }}>کارت امتیاز صلاحیت</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
               {qualification.map((q) => (
                 <div key={q.label} style={{ border: `1px solid ${LINE}`, borderRadius: 8, padding: '6px 4px', textAlign: 'center' }}>
                   <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: toneForPercent(q.value != null ? q.value * 20 : null) }}>
-                    {fa(q.value)} <span style={{ fontSize: 9, color: MUTED }}>/ ۵</span>
+                    {fa(q.value)} <span style={{ fontSize: 11, color: MUTED }}>/ ۵</span>
                   </p>
-                  <p style={{ margin: 0, fontSize: 9, color: SUB }}>{q.label}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: SUB }}>{q.label}</p>
                 </div>
               ))}
             </div>
@@ -650,8 +650,8 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
           {interp.source !== 'pending' && (
             <p style={{ margin: '4px 0 0', fontSize: 10.5, fontWeight: 700, color: ACCENT }}>سمت شغلی پیشنهادی: {interp.suggestedPositions}</p>
           )}
-          {interp.focusAreas.length > 0 && <p style={{ margin: '4px 0 0', fontSize: 10, color: PRINT_TONE.warn }}>اولویت‌های توسعه این متقاضی: {interp.focusAreas.join('، ')}</p>}
-          {status.recommendation?.hasCriticalGap && <p style={{ margin: '4px 0 0', fontSize: 10, color: PRINT_TONE.bad }}>{status.recommendation.reason}</p>}
+          {interp.focusAreas.length > 0 && <p style={{ margin: '4px 0 0', fontSize: 11, color: PRINT_TONE.warn }}>اولویت‌های توسعه این متقاضی: {interp.focusAreas.join('، ')}</p>}
+          {status.recommendation?.hasCriticalGap && <p style={{ margin: '4px 0 0', fontSize: 11, color: PRINT_TONE.bad }}>{status.recommendation.reason}</p>}
         </div>
         <p style={{ margin: '6px 0 0', fontSize: 8.5, color: MUTED }}>
           این سطح بلوغ فقط بر پایه‌ی امتیاز فنی-تخصصی محاسبه می‌شود؛ برای آمادگی کلی از ترکیب همه روش‌ها، به «آمادگی برای الزامات شغل» در تحلیل شکاف شایستگی زیر مراجعه کنید.
@@ -720,10 +720,10 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
           <Empty>تحلیل جامع هوشمند هنوز برای این متقاضی تولید نشده است.</Empty>
         ) : (
           <div style={{ border: `1px solid ${LINE}`, borderRadius: 10, padding: '8px 12px' }}>
-            {ai.stale && <p style={{ margin: '0 0 4px', fontSize: 9.5, color: PRINT_TONE.warn, fontWeight: 700 }}>توجه: پروفایل شایستگی پس از تولید این تحلیل تغییر کرده است.</p>}
-            <p style={{ margin: 0, fontSize: 10, color: SUB }}>{ai.summary}</p>
+            {ai.stale && <p style={{ margin: '0 0 4px', fontSize: 11, color: PRINT_TONE.warn, fontWeight: 700 }}>توجه: پروفایل شایستگی پس از تولید این تحلیل تغییر کرده است.</p>}
+            <p style={{ margin: 0, fontSize: 11, color: SUB }}>{ai.summary}</p>
             {ai.roleFit && (
-              <p style={{ margin: '5px 0 0', fontSize: 10, color: SUB }}>
+              <p style={{ margin: '5px 0 0', fontSize: 11, color: SUB }}>
                 <b style={{ color: INK }}>تطابق با شغل: </b>
                 {ai.roleFit}
               </p>
@@ -760,7 +760,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
                 ]}
               />
               {reassessment.competencies.some((c) => c.levelDelta != null && c.levelDelta !== 0) && (
-                <p style={{ margin: '6px 0 0', fontSize: 9.5, color: SUB }}>
+                <p style={{ margin: '6px 0 0', fontSize: 11, color: SUB }}>
                   تغییرات سطح:{' '}
                   {reassessment.competencies
                     .filter((c) => c.levelDelta != null && c.levelDelta !== 0)
@@ -797,7 +797,7 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
           {['امضای مسئول ارزیابی', 'امضای سرداور پنل', 'تأیید مدیر منابع انسانی'].map((l) => (
             <div key={l} style={{ flex: 1, textAlign: 'center' }}>
               <div style={{ height: 34, borderBottom: `1px dashed ${MUTED}` }} />
-              <p style={{ margin: '3px 0 0', fontSize: 9, color: SUB }}>{l}</p>
+              <p style={{ margin: '3px 0 0', fontSize: 11, color: SUB }}>{l}</p>
             </div>
           ))}
         </div>
@@ -812,11 +812,11 @@ export function CompetencyPrintReport(props: CompetencyPrintReportProps) {
 function MiniList({ title, items }: { title: string; items: string[] }) {
   return (
     <div>
-      <p style={{ margin: '0 0 3px', fontSize: 10, fontWeight: 800 }}>{title}</p>
+      <p style={{ margin: '0 0 3px', fontSize: 11, fontWeight: 800 }}>{title}</p>
       {items.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 9.5, color: MUTED }}>ثبت نشده</p>
+        <p style={{ margin: 0, fontSize: 11, color: MUTED }}>ثبت نشده</p>
       ) : (
-        <ul style={{ margin: 0, paddingRight: 14, fontSize: 9.5, color: SUB }}>
+        <ul style={{ margin: 0, paddingRight: 14, fontSize: 11, color: SUB }}>
           {items.map((t, i) => (
             <li key={i}>{t}</li>
           ))}
@@ -829,8 +829,8 @@ function MiniList({ title, items }: { title: string; items: string[] }) {
 function Note({ color, title, text }: { color: string; title: string; text: string }) {
   return (
     <div style={{ flex: 1, borderRight: `3px solid ${color}`, background: SOFT, borderRadius: 6, padding: '5px 9px' }}>
-      <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color }}>{title}</p>
-      <p style={{ margin: '2px 0 0', fontSize: 9.5, color: SUB }}>{text}</p>
+      <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color }}>{title}</p>
+      <p style={{ margin: '2px 0 0', fontSize: 11, color: SUB }}>{text}</p>
     </div>
   )
 }
@@ -844,10 +844,10 @@ function PersonalityBlock({ snap }: { snap: FingerprintSnapshot }) {
     <>
       <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
         <div style={{ flex: 1, border: `1px solid ${LINE}`, borderRadius: 10, padding: '6px 10px' }}>
-          <p style={{ margin: 0, fontSize: 9.5, color: SUB }}>شاخص‌های اعتبار پاسخ‌ها</p>
+          <p style={{ margin: 0, fontSize: 11, color: SUB }}>شاخص‌های اعتبار پاسخ‌ها</p>
           <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: validityTone }}>{v ? PERSONALITY_VALIDITY_STATUS_LABEL_FA[v.overallStatus] : 'محاسبه نشده'}</p>
           {v && (
-            <p style={{ margin: '2px 0 0', fontSize: 9, color: SUB }}>
+            <p style={{ margin: '2px 0 0', fontSize: 11, color: SUB }}>
               {[
                 v.consistencyScore != null ? `سازگاری ${pct(v.consistencyScore)}` : null,
                 `تناقض ${fa(v.contradictionCount)}`,
@@ -874,11 +874,11 @@ function PersonalityBlock({ snap }: { snap: FingerprintSnapshot }) {
             <p style={{ margin: '0 0 4px', fontSize: 10.5, fontWeight: 800 }}>Big Five Traits (ویژگی‌های شخصیتی — پنج عامل بزرگ)</p>
             {snap.traits.map((t) => (
               <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2.5px 0' }}>
-                <span style={{ width: 170, flexShrink: 0, fontSize: 9.5, color: INK }}>
+                <span style={{ width: 170, flexShrink: 0, fontSize: 11, color: INK }}>
                   <b style={{ color: inkTone(t.tone) }}>{t.label.en}</b> ({t.label.fa})
                 </span>
                 <Bar value={t.score} color={t.tone} />
-                <span style={{ width: 96, flexShrink: 0, textAlign: 'left', fontSize: 9.5, color: SUB, whiteSpace: 'nowrap' }}>
+                <span style={{ width: 96, flexShrink: 0, textAlign: 'left', fontSize: 11, color: SUB, whiteSpace: 'nowrap' }}>
                   <b style={{ color: INK }}>{t.score != null ? fa(Math.round(t.score)) : '—'}</b> {scoreBandFa(t.score)}
                 </span>
               </div>
@@ -903,7 +903,7 @@ function PersonalityBlock({ snap }: { snap: FingerprintSnapshot }) {
               const head = rows[0]
               return [
                 <tr key={`f-${fk}`}>
-                  <td colSpan={4} style={{ ...td, fontWeight: 800, color: inkTone(head.tone), background: SOFT, fontSize: 9 }}>
+                  <td colSpan={4} style={{ ...td, fontWeight: 800, color: inkTone(head.tone), background: SOFT, fontSize: 11 }}>
                     {head.familyLabelEn} ({head.familyLabelFa})
                   </td>
                 </tr>,
@@ -957,12 +957,12 @@ function IdpBlock({ plan }: { plan: NonNullable<CompetencyPrintReportProps['deve
   const rows = [...plan.actions].filter((x) => x.status !== 'CANCELLED').sort((x, y) => x.sortOrder - y.sortOrder)
   return (
     <>
-      <p style={{ margin: '0 0 6px', fontSize: 10, color: SUB }}>
+      <p style={{ margin: '0 0 6px', fontSize: 11, color: SUB }}>
         وضعیت: <b style={{ color: INK }}>{PLAN_STATUS_META[plan.plan.status].label}</b>، پیشرفت: {fa(progress.done)} از {fa(progress.total)} اقدام (٪{fa(progress.percent)})
         {plan.ownerName ? `، مسئول پیگیری: ${plan.ownerName}` : ''}
         {plan.plan.targetReviewDate ? `، بازبینی: ${formatJalali(plan.plan.targetReviewDate)}` : ''}
       </p>
-      {plan.plan.summary && <p style={{ margin: '0 0 6px', fontSize: 10, color: SUB }}>{plan.plan.summary}</p>}
+      {plan.plan.summary && <p style={{ margin: '0 0 6px', fontSize: 11, color: SUB }}>{plan.plan.summary}</p>}
       {rows.length === 0 ? (
         <Empty>هنوز اقدامی در این برنامه ثبت نشده است.</Empty>
       ) : (

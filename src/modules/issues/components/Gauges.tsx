@@ -56,7 +56,7 @@ export function StatusDonut({ distribution, total }: { distribution: { status: I
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', maxWidth: 160, margin: '0 auto' }}>
         {IM_STATUSES.map((s) => (
-          <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--im-muted-2)' }}>
+          <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--im-muted-2)' }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: IM_STATUS_COLOR[s], display: 'inline-block' }} />
             {IM_STATUS_LABEL_FA[s]}
           </div>

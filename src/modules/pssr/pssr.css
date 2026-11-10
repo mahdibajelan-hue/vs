@@ -258,3 +258,6 @@
   .ps-of-ans { grid-column: 1 / -1; justify-self: start; } .ps-of-ans button { min-height: 2.6rem; padding-inline: .9rem; }
   .ps-of-note { grid-column: 1 / 4; } .ps-of-file { grid-column: 4; }
 }
+
+/* touch screens (site phones): shared buttons used by PSSR, testing and station piping reach 44px */
+@media (pointer: coarse) { .ps-btn { height: auto; min-height: 44px; } }

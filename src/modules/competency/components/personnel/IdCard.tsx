@@ -70,24 +70,24 @@ export function IdCard({ kind, data, photo, cardNo, projectName, payload, sigA, 
   const frontFace = (r?: React.Ref<HTMLDivElement>) => (
     <div ref={r} style={card}>
       <div style={{ width: 138, flex: 'none', background: `linear-gradient(160deg, ${NAVY} 0%, ${NAVY2} 100%)`, color: '#fff', padding: '14px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-        <div style={{ fontSize: 8, letterSpacing: 0.8, opacity: 0.75, textAlign: 'center', lineHeight: 1.4 }}>{projectName}</div>
+        <div style={{ fontSize: 11, letterSpacing: 0.8, opacity: 0.75, textAlign: 'center', lineHeight: 1.4 }}>{projectName}</div>
         <div style={{ width: 104, height: 132, borderRadius: 14, overflow: 'hidden', border: `3px solid ${AMBER}`, background: '#1e3a5f', boxShadow: '0 4px 12px rgba(0,0,0,.35)' }}>
-          {photo ? <img src={photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', fontSize: 10, opacity: 0.6 }}>PHOTO</div>}
+          {photo ? <img src={photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ height: '100%', display: 'grid', placeItems: 'center', fontSize: 11, opacity: 0.6 }}>PHOTO</div>}
         </div>
-        <div style={{ textAlign: 'center', lineHeight: 1.1 }}><div style={{ fontSize: 8, letterSpacing: 1.2, opacity: 0.75 }}>STAMP</div><div style={{ fontSize: 26, fontWeight: 800, color: AMBER, direction: 'ltr' }}>{data.stamp}</div></div>
+        <div style={{ textAlign: 'center', lineHeight: 1.1 }}><div style={{ fontSize: 11, letterSpacing: 1.2, opacity: 0.75 }}>STAMP</div><div style={{ fontSize: 26, fontWeight: 800, color: AMBER, direction: 'ltr' }}>{data.stamp}</div></div>
       </div>
       <div style={{ flex: 1, minWidth: 0, padding: '14px 16px 12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, direction: 'ltr' }}>
           <span style={{ background: NAVY, color: '#fff', fontSize: 8.5, fontWeight: 800, letterSpacing: 1, padding: '3px 9px', borderRadius: 20 }}>{badge}</span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9.5, fontWeight: 800, color: okColor }}><span style={{ width: 7, height: 7, borderRadius: 4, background: expired ? '#ef4444' : '#10b981' }} />{expired ? 'EXPIRED' : 'VALID'}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 800, color: okColor }}><span style={{ width: 7, height: 7, borderRadius: 4, background: expired ? '#ef4444' : '#10b981' }} />{expired ? 'EXPIRED' : 'VALID'}</span>
         </div>
         <div>
           <div dir="auto" style={{ fontSize: 19, fontWeight: 800, lineHeight: 1.15, color: NAVY, textAlign: 'start' }}>{data.name || '—'}</div>
-          <div style={{ fontSize: 10, color: MUTE, direction: 'ltr', textAlign: 'left', marginTop: 2 }}>ID <b style={{ color: INK, letterSpacing: 0.5 }}>{data.nationalId || '—'}</b></div>
+          <div style={{ fontSize: 11, color: MUTE, direction: 'ltr', textAlign: 'left', marginTop: 2 }}>ID <b style={{ color: INK, letterSpacing: 0.5 }}>{data.nationalId || '—'}</b></div>
         </div>
         <div style={{ height: 1, background: 'linear-gradient(90deg, #e2e8f0, transparent)' }} />
         {kind === 'coater' && data.scope && data.scope.length > 0 ? (
-          <div style={{ display: 'grid', gap: 4, direction: 'ltr' }}><div style={lab}>Qualified for</div><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{data.scope.map((s) => <span key={s} style={{ fontSize: 9.5, fontWeight: 700, background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 20 }}>{s}</span>)}</div></div>
+          <div style={{ display: 'grid', gap: 4, direction: 'ltr' }}><div style={lab}>Qualified for</div><div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{data.scope.map((s) => <span key={s} style={{ fontSize: 11, fontWeight: 700, background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 20 }}>{s}</span>)}</div></div>
         ) : null}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px', direction: 'ltr' }}>{facts.map(([k, v]) => <div key={k} style={{ minWidth: 0 }}><div style={lab}>{k}</div><div style={{ ...val, fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</div></div>)}</div>
         <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', direction: 'ltr' }}>
@@ -113,10 +113,10 @@ export function IdCard({ kind, data, photo, cardNo, projectName, payload, sigA, 
           </div>
         )}
         {kind === 'coater' && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>{data.rows.map(([k, v]) => <div key={k} style={{ minWidth: 0 }}><div style={lab}>{k}</div><div style={{ ...val, fontSize: 10.5 }}>{v}</div></div>)}</div>}
-        {data.dirs && (data.dirs.fill || data.dirs.root) && <div style={{ display: 'flex', gap: 18, fontSize: 9.5 }}>{[['Root & Hot', data.dirs.root], ['Filling & Cap', data.dirs.fill]].map(([k, d]) => <div key={k}><b>{k}:</b> {d === 'up' ? '☑' : '☐'} Up Hill &nbsp; {d === 'down' ? '☑' : '☐'} Down Hill</div>)}</div>}
+        {data.dirs && (data.dirs.fill || data.dirs.root) && <div style={{ display: 'flex', gap: 18, fontSize: 11 }}>{[['Root & Hot', data.dirs.root], ['Filling & Cap', data.dirs.fill]].map(([k, d]) => <div key={k}><b>{k}:</b> {d === 'up' ? '☑' : '☐'} Up Hill &nbsp; {d === 'down' ? '☑' : '☐'} Down Hill</div>)}</div>}
         <div style={{ display: 'flex', gap: 18, marginTop: 4, direction: 'rtl' }}>{sign(labelA, sigA)}{sign(labelB, sigB)}</div>
       </div>
-      <div style={{ padding: '5px 16px 8px', fontSize: 8, color: MUTE, textAlign: 'center', direction: 'rtl' }}>اعتبار این کارت با اسکن QR و تطبیق با رجیستر پروژه کنترل می‌شود · در صورت یافتن به دفتر فنی پروژه تحویل شود.</div>
+      <div style={{ padding: '5px 16px 8px', fontSize: 11, color: MUTE, textAlign: 'center', direction: 'rtl' }}>اعتبار این کارت با اسکن QR و تطبیق با رجیستر پروژه کنترل می‌شود · در صورت یافتن به دفتر فنی پروژه تحویل شود.</div>
     </div>
   )
   return (
