@@ -8,7 +8,7 @@ import { useModuleStore } from '../../../store/useModuleStore'
 import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { formatJalali } from '../../../lib/jalali'
 import { criticalOverdue, ISSUE_BANDS, issueKpi, pressureOrder, sharedCategories, signalOf, type IssueKpi, type Signal } from '../lib/issueKpiCore'
-import { Empty, faNum, Kpi, Panel } from '../components/pfUi'
+import { Empty, faDigits, faNum, Kpi, Panel } from '../components/pfUi'
 import { Donut, Gauge } from '../components/viz'
 import { useDrill } from '../components/DrillSheet'
 import { todayTehran } from '../../../lib/today'
@@ -134,7 +134,7 @@ export function IssuesTab({ projects, issuesByMaster }: { projects: MasterProjec
           <div dir="ltr">
             <ResponsiveContainer width="100%" height={170}>
               <AreaChart data={k.trend.map((x) => ({ ...x, label: formatJalali(x.date).slice(2, 7) }))} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text-secondary)' }} />
+                <XAxis dataKey="label" tickFormatter={faDigits} tick={{ fontSize: 10, fill: 'var(--text-secondary)' }} />
                 <Tooltip isAnimationActive={false} contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 12 }} formatter={(v) => [faNum(Number(v)), 'باز']} />
                 <Area dataKey="open" stroke="#f97316" fill="#f97316" fillOpacity={0.15} strokeWidth={2} />
               </AreaChart>

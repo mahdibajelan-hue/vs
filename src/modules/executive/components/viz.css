@@ -4,7 +4,6 @@
 .vz-kpi { --c: #6366f1; position: relative; overflow: hidden; display: grid; align-content: start; gap: .25rem; min-height: 7.2rem; padding: .85rem .9rem .5rem; border-radius: 1rem; text-align: right; color: var(--text-primary);
   border: 1px solid color-mix(in srgb, var(--c) 22%, var(--border-soft)); background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--c) 16%, transparent), transparent 60%), var(--bg-panel-solid);
   transition: transform 200ms cubic-bezier(.23, 1, .32, 1), border-color 200ms ease, box-shadow 200ms ease; }
-.vz-kpi::before { content: ''; position: absolute; inset-inline-start: 0; top: .8rem; bottom: .8rem; width: 3px; border-radius: 3px; background: var(--c); }
 .vz-kpi-top { display: flex; align-items: center; gap: .4rem; }
 .vz-kpi-ic { display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: .55rem; color: var(--c); background: color-mix(in srgb, var(--c) 15%, transparent); flex: none; }
 .vz-kpi-ic:empty { display: none; }
@@ -57,7 +56,7 @@
 .vz-donut-c { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
 .vz-donut-c b { font-size: 1.45rem; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .vz-donut-c small { font-size: 10.5px; color: var(--text-muted); max-width: 6.5rem; line-height: 1.5; }
-.vz-legend { display: grid; gap: .15rem; min-width: 10rem; flex: 1 1 10rem; max-width: 17rem; }
+.vz-legend { display: grid; gap: .15rem; min-width: 10rem; flex: 1 1 10rem; max-width: 15rem; }
 .vz-legend button { width: 100%; display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: .45rem; padding: .3rem .45rem; border-radius: .55rem; font-size: 11.5px; text-align: right; transition: background-color 150ms ease, opacity 150ms ease, transform 140ms cubic-bezier(.23, 1, .32, 1); }
 .vz-legend button:disabled { cursor: default; }
 .vz-legend button:not(:disabled):active { transform: scale(.98); }

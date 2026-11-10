@@ -5,7 +5,7 @@ import { formatJalali, isoToJalali, JALALI_MONTHS } from '../../../lib/jalali'
 import type { PfProjectView } from '../lib/portfolioCore'
 import { byProject, byResource, flagsOf, monthlyTrend, RES_FLAG_FA } from '../lib/resourceCore'
 import { usePortfolioPlanningStore } from '../store/usePortfolioPlanningStore'
-import { Empty, faNum, Kpi, Panel } from '../components/pfUi'
+import { Empty, faDigits, faNum, Kpi, Panel } from '../components/pfUi'
 import { BarList, Gauge, Seg } from '../components/viz'
 import { useDrill } from '../components/DrillSheet'
 
@@ -83,8 +83,8 @@ export function ResourceTab({ views }: { views: PfProjectView[] }) {
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={trend} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border-soft)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} width={36} />
+                <XAxis dataKey="label" tickFormatter={faDigits} tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
+                <YAxis tickFormatter={(v) => faNum(Number(v))} tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} width={36} />
                 <Tooltip isAnimationActive={false} contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 12, direction: 'rtl' }}
                   formatter={(v, n) => [faNum(Number(v), 1), n === 'man' ? 'نفرات' : n === 'manWorking' ? 'نفرات فعال' : n === 'equip' ? 'ماشین‌آلات' : 'ماشین فعال']} />
                 <Legend formatter={(n) => (n === 'man' ? 'نفرات' : n === 'manWorking' ? 'نفرات فعال' : n === 'equip' ? 'ماشین‌آلات' : 'ماشین فعال')} wrapperStyle={{ fontSize: 11 }} />

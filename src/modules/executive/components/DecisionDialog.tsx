@@ -30,7 +30,7 @@ export function DecisionDialog({ views, initialId, onClose }: { views: PfProject
     setBusy(true); setErr('')
     const ok = await recordDecision({ projectId: v.input.id, decision: kind, rationale, conditions, reviewBy: reviewBy || null, healthAtDecision: v.health, priorityAtDecision: v.priority })
     setBusy(false)
-    if (ok) onClose(); else setErr('ثبت نشد؛ دسترسی «تصویب» ماژول پرتفولیو لازم است.')
+    if (ok) onClose(); else setErr('ثبت نشد؛ دسترسی «تصویب» ماژول پورتفولیو لازم است.')
   }
 
   return createPortal(

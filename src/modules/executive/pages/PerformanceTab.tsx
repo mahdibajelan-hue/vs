@@ -52,8 +52,8 @@ export function PerformanceTab({ views, currency }: { views: PfProjectView[]; cu
                 <ResponsiveContainer width="100%" height={300}>
                   <ScatterChart margin={{ top: 10, right: 16, bottom: 18, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border-soft)" />
-                    <XAxis type="number" dataKey="spi" name="SPI" domain={[minAxis, maxAxis]} tickFormatter={(v) => Number(v).toFixed(2)} tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} label={{ value: 'SPI — زمان', position: 'insideBottom', offset: -10, fontSize: 11, fill: 'var(--text-secondary)' }} />
-                    <YAxis type="number" dataKey="cpi" name="CPI" domain={[minAxis, maxAxis]} tickFormatter={(v) => Number(v).toFixed(2)} tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} width={44} />
+                    <XAxis type="number" dataKey="spi" name="SPI" domain={[minAxis, maxAxis]} tickFormatter={(v) => faNum(Number(v), 2)} tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} label={{ value: 'SPI — زمان', position: 'insideBottom', offset: -10, fontSize: 11, fill: 'var(--text-secondary)' }} />
+                    <YAxis type="number" dataKey="cpi" name="CPI" domain={[minAxis, maxAxis]} tickFormatter={(v) => faNum(Number(v), 2)} tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} width={44} />
                     <ZAxis type="number" dataKey="bac" range={[60, 600]} />
                     <ReferenceLine x={1} stroke="var(--text-muted)" strokeDasharray="4 4" />
                     <ReferenceLine y={1} stroke="var(--text-muted)" strokeDasharray="4 4" />

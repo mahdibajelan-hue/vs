@@ -6,6 +6,8 @@ import type { RmRisk, RmRiskAssessment } from '../../risk/types'
 import { RankedBarChart, type ChartDatum } from '../../masterdata/components/RollupCharts'
 import { computeDependencyImpacts, type ProjectDashboardSummary } from '../../reporting/lib/portfolioDashboard'
 import type { MasterProject, ProjectDependency } from '../../masterdata/types'
+import { faDigits, faNum } from './pfUi'
+import { formatJalali } from '../../../lib/jalali'
 
 /** The two widgets kept from the former reporting portfolio dashboard, which this module replaced (council review). */
 const CAT = { strategic: '#a78bfa', risk: '#f97316' }
@@ -37,8 +39,8 @@ export function RiskExposureTrendWidget({ risks, assessments }: { risks: RmRisk[
                 </linearGradient>
               </defs>
               <CartesianGrid stroke="var(--border-soft)" vertical={false} />
-              <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} width={30} />
+              <XAxis dataKey="date" tickFormatter={(d) => faDigits(formatJalali(String(d)).slice(2))} tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
+              <YAxis tickFormatter={(v) => faNum(Number(v))} tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} width={30} />
               <RTooltip
                 contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 11 }}
                 labelStyle={{ color: 'var(--text-secondary)' }}

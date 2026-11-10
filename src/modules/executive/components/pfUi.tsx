@@ -7,13 +7,18 @@ export const faNum = (n: number, digits = 0) => n.toLocaleString('fa-IR', { maxi
 /** compact money: rial amounts on real contracts run into the trillions */
 export function fmtMoney(n: number | null | undefined, currency = 'ریال'): string {
   if (n == null || !Number.isFinite(n)) return '—'
-  const abs = Math.abs(n), sign = n < 0 ? '−' : ''
+  const abs = Math.abs(n)
   const unit = currency ? ` ${currency}` : ''
-  if (abs >= 1e12) return `${sign}${faNum(abs / 1e12, 1)} هزار میلیارد${unit}`
-  if (abs >= 1e9) return `${sign}${faNum(abs / 1e9, 1)} میلیارد${unit}`
-  if (abs >= 1e6) return `${sign}${faNum(abs / 1e6, 1)} میلیون${unit}`
-  return `${sign}${faNum(abs)}${unit}`
+  // a minus inside RTL text drifts to the far side of the digits; an LTR isolate keeps «−۱۰٫۷» together
+  const num = (s: string) => (n < 0 ? `\u2066−${s}\u2069` : s)
+  if (abs >= 1e12) return `${num(faNum(abs / 1e12, 1))} هزار میلیارد${unit}`
+  if (abs >= 1e9) return `${num(faNum(abs / 1e9, 1))} میلیارد${unit}`
+  if (abs >= 1e6) return `${num(faNum(abs / 1e6, 1))} میلیون${unit}`
+  return `${num(faNum(abs))}${unit}`
 }
+
+/** Persian digits in any label (chart ticks get raw strings such as «05/08» from the data) */
+export const faDigits = (v: unknown) => String(v ?? '').replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])
 
 export const fmtIdx = (n: number | null | undefined) => (n == null || !Number.isFinite(n) ? '—' : faNum(n, 2))
 

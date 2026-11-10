@@ -95,7 +95,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       <StorageErrorBanner />
 
       <div className="pf-bar no-print" dir="rtl">
-        <NavScroller label="بخش‌های پرتفولیو"><nav ref={tabInd.list} className="pf-tabs" role="tablist" aria-label="بخش‌های پرتفولیو">
+        <NavScroller label="بخش‌های پورتفولیو"><nav ref={tabInd.list} className="pf-tabs" role="tablist" aria-label="بخش‌های پورتفولیو">
           <span ref={tabInd.indicator} className="tab-ind pf-tab-ind" aria-hidden />
           {TABS.map((t) => (
             <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'is-on' : ''} onClick={() => setTab(t.key)}>{t.icon}{t.label}</button>

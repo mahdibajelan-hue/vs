@@ -7,7 +7,7 @@ import type { PfProjectView } from '../lib/portfolioCore'
 import { ACTION_FA, autoFit, buildProfile, evaluate, fundingOrder, monthIndex, SOURCE_FA, yearOf, type ScAction, type ScChoice, type ScProject } from '../lib/scenarioCore'
 import { usePortfolioStore } from '../store/usePortfolioStore'
 import { usePortfolioPlanningStore, type PfScenario } from '../store/usePortfolioPlanningStore'
-import { Empty, faNum, fmtMoney, Kpi, Panel } from '../components/pfUi'
+import { Empty, faDigits, faNum, fmtMoney, Kpi, Panel } from '../components/pfUi'
 
 const BN = 1e9
 const monthOfIso = (iso: string | null) => { const j = iso ? isoToJalali(iso) : null; return j ? monthIndex(j.jy, j.jm) : null }
@@ -123,7 +123,7 @@ export function ScenarioTab({ views, projects, currency }: { views: PfProjectVie
           <ResponsiveContainer width="100%" height={280}>
             <ComposedChart data={chart} margin={{ top: 10, right: 12, bottom: 4, left: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-soft)" vertical={false} />
-              <XAxis dataKey="jy" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
+              <XAxis dataKey="jy" tickFormatter={faDigits} tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
               <YAxis tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} width={56} tickFormatter={(v) => faNum(Number(v))} />
               <Tooltip isAnimationActive={false} contentStyle={{ background: 'var(--bg-panel-solid)', border: '1px solid var(--border-soft)', borderRadius: 10, fontSize: 12, direction: 'rtl' }}
                 formatter={(v, n) => [`${faNum(Number(v))} میلیارد`, n === 'scenario' ? 'این سناریو' : n === 'base' ? 'برنامهٔ پایه' : 'سقف']} />

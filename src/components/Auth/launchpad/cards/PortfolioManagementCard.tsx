@@ -5,7 +5,7 @@ export function PortfolioManagementCard({ onSelect, locked, badge }: { onSelect:
   return (
     <ModuleCard
       number="02"
-      title="مدیریت پرتفولیو"
+      title="مدیریت سبد پروژه‌ها"
       englishTag="Portfolio & Program Control"
       description="دید تجمیعی سلامت، ریسک و مالی کل سبد پروژه‌ها — Portfolio ← Program ← Project."
       icon={Briefcase}

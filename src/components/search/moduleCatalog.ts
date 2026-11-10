@@ -3,7 +3,7 @@ import type { ModuleKey } from '../../store/useModuleStore'
 /** The modules as the search knows them: Persian and English name plus words people type for them. */
 export const MODULE_CATALOG: { key: ModuleKey | 'radar'; fa: string; en: string; words: string }[] = [
   { key: 'radar', fa: 'رادار پروژه‌ها', en: 'Project Radar', words: 'رادار پروژه سیگنال چرخه عمر گیت ریسک مسئله قرارداد مالی' },
-  { key: 'executive', fa: 'مدیریت پرتفولیو', en: 'Portfolio', words: 'پرتفولیو برنامه مدیریت اجرایی پورتفوی' },
+  { key: 'executive', fa: 'مدیریت سبد پروژه‌ها', en: 'Portfolio', words: 'پرتفولیو پورتفولیو سبد برنامه مدیریت اجرایی پورتفوی' },
   { key: 'reporting', fa: 'گزارش هوشمند و تحلیل', en: 'Smart Reporting', words: 'گزارش تحلیل داشبورد هوشمند' },
   { key: 'competency', fa: 'ارزیابی شایستگی عوامل فنی', en: 'Technical Competency', words: 'شایستگی ارزیابی مصاحبه آزمون جوشکار' },
   { key: 'estimator', fa: 'برآورد پروژه‌ها', en: 'Project Estimation', words: 'برآورد هزینه تخمین' },

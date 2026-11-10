@@ -169,7 +169,7 @@ export function whyCritical(v: PfProjectView): string {
   if (v.health === 'black' && s?.blockers?.length) return `گیت مسدود: ${s.blockers[0]}`
   if (s?.drivenBy) return `عامل اصلی: ${s.drivenBy}`
   if (s?.spi != null && s.spi < 0.9) return `SPI ${fa(s.spi, 2)}`
-  if (v.input.delivery?.criticalMilestonesDelayed) return `${fa(v.input.delivery.criticalMilestonesDelayed)} مایلستون بحرانی عقب`
+  if (v.input.delivery?.criticalMilestonesDelayed) return `${fa(v.input.delivery.criticalMilestonesDelayed)} Milestone بحرانی عقب`
   return 'وضعیت سلامت قرمز'
 }
 
@@ -186,7 +186,7 @@ export function warnings(views: PfProjectView[], today: string): Warn[] {
     if (s?.cpi != null && s.cpi > 0 && s.cpi < 0.9) out.push({ key: `c-${id}`, projectId: id, project: name, kind: 'افزایش هزینه', severity: s.cpi < 0.8 ? 'high' : 'medium', text: `CPI ${fa(s.cpi, 2)}` })
     const vp = vacPct(v)
     if (vp != null && vp <= -5) out.push({ key: `v-${id}`, projectId: id, project: name, kind: 'پیش‌بینی بیش‌هزینه', severity: vp <= -10 ? 'high' : 'medium', text: `${fa(Math.abs(vp), 1)}٪ بیش از بودجه` })
-    if (v.input.delivery?.criticalMilestonesDelayed) out.push({ key: `m-${id}`, projectId: id, project: name, kind: 'تأخیر مایلستون', severity: 'high', text: `${fa(v.input.delivery.criticalMilestonesDelayed)} مایلستون بحرانی عقب‌افتاده` })
+    if (v.input.delivery?.criticalMilestonesDelayed) out.push({ key: `m-${id}`, projectId: id, project: name, kind: 'تأخیر Milestone', severity: 'high', text: `${fa(v.input.delivery.criticalMilestonesDelayed)} Milestone بحرانی عقب‌افتاده` })
     if (v.lastDecision?.reviewBy && v.lastDecision.reviewBy.slice(0, 10) < today) out.push({ key: `r-${id}`, projectId: id, project: name, kind: 'بازبینی تصمیم', severity: 'medium', text: 'موعد بازبینی تصمیم سبد گذشته' })
   }
   return out.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'high' ? -1 : 1))

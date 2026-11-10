@@ -34,7 +34,7 @@ export function RiskHeatMap({
         <div className="flex shrink-0 flex-col justify-between py-1 text-[9px] text-muted sm:text-[10px]">
           {LEVELS.map((lvl) => (
             <div key={lvl} className="flex h-10 w-4 items-center justify-center sm:h-14 sm:w-5">
-              {lvl}
+              {lvl.toLocaleString('fa-IR')}
             </div>
           ))}
         </div>
@@ -59,7 +59,7 @@ export function RiskHeatMap({
                       opacity: activeCell && !isActive ? 0.55 : 1,
                     }}
                   >
-                    {cellRisks.length > 0 && <span className="text-xs leading-none sm:text-base">{cellRisks.length}</span>}
+                    {cellRisks.length > 0 && <span className="text-xs leading-none sm:text-base">{cellRisks.length.toLocaleString('fa-IR')}</span>}
                   </button>
                 )
               }),
@@ -67,7 +67,7 @@ export function RiskHeatMap({
           </div>
           <div className="mt-1.5 grid grid-cols-5 gap-1 text-center text-[9px] text-muted sm:gap-1.5 sm:text-[10px]">
             {[1, 2, 3, 4, 5].map((p) => (
-              <div key={p}>{p}</div>
+              <div key={p}>{p.toLocaleString('fa-IR')}</div>
             ))}
           </div>
           <p className="mt-1 text-center text-[9px] text-muted sm:text-[10px]">احتمال وقوع →</p>

@@ -49,10 +49,10 @@ export function DashboardTab({ views, projects, risks, riskMaster, assessments, 
           <Card tone="#ef4444" icon={<AlertTriangle size={18} />} label="پروژه‌های بحرانی" value={faNum(critical.length)} sub={`از ${faNum(views.length)} پروژه`} />
           <Card tone="#f59e0b" icon={<ShieldAlert size={18} />} label="انحرافات کلیدی" value={faNum(warns.filter((w) => w.severity === 'high').length)} sub={`${faNum(new Set(warns.filter((w) => w.severity === 'high').map((w) => w.projectId)).size)} پروژه · ${faNum(warns.length)} هشدار کل`} />
           <Card tone="#6366f1" icon={<CalendarClock size={18} />} label="میانگین تأخیر" value={avgDelay == null ? '—' : `${faNum(Math.round(avgDelay))} روز`} sub={avgDelay == null ? 'منحنی پیشرفت EPC ثبت نشده' : `روش زمان کسب‌شده · ${faNum(delays.length)} پروژه`} />
-          <Card tone="#22c55e" icon={<TrendingUp size={18} />} label="پیشرفت کل پرتفولیو" value={pct(wp?.actual, 0)} sub={wp ? `برنامه ${pct(wp.planned, 0)} · ${wp.actual >= wp.planned ? 'جلوتر' : `${faNum(wp.planned - wp.actual, 1)} واحد عقب`}` : 'شاخص پیشرفت ثبت نشده'}>
+          <Card tone="#22c55e" icon={<TrendingUp size={18} />} label="پیشرفت کل پورتفولیو" value={pct(wp?.actual, 0)} sub={wp ? `برنامه ${pct(wp.planned, 0)} · ${wp.actual >= wp.planned ? 'جلوتر' : `${faNum(wp.planned - wp.actual, 1)} واحد عقب`}` : 'شاخص پیشرفت ثبت نشده'}>
             {wp && <div className="pd-meter"><i style={{ width: `${Math.min(100, wp.actual)}%` }} /><s style={{ insetInlineStart: `${Math.min(100, wp.planned)}%` }} /></div>}
           </Card>
-          <Card tone="#0ea5e9" icon={<Layers size={18} />} label="تعداد کل پروژه‌ها" value={faNum(views.length)} sub={`${faNum(statusCount('good'))} خوب · ${faNum(statusCount('attention'))} نیازمند توجه · ${faNum(statusCount('unknown'))} بدون داده`} />
+          <Card tone="#0ea5e9" icon={<Layers size={18} />} label="تعداد کل پروژه‌ها" value={faNum(views.length)} sub={views.length ? (['critical', 'attention', 'good', 'unknown'] as const).filter((k) => statusCount(k) > 0).map((k) => `${faNum(statusCount(k))} ${STATUS_FA[k].label}`).join(' · ') : 'پروژه‌ای در این محدوده نیست'} />
         </div>
       </div>
 
@@ -83,7 +83,7 @@ export function DashboardTab({ views, projects, risks, riskMaster, assessments, 
 
       {/* row 4 — status table and achievements */}
       <div className="pd-row4">
-        <Box title="وضعیت پروژه‌های پرتفولیو" icon={<ClipboardCheck size={15} />} tone="#6366f1" foot={<Foot onClick={() => onOpenTab('performance')}>عملکرد و پیش‌بینی همهٔ پروژه‌ها</Foot>}>
+        <Box title="وضعیت پروژه‌های پورتفولیو" icon={<ClipboardCheck size={15} />} tone="#6366f1" foot={<Foot onClick={() => onOpenTab('performance')}>عملکرد و پیش‌بینی همهٔ پروژه‌ها</Foot>}>
           <div className="pd-table-wrap"><table className="pd-table"><thead><tr><th>پروژه</th><th>پیشرفت</th><th>انحراف زمان</th><th>انحراف هزینه</th><th>وضعیت</th><th>بودجه ({currency})</th></tr></thead><tbody>
             {[...views].sort((a, c) => ({ critical: 0, attention: 1, good: 2, unknown: 3 })[statusOf(a)] - ({ critical: 0, attention: 1, good: 2, unknown: 3 })[statusOf(c)]).slice(0, 10).map((v) => {
               const d = delayOf(v.input.id), vp = vacPct(v), s = statusOf(v), g = gapOf(v)
@@ -151,7 +151,7 @@ function BudgetCard({ b, currency }: { b: ReturnType<typeof budget>; currency: s
   const p = b.absorbedPct == null ? 0 : Math.min(100, b.absorbedPct)
   return (
     <section className="pd-box pd-budget" style={{ '--c': '#16a34a' } as CSSProperties}>
-      <header><h3><span aria-hidden><Wallet size={15} /></span>بودجهٔ کل پرتفولیو و میزان جذب</h3></header>
+      <header><h3><span aria-hidden><Wallet size={15} /></span>بودجهٔ کل پورتفولیو و میزان جذب</h3></header>
       <div className="pd-budget-body">
         <svg viewBox="0 0 140 140" className="pd-donut" role="img" aria-label={`جذب ${faNum(p, 0)} درصد بودجه`}>
           <circle cx="70" cy="70" r={R} fill="none" stroke="var(--pd-track)" strokeWidth="16" />
@@ -184,7 +184,7 @@ function RiskMatrix({ risks, assessments, names, onOpen }: { risks: RmRisk[]; as
   const active = [...grid.values()].reduce((n, l) => n + l.length, 0)
   const picked = cell ? grid.get(cell) ?? [] : []
   return (
-    <Box title="نقشهٔ حرارتی ریسک‌های پرتفولیو — احتمال × اثر" icon={<ShieldAlert size={15} />} tone="#ef4444" foot={<Foot onClick={onOpen}>ریسک و وابستگی</Foot>}>
+    <Box title="نقشهٔ حرارتی ریسک‌های پورتفولیو — احتمال × اثر" icon={<ShieldAlert size={15} />} tone="#ef4444" foot={<Foot onClick={onOpen}>ریسک و وابستگی</Foot>}>
       <div className="pd-heat">
         <div className="pd-heat-y" aria-hidden><span>اثر</span>{LEVELS.map((l) => <b key={l}>{faNum(l)}</b>)}</div>
         <div className="pd-heat-grid" role="grid" aria-label="ماتریس احتمال و اثر">
@@ -214,7 +214,7 @@ function RiskMatrix({ risks, assessments, names, onOpen }: { risks: RmRisk[]; as
 
 function TrendCard({ views, onOpen }: { views: PfProjectView[]; onOpen: () => void }) {
   return (
-    <Box title="پیشرفت پروژه‌های پرتفولیو" icon={<BarChart3 size={15} />} tone="#2563eb" foot={<Foot onClick={onOpen}>عملکرد و پیش‌بینی</Foot>}>
+    <Box title="پیشرفت پروژه‌های پورتفولیو" icon={<BarChart3 size={15} />} tone="#2563eb" foot={<Foot onClick={onOpen}>عملکرد و پیش‌بینی</Foot>}>
       <ProgressChart views={views} />
     </Box>
   )

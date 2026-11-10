@@ -36,7 +36,7 @@ assert.equal(pt[0].planned, 65); assert.equal(pt[0].earned, 40); assert.equal(pt
 /* status, warnings, achievements */
 assert.equal(statusOf(v('a', { h: 'black' })), 'critical'); assert.equal(statusOf(v('a', { h: 'unknown' })), 'unknown')
 const w = warnings([v('a', { h: 'black', snap: { blockers: ['G5'], spi: 0.7, cpi: 0.85 }, vac: -15, bac: 100, del: { criticalMilestonesDelayed: 2 }, ld: { reviewBy: '2026-01-01' } })], '2026-10-29')
-assert.deepEqual(w.map((x) => x.kind).sort(), ['افزایش هزینه', 'بازبینی تصمیم', 'تأخیر مایلستون', 'عقب‌ماندگی زمانی', 'پیش‌بینی بیش‌هزینه', 'گیت مسدود'].sort())
+assert.deepEqual(w.map((x) => x.kind).sort(), ['افزایش هزینه', 'بازبینی تصمیم', 'تأخیر Milestone', 'عقب‌ماندگی زمانی', 'پیش‌بینی بیش‌هزینه', 'گیت مسدود'].sort())
 assert.equal(w[0].severity, 'high')
 assert.ok(!warnings([v('z', { snap: { cpi: 0, spi: null } })], '2026-10-29').some((x) => x.kind === 'افزایش هزینه')) // CPI 0 is not measured
 const ac = achievements([v('a', { snap: { spi: 1.1, cpi: 1.05, actual: 50, planned: 48 } }), v('b', { h: 'green', pr: 80 })])

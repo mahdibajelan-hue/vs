@@ -37,7 +37,7 @@ export function DecisionsTab({ views, onDecide }: { views: PfProjectView[]; onDe
       </div>
 
       <Panel title="ترکیب تصمیم‌ها" icon={<PieChart size={15} />} hint="آخرین تصمیم معتبر هر پروژه. روی هر بخش بزنید تا دفتر پایین به همان نوع تصمیم محدود شود."
-        right={st.canGovern ? <button type="button" className="pf-btn is-primary" onClick={() => onDecide(null)}><Gavel size={14} /> ثبت تصمیم</button> : <span className="pf-muted"><Lock size={12} /> ثبت تصمیم: دسترسی «تصویب» پرتفولیو</span>}>
+        right={st.canGovern ? <button type="button" className="pf-btn is-primary" onClick={() => onDecide(null)}><Gavel size={14} /> ثبت تصمیم</button> : <span className="pf-muted"><Lock size={12} /> ثبت تصمیم: دسترسی «تصویب» پورتفولیو</span>}>
         <Donut sub="پروژه" picked={kind === 'all' ? null : kind} onPick={(k) => (k === 'none' ? drill('پروژه‌های بدون تصمیم سبد', undecided.map((v) => v.input.id)) : setKind((k as PfDecisionKind | null) ?? 'all'))}
           parts={[...counts.map(({ k, n }) => ({ key: k, label: DECISION_FA[k].label, value: n, color: DECISION_FA[k].color })), { key: 'none', label: 'بدون تصمیم', value: undecided.length, color: '#64748b' }]} />
       </Panel>

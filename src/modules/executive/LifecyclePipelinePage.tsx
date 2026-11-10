@@ -79,7 +79,7 @@ export function LifecyclePipelinePage({ onBack }: { onBack: () => void }) {
     <div className="lpp" dir="rtl">
       <div className="lpp-head">
         <div>
-          <button type="button" className="lpp-back" onClick={onBack}><ArrowRight size={14} aria-hidden /> داشبورد پرتفولیو</button>
+          <button type="button" className="lpp-back" onClick={onBack}><ArrowRight size={14} aria-hidden /> داشبورد پورتفولیو</button>
           <h1>پروژه‌ها در مراحل چرخهٔ عمر</h1>
           <p>مدل Stage-Gate، از G1 تا G9. گام جاری و آخرین اقدام به‌طور خودکار از گام‌ها، خروجی‌ها، معیارها و تصمیم‌های گیت ماژول Stage-Gate خوانده می‌شود. روی هر مرحله یا نمودار بزنید تا فهرست پروژه‌ها به همان گروه محدود شود.</p>
         </div>

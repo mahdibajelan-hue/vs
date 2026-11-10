@@ -40,7 +40,7 @@ export function RiskTab({ views, risks, assessments, summaries }: { views: PfPro
           <Donut size={150} sub="پروژه" onPick={(l) => { if (l) { const g = byLevel.find((x) => x.l === l); if (g) drill(`بالاترین ریسک: ${LEVEL_FA[l].label}`, pid(g.list)) } }}
             parts={[...byLevel.map(({ l, list }) => ({ key: l, label: LEVEL_FA[l].label, value: list.length, color: LEVEL_FA[l].color })), { key: 'none', label: 'بدون ریسک ثبت‌شده', value: noRegister.length, color: '#64748b' }]} />
           <div className="pf-risk-cols">
-            {byLevel.map(({ l, list }) => (
+            {byLevel.filter(({ list }) => list.length > 0).map(({ l, list }) => (
               <div key={l}>
                 <p className="pf-risk-h" style={{ color: LEVEL_FA[l].color }}>{LEVEL_FA[l].label} <span className="pf-muted">({faNum(list.length)})</span></p>
                 <ul>{list.map((v) => <li key={v.input.id}><button type="button" className="vz-link truncate" onClick={() => open(v.input.id)}>{v.input.name}</button><HealthChip health={v.health} /></li>)}</ul>
