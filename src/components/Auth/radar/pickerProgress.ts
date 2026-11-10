@@ -3,20 +3,31 @@ import { fetchPages } from '../../../modules/supervision/lib/fetchPages'
 import { pickerProgress, type PickerProgress, type PickerSource } from './pickerProgressCore'
 import { ensureEpcStores, epcProgressOf } from '../../../modules/epc/epcProgressLoader'
 import { weightsFromReport, type EpcProgress } from '../../../modules/epc/epcProgress'
+import { readEpcSnapshots, saveEpcSnapshot, STALE_MS } from './epcSnapshots'
 
 type Row = Record<string, unknown>
 const s = (v: unknown) => (v == null ? '' : String(v))
 
-/** Progress of every listed project for the picker's gauges: the Stage-Gate lifecycle first (one round), then again
- * once the EPC modules are loaded — their live progress feeds the EPC phase and gauges projects outside Stage-Gate. */
+/**
+ * Progress of every listed project for the picker's gauges: the Stage-Gate lifecycle first (one round), then each
+ * project's EPC figure as last saved (one request for every card). A missing or stale figure is recomputed from that
+ * project's own data only, one project at a time, saved for everyone, and the card updates as it lands. Nothing here
+ * loads every project's module data at once.
+ */
 export async function loadPickerProgress(projectIds: string[], onFirst?: (m: Map<string, PickerProgress>) => void): Promise<Map<string, PickerProgress>> {
-  const src = await loadSgSource().catch(() => null)
+  const [src, snaps] = await Promise.all([loadSgSource().catch(() => null), readEpcSnapshots(projectIds).catch(() => new Map())])
   const base: PickerSource = src ?? { links: [], phases: [], steps: [], items: [], decisions: [], phaseRows: [] }
-  onFirst?.(pickerProgress(base))
-  await ensureEpcStores()
-  const reportOf = new Map(base.links.map((l) => [l.masterId, base.engines?.clientReports.get(l.project)]))
   const epc = new Map<string, EpcProgress>()
-  for (const id of projectIds) epc.set(id, epcProgressOf(id, weightsFromReport(reportOf.get(id))))
+  for (const [id, sn] of snaps) epc.set(id, sn.epc)
+  onFirst?.(pickerProgress({ ...base, epc }))
+  const reportOf = new Map(base.links.map((l) => [l.masterId, base.engines?.clientReports.get(l.project)]))
+  const due = projectIds.filter((id) => { const sn = snaps.get(id); return !sn || Date.now() - sn.at > STALE_MS })
+  for (const id of due) {
+    await ensureEpcStores(id, { only: true })
+    const e = epcProgressOf(id, weightsFromReport(reportOf.get(id)))
+    epc.set(id, e); saveEpcSnapshot(id, e)
+    onFirst?.(pickerProgress({ ...base, epc: new Map(epc) }))
+  }
   return pickerProgress({ ...base, epc })
 }
 

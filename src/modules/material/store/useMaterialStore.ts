@@ -1,5 +1,6 @@
 import { explainMaterialError } from '../lib/control/errors'
 import { create } from 'zustand'
+import { addCoverage, covers, EMPTY_COVERAGE, mergePatch, onScopeChange, resolveScope, scopedSelect, type Coverage, type ScopeRequest, type TableScope } from '../../../lib/projectScope'
 import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
 import type {
@@ -80,7 +81,9 @@ interface MaterialState {
   loading: boolean
   loaded: boolean
 
-  fetchAll: () => Promise<void>
+  fetchAll: (opts?: { scope?: ScopeRequest }) => Promise<void>
+  /** which projects are in memory (lib/projectScope) */
+  coverage: Coverage
 
   createMtoRevision: (masterProjectId: string, data: Partial<MtoRevision>) => Promise<string | null>
   updateMtoRevision: (id: string, data: Partial<MtoRevision>) => Promise<void>
@@ -127,6 +130,23 @@ interface MaterialState {
   recordConsumption: (id: string, additionalQuantity: number) => Promise<void>
 }
 
+/** how each table reaches its project (lib/projectScope); tables not listed are shared */
+const TABLES: Record<string, TableScope> = {
+  mtl_mto_revisions: { col: 'master_project_id' }, mtl_materials: { col: 'master_project_id' }, mtl_procurement_requests: { col: 'master_project_id' },
+  mtl_procurement_lines: { col: 'master_project_id', path: [['mtl_procurement_requests', 'mtl_procurement_lines_request_id_fkey']] },
+  mtl_purchase_orders: { col: 'master_project_id' }, mtl_po_lines: { col: 'master_project_id', path: [['mtl_purchase_orders', 'mtl_po_lines_po_id_fkey']] },
+  mtl_manufacturing: { col: 'master_project_id', path: [['mtl_po_lines', 'mtl_manufacturing_po_line_id_fkey'], ['mtl_purchase_orders', 'mtl_po_lines_po_id_fkey']] },
+  mtl_release_notes: { col: 'master_project_id' }, mtl_release_lines: { col: 'master_project_id', path: [['mtl_release_notes', 'mtl_release_lines_release_id_fkey']] },
+  mtl_shipments: { col: 'master_project_id' }, mtl_shipment_lines: { col: 'master_project_id', path: [['mtl_shipments', 'mtl_shipment_lines_shipment_id_fkey']] },
+  mtl_warehouse_receipts: { col: 'master_project_id' }, mtl_warehouse_lines: { col: 'master_project_id', path: [['mtl_warehouse_receipts', 'mtl_warehouse_lines_receipt_id_fkey']] },
+  mtl_allocations: { col: 'master_project_id' },
+}
+/** store lists that belong to a project through a parent list: [field, parent list] */
+const CHILDREN: Record<string, [string, string]> = {
+  procurementLines: ['requestId', 'procurementRequests'], poLines: ['poId', 'purchaseOrders'], manufacturing: ['poLineId', 'poLines'],
+  releaseLines: ['releaseId', 'releaseNotes'], shipmentLines: ['shipmentId', 'shipments'], warehouseLines: ['receiptId', 'warehouseReceipts'],
+}
+
 export const useMaterialStore = create<MaterialState>()((set, get) => ({
   mtoRevisions: [],
   materials: [],
@@ -144,8 +164,12 @@ export const useMaterialStore = create<MaterialState>()((set, get) => ({
   allocations: [],
   loading: false,
   loaded: false,
+  coverage: EMPTY_COVERAGE,
 
-  fetchAll: async () => {
+  fetchAll: async (opts) => {
+    // inside a project only that project is read; other projects already in memory stay
+    const sc = resolveScope(opts?.scope)
+    const S = (name: string) => { const r = scopedSelect('*', TABLES[name], sc); const q = supabase.from(name).select(r.select as '*'); return r.key ? q.eq(r.key, sc as string) : q }
     set({ loading: true })
     const [
       { data: revisions, error: e1 },
@@ -163,27 +187,27 @@ export const useMaterialStore = create<MaterialState>()((set, get) => ({
       { data: whLines, error: e13 },
       { data: allocations, error: e14 },
     ] = await Promise.all([
-      supabase.from('mtl_mto_revisions').select('*').order('revision_date', { ascending: false }),
-      supabase.from('mtl_materials').select('*').order('line_no'),
-      supabase.from('mtl_procurement_requests').select('*').order('mr_date', { ascending: false }),
-      supabase.from('mtl_procurement_lines').select('*'),
-      supabase.from('mtl_purchase_orders').select('*').order('po_date', { ascending: false }),
-      supabase.from('mtl_po_lines').select('*'),
-      supabase.from('mtl_manufacturing').select('*'),
-      supabase.from('mtl_release_notes').select('*').order('release_date', { ascending: false }),
-      supabase.from('mtl_release_lines').select('*'),
-      supabase.from('mtl_shipments').select('*').order('shipment_date', { ascending: false }),
-      supabase.from('mtl_shipment_lines').select('*'),
-      supabase.from('mtl_warehouse_receipts').select('*').order('receipt_date', { ascending: false }),
-      supabase.from('mtl_warehouse_lines').select('*'),
-      supabase.from('mtl_allocations').select('*').order('allocation_date', { ascending: false }),
+      S('mtl_mto_revisions').order('revision_date', { ascending: false }),
+      S('mtl_materials').order('line_no'),
+      S('mtl_procurement_requests').order('mr_date', { ascending: false }),
+      S('mtl_procurement_lines'),
+      S('mtl_purchase_orders').order('po_date', { ascending: false }),
+      S('mtl_po_lines'),
+      S('mtl_manufacturing'),
+      S('mtl_release_notes').order('release_date', { ascending: false }),
+      S('mtl_release_lines'),
+      S('mtl_shipments').order('shipment_date', { ascending: false }),
+      S('mtl_shipment_lines'),
+      S('mtl_warehouse_receipts').order('receipt_date', { ascending: false }),
+      S('mtl_warehouse_lines'),
+      S('mtl_allocations').order('allocation_date', { ascending: false }),
     ])
     const firstError = e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6 ?? e7 ?? e8 ?? e9 ?? e10 ?? e11 ?? e12 ?? e13 ?? e14
     if (reportError('بارگذاری داده‌های تامین کالا', firstError)) {
       set({ loading: false })
       return
     }
-    set({
+    set(mergePatch(get(), {
       mtoRevisions: (revisions ?? []).map(mtoRevisionFromRow),
       materials: (materials ?? []).map(materialFromRow),
       procurementRequests: (requests ?? []).map(procurementRequestFromRow),
@@ -198,9 +222,9 @@ export const useMaterialStore = create<MaterialState>()((set, get) => ({
       warehouseReceipts: (receipts ?? []).map(warehouseReceiptFromRow),
       warehouseLines: (whLines ?? []).map(warehouseLineFromRow),
       allocations: (allocations ?? []).map(allocationFromRow),
-      loading: false,
-      loaded: true,
-    })
+    }, sc, CHILDREN))
+    const coverage = addCoverage(get().coverage, sc)
+    set({ coverage, loading: false, loaded: covers(coverage, sc) })
   },
 
   createMtoRevision: async (masterProjectId, data) => {
@@ -401,3 +425,6 @@ export const useMaterialStore = create<MaterialState>()((set, get) => ({
     await get().fetchAll()
   },
 }))
+
+// entering another project (or leaving for the hub/portfolio): read again unless that scope is already in memory
+onScopeChange((sc) => { useMaterialStore.setState({ loaded: covers(useMaterialStore.getState().coverage, sc) }) })

@@ -9,20 +9,34 @@ import { combineEpc, EQUAL_EPC_WEIGHTS, weightsFromReport, type EpcProgress, typ
 import { todayTehran } from '../../lib/today'
 import { ensureSpEpc, spConstructionOf, spDatesOf } from '../stationpiping/spEpc'
 import { blendConstruction } from '../stationpiping/lib/spCore'
+import { covers, insideProject } from '../../lib/projectScope'
 
-let loading: Promise<void> | null = null
-/** Loads the engineering / material / execution stores once (they hold every project the user may read). */
-export function ensureEpcStores(): Promise<void> {
+const loadingBy = new Map<string, Promise<void>>()
+/**
+ * Loads what the EPC progress reads (engineering / material / execution / stations). Inside a project only that
+ * project is read — the one asked for, or the open one. Outside a project (portfolio, the project picker) every project
+ * is read in one go, since those pages compare many projects. Each store keeps what it already holds.
+ */
+export function ensureEpcStores(projectId?: string | null, opts?: { only?: boolean }): Promise<void> {
+  // `only`: that one project even outside a project (the picker refreshing one card)
+  const sc = opts?.only && projectId ? projectId : insideProject() ? (projectId ?? insideProject()) : null
+  const req = sc ?? 'all'
   const ex = useExecutionStore.getState(), epc = useEpcStore.getState(), ms = useMaterialStore.getState(), cs = useMaterialControlStore.getState()
-  if (ex.coreLoaded && epc.loaded && ms.loaded && cs.loaded) return ensureSpEpc()
-  loading ??= Promise.all([
-    ensureSpEpc(),
-    ex.coreLoaded ? null : ex.fetchAll({ lite: true }),
-    epc.loaded ? null : epc.fetchAll(),
-    ms.loaded ? null : ms.fetchAll(),
-    cs.loaded ? null : cs.fetchAll(),
-  ]).then(() => undefined, () => undefined).finally(() => { loading = null })
-  return loading
+  const need = [!covers(ex.coverage.core, sc), !covers(epc.coverage, sc), !covers(ms.coverage, sc), !covers(cs.coverage, sc)]
+  if (!need.some(Boolean)) return ensureSpEpc(req)
+  const key = sc ?? '*'
+  let p = loadingBy.get(key)
+  if (!p) {
+    p = Promise.all([
+      ensureSpEpc(req),
+      need[0] ? ex.fetchAll({ lite: true, scope: req }) : null,
+      need[1] ? epc.fetchAll({ scope: req }) : null,
+      need[2] ? ms.fetchAll({ scope: req }) : null,
+      need[3] ? cs.fetchAll({ scope: req }) : null,
+    ]).then(() => undefined, () => undefined).finally(() => { loadingBy.delete(key) })
+    loadingBy.set(key, p)
+  }
+  return p
 }
 
 /**
@@ -80,7 +94,7 @@ export function epcProgressOf(projectId: string, fallback?: EpcWeights | null, t
 
 /** Loads the modules if needed, then one project's EPC progress weighted by its Stage-Gate client report (equal otherwise). */
 export async function loadEpcProgress(projectId: string, clientReport?: Record<string, unknown> | null): Promise<EpcProgress> {
-  await ensureEpcStores()
+  await ensureEpcStores(projectId)
   return epcProgressOf(projectId, weightsFromReport(clientReport))
 }
 

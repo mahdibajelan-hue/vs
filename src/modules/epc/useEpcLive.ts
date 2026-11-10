@@ -32,7 +32,7 @@ export function useEpcLive(projectId: string | null): EpcLive | null | 'loading'
     if (!projectId) { setOut(null); return }
     let live = true
     void (async () => {
-      const [lc] = await Promise.all([loadLifecycleInputs(projectId).catch(() => null), ensureEpcStores()])
+      const [lc] = await Promise.all([loadLifecycleInputs(projectId).catch(() => null), ensureEpcStores(projectId)])
       if (!live) return
       // the same weights as the project dashboard: module values, else the client report's E/P/C weights, else equal
       const w = weightsFromReport(lc?.clientReport)

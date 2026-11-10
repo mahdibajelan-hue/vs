@@ -59,7 +59,7 @@ export function perfOf(m: ProjectMetrics): NonNullable<ExternalCounts['perf']> {
 
 /** Everything the project dashboard shows, from the modules' own data and engines. */
 export async function loadProjectMetrics(masterProjectId: string): Promise<ProjectSnapshot | null> {
-  const [lc, risk, bundle] = await Promise.all([loadLifecycleInputs(masterProjectId), riskPicture(masterProjectId), loadStageGateBundle(masterProjectId).catch(() => null), ensureEpcStores(), ensureFinance()])
+  const [lc, risk, bundle] = await Promise.all([loadLifecycleInputs(masterProjectId), riskPicture(masterProjectId), loadStageGateBundle(masterProjectId).catch(() => null), ensureEpcStores(masterProjectId), ensureFinance()])
   if (!lc) return null
   const today = todayTehran()
   const weights = weightsFromReport(lc.clientReport)

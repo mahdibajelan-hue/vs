@@ -58,11 +58,13 @@ export async function saveSettings(pid: string, x: SpSettings, by: string): Prom
 }
 
 /** what the EPC progress needs of every project's stations (all the projects the user can read, in one pass) */
-export async function loadForEpc() {
+/** pid: only that project's stations (the radar / a project); without it every project (portfolio) */
+export async function loadForEpc(pid?: string | null) {
   const page = async (table: string, cols: string): Promise<Row[]> => {
     const out: Row[] = []
     for (let from = 0; ; from += 1000) {
-      const r = await supabase.from(table).select(cols).eq('archived', false).order('id').range(from, from + 999)
+      const q = supabase.from(table).select(cols).eq('archived', false)
+      const r = await (pid ? q.eq('master_project_id', pid) : q).order('id').range(from, from + 999)
       chk(r); out.push(...((r.data ?? []) as unknown as Row[]))
       if ((r.data ?? []).length < 1000) return out
     }
@@ -70,7 +72,7 @@ export async function loadForEpc() {
   const [st, it, lg, wd, cfg] = await Promise.all([
     page('sp_stations', '*'), page('sp_items', '*'), page('sp_logs', 'id, master_project_id, station_id, item_id, at, qty'),
     page('sp_welds', 'id, master_project_id, station_id, weld_no, size_in, joint_type, weld_date, ndt_method, ndt_date, ndt_result, repairs, buried, blast_date, coat_date'),
-    supabase.from('sp_settings').select('*').then((r) => (r.error ? [] : ((r.data ?? []) as Row[]))),
+    (pid ? supabase.from('sp_settings').select('*').eq('master_project_id', pid) : supabase.from('sp_settings').select('*')).then((r) => (r.error ? [] : ((r.data ?? []) as Row[]))),
   ])
   const by = new Map<string, { stations: StationRec[]; items: Item[]; logs: Log[]; welds: Weld[]; settings: SpSettings }>()
   const get = (pid: string) => { let v = by.get(pid); if (!v) by.set(pid, (v = { stations: [], items: [], logs: [], welds: [], settings: DEFAULT_SP_SETTINGS })); return v }

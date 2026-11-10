@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { addCoverage, covers, EMPTY_COVERAGE, mergePatch, onScopeChange, resolveScope, scopedSelect, type Coverage, type ScopeRequest, type TableScope } from '../../../lib/projectScope'
 import { supabase } from '../../../lib/supabaseClient'
 import type { WeldBasis, WeldLine, WeldSet } from '../lib/control/weldPlan'
 import { explainMaterialError } from '../lib/control/errors'
@@ -52,7 +53,9 @@ interface State {
   settings: MtlSettings
   settingsVersion: number
   people: Map<string, string>
-  fetchAll: () => Promise<void>
+  fetchAll: (opts?: { scope?: ScopeRequest }) => Promise<void>
+  /** which projects are in memory (lib/projectScope) */
+  coverage: Coverage
   can: (projectId: string, action: string) => boolean
   myRoles: (projectId: string) => MtlRole[]
   // configuration (configurators)
@@ -110,7 +113,23 @@ interface State {
 }
 
 let lookupsPromise: Promise<void> | null = null
-const initial = { loaded: false, loading: false, groups: [], units: [], stageDefs: [], patterns: [], patternWeights: [], packages: [], items: [], stages: [], baselines: [], changes: [], txns: [], norms: [], discrepancies: [], links: [], linkTargets: new Map<string, LinkTarget>(), roles: [], lookups: [], weldSets: [], weldLines: [], requisitions: [], reqLines: [], reqSigners: [], settings: DEFAULT_MTL_SETTINGS, settingsVersion: 0, people: new Map<string, string>() }
+const initial = { loaded: false, loading: false, coverage: EMPTY_COVERAGE as Coverage, groups: [], units: [], stageDefs: [], patterns: [], patternWeights: [], packages: [], items: [], stages: [], baselines: [], changes: [], txns: [], norms: [], discrepancies: [], links: [], linkTargets: new Map<string, LinkTarget>(), roles: [], lookups: [], weldSets: [], weldLines: [], requisitions: [], reqLines: [], reqSigners: [], settings: DEFAULT_MTL_SETTINGS, settingsVersion: 0, people: new Map<string, string>() }
+
+/** how each table reaches its project (lib/projectScope); tables not listed are shared lookups */
+const TABLES: Record<string, TableScope> = {
+  mtl_packages: { col: 'master_project_id' }, mtl_baselines: { col: 'master_project_id' }, mtl_changes: { col: 'master_project_id' }, mtl_txns: { col: 'master_project_id' },
+  mtl_norms: { col: 'master_project_id' }, mtl_discrepancies: { col: 'master_project_id' }, mtl_links: { col: 'master_project_id' }, mtl_lookups: { col: 'master_project_id' },
+  mtl_weld_sets: { col: 'master_project_id' }, mtl_requisitions: { col: 'master_project_id' }, mtl_project_roles: { col: 'project_id' },
+  mtl_package_items: { col: 'master_project_id', path: [['mtl_packages', 'mtl_package_items_package_id_fkey']] },
+  mtl_item_stages: { col: 'master_project_id', path: [['mtl_package_items', 'mtl_item_stages_item_id_fkey'], ['mtl_packages', 'mtl_package_items_package_id_fkey']] },
+  mtl_requisition_lines: { col: 'master_project_id', path: [['mtl_requisitions', 'mtl_requisition_lines_requisition_id_fkey']] },
+  mtl_requisition_signers: { col: 'master_project_id', path: [['mtl_requisitions', 'mtl_requisition_signers_requisition_id_fkey']] },
+  mtl_weld_lines: { col: 'master_project_id', path: [['mtl_weld_sets', 'mtl_weld_lines_set_id_fkey']] },
+}
+/** store lists that belong to a project through a parent list: [field, parent list] */
+const CHILDREN: Record<string, [string, string]> = {
+  items: ['packageId', 'packages'], stages: ['itemId', 'items'], reqLines: ['requisitionId', 'requisitions'], reqSigners: ['requisitionId', 'requisitions'], weldLines: ['setId', 'weldSets'],
+}
 
 export const useMaterialControlStore = create<State>((set, get) => ({
   ...initial,
@@ -124,9 +143,11 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     })().finally(() => { lookupsPromise = null })
     return lookupsPromise
   },
-  fetchAll: async () => {
+  fetchAll: async (opts) => {
+    // inside a project only that project is read; other projects already in memory stay
+    const sc = resolveScope(opts?.scope)
     set({ loading: true })
-    const t = (name: string) => supabase.from(name).select('*')
+    const t = (name: string) => { const r = scopedSelect('*', TABLES[name], sc); const q = supabase.from(name).select(r.select as '*'); return r.key ? q.eq(r.key, sc as string) : q }
     const [groups, units, defs, pats, pw, pkgs, items, stages, bases, chg, txns, norms, disc, links, roles, sets, profs, reqs, reqLn, reqSg, lks, wsets, wlines] = await Promise.all([
       t('mtl_groups').order('sort'), t('mtl_units'), t('mtl_stage_defs').order('sort'), t('mtl_patterns'), t('mtl_pattern_weights'), t('mtl_packages'), t('mtl_package_items'), t('mtl_item_stages'), t('mtl_baselines').order('version'),
       t('mtl_changes').order('requested_at', { ascending: false }), t('mtl_txns').order('txn_date', { ascending: false }), t('mtl_norms'), t('mtl_discrepancies'), t('mtl_links'), t('mtl_project_roles'),
@@ -150,7 +171,7 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     const inForce = [...versions].reverse().find((v) => v.valid_from <= today)
     const settings: MtlSettings = { ...DEFAULT_MTL_SETTINGS, ...(inForce?.values_json ?? {}), priority: { ...DEFAULT_MTL_SETTINGS.priority, ...(inForce?.values_json?.priority ?? {}) } }
     const n = (x: unknown) => Number(x)
-    set({
+    set(mergePatch(get(), {
       groups: ok<Row>(groups).map((r): MtlGroup => ({ id: r.id, code: r.code, title: r.title, measureKind: r.measure_kind, defaultUnit: r.default_unit, isConsumable: !!r.is_consumable, scrapAllowPct: r.scrap_allow_pct == null ? null : n(r.scrap_allow_pct), patternId: r.pattern_id, leadTimeDays: r.lead_time_days, criticality: r.criticality, sort: r.sort, active: !!r.active })),
       units: ok<Row>(units).map((r): MtlUnit => ({ code: r.code, label: r.label, kind: r.kind, baseCode: r.base_code, toBase: n(r.to_base), active: !!r.active })),
       stageDefs: ok<Row>(defs).map((r): StageDef => ({ key: r.key, title: r.title, sort: r.sort, reviewLevel: r.review_level, needsEvidence: !!r.needs_evidence, active: !!r.active })),
@@ -165,7 +186,6 @@ export const useMaterialControlStore = create<State>((set, get) => ({
       norms: ok<Row>(norms).map((r): MtlNorm => ({ id: r.id, masterProjectId: r.master_project_id, materialId: r.material_id, groupId: r.group_id, workOp: r.work_op ?? '', perUnit: r.per_unit ?? '', qtyPerUnit: n(r.qty_per_unit), notes: r.notes ?? '' })),
       discrepancies: ok<Row>(disc).map((r): MtlDiscrepancy => ({ id: r.id, masterProjectId: r.master_project_id, materialId: r.material_id, packageId: r.package_id, kind: r.kind, source: r.source, fingerprint: r.fingerprint, diffQty: r.diff_qty == null ? null : n(r.diff_qty), probableCause: r.probable_cause ?? '', usageLocation: r.usage_location ?? '', impact: r.impact ?? '', responsible: r.responsible, dueDate: r.due_date, status: r.status, resolution: r.resolution ?? '', decidedBy: r.decided_by, decidedAt: r.decided_at, detectedAt: r.detected_at })),
       links: linkRows.map((r): MtlLink => ({ id: r.id, masterProjectId: r.master_project_id, sourceType: r.source_type, sourceId: r.source_id, targetType: r.target_type, targetId: r.target_id, rel: r.rel, label: r.label ?? '', createdAt: r.created_at })),
-      linkTargets: targets,
       roles: ok<Row>(roles).map((r): ProjectRole => ({ id: r.id, projectId: r.project_id, userId: r.user_id, role: r.role, organizationId: r.organization_id, active: !!r.active })),
       weldSets: ok<Row>(wsets).map((r): WeldSet => ({ id: r.id, masterProjectId: r.master_project_id, title: r.title, jointSize: r.joint_size ?? '', thickness: r.thickness ?? '', process: r.process ?? '', jointCount: n(r.joint_count), pipeLengthM: n(r.pipe_length_m), notes: r.notes ?? '' })),
       weldLines: ok<Row>(wlines).map((r): WeldLine => ({ id: r.id, setId: r.set_id, materialId: r.material_id, qtyPerJoint: n(r.qty_per_joint), basis: r.basis === 'meter' ? 'meter' : 'joint', notes: r.notes ?? '' })),
@@ -174,9 +194,11 @@ export const useMaterialControlStore = create<State>((set, get) => ({
       reqLines: ok<Row>(reqLn).map((r): RequisitionLine => ({ id: r.id, requisitionId: r.requisition_id, materialId: r.material_id, qtyRequested: n(r.qty_requested), stockAtRequest: n(r.stock_at_request), qtyIssued: n(r.qty_issued), notes: r.notes ?? '' })),
       reqSigners: ok<Row>(reqSg).map((r): RequisitionSigner => ({ id: r.id, requisitionId: r.requisition_id, role: r.role, sort: r.sort, userId: r.user_id, decision: r.decision, signedAt: r.signed_at, note: r.note ?? '', signatureImage: r.signature_image })),
       settings, settingsVersion: inForce?.version ?? 0,
-      people: new Map(ok<Row>(profs).map((p) => [p.id as string, (p.full_name as string) || 'کاربر'])),
-      loaded: true, loading: false,
-    })
+      people: new Map([...(sc ? get().people : []), ...ok<Row>(profs).map((p) => [p.id as string, (p.full_name as string) || 'کاربر'] as [string, string])]),
+      linkTargets: new Map([...(sc ? get().linkTargets : []), ...targets]),
+    }, sc, CHILDREN))
+    const coverage = addCoverage(get().coverage, sc)
+    set({ coverage, loaded: covers(coverage, sc), loading: false })
   },
 
   myRoles: (projectId) => {
@@ -463,3 +485,6 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     return ((data ?? []) as Row[]).map((r): AuditRow => ({ id: r.id, at: r.at, actor: r.actor, tableName: r.table_name, rowId: r.row_id, masterProjectId: r.master_project_id, action: r.action, oldRow: r.old_row, newRow: r.new_row }))
   },
 }))
+
+// entering another project (or leaving for the hub/portfolio): read again unless that scope is already in memory
+onScopeChange((sc) => { useMaterialControlStore.setState({ loaded: covers(useMaterialControlStore.getState().coverage, sc) }) })
