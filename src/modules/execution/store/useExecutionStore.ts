@@ -5,6 +5,7 @@ import { useAuthStore } from '../../../store/useAuthStore'
 import { explainExecutionError } from '../lib/errors'
 import { weightsByValue, type ParsedBook } from '../lib/priceBookImport'
 import { roleAllows } from '../lib/perms'
+import { addCoverage, covers, EMPTY_COVERAGE, mergeRows, onScopeChange, resolveScope, viaParent, type Coverage, type ScopeRequest } from '../../../lib/projectScope'
 import {
   DEFAULT_EX_SETTINGS, type Activity, type Baseline, type BaselineLine, type DetectedGap, type ExProjectRole, type ExRole, type ExSettings, type FormMap, type Gap, type GapStatus, type PriceBook, type PriceItem,
   type Report, type ReportHistory, type ReportLine, type ReportResource, type ReportStatus, type Stoppage,
@@ -40,7 +41,9 @@ interface State {
   focusTab: 'review' | 'daily' | 'gaps' | 'delays' | null
   setFocus: (id: string | null, tab?: 'review' | 'daily' | 'gaps' | 'delays') => void
   /** lite: only what other modules (the schedule) read — skips the price list, report history, gap items and people names; `loaded` stays false so the execution module itself still loads everything */
-  fetchAll: (opts?: { lite?: boolean }) => Promise<void>
+  fetchAll: (opts?: { lite?: boolean; scope?: ScopeRequest }) => Promise<void>
+  /** which projects are in memory: `core` = the lite set, `full` = everything the module itself shows */
+  coverage: { core: Coverage; full: Coverage }
   /** re-reads only the given reports (row, lines, resources, stoppages, history) — the daily save / send / review path, instead of reloading every project */
   reloadReports: (ids: string[]) => Promise<void>
   myRoles: (projectId: string) => ExRole[]
@@ -86,7 +89,7 @@ async function archiveIfDone(r: { id: string; formKey: string; status: string } 
   const { useEpcStore } = await import('./useEpcStore')
   await useEpcStore.getState().archiveReport(r.id, true)
 }
-const initial = { loaded: false, coreLoaded: false, loading: false, roles: [], settingsByProject: new Map<string, ExSettings>(), books: [], priceItems: [], activities: [], baselines: [], blines: [], reports: [], lines: [], resources: [], stoppages: [], history: [], maps: [], gaps: [], people: new Map<string, string>(), focusReportId: null as string | null, focusTab: null as 'review' | 'daily' | 'gaps' | 'delays' | null }
+const initial = { loaded: false, coreLoaded: false, loading: false, coverage: { core: EMPTY_COVERAGE, full: EMPTY_COVERAGE }, roles: [], settingsByProject: new Map<string, ExSettings>(), books: [], priceItems: [], activities: [], baselines: [], blines: [], reports: [], lines: [], resources: [], stoppages: [], history: [], maps: [], gaps: [], people: new Map<string, string>(), focusReportId: null as string | null, focusTab: null as 'review' | 'daily' | 'gaps' | 'delays' | null }
 
 const actRow = (r: Row): Activity => ({ id: r.id, projectId: r.project_id, priceItemId: r.price_item_id, itemNo: r.item_no ?? '', title: r.title, unit: r.unit ?? '', chapter: r.chapter ?? '', kind: r.kind, baseQty: n(r.base_qty), unitPrice: n(r.unit_price), weight: n(r.weight), weightGroup: r.weight_group ?? '', metric: r.metric ?? '', area: r.area ?? '', front: r.front ?? '', station: r.station ?? '', kmFrom: nn(r.km_from), kmTo: nn(r.km_to), plannedStart: r.planned_start, plannedEnd: r.planned_end, active: !!r.active, approval: r.approval, approvalNote: r.approval_note ?? '', sort: r.sort ?? 0, note: r.note ?? '', rowNo: r.row_no ?? '', spec: r.spec ?? '', remark: r.remark ?? '', chapterNo: r.chapter_no ?? '', parentActivityId: r.parent_activity_id, surchargePct: nn(r.surcharge_pct), bookId: r.book_id })
 export const repRow = (r: Row): Report => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, reportNo: r.report_no, reportDate: r.report_date, contractorOrgId: r.contractor_org_id, front: r.front ?? '', station: r.station ?? '', shift: r.shift ?? 'day', status: r.status, data: r.data ?? {}, notes: r.notes ?? '', missing: Array.isArray(r.missing) ? r.missing : [], completionOf: r.completion_of, dueDate: r.due_date, createdBy: r.created_by, createdAt: r.created_at, submittedBy: r.submitted_by, submittedAt: r.submitted_at, reviewedBy: r.reviewed_by, reviewedAt: r.reviewed_at, reviewNote: r.review_note ?? '', letterhead: r.letterhead ?? null })
@@ -102,37 +105,56 @@ export const useExecutionStore = create<State>((set, get) => ({
   setFocus: (id, tab) => set({ focusReportId: id, focusTab: id ? tab ?? null : null }),
   fetchAll: async (opts) => {
     const lite = opts?.lite === true
+    // inside a project only that project is read; other projects already in memory stay (see lib/projectScope)
+    const sc = resolveScope(opts?.scope)
     set({ loading: true })
-    const t = (name: string) => supabase.from(name).select('*')
+    const t = (name: string, col = 'project_id') => { const q = supabase.from(name).select('*'); return sc ? q.eq(col, sc) : q }
+    const child = (name: string, parent: string, fk: string) => { const q = supabase.from(name).select(viaParent('*', parent, fk, 'project_id', sc)); return sc ? q.eq('__p.project_id', sc) : q }
     const none = Promise.resolve({ data: [] as Row[], error: null })
     const [roles, sets, books, items, acts, bases, blines, reps, lns, res, stp, his, maps, gaps, profs] = await Promise.all([
-      t('ex_project_roles'), t('ex_settings'), lite ? none : t('ex_price_books').order('created_at'), lite ? none : t('ex_price_items'), t('ex_activities').order('sort'), t('ex_baselines').order('version'), t('ex_baseline_lines'),
-      t('ex_reports').order('report_date', { ascending: false }), t('ex_report_lines').order('line_no'), t('ex_report_resources'), t('ex_report_stoppages'), lite ? none : t('ex_report_history').order('at', { ascending: false }).limit(2000), t('ex_form_activity_map'), lite ? none : t('ex_gap_items'),
+      t('ex_project_roles'), t('ex_settings'), lite ? none : t('ex_price_books').order('created_at'), lite ? none : child('ex_price_items', 'ex_price_books', 'ex_price_items_book_id_fkey'), t('ex_activities').order('sort'), t('ex_baselines').order('version'), child('ex_baseline_lines', 'ex_baselines', 'ex_baseline_lines_baseline_id_fkey'),
+      t('ex_reports').order('report_date', { ascending: false }), child('ex_report_lines', 'ex_reports', 'ex_report_lines_report_id_fkey').order('line_no'), child('ex_report_resources', 'ex_reports', 'ex_report_resources_report_id_fkey'), child('ex_report_stoppages', 'ex_reports', 'ex_report_stoppages_report_id_fkey'), lite ? none : child('ex_report_history', 'ex_reports', 'ex_report_history_report_id_fkey').order('at', { ascending: false }).limit(2000), t('ex_form_activity_map'), lite ? none : t('ex_gap_items'),
       lite ? none : supabase.from('profiles').select('id, full_name'),
     ])
     // an un-migrated database leaves these empty rather than breaking the module
     const ok = <T,>(r: { data: T[] | null; error: unknown }): T[] => (r.error ? [] : r.data ?? [])
-    const sm = new Map<string, ExSettings>()
+    const cur = get()
+    // children follow their parent's project: drop the old children of this project's parents, add the fresh ones
+    const reportsNew = ok<Row>(reps).map(repRow)
+    const reports = mergeRows(cur.reports, reportsNew, sc, (r) => r.projectId)
+    const oldReportIds = new Set(sc ? cur.reports.filter((r) => r.projectId === sc).map((r) => r.id) : [])
+    const kidsOf = <T extends { reportId: string }>(old: T[], fresh: T[]) => (sc ? [...old.filter((x) => !oldReportIds.has(x.reportId)), ...fresh] : fresh)
+    const basesNew = ok<Row>(bases).map((r): Baseline => ({ id: r.id, projectId: r.project_id, version: r.version, status: r.status, reason: r.reason ?? '', effectiveDate: r.effective_date, createdAt: r.created_at, approvedAt: r.approved_at }))
+    const oldBaseIds = new Set(sc ? cur.baselines.filter((b) => b.projectId === sc).map((b) => b.id) : [])
+    const blinesNew = ok<Row>(blines).map((r): BaselineLine => ({ id: r.id, baselineId: r.baseline_id, activityId: r.activity_id, itemNo: r.item_no ?? '', title: r.title ?? '', unit: r.unit ?? '', baseQty: n(r.base_qty), weight: n(r.weight), unitPrice: n(r.unit_price), weightGroup: r.weight_group ?? '', active: !!r.active }))
+    const sm = new Map<string, ExSettings>(sc ? [...cur.settingsByProject].filter(([k]) => k !== sc) : [])
     for (const r of ok<Row>(sets)) sm.set(r.project_id, { ...DEFAULT_EX_SETTINGS, ...(r.values_json ?? {}) })
+    const coverage = { core: addCoverage(cur.coverage.core, sc), full: lite ? cur.coverage.full : addCoverage(cur.coverage.full, sc) }
     set({
-      roles: ok<Row>(roles).map((r): ExProjectRole => ({ id: r.id, projectId: r.project_id, userId: r.user_id, role: r.role, organizationId: r.organization_id, active: !!r.active })),
+      roles: mergeRows(cur.roles, ok<Row>(roles).map((r): ExProjectRole => ({ id: r.id, projectId: r.project_id, userId: r.user_id, role: r.role, organizationId: r.organization_id, active: !!r.active })), sc, (r) => r.projectId),
       settingsByProject: sm,
-      activities: ok<Row>(acts).map(actRow),
-      baselines: ok<Row>(bases).map((r): Baseline => ({ id: r.id, projectId: r.project_id, version: r.version, status: r.status, reason: r.reason ?? '', effectiveDate: r.effective_date, createdAt: r.created_at, approvedAt: r.approved_at })),
-      blines: ok<Row>(blines).map((r): BaselineLine => ({ id: r.id, baselineId: r.baseline_id, activityId: r.activity_id, itemNo: r.item_no ?? '', title: r.title ?? '', unit: r.unit ?? '', baseQty: n(r.base_qty), weight: n(r.weight), unitPrice: n(r.unit_price), weightGroup: r.weight_group ?? '', active: !!r.active })),
-      reports: ok<Row>(reps).map(repRow),
-      lines: ok<Row>(lns).map(lineRow),
-      resources: ok<Row>(res).map(resRow),
-      stoppages: ok<Row>(stp).map(stopRow),
-      maps: ok<Row>(maps).map((r): FormMap => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, metricKey: r.metric_key, groupValue: r.group_value ?? '', activityId: r.activity_id })),
-      ...(lite ? {} : {
-      books: ok<Row>(books).map((r): PriceBook => ({ id: r.id, projectId: r.project_id, discipline: r.discipline ?? '', year: r.year, season: r.season ?? '', title: r.title, version: r.version, status: r.status, note: r.note ?? '' })),
-      priceItems: ok<Row>(items).map((r): PriceItem => ({ id: r.id, bookId: r.book_id, chapter: r.chapter ?? '', itemNo: r.item_no, spec: r.spec ?? '', description: r.description, unit: r.unit ?? '', unitPrice: n(r.unit_price), starred: !!r.starred, remark: r.remark ?? '', groupCode: r.group_code ?? '', groupTitle: r.group_title ?? '', parentItemNo: r.parent_item_no ?? '', surchargePct: nn(r.surcharge_pct) })),
-      history: ok<Row>(his).map(histRow),
-      gaps: ok<Row>(gaps).map((r): Gap => ({ id: r.id, projectId: r.project_id, fingerprint: r.fingerprint, kind: r.kind, formKey: r.form_key ?? '', periodKey: r.period_key ?? '', front: r.front ?? '', subject: r.subject ?? '', existing: r.existing ?? {}, missing: Array.isArray(r.missing) ? r.missing : [], responsible: r.responsible, dueDate: r.due_date, status: r.status, note: r.note ?? '', generatedReportId: r.generated_report_id })),
-      people: new Map(ok<Row>(profs).map((p) => [p.id as string, (p.full_name as string) || 'کاربر'])),
-      }),
-      loaded: lite ? get().loaded : true, coreLoaded: true, loading: false,
+      activities: mergeRows(cur.activities, ok<Row>(acts).map(actRow), sc, (r) => r.projectId),
+      baselines: mergeRows(cur.baselines, basesNew, sc, (r) => r.projectId),
+      blines: sc ? [...cur.blines.filter((l) => !oldBaseIds.has(l.baselineId)), ...blinesNew] : blinesNew,
+      reports,
+      lines: kidsOf(cur.lines, ok<Row>(lns).map(lineRow)),
+      resources: kidsOf(cur.resources, ok<Row>(res).map(resRow)),
+      stoppages: kidsOf(cur.stoppages, ok<Row>(stp).map(stopRow)),
+      maps: mergeRows(cur.maps, ok<Row>(maps).map((r): FormMap => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, metricKey: r.metric_key, groupValue: r.group_value ?? '', activityId: r.activity_id })), sc, (r) => r.projectId),
+      ...(lite ? {} : (() => {
+        const booksNew = ok<Row>(books).map((r): PriceBook => ({ id: r.id, projectId: r.project_id, discipline: r.discipline ?? '', year: r.year, season: r.season ?? '', title: r.title, version: r.version, status: r.status, note: r.note ?? '' }))
+        const oldBookIds = new Set(sc ? cur.books.filter((b) => b.projectId === sc).map((b) => b.id) : [])
+        const itemsNew = ok<Row>(items).map((r): PriceItem => ({ id: r.id, bookId: r.book_id, chapter: r.chapter ?? '', itemNo: r.item_no, spec: r.spec ?? '', description: r.description, unit: r.unit ?? '', unitPrice: n(r.unit_price), starred: !!r.starred, remark: r.remark ?? '', groupCode: r.group_code ?? '', groupTitle: r.group_title ?? '', parentItemNo: r.parent_item_no ?? '', surchargePct: nn(r.surcharge_pct) }))
+        return {
+          books: mergeRows(cur.books, booksNew, sc, (r) => r.projectId),
+          priceItems: sc ? [...cur.priceItems.filter((i) => !oldBookIds.has(i.bookId)), ...itemsNew] : itemsNew,
+          history: kidsOf(cur.history, ok<Row>(his).map(histRow)),
+          gaps: mergeRows(cur.gaps, ok<Row>(gaps).map((r): Gap => ({ id: r.id, projectId: r.project_id, fingerprint: r.fingerprint, kind: r.kind, formKey: r.form_key ?? '', periodKey: r.period_key ?? '', front: r.front ?? '', subject: r.subject ?? '', existing: r.existing ?? {}, missing: Array.isArray(r.missing) ? r.missing : [], responsible: r.responsible, dueDate: r.due_date, status: r.status, note: r.note ?? '', generatedReportId: r.generated_report_id })), sc, (r) => r.projectId),
+          people: new Map([...cur.people, ...ok<Row>(profs).map((p) => [p.id as string, (p.full_name as string) || 'کاربر'] as [string, string])]),
+        }
+      })()),
+      coverage,
+      loaded: covers(coverage.full, sc), coreLoaded: true, loading: false,
     })
   },
 
@@ -427,3 +449,9 @@ export const useExecutionStore = create<State>((set, get) => ({
   },
 }))
 export type { ReportStatus }
+
+// entering another project (or leaving for the hub/portfolio): the module reads again unless that scope is already in memory
+onScopeChange((sc) => {
+  const c = useExecutionStore.getState().coverage
+  useExecutionStore.setState({ coreLoaded: covers(c.core, sc), loaded: covers(c.full, sc) })
+})
