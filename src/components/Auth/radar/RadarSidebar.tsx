@@ -102,9 +102,8 @@ export function RadarSidebar({ project, active, canSee, badgeFor, desktop, pinne
 
   return (
     <MotionConfig reducedMotion="user" transition={{ duration: 0.34, ease }}>
-      <AnimatePresence>
-        {!desktop && mobileOpen && <motion.button key="scrim" type="button" className="pmenu-scrim" onClick={onMobileClose} aria-label="بستن منو" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />}
-      </AnimatePresence>
+      {/* always mounted and faded with CSS: an exit animation that never completes would leave a blurred layer over the page */}
+      {!desktop && <button type="button" className={`pmenu-scrim ${mobileOpen ? 'is-on' : ''}`} onClick={onMobileClose} aria-label="بستن منو" tabIndex={mobileOpen ? 0 : -1} aria-hidden={!mobileOpen || undefined} />}
       <motion.aside
         ref={asideRef}
         dir="rtl"

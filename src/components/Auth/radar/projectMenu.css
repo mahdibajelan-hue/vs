@@ -50,7 +50,8 @@
 }
 .pmenu.is-drawer { top: 8px; bottom: 8px; right: 8px; z-index: 81; }
 /* above module action buttons (floating «+» and the like) while the drawer is open */
-.pmenu-scrim { position: fixed; inset: 0; z-index: 80; background: rgba(2, 6, 23, 0.5); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); cursor: default; }
+.pmenu-scrim { position: fixed; inset: 0; z-index: 80; background: rgba(2, 6, 23, 0.5); cursor: default; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 240ms ease, visibility 0s linear 240ms; }
+.pmenu-scrim.is-on { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity 240ms ease; }
 .pmenu button { font: inherit; color: inherit; }
 .pmenu :focus-visible { outline: 2px solid color-mix(in srgb, var(--pm-text) 70%, transparent); outline-offset: 1px; }
 
