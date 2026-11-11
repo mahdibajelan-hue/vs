@@ -111,7 +111,7 @@ begin
       ('mtl_requisition_lines',   'exists (select 1 from mtl_requisitions q where q.id = mtl_requisition_lines.requisition_id and (is_admin_user() or rasta_user_can_access_master_project(q.master_project_id)))'),
       ('mtl_requisition_signers', 'exists (select 1 from mtl_requisitions q where q.id = mtl_requisition_signers.requisition_id and (is_admin_user() or rasta_user_can_access_master_project(q.master_project_id)))'),
       ('mtl_package_items',       'exists (select 1 from mtl_packages p where p.id = mtl_package_items.package_id and (is_admin_user() or rasta_user_can_access_master_project(p.master_project_id)))'),
-      ('mtl_item_stages',         'exists (select 1 from mtl_materials mm where mm.id = mtl_item_stages.item_id and (is_admin_user() or rasta_user_can_access_master_project(mm.master_project_id)))'),
+      ('mtl_item_stages',         'exists (select 1 from mtl_package_items pi join mtl_packages p on p.id = pi.package_id where pi.id = mtl_item_stages.item_id and (is_admin_user() or rasta_user_can_access_master_project(p.master_project_id)))'),
       ('mtl_weld_lines',          'exists (select 1 from mtl_weld_sets ws where ws.id = mtl_weld_lines.set_id and (is_admin_user() or rasta_user_can_access_master_project(ws.master_project_id)))'),
       -- ---- reporting ----
       ('rp_thresholds',        '(is_admin_user() or rasta_user_can_access_master_project(rp_thresholds.master_project_id))')
