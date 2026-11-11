@@ -1,4 +1,5 @@
 import { HEALTH_VERDICT_FA, HealthGuideButton, healthColor as healthColorOf } from '../../../modules/projectMetrics/HealthGuide'
+import { HEALTH_COLOR, statusFromScore } from '../../../modules/lifecycle/lib/health'
 import { useEffect, type CSSProperties } from 'react'
 import { Activity, ArrowLeftRight, ArrowRight, ChevronLeft, Clock3, RefreshCw, ShieldAlert } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -29,7 +30,11 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
   // coming back from a module the window may still be scrolled down
   useEffect(() => { window.scrollTo(0, 0) }, [])
   // colour = the health verdict (worst dimension) when known, so the ring and the status always agree
-  const statusColor = data.healthDetail ? healthColorOf(data.healthDetail) : STATUS_COLOR[data.status]
+  // The ring is always coloured by health severity: a blocked gate (black verdict) shows its
+  // score's severity colour, never grey — the gate-blocked state is conveyed by the label, not by
+  // draining the colour out of the gauge.
+  const hd0 = data.healthDetail
+  const statusColor = hd0 ? (hd0.status === 'black' ? HEALTH_COLOR[statusFromScore(hd0.score)] : healthColorOf(hd0)) : STATUS_COLOR[data.status]
   const code = project.projectIdCode || project.projectCode
   const items = PROJECT_NAV.flatMap((g) => g.items)
   const open = (module: ModuleKey) => { const it = items.find((i) => i.module === module); if (it && canSee(module)) onItem(it) }

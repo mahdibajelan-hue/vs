@@ -7,6 +7,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { ModuleKey } from '../../../store/useModuleStore'
 import { formatJalaliFa } from '../../../lib/jalali'
 import { HEALTH_VERDICT_FA, HealthGuideButton, healthColor as healthColorOf } from '../../../modules/projectMetrics/HealthGuide'
+import { HEALTH_COLOR, statusFromScore } from '../../../modules/lifecycle/lib/health'
 import { HEALTH_DIMENSION_LABEL_FA } from '../../../modules/lifecycle/types'
 import { ModuleHeaderActions } from '../../common/ModuleHeaderActions'
 import { RadarDisplay } from './RadarDisplay'
@@ -53,7 +54,9 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
   const shown = cat === 'all' ? signals : signals.filter((s) => s.category === cat)
   const counts = useMemo(() => Object.fromEntries(CAT_ORDER.map((c) => [c, signals.filter((s) => s.category === c).length])) as Record<SignalCategory, number>, [signals])
   const hd = data.healthDetail
-  const statusColor = hd ? healthColorOf(hd) : STATUS_COLOR[data.status]
+  // A blocked gate (black verdict) still shows its score's severity colour, never grey — the ring is
+  // always coloured; the gate-blocked state is conveyed by the label, not by draining the colour.
+  const statusColor = hd ? (hd.status === 'black' ? HEALTH_COLOR[statusFromScore(hd.score)] : healthColorOf(hd)) : STATUS_COLOR[data.status]
   const go = (m: ModuleKey) => { if (canSee(m)) onOpen(m) }
   const k = data.kpi
 
