@@ -96,15 +96,33 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
 }
 
 
-function Ring({ value, color, loading }: { value: number; color: string; loading?: boolean }) {
-  const r = 40, c = 2 * Math.PI * r, v = Math.max(0, Math.min(100, value))
+// A compact holographic gauge: a tick ring that lights up to the score, a glowing arc, a dashed
+// pulsing halo and a pedestal "floor" so the index reads as a small 3-D instrument floating above the
+// card — the same visual language as the Health Centre's HoloRing, sized to fit the radar hero.
+// Colour comes from --st on the hero (the health verdict), so the ring and the status always agree.
+function Ring({ value, loading }: { value: number; color?: string; loading?: boolean }) {
+  const R = 38, C = 2 * Math.PI * R, N = 48
+  const v = Math.max(0, Math.min(100, Math.round(value)))
   return (
-    <div className="mr-ring" role="img" aria-label={loading ? 'سلامت پروژه در حال خواندن' : `سلامت ${fa(v)} از ۱۰۰`}>
-      <svg viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r={r} className="mr-ring-bg" />
-        {!loading && v > 0 && <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="8" strokeLinecap="round" strokeDasharray={`${(v / 100) * c} ${c}`} transform="rotate(-90 50 50)" className="mr-ring-fg" />}
+    <div className="mr-holo" role="img" aria-label={loading ? 'سلامت پروژه در حال خواندن' : `سلامت ${fa(v)} از ۱۰۰`}>
+      <svg viewBox="0 0 100 118" aria-hidden>
+        {/* pedestal — the hologram floor the index floats on */}
+        <ellipse cx="50" cy="106" rx="45" ry="11" className="mr-holo-ped-glow" />
+        <ellipse cx="50" cy="106" rx="40" ry="8" className="mr-holo-ped-ring" />
+        <ellipse cx="50" cy="106" rx="29" ry="5.4" className="mr-holo-ped-ring is-dash" />
+        <ellipse cx="50" cy="106" rx="17" ry="3.1" className="mr-holo-ped-ring is-bright" />
+        {/* ring stack */}
+        <circle cx="50" cy="50" r="46" className="mr-holo-halo" />
+        {Array.from({ length: N }, (_, i) => {
+          const a = (i / N) * Math.PI * 2 - Math.PI / 2, r1 = 46, r2 = i % 4 ? 43.5 : 41
+          const lit = !loading && v > 0 && i / N <= v / 100
+          return <line key={i} x1={50 + r1 * Math.cos(a)} y1={50 + r1 * Math.sin(a)} x2={50 + r2 * Math.cos(a)} y2={50 + r2 * Math.sin(a)} className={lit ? 'mr-holo-tick on' : 'mr-holo-tick'} />
+        })}
+        <circle cx="50" cy="50" r={R} className="mr-holo-track" />
+        {!loading && v > 0 && <circle cx="50" cy="50" r={R} className="mr-holo-val" strokeDasharray={`${(v / 100) * C} ${C}`} transform="rotate(-90 50 50)" />}
+        <circle cx="50" cy="50" r="28" className="mr-holo-inner" />
       </svg>
-      <span className="mr-ring-num">{loading ? '—' : fa(v)}<small>از ۱۰۰</small></span>
+      <span className="mr-holo-num">{loading ? '—' : fa(v)}<small>از ۱۰۰</small></span>
     </div>
   )
 }
