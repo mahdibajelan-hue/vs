@@ -1,0 +1,367 @@
+[
+  {
+    "verdict": "needs_validation",
+    "fingerprint": "auth-config:leaked-password-protection",
+    "title": "Leaked-password protection disabled (Supabase advisor)",
+    "description": "The Supabase security advisor reports auth_leaked_password_protection disabled, so passwords are not checked against the HaveIBeenPwned breach corpus. This is an Auth dashboard setting not present in source.",
+    "claimed_root_cause": "HaveIBeenPwned password checking is turned off in Auth settings.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "src/components/Auth/AuthGate.tsx",
+        "line": 1,
+        "scope": "password sign-in",
+        "description": "Users authenticate with passwords; weak/breached passwords are accepted."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "docs/SECURITY_REVIEW.md",
+        "line": 1,
+        "description": "Advisor finding recorded in the manual review write-up."
+      }
+    ],
+    "blockers": [
+      "Leaked-password protection is a Supabase Auth dashboard setting not represented in the repository."
+    ],
+    "validation_plan": {
+      "deployment": "In the Supabase dashboard, enable Authentication -> Policies -> 'Leaked password protection' and set a minimum password strength."
+    }
+  },
+  {
+    "verdict": "needs_validation",
+    "fingerprint": "auth-config:open-signup",
+    "title": "Self-registration may be enabled at the Auth layer (no in-app signup UI)",
+    "description": "The app exposes only a login screen (no signup), implying external self-registration should be off. If Supabase Auth 'allow new users to sign up' is enabled, anyone could self-register, obtain the authenticated role, and read all user profiles plus the global catalog tables. Whether signup is enabled is an Auth dashboard setting not present in source.",
+    "claimed_root_cause": "Auth signup setting may permit self-registration while the product model assumes admin-only account creation (uc-admin-ops).",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "src/components/Auth/AuthGate.tsx",
+        "line": 1,
+        "scope": "login-only UI; account creation is admin-only via uc-admin-ops",
+        "description": "No signup path in the client implies signups should be disabled server-side."
+      },
+      {
+        "kind": "sink",
+        "file": "supabase/functions/uc-admin-ops/handler.ts",
+        "line": 1,
+        "scope": "admin-only user creation",
+        "description": "The intended account-creation path is admin-gated; open signup would bypass it."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "src/components/Auth/AuthGate.tsx",
+        "line": 10,
+        "description": "Only a login card is rendered; there is no self-registration form."
+      }
+    ],
+    "blockers": [
+      "The Supabase Auth 'allow new users to sign up' setting is a dashboard configuration not represented in the repository."
+    ],
+    "validation_plan": {
+      "deployment": "In the Supabase dashboard, check Authentication -> Sign In / Providers: confirm 'Allow new users to sign up' is OFF. If it must stay on, restrict allowed email domains and confirm new users receive no implicit project access."
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "fingerprint": "grants:public-execute:anon-rpc-exposure",
+    "title": "Anonymous access to 334 SECURITY DEFINER functions via default PUBLIC EXECUTE",
+    "description": "Default PostgreSQL PUBLIC EXECUTE plus Supabase's anon role exposed 334 SECURITY DEFINER functions (and 86 trigger functions) to unauthenticated callers over PostgREST /rpc/. Remediated by migration 001: PUBLIC/anon revoked, re-granted to authenticated+service_role, anon limited to token-gated public endpoints and policy helpers (anon-reachable 334 -> 95); trigger functions revoked from all roles.",
+    "root_cause": "Functions inherited the default PUBLIC EXECUTE grant, which the anon role inherits.",
+    "intended_behavior": "Unauthenticated callers should reach only the explicit public token endpoints.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "supabase/security/001_function_exposure_and_profile_guard.sql",
+        "line": 40,
+        "scope": "REVOKE EXECUTE ... FROM public, anon",
+        "description": "anon could call internal RPCs before this revoke."
+      },
+      {
+        "kind": "sink",
+        "file": "supabase/security/001_function_exposure_and_profile_guard.sql",
+        "line": 90,
+        "scope": "anon allowlist + policy helpers",
+        "description": "anon re-granted only the intended public endpoints."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "supabase/security/001_function_exposure_and_profile_guard.sql",
+        "line": 24,
+        "description": "Describes the 334 anon-reachable SECURITY DEFINER functions and the lockdown."
+      }
+    ],
+    "conditions": [
+      {
+        "kind": "authentication_level",
+        "description": "Unauthenticated (anon) role."
+      }
+    ],
+    "execution": {
+      "attacker_perspective": "Any unauthenticated internet client.",
+      "payloads": [
+        "POST /rest/v1/rpc/<internal_function>"
+      ],
+      "instructions": [
+        "Call internal RPC endpoints with the public anon key."
+      ],
+      "observed_result": "Pre-fix: 334 SECURITY DEFINER functions anon-reachable (most still enforced internal authz). Post-fix: 95 (token endpoints + RLS predicates only); advisor-flagged trigger exposure and mutable search_path both cleared."
+    },
+    "remediation": {
+      "strategy": "Revoke PUBLIC/anon, re-grant authenticated+service_role, grant anon only the mapped token endpoints and policy-referenced helpers; revoke trigger functions from all roles; pin search_path. Applied in migration 001.",
+      "code_changes": [
+        {
+          "file_name": "supabase/security/001_function_exposure_and_profile_guard.sql",
+          "fixed_code": "-- see file: Step 0-3 grant/revoke/search_path hardening."
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "high",
+        "reason": "Reachable by anyone with the public anon key (shipped in the client)."
+      },
+      "impact": {
+        "score": "medium",
+        "reason": "Most functions enforce internal authz, so direct data impact was limited; the exposure itself is the defect and attack surface."
+      },
+      "overall_severity": "medium"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "Confirmed via pg_proc privilege queries and Supabase security advisor before/after."
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "fingerprint": "profiles:self-update:account-status-unfrozen",
+    "title": "Disabled user could self-reactivate by updating their own account_status",
+    "description": "The profiles self-update policy (USING auth.uid() = id) combined with a guard trigger that froze only is_admin let a disabled/blocked user with a still-valid JWT set their own account_status back to active (and change user_type) via a direct PostgREST UPDATE. Remediated by extending the guard trigger to also freeze account_status, status_reason and user_type for non-admins.",
+    "root_cause": "The BEFORE UPDATE guard froze only is_admin, not the other admin-controlled profile fields.",
+    "intended_behavior": "Only an admin may change a user's account_status, status_reason, user_type or is_admin.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "src/store/useAuthStore.ts",
+        "line": 75,
+        "scope": "account_status gate is enforced client-side",
+        "description": "Disabled accounts are only signed out in the client; a valid JWT can still call the API directly."
+      },
+      {
+        "kind": "sink",
+        "file": "supabase/security/001_function_exposure_and_profile_guard.sql",
+        "line": 150,
+        "scope": "prevent_self_admin_escalation trigger",
+        "description": "Now freezes account_status/status_reason/user_type/is_admin for non-admins."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "supabase/security/001_function_exposure_and_profile_guard.sql",
+        "line": 150,
+        "description": "Extended guard trigger body."
+      }
+    ],
+    "conditions": [
+      {
+        "kind": "authentication_level",
+        "description": "A disabled/blocked user whose JWT has not yet expired."
+      },
+      {
+        "kind": "data_state",
+        "description": "account_status is enforced client-side; self-reactivation defeats that lockout."
+      }
+    ],
+    "execution": {
+      "attacker_perspective": "A user whose account was just disabled/blocked by an admin.",
+      "payloads": [
+        "PATCH /rest/v1/profiles?id=eq.<self> {\"account_status\":\"active\"}"
+      ],
+      "instructions": [
+        "With the still-valid JWT, PATCH own profiles row setting account_status=active."
+      ],
+      "observed_result": "Pre-fix: the update persisted. Post-fix: the guard trigger reverts account_status/status_reason/user_type for non-admins."
+    },
+    "remediation": {
+      "strategy": "Extend prevent_self_admin_escalation to freeze all admin-controlled fields for non-admin callers. Applied in migration 001.",
+      "code_changes": [
+        {
+          "file_name": "supabase/security/001_function_exposure_and_profile_guard.sql",
+          "fixed_code": "-- Step 4: freeze is_admin, account_status, status_reason, user_type for non-admins."
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "medium",
+        "reason": "Narrow window (valid JWT after disable) and requires direct API use."
+      },
+      "impact": {
+        "score": "medium",
+        "reason": "Defeats the client-side account lockout; bounded because account_status is not a server-side RLS gate for tenant data."
+      },
+      "overall_severity": "medium"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "Policy + trigger behavior confirmed by source and trigger-binding inspection."
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "fingerprint": "rls:select-using-true:tenant-read-leak",
+    "title": "Cross-project read leak (IDOR): ~70 tables had SELECT USING (true)",
+    "description": "Across the execution, finance, material and reporting modules ~70 tables exposed SELECT to every authenticated user regardless of project membership, while writes were correctly project-scoped. Any signed-in user could read other organizations' budgets, cashflow plans, material requisitions, NCRs, statements and daily reports via PostgREST. Remediated by migration 002 and verified with role impersonation (isolated user 206 -> 0 reports; admin unchanged).",
+    "root_cause": "Read policies were written as USING (true) instead of a project-membership predicate.",
+    "intended_behavior": "A user may read a project's rows only if they are an admin or a member of that project.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "src/modules/execution/store/useEpcStore.ts",
+        "line": 1,
+        "scope": "authenticated PostgREST reads of ex_* tables",
+        "description": "Any authenticated client can select from the exposed tables."
+      },
+      {
+        "kind": "sink",
+        "file": "supabase/security/002_read_scoping_rls.sql",
+        "line": 1,
+        "scope": "SELECT policies formerly USING (true)",
+        "description": "Policies granted unconditional read; now rewritten to ex_can_view()/rasta_user_can_access_master_project()."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "supabase/security/002_read_scoping_rls.sql",
+        "line": 39,
+        "description": "Enumerates the ~70 affected tables and their corrected per-project read predicates."
+      }
+    ],
+    "conditions": [
+      {
+        "kind": "authentication_level",
+        "description": "Any authenticated user (lowest app role); no project membership required pre-fix."
+      }
+    ],
+    "execution": {
+      "attacker_perspective": "A signed-in user of any one project/organization.",
+      "payloads": [
+        "GET /rest/v1/ex_reports?select=* (and fin_budget_lines, mtl_requisitions, ex_statements, ...)"
+      ],
+      "instructions": [
+        "Sign in as a user who belongs to no project (or a different project).",
+        "Query the affected tables through PostgREST."
+      ],
+      "observed_result": "Pre-fix: an unaffiliated user saw all 206 ex_reports (and all budgets/requisitions/statements). Post-fix (migration 002): the same user sees 0; a member sees only their projects; an admin sees all."
+    },
+    "remediation": {
+      "strategy": "Rewrite each open SELECT policy to the module's project-view predicate (ex_can_view(project_id) for execution; is_admin_user() OR rasta_user_can_access_master_project(master_project_id) for finance/material/reporting; parent-join for child tables). Applied in migration 002.",
+      "code_changes": [
+        {
+          "file_name": "supabase/security/002_read_scoping_rls.sql",
+          "fixed_code": "-- ALTER POLICY <sel> ON <tbl> USING (<project-scoped predicate>); see file for the full per-table map."
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "high",
+        "reason": "Trivially reachable by any authenticated user via the public REST API."
+      },
+      "impact": {
+        "score": "high",
+        "reason": "Cross-tenant disclosure of commercial/financial data in a multi-organization platform."
+      },
+      "overall_severity": "high"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "Demonstrated by role impersonation before and after the fix."
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "fingerprint": "supplychain:xlsx-0.18.5:SchImport-read",
+    "title": "Known-vulnerable xlsx@0.18.5 reachable via schedule-import parser (prototype pollution, CVE-2023-30533)",
+    "description": "The scheduling module parses a user-supplied .xlsx file in the browser with SheetJS xlsx@0.18.5. That version is vulnerable to prototype pollution (CVE-2023-30533, fixed in 0.19.3) and ReDoS (CVE-2024-22363, fixed 0.20.2). A crafted workbook imported by a user can pollute Object.prototype in that user's browser session.",
+    "root_cause": "A dependency with a published prototype-pollution CVE is used to parse untrusted spreadsheet input, and the npm distribution of xlsx is unmaintained (SheetJS ships current builds only via its own CDN).",
+    "intended_behavior": "Importing a schedule workbook should parse tabular data only and never let file content mutate the JavaScript runtime (Object.prototype).",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "src/modules/scheduling/pages/SchImport.tsx",
+        "line": 116,
+        "scope": "file input accept=.xlsx,.xls,.xlsm,.xer,.xml",
+        "description": "User selects a schedule file to import."
+      },
+      {
+        "kind": "sink",
+        "file": "src/modules/scheduling/pages/SchImport.tsx",
+        "line": 22,
+        "scope": "XLSX.read(await file.arrayBuffer(), { type: 'array' })",
+        "description": "The untrusted workbook bytes are parsed by xlsx@0.18.5."
+      }
+    ],
+    "evidence": [
+      {
+        "file": "package.json",
+        "line": 24,
+        "description": "Dependency pinned at \"xlsx\": \"^0.18.5\" (resolves to 0.18.5, below the 0.19.3 fix)."
+      },
+      {
+        "file": "src/modules/scheduling/pages/SchImport.tsx",
+        "line": 22,
+        "description": "XLSX.read on user-supplied ArrayBuffer — the reachable parse path."
+      }
+    ],
+    "conditions": [
+      {
+        "kind": "user_interaction",
+        "description": "A signed-in user must import a maliciously crafted .xlsx file (e.g. one sent by a contractor)."
+      },
+      {
+        "kind": "third_party_dependency",
+        "description": "Impact depends on xlsx@0.18.5's prototype-pollution behavior; confirmed by the public CVE, not reproduced here."
+      }
+    ],
+    "execution": {
+      "attacker_perspective": "An attacker who can get a target user to import a schedule workbook they supplied.",
+      "payloads": [
+        "A .xlsx crafted per CVE-2023-30533 to set a key on Object.prototype during parse."
+      ],
+      "instructions": [
+        "Deliver the crafted .xlsx to a user with schedule-import access.",
+        "User opens Scheduling -> Import and selects the file.",
+        "On XLSX.read, Object.prototype is polluted in the user's browser session."
+      ],
+      "observed_result": "Not reproduced in-audit (no payload developed, per audit safety rules). The parse path is confirmed reachable and the dependency version is confirmed vulnerable by published CVE."
+    },
+    "remediation": {
+      "strategy": "Upgrade off the vulnerable npm build: move to the current SheetJS release (its maintained CDN tarball) or replace the import parser with the already-present exceljs for reading. Keep export usage as-is. Optionally guard parsing by freezing Object.prototype or validating parsed keys.",
+      "code_changes": [
+        {
+          "file_name": "package.json",
+          "fixed_code": "// replace \"xlsx\": \"^0.18.5\" with the current SheetJS build, e.g. install from https://cdn.sheetjs.com/ (npm xlsx is stale), or read with the existing exceljs dependency instead."
+        }
+      ]
+    },
+    "severity": {
+      "likelihood": {
+        "score": "low",
+        "reason": "Requires social-engineering a user into importing a crafted workbook; not an unauthenticated or automatic path."
+      },
+      "impact": {
+        "score": "medium",
+        "reason": "Prototype pollution in the victim's own browser session can corrupt app logic and, with a gadget, escalate to client-side script execution; confined to that one user's session."
+      },
+      "overall_severity": "low"
+    },
+    "confidence": {
+      "score": "high",
+      "reason": "Reachable parse path and vulnerable version are both confirmed in source; only the browser-exploitable end effect is not reproduced."
+    }
+  }
+]
