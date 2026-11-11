@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../../../lib/supabaseClient'
-import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
+import { useMasterDataStore, useTeam } from '../../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { usePersonnelStore } from '../store/usePersonnelStore'
 import { CompetencySidebarShell, type CompetencySection } from '../components/CompetencySidebarShell'
@@ -168,7 +168,7 @@ function ScanBox({ people, onFound, stateOf }: { people: Welder[]; onFound: (w: 
 /** who signs the tests and the cards of this project (a slot left empty may be signed by any reviewer) */
 function SignerSettings({ projectName }: { projectName: string }) {
   const st = usePersonnelStore()
-  const team = useMasterDataStore((s) => s.team).filter((t) => t.projectId === st.projectId && t.userId)
+  const team = useTeam().filter((t) => t.projectId === st.projectId && t.userId)
   const cur = st.caps.signers
   const slots: [string, string][] = [['weld_inspector', 'ناظر جوش (آزمون جوشکار)'], ['defect_interpreter', 'مفسر عیوب جوش (آزمون جوشکار)'], ['coat_supervisor', 'ناظر (آزمون عایق‌کار)'], ['coat_contractor', 'نماینده پیمانکار (آزمون عایق‌کار)'], ['site_head', 'سرپرست کارگاه (کارت)'], ['supervision_head', 'سرپرست نظارت (کارت)']]
   return (

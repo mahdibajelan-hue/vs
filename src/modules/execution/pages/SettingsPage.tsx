@@ -2,7 +2,7 @@ import { TEAM_POSITION_LABEL } from '../../masterdata/types'
 import { SigningRoles, useSignRoles } from '../components/SigningRoles'
 import { ActionsSettings } from './ActionsSettings'
 import { FrontsEditor } from './FrontsEditor'
-import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
+import { useMasterDataStore, useTeam } from '../../masterdata/store/useMasterDataStore'
 import { useLookupOptions } from '../../material/lib/control/lookups'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { useExecutionModel } from '../lib/useExecutionModel'
@@ -25,7 +25,7 @@ export function SettingsPage({ projectId, sub }: { projectId: string; sub: strin
 function RolesView({ projectId }: { projectId: string }) {
   const ex = useExecutionStore()
   const orgs = useMasterDataStore((s) => s.organizations)
-  const team = useMasterDataStore((s) => s.team).filter((t) => t.projectId === projectId).sort((a, b) => a.sort - b.sort)
+  const team = useTeam().filter((t) => t.projectId === projectId).sort((a, b) => a.sort - b.sort)
   const signRoles = useSignRoles(projectId)
   const roles = ex.roles.filter((r) => r.projectId === projectId)
   const canCfg = ex.can(projectId, '*') || ex.can(projectId, 'configure')

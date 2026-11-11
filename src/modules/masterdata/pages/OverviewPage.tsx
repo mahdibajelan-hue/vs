@@ -1,5 +1,5 @@
 import { ArrowLeft, Check } from 'lucide-react'
-import { useMasterDataStore } from '../store/useMasterDataStore'
+import { useMasterDataStore, useTeam } from '../store/useMasterDataStore'
 import { PageHead, faNum } from '../components/md'
 import { STEP_COLORS } from '../lib/colors'
 
@@ -12,7 +12,7 @@ export function OverviewPage({ go }: { go: (t: NavTarget) => void }) {
   const programs = useMasterDataStore((s) => s.programs)
   const projects = useMasterDataStore((s) => s.projects)
   const parties = useMasterDataStore((s) => s.parties)
-  const team = useMasterDataStore((s) => s.team)
+  const team = useTeam()
 
   const withParties = projects.filter((p) => ['employer', 'contractor'].every((r) => parties.some((x) => x.projectId === p.id && x.role === r))).length
   const withTeam = projects.filter((p) => team.some((t) => t.projectId === p.id && t.positionKey === 'project_manager') && team.some((t) => t.projectId === p.id && t.positionKey === 'executive') && p.description.trim()).length

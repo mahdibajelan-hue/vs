@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { friendlyErrorMessage } from '../../../lib/friendlyError'
@@ -43,8 +44,12 @@ interface MasterDataState {
   dependencies: ProjectDependency[]
   /** Which organization plays which role in which project (several per role allowed). */
   parties: ProjectParty[]
-  /** Every project's human-resources structure. */
+  /** Every project's human-resources structure. Read on demand (ensureTeam / useTeam), not at sign-in: it grows with
+   * every project and only the team, personnel and access screens need it. */
   team: TeamMember[]
+  teamLoaded: boolean
+  /** reads the team once; later loads (fetchAll after a change) keep it fresh */
+  ensureTeam: () => Promise<void>
   /** Every platform user, for owner/manager/sponsor pickers — reuses the shared `profiles` table. */
   users: UserOption[]
   loading: boolean
@@ -85,6 +90,8 @@ interface MasterDataState {
 
 let inflight: Promise<void> | null = null
 
+let teamInflight: Promise<void> | null = null
+
 export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
   organizations: [],
   portfolios: [],
@@ -94,9 +101,20 @@ export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
   dependencies: [],
   parties: [],
   team: [],
+  teamLoaded: false,
   users: [],
   loading: false,
   loaded: false,
+
+  ensureTeam: () => {
+    if (get().teamLoaded) return Promise.resolve()
+    teamInflight ??= (async () => {
+      const { data, error } = await supabase.from('master_project_team').select('*').order('sort')
+      if (error) console.warn('[masterdata] team unavailable (migration not yet applied?):', error.message)
+      set({ team: error ? [] : (data ?? []).map(teamMemberFromRow), teamLoaded: !error })
+    })().finally(() => { teamInflight = null })
+    return teamInflight
+  },
 
   fetchAll: async () => {
     // callers on every module entry share one in-flight load instead of each starting their own
@@ -112,7 +130,8 @@ export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
           supabase.from('profiles').select('id, email, full_name').order('email'),
           supabase.from('master_project_dependencies').select('*'),
           supabase.from('master_project_parties').select('*'),
-          supabase.from('master_project_team').select('*').order('sort'),
+          // the team only once something asked for it (ensureTeam); then it is kept fresh with the rest
+          get().teamLoaded ? supabase.from('master_project_team').select('*').order('sort') : Promise.resolve({ data: null, error: null }),
         ])
       let res = await wave()
       // right after sign-in the first wave can go out before the new session is attached (401); try once more before alarming
@@ -126,7 +145,7 @@ export const useMasterDataStore = create<MasterDataState>()((set, get) => ({
       if (e7 || e8) console.warn('[masterdata] parties/team unavailable (migration not yet applied?):', (e7 ?? e8)?.message)
       set({
         parties: e7 ? [] : (parties ?? []).map(projectPartyFromRow),
-        team: e8 ? [] : (team ?? []).map(teamMemberFromRow),
+        ...(get().teamLoaded ? { team: e8 ? [] : (team ?? []).map(teamMemberFromRow) } : {}),
         organizations: (orgs ?? []).map(organizationFromRow),
         portfolios: (pf ?? []).map(portfolioFromRow),
         programs: (pg ?? []).map(programFromRow),
@@ -293,6 +312,7 @@ async function syncLegacyParties(projectId: string, get: Get): Promise<void> {
 
 /** Same for the people: project manager and project executive (مجری طرح) of the structure are mirrored onto the project row. */
 async function syncLegacyManagers(projectId: string, get: Get): Promise<void> {
+  await get().ensureTeam()
   const mine = get().team.filter((x) => x.projectId === projectId && x.userId)
   const of = (k: string) => mine.find((x) => x.positionKey === k)?.userId ?? null
   const patch = { projectManagerId: of('project_manager'), projectDirectorId: of('executive') }
@@ -304,4 +324,11 @@ async function syncLegacyManagers(projectId: string, get: Get): Promise<void> {
   if (Object.keys(changed).length === 0) return
   const { error } = await supabase.from('master_projects').update(masterProjectToRow(changed)).eq('id', projectId)
   if (!reportError('همگام‌سازی مدیران با پروژه', error)) await get().fetchAll()
+}
+
+/** every project's team, read on first use (see MasterDataState.team) */
+export function useTeam(): TeamMember[] {
+  const team = useMasterDataStore((s) => s.team)
+  useEffect(() => { void useMasterDataStore.getState().ensureTeam() }, [])
+  return team
 }

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useAccessStore } from '../../masterdata/store/useAccessStore'
-import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
+import { useMasterDataStore, useTeam } from '../../masterdata/store/useMasterDataStore'
 import { useUserCenterStore } from '../store/useUserCenterStore'
 import { buildProjectRows, rowHasAccess, type PermissionContext, type ProjectRow } from './access'
 import type { ProjectMapRef } from './access'
@@ -29,7 +29,7 @@ export function useAccessData() {
   const moduleAccess = useAccessStore((s) => s.moduleAccess)
   const projectMappings = useAccessStore((s) => s.projectMappings)
   const assignments = useAccessStore((s) => s.projectRoleAssignments)
-  const team = useMasterDataStore((s) => s.team)
+  const team = useTeam()
   const products = useUserCenterStore((s) => s.products)
   const memberships = useUserCenterStore((s) => s.memberships)
   const overrides = useUserCenterStore((s) => s.overrides)

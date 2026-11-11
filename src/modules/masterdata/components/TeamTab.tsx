@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Pencil, Plus, ShieldCheck, UserRound, Users } from 'lucide-react'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
-import { useMasterDataStore } from '../store/useMasterDataStore'
+import { useMasterDataStore, useTeam } from '../store/useMasterDataStore'
 import { SUPERVISION_POSITIONS, TEAM_POSITIONS, TEAM_POSITION_LABEL, type TeamMember } from '../types'
 import { positionColor } from '../lib/colors'
 import { DeleteButton, Empty, Field, Sheet, initials } from './md'
@@ -26,7 +26,7 @@ const nameOf = (m: TeamMember, users: { id: string; fullName: string; email: str
 
 /** The human-resources structure of a project: who holds which position, for which organization, and who reports to whom. */
 export function TeamTab({ projectId }: { projectId: string }) {
-  const team = useMasterDataStore((s) => s.team).filter((m) => m.projectId === projectId)
+  const team = useTeam().filter((m) => m.projectId === projectId)
   const users = useMasterDataStore((s) => s.users)
   const organizations = useMasterDataStore((s) => s.organizations)
   const [sheet, setSheet] = useState<{ member?: TeamMember; position?: string } | null>(null)

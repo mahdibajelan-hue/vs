@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { FolderKanban, Plus } from 'lucide-react'
-import { useMasterDataStore } from '../store/useMasterDataStore'
+import { useMasterDataStore, useTeam } from '../store/useMasterDataStore'
 import { PROJECT_LIFECYCLE_STATUSES, PROJECT_STATUS_LABEL_FA } from '../types'
 import { LEVEL_COLOR, STATUS_COLOR } from '../lib/colors'
 import { Empty, Field, PageHead, SearchBox, Sheet, initials } from '../components/md'
@@ -13,7 +13,7 @@ export function ProjectsPage({ onOpen }: { onOpen: (id: string) => void }) {
   const programs = useMasterDataStore((s) => s.programs)
   const parties = useMasterDataStore((s) => s.parties)
   const organizations = useMasterDataStore((s) => s.organizations)
-  const team = useMasterDataStore((s) => s.team)
+  const team = useTeam()
   const users = useMasterDataStore((s) => s.users)
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<string>('all')

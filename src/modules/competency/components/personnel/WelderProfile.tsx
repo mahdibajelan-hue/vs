@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BadgeCheck, Camera, Undo2 } from 'lucide-react'
-import { useMasterDataStore } from '../../../masterdata/store/useMasterDataStore'
+import { useMasterDataStore, useTeam } from '../../../masterdata/store/useMasterDataStore'
 import { JalaliDateInput } from '../../../../components/common/JalaliDateInput'
 import { usePersonnelStore } from '../../store/usePersonnelStore'
 import { COATER_CARD_FIELDS, COATER_SCOPE, KIND_FA, WELDER_CARD_EXTRA, cardData, testConfig, testProblems, type PField } from '../../lib/personnelForms'
@@ -58,7 +58,7 @@ export function IssuedCard({ w, tests, projectName }: { w: Welder; tests: Welder
 export function WelderProfile({ w, tests }: { w: Welder; tests: WelderQual[] }) {
   const st = usePersonnelStore()
   const orgs = useMasterDataStore((x) => x.organizations)
-  const team = useMasterDataStore((x) => x.team)
+  const team = useTeam()
   const { caps } = st
   const can = caps.register
   const canReview = caps.review || caps.admin

@@ -260,6 +260,7 @@ export const useUserCenterStore = create<UcState>()((set, get) => {
 
     joinProjects: async (user, projectIds, projectRoleId) => {
       if (!projectIds.length) return { ok: true, count: 0 }
+      await useMasterDataStore.getState().ensureTeam()
       const acc = useAccessStore.getState(), md = useMasterDataStore.getState()
       const roleName = acc.projectRoles.find((r) => r.id === projectRoleId)?.name
       // 1 · the project role (membership itself)
