@@ -20,8 +20,11 @@ interface IssuesState {
   /** Header project picker: 'all' or an im_projects id. Pages read it through useScoped(). */
   scopeProjectId: string
   setScope: (id: string) => void
+  /** which im project the issue list holds: 'all', or one project when the module was opened inside a project */
+  loadedScope: string | null
 
-  fetchAll: () => Promise<void>
+  /** project: one project's issues only (opened from a project); 'all': every project; omitted: what is loaded now */
+  fetchAll: (opts?: { project?: string }) => Promise<void>
   createIssue: (
     projectId: string,
     data: { title: string; description: string; pursuerId: string | null; approverId: string | null; priority: ImIssuePriority; deadlineDays: number },
@@ -51,15 +54,17 @@ export const useIssuesStore = create<IssuesState>()((set, get) => ({
   issues: [],
   loading: true,
   scopeProjectId: 'all',
+  loadedScope: null,
   setScope: (id) => set({ scopeProjectId: id }),
 
-  fetchAll: async () => {
+  fetchAll: async (opts) => {
+    const scope = opts?.project ?? get().loadedScope ?? 'all'
     // First visit shows the skeleton; later visits keep the previous data on screen while it refreshes.
     if (!get().projects.length) set({ loading: true })
     // Projects and issues are read in parallel (row-level security already limits both to what the user may see).
     const read = () => Promise.all([
       supabase.from('im_projects').select('*').order('created_at', { ascending: false }),
-      supabase.from('im_issues').select('*').order('created_at', { ascending: false }),
+      scope === 'all' ? supabase.from('im_issues').select('*').order('created_at', { ascending: false }) : supabase.from('im_issues').select('*').eq('project_id', scope).order('created_at', { ascending: false }),
     ])
     // Projects are owned by Master Data: platform admins keep the issue projects in step with it (names, new projects).
     // The sync runs alongside the reads; only if it actually changed something are the projects read again.
@@ -71,7 +76,7 @@ export const useIssuesStore = create<IssuesState>()((set, get) => ({
     const projects = ((p.data ?? []) as ImProjectRow[]).map(imProjectFromRow)
     if (reportError('بارگذاری مشکلات', i.error)) { set({ projects, loading: false }); return }
     const known = new Set(projects.map((x) => x.id))
-    set({ projects, issues: ((i.data ?? []) as ImIssueRow[]).filter((r) => known.has(r.project_id)).map(imIssueFromRow), loading: false })
+    set({ projects, issues: ((i.data ?? []) as ImIssueRow[]).filter((r) => known.has(r.project_id)).map(imIssueFromRow), loading: false, loadedScope: scope })
   },
 
   createIssue: async (projectId, data) => {

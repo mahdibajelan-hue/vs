@@ -49,10 +49,10 @@ export function friendly(error: { message?: string; code?: string } | null | und
 }
 const fail = (error: any): Result => ({ ok: false, error: friendly(error) })
 
-async function fetchAll(table: string, build?: (q: any) => any, page = 1000): Promise<any[]> {
+async function fetchAll(table: string, build?: (q: any) => any, page = 1000, select = '*'): Promise<any[]> {
   const out: any[] = []
   for (let from = 0; ; from += page) {
-    let q = supabase.from(table).select('*')
+    let q = supabase.from(table).select(select)
     if (build) q = build(q)
     const { data, error } = await q.range(from, from + page - 1)
     if (error) throw error
@@ -97,7 +97,10 @@ interface State {
   historyByRisk: Record<string, RmRiskHistoryEntry[]>
   myRoles: Record<string, RmUserRole>
 
-  fetchAll: () => Promise<void>
+  /** which risk project the lists hold: 'all', or one project when the module was opened inside a project */
+  loadedScope: string | null
+  /** project: one risk project's rows only (opened from a project); 'all': every project; omitted: what is loaded now */
+  fetchAll: (opts?: { project?: string }) => Promise<void>
   setScope: (id: string) => void
   loadRiskExtras: (riskId: string) => Promise<void>
   syncProjects: () => Promise<void>
@@ -162,20 +165,26 @@ export const useRiskStore = create<State>()((set, get) => {
   const touchHistory = (riskId: string) => set((s) => { const h = { ...s.historyByRisk }; delete h[riskId]; return { historyByRisk: h } })
 
   return {
-    loading: false, loaded: false, error: null, scopeProjectId: 'all', projects: [], categories: [], policies: [], notifRules: [], risks: [], assessments: [], actions: [], controls: [], contingency: [],
+    loading: false, loaded: false, error: null, scopeProjectId: 'all', loadedScope: null, projects: [], categories: [], policies: [], notifRules: [], risks: [], assessments: [], actions: [], controls: [], contingency: [],
     kris: [], kriReadings: [], kriEvents: [], links: [], acceptances: [], corporate: [], suggestions: [], evidenceByRisk: {}, historyByRisk: {}, myRoles: {},
 
     setScope: (id) => set({ scopeProjectId: id }),
 
-    fetchAll: async () => {
+    fetchAll: async (opts) => {
+      const scope = opts?.project ?? get().loadedScope ?? 'all'
       set({ loading: true, error: null })
       try {
         const since = new Date(Date.now() - 180 * 86400000).toISOString()
+        // opened inside a project: only that project's risks and what hangs off them (through the risk or the KRI)
+        const one = scope !== 'all'
+        const own = (table: string, build?: (q: any) => any) => fetchAll(table, (q) => { const b = build ? build(q) : q; return one ? b.eq('project_id', scope) : b })
+        const viaRisk = (table: string, build?: (q: any) => any) => (one ? fetchAll(table, (q) => (build ? build(q) : q).eq('__p.project_id', scope), 1000, `*, __p:rm_risks!${table}_risk_id_fkey!inner(project_id)`) : fetchAll(table, build))
+        const viaKri = (table: string, build?: (q: any) => any) => (one ? fetchAll(table, (q) => (build ? build(q) : q).eq('__p.project_id', scope), 1000, `*, __p:rm_kris!${table}_kri_id_fkey!inner(project_id)`) : fetchAll(table, build))
         const [projects, cats, pols, rules, risks, assess, actions, controls, cont, kris, readings, events, links, acc, corp, sugg, roles] = await Promise.all([
           fetchAll('rm_projects', (q) => q.order('name')), fetchAll('rm_categories', (q) => q.order('sort')), fetchAll('rm_policy'), fetchAll('im_notif_rules', (q) => q.eq('scope', 'risk').order('sort')),
-          fetchAll('rm_risks', (q) => q.order('created_at')), fetchAll('rm_risk_assessments', (q) => q.order('review_date').order('created_at')), fetchAll('rm_risk_actions', (q) => q.order('created_at')),
-          fetchAll('rm_controls'), fetchAll('rm_contingency_plans'), fetchAll('rm_kris'), fetchAll('rm_kri_readings', (q) => q.gte('read_at', since).order('read_at')), fetchAll('rm_kri_events', (q) => q.order('at', { ascending: false })),
-          fetchAll('rm_risk_links'), fetchAll('rm_acceptances', (q) => q.order('requested_at', { ascending: false })), fetchAll('rm_corporate_risks'), fetchAll('rm_suggestions', (q) => q.order('created_at', { ascending: false })),
+          own('rm_risks', (q) => q.order('created_at')), viaRisk('rm_risk_assessments', (q) => q.order('review_date').order('created_at')), viaRisk('rm_risk_actions', (q) => q.order('created_at')),
+          viaRisk('rm_controls'), viaRisk('rm_contingency_plans'), own('rm_kris'), viaKri('rm_kri_readings', (q) => q.gte('read_at', since).order('read_at')), viaKri('rm_kri_events', (q) => q.order('at', { ascending: false })),
+          viaRisk('rm_risk_links'), viaRisk('rm_acceptances', (q) => q.order('requested_at', { ascending: false })), fetchAll('rm_corporate_risks'), own('rm_suggestions', (q) => q.order('created_at', { ascending: false })),
           supabase.from('rm_project_members').select('project_id, role').eq('user_id', me() ?? '00000000-0000-0000-0000-000000000000'),
         ])
         const myRoles: Record<string, RmUserRole> = {}
@@ -184,7 +193,7 @@ export const useRiskStore = create<State>()((set, get) => {
           projects: projects.map(rmProjectFromRow), categories: cats.map(rmCategoryFromRow), policies: pols.map(rmPolicyFromRow), notifRules: rules.map(rmNotifRuleFromRow),
           risks: risks.map(rmRiskFromRow), assessments: assess.map(rmAssessmentFromRow), actions: actions.map(rmActionFromRow), controls: controls.map(rmControlFromRow), contingency: cont.map(rmContingencyFromRow),
           kris: kris.map(rmKriFromRow), kriReadings: readings.map(rmKriReadingFromRow), kriEvents: events.map(rmKriEventFromRow), links: links.map(rmLinkFromRow), acceptances: acc.map(rmAcceptanceFromRow),
-          corporate: corp.map(rmCorporateFromRow), suggestions: sugg.map(rmSuggestionFromRow), myRoles, loading: false, loaded: true,
+          corporate: corp.map(rmCorporateFromRow), suggestions: sugg.map(rmSuggestionFromRow), myRoles, loading: false, loaded: true, loadedScope: scope,
         })
       } catch (e) { set({ loading: false, error: friendly(e as any) }) }
     },

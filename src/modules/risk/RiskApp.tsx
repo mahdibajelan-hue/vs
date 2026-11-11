@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, Bell, Bot, CircleHelp, FileBarChart, Gauge, Home, Layers, Loader2, Network, Plus, ScanSearch, Settings2, ShieldAlert, ShieldCheck, TrendingUp, ArrowLeftRight, Dices } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -76,20 +76,28 @@ export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => voi
   const [newOpen, setNewOpen] = useState(false)
   const role = useRiskRole(scope === 'all' ? null : scope)
 
-  useEffect(() => { (async () => { await syncProjects(); await fetchAll() })(); fetchPeople() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [])
-
-  // Arrived from Project Radar with a project in context: the whole module is scoped to that project.
+  // Arrived from Project Radar with a project in context: the whole module is scoped to that project, and only that
+  // project's risks are read (the portfolio view reads every project).
   const contextProjectId = useProjectContextStore((s) => s.projectId)
   const [locked, setLocked] = useState(false)
+  const synced = useRef(false)
+  useEffect(() => { fetchPeople() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [])
   useEffect(() => {
-    if (!contextProjectId) return
-    fetchModuleProjectMappings('risk').then((map) => {
-      const resolved = map.get(contextProjectId)
-      if (resolved) { setScope(resolved); setTab('register'); setLocked(true) }
-    })
-    return () => { if (useRiskStore.getState().scopeProjectId !== 'all') setScope('all') }
+    let live = true
+    ;(async () => {
+      const first = !synced.current; synced.current = true
+      const [, map] = await Promise.all([first ? syncProjects() : Promise.resolve(), contextProjectId ? fetchModuleProjectMappings('risk') : Promise.resolve(null)])
+      if (!live) return
+      const resolved = contextProjectId ? map?.get(contextProjectId) : undefined
+      if (resolved) { setScope(resolved); if (first) setTab('register'); setLocked(true) }
+      else { setLocked(false); if (useRiskStore.getState().scopeProjectId !== 'all' && !first) setScope('all') }
+      await fetchAll({ project: resolved ?? 'all' })
+    })()
+    return () => { live = false }
+    // the portfolio view clears the project: the module then reads every project
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [contextProjectId])
+  useEffect(() => () => { if (useRiskStore.getState().scopeProjectId !== 'all') setScope('all') }, [setScope])
 
   // A mission finding / issue asked to open one of these risks.
   const pendingLink = useDeepLinkStore((s) => s.pending)

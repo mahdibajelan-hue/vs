@@ -86,7 +86,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
 
   // Everything the module needs is requested at once on entry (no waterfall); tasks and decisions are re-read when the
   // number of issues changes afterwards (a new issue may bring template tasks with it).
-  useEffect(() => { void fetchAll(); void fetchWork(); void fetchDecisions() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [])
+  useEffect(() => { void fetchDecisions() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [])
   useEffect(() => { if (!cfgLoaded) fetchCfg() }, [cfgLoaded, fetchCfg])
   const seenCount = useRef<number | null>(null)
   useEffect(() => {
@@ -99,15 +99,23 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   // Arrived from Project Radar with a project in context: the whole module is scoped to that project (and the picker is hidden).
   const contextProjectId = useProjectContextStore((s) => s.projectId)
   const [locked, setLocked] = useState(false)
+  // Only that project's issues and tasks are read; the portfolio view (which clears the project) reads every project.
+  const firstEntry = useRef(true)
   useEffect(() => {
-    if (!contextProjectId) return
-    fetchModuleProjectMappings('issues').then((map) => {
-      const resolved = map.get(contextProjectId)
-      if (resolved) { setScope(resolved); setTab('tracking'); setLocked(true) }
-    })
-    return () => { if (useIssuesStore.getState().scopeProjectId !== 'all') setScope('all') }
+    let live = true
+    ;(async () => {
+      const first = firstEntry.current; firstEntry.current = false
+      const resolved = contextProjectId ? (await fetchModuleProjectMappings('issues')).get(contextProjectId) : undefined
+      if (!live) return
+      if (resolved) { setScope(resolved); if (first) setTab('tracking'); setLocked(true) }
+      else { setLocked(false); if (!first && useIssuesStore.getState().scopeProjectId !== 'all') setScope('all') }
+      const project = resolved ?? 'all'
+      await Promise.all([fetchAll({ project }), fetchWork({ project })])
+    })()
+    return () => { live = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [contextProjectId])
+  useEffect(() => () => { if (useIssuesStore.getState().scopeProjectId !== 'all') setScope('all') }, [setScope])
 
   // Arrived from a mission finding / risk / lifecycle link: open that issue once the list has loaded.
   const pendingLink = useDeepLinkStore((s) => s.pending)
@@ -148,7 +156,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
         </div>
         <NavScroller label="بخش‌های مدیریت موانع و اقدامات"><nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت موانع و اقدامات">
           {/* inside one project the portfolio-wide tabs live in the portfolio view instead */}
-          {NAV.filter((n) => !locked || (n.id !== 'insights' && n.id !== 'portfolio')).map((n) => (
+          {NAV.filter((n) => !locked || (n.id !== 'insights' && n.id !== 'portfolio' && n.id !== 'projects')).map((n) => (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
               <n.icon size={15} aria-hidden />{n.label}
             </button>

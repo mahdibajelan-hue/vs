@@ -45,6 +45,8 @@ interface WorkState {
   tasks: ImTask[]
   extensions: ImExtension[]
   loadingAll: boolean
+  /** 'all', or the im project whose tasks are loaded */
+  loadedScope: string | null
   eventsByIssue: Record<string, ImEvent[]>
   linksByIssue: Record<string, ImLink[]>
   attachmentsByIssue: Record<string, ImAttachment[]>
@@ -52,7 +54,7 @@ interface WorkState {
   capaByIssue: Record<string, ImCapa[]>
   depsByTask: Record<string, string[]>
 
-  fetchAll: () => Promise<void>
+  fetchAll: (opts?: { project?: string }) => Promise<void>
   fetchIssueDetail: (issueId: string) => Promise<void>
 
   transition: (issueId: string, to: ImStage, reason: string, patch?: Record<string, unknown>) => Promise<WorkResult>
@@ -80,16 +82,19 @@ async function refreshIssue(issueId: string) {
 }
 
 export const useIssueWorkStore = create<WorkState>()((set, get) => ({
-  tasks: [], extensions: [], loadingAll: false,
+  tasks: [], extensions: [], loadingAll: false, loadedScope: null,
   eventsByIssue: {}, linksByIssue: {}, attachmentsByIssue: {}, rcaByIssue: {}, capaByIssue: {}, depsByTask: {},
 
-  fetchAll: async () => {
+  fetchAll: async (opts) => {
+    const scope = opts?.project ?? get().loadedScope ?? 'all'
     set({ loadingAll: true })
     // Not filtered by issue id: row-level security returns only the tasks/extensions of issues the user can see, so this
     // can start together with the issue list instead of waiting for it (and needs no long IN() lists).
-    const [t, e] = await Promise.all([supabase.from('im_issue_tasks').select('*'), supabase.from('im_extensions').select('*')])
+    // Inside a project, only that project's tasks and extensions (through their issue).
+    const read = (table: string) => (scope === 'all' ? supabase.from(table).select('*') : supabase.from(table).select(`*, __p:im_issues!${table}_issue_id_fkey!inner(project_id)`).eq('__p.project_id', scope))
+    const [t, e] = await Promise.all([read('im_issue_tasks'), read('im_extensions')])
     if (t.error) fail('بارگذاری اقدامات', t.error)
-    set({ tasks: ((t.data ?? []) as ImTaskRow[]).map(imTaskFromRow), extensions: ((e.data ?? []) as ImExtensionRow[]).map(imExtensionFromRow), loadingAll: false })
+    set({ tasks: ((t.data ?? []) as ImTaskRow[]).map(imTaskFromRow), extensions: ((e.data ?? []) as ImExtensionRow[]).map(imExtensionFromRow), loadingAll: false, loadedScope: scope })
   },
 
   fetchIssueDetail: async (issueId) => {
