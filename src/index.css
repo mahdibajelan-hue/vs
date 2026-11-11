@@ -1907,7 +1907,7 @@ select option {
 .lp-home-top > * { min-width: 0; }
 @media (min-width: 1024px) { .lp-home-top { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: stretch; } }
 .lp-home-top > * > * { height: 100%; }
-.lp-home-top .lp-tile.is-hero { min-height: 0; }
+.lp-home-top .lp-tile.is-hero { min-height: 8.75rem; }
 /* home: a short radar band — title, one or two description lines, the way in */
 .lp-home-top .lp-tile.is-hero { padding: 0.8rem 1rem; gap: 0.35rem; }
 .lp-home-top .lp-tile.is-hero .lp-tile-title { font-size: 1.1rem; line-height: 1.4; }
@@ -1915,9 +1915,10 @@ select option {
 .lp-home-top .lp-tile.is-hero .lp-tile-en { font-size: 10px; }
 .lp-home-top .lp-tile.is-hero .lp-tile-mark { width: 96px; height: 96px; }
 @media (max-width: 639px) {
-  .lp-home-top .lp-tile.is-hero { padding: 0.6rem 0.75rem; }
-  .lp-home-top .lp-tile.is-hero .lp-tile-desc { -webkit-line-clamp: 1; }
-  .lp-home-top .lp-tile.is-hero .lp-tile-title { font-size: 1rem; }
+  /* a real band on phones: the radar mark fits whole, the description gets two lines */
+  .lp-home-top .lp-tile.is-hero { min-height: 8.25rem; padding: 0.95rem 0.9rem; align-content: center; }
+  .lp-home-top .lp-tile.is-hero .lp-tile-desc { -webkit-line-clamp: 2; }
+  .lp-home-top .lp-tile.is-hero .lp-tile-title { font-size: 1.1rem; }
   /* the count sits on the radar mark, clear of the arrow */
   .lp-home-top .lp-tile.is-hero .lp-tile-badge { inset-inline-end: auto; inset-inline-start: 0.4rem; top: 0.35rem; }
 }
