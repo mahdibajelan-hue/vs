@@ -1,4 +1,3 @@
-import { PmisMark } from '../../../components/common/Logo'
 import { useMemo } from 'react'
 import { ArrowLeft, Bell, Inbox } from 'lucide-react'
 import { useNotificationStore } from '../../../store/useNotificationStore'
@@ -33,7 +32,7 @@ export function InboxHubCard({ locked }: { locked?: boolean }) {
     <div className={`ibh${locked ? ' locked' : ''}`}>
       <button type="button" className="ibh-main" onClick={() => go()} disabled={locked} aria-label="ورود به کارتابل من">
         <span className="ibh-art" aria-hidden>
-          <svg viewBox="0 0 120 96" width="104" height="84">
+          <svg viewBox="0 0 120 96" width="72" height="58">
             <defs><linearGradient id="ibh-g" x1="0" x2="1"><stop offset="0" stopColor="#22d3ee" /><stop offset="1" stopColor="#a78bfa" /></linearGradient></defs>
             <g className="ibh-card c3"><rect x="22" y="14" width="76" height="46" rx="9" fill="#1e3a68" stroke="#38bdf8" strokeOpacity=".5" /></g>
             <g className="ibh-card c2"><rect x="16" y="22" width="76" height="46" rx="9" fill="#27487f" stroke="#7dd3fc" strokeOpacity=".6" /></g>
@@ -42,9 +41,7 @@ export function InboxHubCard({ locked }: { locked?: boolean }) {
           <span className="ibh-face">{loaded ? md.face : '📬'}</span>
         </span>
         <span className="ibh-txt">
-          <span className="ibh-brand" dir="ltr" aria-label="FARIN PMIS"><span className="ibh-brand-farin">FARIN</span><PmisMark className="ibh-brand-pmis" /></span>
-          <span className="ibh-tag"><Inbox size={13} /> Unified Inbox</span>
-          <b>کارتابل من</b>
+          <b><Inbox size={17} aria-hidden /> کارتابل من</b>
           <span className="ibh-sub">{locked ? 'پس از ورود، همهٔ کارهای شما در همهٔ ماژول‌ها یک‌جاست' : loaded ? md.text : 'در حال بارگذاری…'}</span>
           <span className="ibh-nums">
             <span><em>{n(st.total)}</em>کار باز</span>
@@ -64,7 +61,7 @@ export function InboxHubCard({ locked }: { locked?: boolean }) {
               {st.bySource.map(([k, v]) => { const len = (v / total) * c; const el = <circle key={k} cx="35" cy="35" r={r} fill="none" stroke={SOURCE_COLOR[k]} strokeWidth="9" strokeDasharray={`${Math.max(0, len - 1.2)} ${c}`} strokeDashoffset={-off} transform="rotate(-90 35 35)" />; off += len; return el })}
               <text x="35" y="39" textAnchor="middle" className="ibh-dn">{n(st.total)}</text>
             </svg>
-            <ul>{st.bySource.slice(0, 4).map(([k, v]) => { const I = SOURCE_ICON[k]; return <li key={k}><button onClick={() => go(k)}><I size={12} style={{ color: SOURCE_COLOR[k] }} />{SOURCE_LABEL_FA[k]}<b>{fa(v)}</b></button></li> })}{loaded && st.bySource.length === 0 && <li className="ibh-none">کار بازی نیست 🎉</li>}</ul>
+            <ul>{st.bySource.slice(0, 4).map(([k, v]) => { const I = SOURCE_ICON[k]; return <li key={k}><button onClick={() => go(k)}><I size={12} style={{ color: SOURCE_COLOR[k] }} /><span className="ibh-lbl">{SOURCE_LABEL_FA[k]}</span><b>{fa(v)}</b></button></li> })}{loaded && st.bySource.length === 0 && <li className="ibh-none">کار بازی نیست 🎉</li>}</ul>
           </div>
           <div className="ibh-bars" title="مهلت انجام کارها">
             {BUCKETS.map((b) => <span key={b} className="ibh-bar"><i style={{ height: `${Math.max(st.byBucket[b] ? 12 : 4, (st.byBucket[b] / max) * 100)}%`, background: BUCKET_COLOR[b] }} /><em>{BUCKET_LABEL_FA[b]}</em></span>)}
