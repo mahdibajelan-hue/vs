@@ -30,6 +30,8 @@ export interface RadarSignal {
   angle: number
   /** 0-1 fraction of the radar radius; lower = closer to center = more urgent. */
   radius: number
+  /** ISO due date when the item has one (an issue's deadline, a milestone's date) — drives «overdue» in the cockpit */
+  due?: string | null
 }
 
 export const SIGNAL_CATEGORY_LABEL_FA: Record<SignalCategory, string> = {

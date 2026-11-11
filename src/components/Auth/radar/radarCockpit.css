@@ -31,6 +31,21 @@
 .rc-hero-status { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
 .rc-status-pill { display: inline-flex; align-items: center; gap: .4rem; padding: .4rem .85rem; border-radius: 99px; font-size: 13px; font-weight: 900; color: var(--st); background: color-mix(in srgb, var(--st) 14%, transparent); border: 1px solid color-mix(in srgb, var(--st) 40%, transparent); }
 
+/* executive brief: the facts that set the status, each a door into its module */
+.rc-brief { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: stretch; gap: .5rem; padding-top: .85rem; border-top: 1px dashed color-mix(in srgb, var(--st) 28%, var(--border-soft)); }
+.rc-brief-h { flex-basis: 100%; font-size: 11.5px; font-weight: 800; color: var(--text-muted); }
+.rc-brief-i { --bt: #f59e0b; flex: 1 1 13rem; max-width: 22rem; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: .55rem; align-items: center; padding: .55rem .75rem; border-radius: .9rem; text-align: start;
+  border: 1px solid color-mix(in srgb, var(--bt) 30%, var(--border-soft)); background: color-mix(in srgb, var(--bt) 7%, var(--bg-panel-solid)); transition: border-color 160ms ease, transform 160ms var(--rc-ease); }
+.rc-brief-i.is-bad { --bt: #ef4444; } .rc-brief-i.is-ok { --bt: #22c55e; }
+.rc-brief-i > i { grid-row: 1 / 3; width: .55rem; height: .55rem; border-radius: 99px; background: var(--bt); box-shadow: 0 0 0 .22rem color-mix(in srgb, var(--bt) 22%, transparent); }
+.rc-brief-i > b { font-size: 13px; font-weight: 900; color: var(--text-primary); }
+.rc-brief-i > small { grid-column: 2; font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-brief-i > svg { grid-column: 3; grid-row: 1 / 3; color: var(--text-muted); transition: transform 160ms var(--rc-ease); }
+button.rc-brief-i:not(:disabled) { cursor: pointer; }
+button.rc-brief-i:not(:disabled):hover { border-color: color-mix(in srgb, var(--bt) 60%, transparent); }
+button.rc-brief-i:not(:disabled):hover > svg { transform: translateX(-3px); color: var(--bt); }
+button.rc-brief-i:not(:disabled):active { transform: scale(.98); }
+
 /* pulse tiles */
 .rc-pulse { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr)); }
 .rc-tile { position: relative; display: grid; align-content: start; gap: .45rem; min-height: 8.6rem; padding: .9rem 1rem; border-radius: var(--rc-r); border: 1px solid var(--border-soft); background: var(--bg-panel-solid); overflow: hidden; transition: border-color 180ms ease, transform 180ms var(--rc-ease); }
@@ -104,11 +119,19 @@
 
 /* radar scope */
 .rc-scope { background: radial-gradient(90% 70% at 50% 55%, color-mix(in srgb, var(--radar-green) 7%, transparent), transparent 70%), var(--bg-panel-solid); }
-.rc-scope-wrap { padding: .4rem 1.4rem; }
 .rc-seg { display: flex; gap: .3rem; flex-wrap: wrap; }
 .rc-seg button { display: inline-flex; align-items: center; gap: .3rem; padding: .3rem .65rem; border-radius: 99px; border: 1px solid var(--border-soft); font-size: 11.5px; font-weight: 800; color: var(--text-secondary); transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
 .rc-seg button i { font-style: normal; font-size: 10.5px; padding: 0 .35rem; border-radius: 99px; background: color-mix(in srgb, var(--text-primary) 8%, transparent); }
 .rc-seg button[aria-selected=true] { color: var(--radar-green); border-color: color-mix(in srgb, var(--radar-green) 55%, transparent); background: color-mix(in srgb, var(--radar-green) 10%, transparent); }
+/* the scope read by domain (RadarDisplay `sectors`) */
+.rc-scope-wrap { padding: 1.4rem 2.6rem; }
+.radar-sector-label { position: absolute; z-index: 12; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: .3rem; padding: .18rem .55rem; border-radius: 99px; white-space: nowrap; cursor: pointer;
+  font-size: 11.5px; font-weight: 800; color: var(--text-secondary); background: color-mix(in srgb, var(--bg-panel-solid) 82%, transparent); border: 1px solid var(--border-soft); transition: color 160ms ease, border-color 160ms ease, background-color 160ms ease; }
+.radar-sector-label i { font-style: normal; font-size: 10.5px; font-weight: 900; padding: 0 .35rem; border-radius: 99px; background: color-mix(in srgb, var(--text-primary) 9%, transparent); }
+.radar-sector-label:hover { color: var(--text-primary); border-color: color-mix(in srgb, var(--radar-green) 45%, transparent); }
+.radar-sector-label.is-on { color: var(--radar-green); border-color: color-mix(in srgb, var(--radar-green) 60%, transparent); background: color-mix(in srgb, var(--radar-green) 12%, var(--bg-panel-solid)); }
+.radar-sector-label:focus-visible { outline: 2px solid var(--radar-green); outline-offset: 2px; }
+.radar-band-label { position: absolute; z-index: 11; transform: translate(calc(-100% - 5px), -50%); padding: 0 .3rem; border-radius: 99px; background: color-mix(in srgb, var(--bg-panel-solid) 70%, transparent); pointer-events: none; font-size: 9.5px; font-weight: 800; opacity: .8; text-shadow: 0 0 6px var(--bg-panel-solid); }
 .rc-sev-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: .3rem 1rem; font-size: 11.5px; color: var(--text-secondary); }
 .rc-sev-legend span { display: inline-flex; align-items: center; gap: .35rem; }
 .rc-sev-legend i { width: .55rem; height: .55rem; border-radius: 99px; }
@@ -125,6 +148,13 @@
 .rc-sig-body b { font-size: 12.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rc-sig-body small { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rc-sev { padding: .1rem .5rem; border-radius: 99px; font-size: 10.5px; font-weight: 900; color: var(--sv); background: color-mix(in srgb, var(--sv) 13%, transparent); }
+li.rc-sig-group { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: .4rem; padding: .35rem .2rem .2rem; border: 0; border-radius: 0; font-size: 11.5px; font-weight: 900; color: var(--sv); background: var(--bg-panel-solid); }
+li.rc-sig-group i { width: .5rem; height: .5rem; border-radius: 99px; background: var(--sv); }
+li.rc-sig-group b { font-size: 10.5px; padding: 0 .4rem; border-radius: 99px; color: var(--text-secondary); background: color-mix(in srgb, var(--text-primary) 7%, transparent); }
+li.rc-sig-group:not(:first-child) { margin-top: .45rem; }
+.rc-due { padding: .1rem .5rem; border-radius: 99px; font-size: 10.5px; font-weight: 800; white-space: nowrap; color: var(--text-secondary); background: color-mix(in srgb, var(--text-primary) 7%, transparent); }
+.rc-due.is-late { color: #ef4444; background: color-mix(in srgb, #ef4444 13%, transparent); }
+.rc-od-sum { font-style: normal; font-weight: 800; color: #ef4444; }
 .rc-sig-detail { display: grid; gap: .3rem; padding: 0 .9rem .75rem 3.2rem; font-size: 12px; line-height: 1.85; color: var(--text-secondary); animation: rc-in 220ms var(--rc-ease) both; }
 .rc-sig-detail span { color: var(--text-muted); font-weight: 700; }
 .rc-sig-detail .rc-act { color: var(--text-primary); }

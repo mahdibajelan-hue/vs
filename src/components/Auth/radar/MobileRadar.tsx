@@ -8,6 +8,8 @@ import { PROJECT_STATUS_LABEL_FA } from '../../../modules/masterdata/types'
 import type { ModuleKey } from '../../../store/useModuleStore'
 import { PROJECT_NAV, type ProjectNavItem } from './projectNav'
 import { STATUS_COLOR, STATUS_LABEL_FA, type RadarData } from './radarTypes'
+import { radarBrief } from './radarBrief'
+import { todayTehran } from '../../../lib/today'
 
 const fa = (n: number) => Math.round(n).toLocaleString('fa-IR')
 
@@ -66,6 +68,17 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
           <Bar loading={loading} label="عملکرد هزینه" value={k.costPerformancePct} color={k.costVariancePct >= 0 ? '#22c55e' : '#f59e0b'} />
         </div>
       </section>
+
+      {/* what sets the status today, each a tap into the module where it is acted on */}
+      {!loading && (() => { const brief = radarBrief(data, todayTehran()); return brief.length > 0 && (
+        <section className="mr-brief" aria-label="عوامل تعیین‌کنندهٔ وضعیت">
+          {brief.map((b) => (
+            <button key={b.key} type="button" className={`mr-brief-i is-${b.tone}`} onClick={() => b.module && open(b.module)} disabled={!b.module || !canSee(b.module)}>
+              <i aria-hidden /><b>{b.title}</b><small>{b.detail}</small>
+            </button>
+          ))}
+        </section>
+      ) })()}
 
       <section className="mr-kpis" aria-label="شاخص‌های پایش">
         <Kpi loading={loading} icon={ShieldAlert} label="ریسک فعال" value={k.activeRisks} sub={k.activeRisksHigh ? `${fa(k.activeRisksHigh)} بالا` : undefined} color="#f43f5e" onClick={() => open('risk')} />

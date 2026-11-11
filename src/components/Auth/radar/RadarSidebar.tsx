@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from 'framer-motion'
-import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, Home, Moon, Pin, PinOff, Search, Sun, X } from 'lucide-react'
+import { ArrowLeftRight, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Moon, Pin, PinOff, Search, Sun, X } from 'lucide-react'
 import { PROJECT_STATUS_LABEL_FA, PROJECT_STATUS_TONE, type MasterProject } from '../../../modules/masterdata/types'
 import type { ModuleKey } from '../../../store/useModuleStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useAppTheme } from '../../common/useAppTheme'
 import { FarinMark } from '../../common/Logo'
 import { PROJECT_NAV, type ProjectNavItem } from './projectNav'
+import { IcPlant } from './industryIcons'
 import { useRadarPeek } from './radarPeek'
 import { menuPeek, type MenuPeek } from './menuPeek'
 import './projectMenu.css'
@@ -97,8 +98,34 @@ export function RadarSidebar({ project, active, canSee, badgeFor, desktop, pinne
     if (e.key === 'Escape') { if (q) setQ(''); else close() }
   }
 
+  // scroll buttons at the top and bottom of the module list — shown only while there is more to see that way
+  const navRef = useRef<HTMLElement>(null)
+  const navInRef = useRef<HTMLDivElement>(null)
+  const [more, setMore] = useState({ up: false, down: false })
+  useEffect(() => {
+    const nav = navRef.current
+    if (!nav) return
+    const measure = () => {
+      const up = nav.scrollTop > 4, down = nav.scrollTop + nav.clientHeight < nav.scrollHeight - 4
+      setMore((m) => (m.up === up && m.down === down ? m : { up, down }))
+    }
+    measure()
+    nav.addEventListener('scroll', measure, { passive: true })
+    const ro = new ResizeObserver(measure)
+    ro.observe(nav); if (navInRef.current) ro.observe(navInRef.current)
+    return () => { nav.removeEventListener('scroll', measure); ro.disconnect() }
+  }, [])
+  const scrollNav = (dir: 1 | -1) => {
+    const nav = navRef.current
+    if (!nav) return
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    nav.scrollBy({ top: dir * Math.max(120, nav.clientHeight * 0.6), behavior: smooth ? 'smooth' : 'auto' })
+  }
+
   const width = expanded ? (desktop ? PANEL : Math.min(PANEL + 8, window.innerWidth * 0.88)) : RAIL
   const hoverItem = hover ? PROJECT_NAV.flatMap((g) => g.items).find((i) => i.id === hover.id) : null
+  // the glass takes a faint glow of the module you are in
+  const aura = PROJECT_NAV.flatMap((g) => g.items).find((i) => i.id === active)?.accent ?? '#38bdf8'
 
   return (
     <MotionConfig reducedMotion="user" transition={{ duration: 0.34, ease }}>
@@ -110,6 +137,7 @@ export function RadarSidebar({ project, active, canSee, badgeFor, desktop, pinne
         className={`pmenu ${expanded ? 'is-open' : 'is-rail'} ${desktop ? 'is-desktop' : 'is-drawer'}`}
         aria-label="منوی پروژه"
         aria-hidden={!visible || undefined}
+        style={{ '--pm-aura': aura } as CSSProperties}
         initial={false}
         animate={{ width, x: visible ? 0 : width + 24 }}
         onPointerLeave={onListLeave}
@@ -141,7 +169,10 @@ export function RadarSidebar({ project, active, canSee, badgeFor, desktop, pinne
 
         {/* ── modules ── */}
         <LayoutGroup id={`pm-${desktop ? 'd' : 'm'}`}>
-          <nav className="pmenu-nav" onPointerLeave={onListLeave}>
+          <div className="pmenu-navwrap">
+          <button type="button" className={`pmenu-scroll is-up ${more.up ? 'is-on' : ''}`} onClick={() => scrollNav(-1)} aria-label="پیمایش منو به بالا" tabIndex={more.up ? 0 : -1} aria-hidden={!more.up || undefined}><ChevronUp size={15} aria-hidden /></button>
+          <nav ref={navRef} className="pmenu-nav" onPointerLeave={onListLeave}>
+            <div ref={navInRef} className="pmenu-nav-in">
             {groups.map((g) => {
               const shut = expanded && !q && closedGroups.includes(g.id)
               return (
@@ -169,7 +200,7 @@ export function RadarSidebar({ project, active, canSee, badgeFor, desktop, pinne
                             >
                               {on && <motion.span layoutId="pmenu-on" className="pmenu-pill-on" aria-hidden />}
                               {hover?.id === item.id && !on && <motion.span layoutId="pmenu-hover" className="pmenu-pill-hover" aria-hidden transition={{ type: 'spring', duration: 0.32, bounce: 0.12 }} />}
-                              <span className="pmenu-row-ico"><item.icon size={16} aria-hidden />{n > 0 && <i className="pmenu-dot" aria-hidden>{n > 99 ? '۹۹+' : fa(n)}</i>}</span>
+                              <span className="pmenu-row-ico"><item.icon size={18} aria-hidden />{n > 0 && <i className="pmenu-dot" aria-hidden>{n > 99 ? '۹۹+' : fa(n)}</i>}</span>
                               <span className="pmenu-row-label">{item.label}</span>
                               {pv && <span className="pmenu-row-val" aria-hidden>{pv.row}</span>}
                               {n > 0 && <span className="pmenu-badge" aria-hidden>{n > 99 ? '۹۹+' : fa(n)}</span>}
@@ -183,7 +214,10 @@ export function RadarSidebar({ project, active, canSee, badgeFor, desktop, pinne
               )
             })}
             {!groups.length && <p className="pmenu-empty">ماژولی با «{q}» پیدا نشد.</p>}
+            </div>
           </nav>
+          <button type="button" className={`pmenu-scroll is-down ${more.down ? 'is-on' : ''}`} onClick={() => scrollNav(1)} aria-label="پیمایش منو به پایین" tabIndex={more.down ? 0 : -1} aria-hidden={!more.down || undefined}><ChevronDown size={15} aria-hidden /></button>
+          </div>
         </LayoutGroup>
 
         {/* ── foot: theme, home, person ── */}
@@ -194,7 +228,7 @@ export function RadarSidebar({ project, active, canSee, badgeFor, desktop, pinne
             <span className="pmenu-toggle" data-on={dark || undefined} aria-hidden><i /></span>
           </button>
           <button type="button" className="pmenu-row" onClick={onHome} aria-label="صفحهٔ اصلی و ابزارهای سازمانی">
-            <span className="pmenu-row-ico"><Home size={16} aria-hidden /></span>
+            <span className="pmenu-row-ico"><IcPlant size={18} aria-hidden /></span>
             <span className="pmenu-row-label">صفحهٔ اصلی و ابزارهای سازمانی</span>
           </button>
           {user && (

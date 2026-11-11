@@ -327,7 +327,8 @@ function EpcBreakdown({ m }: { m: ProjectMetrics }) {
             {d?.planned != null && <span className="pdb-bar-plan" style={{ width: `${Math.min(100, d.planned)}%` }} />}
             {d && <span className="pdb-bar-act" style={{ width: `${Math.min(100, d.actual)}%` }} />}
           </span>
-          <small className="pdb-epc-plan">{d ? `برنامه ${pct(d.planned)}` : 'بدون داده'}{key === 'execution' && m.epc.consParts ? ` · ${m.epc.consParts.line ? `خط ${pct(m.epc.consParts.line.actual)} و ایستگاه‌ها ${pct(m.epc.consParts.stations.actual)} (سهم ${fa(m.epc.consParts.stationShare)}٪)` : `ایستگاه‌ها ${pct(m.epc.consParts.stations.actual)}`}` : ''}</small>
+          <small className="pdb-epc-plan">{d ? `برنامه ${pct(d.planned)}` : 'بدون داده'}</small>
+          {key === 'execution' && m.epc.consParts && <small className="pdb-epc-plan" style={{ display: 'block' }}>{m.epc.consParts.line ? `ترکیب این عدد: اجرای خط لوله ${pct(m.epc.consParts.line.actual)} با وزن ${fa(100 - m.epc.consParts.stationShare)}٪ و ایستگاه‌ها ${pct(m.epc.consParts.stations.actual)} با وزن ${fa(m.epc.consParts.stationShare)}٪` : `این عدد فقط از پیشرفت ایستگاه‌ها (${pct(m.epc.consParts.stations.actual)}) است`}</small>}
         </button>
       ))}
       {m.epc.overall && <p className="pdb-epc-total">پیشرفت وزنی EPC: <b>{pct(m.epc.overall.actual)}</b> · برنامه {pct(m.epc.overall.planned)}</p>}
@@ -360,40 +361,36 @@ function Phases({ m }: { m: ProjectMetrics }) {
   const totDev = m.earned - m.planned
   return (
     <div className="pdb-ph">
+      <p className="pdb-ph-legend"><span><i className="pdb-ph-key is-act" /> پیشرفت واقعی</span><span><i className="pdb-ph-key is-plan" /> برنامه‌ای امروز</span><span>نوار از راست به چپ پر می‌شود</span></p>
       <ol className="pdb-ph-list">
         {m.phases.map((p, i) => {
           const dev = p.actual - p.planned
           const st = PHASE_STATE[p.state]
           const devTone = dev < -0.5 ? 'is-bad' : dev > 0.5 ? 'is-good' : ''
+          const showDev = p.state !== 'done' || Math.abs(dev) >= 0.5
           return (
             <li key={p.code} className={`pdb-ph-item is-${p.state}`} style={{ '--ph': st.color, animationDelay: `${i * 40}ms` } as CSSProperties}>
               <span className="pdb-ph-node" aria-hidden>{p.state === 'done' ? '✓' : <span dir="ltr">{p.code}</span>}</span>
               <div className="pdb-ph-card">
-                <div className="pdb-ph-head">
-                  <div className="pdb-ph-title">
-                    <b>{p.title}</b>
-                    <span className="pdb-ph-meta">
-                      <span className="pdb-ph-state">{st.label}</span>
-                      <span>وزن {fa(p.weight, 1)}٪</span>
-                      {p.start && p.finish && <span className="pdb-nowrap">{formatJalali(p.start)} ← {formatJalali(p.finish)}</span>}
-                    </span>
-                  </div>
-                  <div className="pdb-ph-nums">
-                    <b>{pct(p.actual)}</b>
-                    <span className={`pdb-ph-dev ${devTone}`}>{dev > 0 ? '+' : ''}{pct(dev)}</span>
-                  </div>
+                <div className="pdb-ph-title">
+                  <b>{p.title}</b>
+                  <span className="pdb-ph-meta">
+                    <span className="pdb-ph-state">{st.label}</span>
+                    <span>وزن {fa(p.weight, 1)}٪</span>
+                    {p.start && p.finish && <span className="pdb-nowrap">{formatJalali(p.start)} ← {formatJalali(p.finish)}</span>}
+                  </span>
                 </div>
-                <div className="pdb-ph-track" dir="ltr" title={`برنامه‌ای ${pct(p.planned)} · واقعی ${pct(p.actual)}`}>
+                <div className="pdb-ph-track" title={`برنامه‌ای ${pct(p.planned)} · واقعی ${pct(p.actual)}`} role="img" aria-label={`${p.title}: واقعی ${pct(p.actual)}، برنامه‌ای ${pct(p.planned)}`}>
                   <span className={`pdb-ph-fill ${devTone}`} style={{ width: `${Math.min(100, Math.max(0, p.actual))}%` }} />
-                  {p.planned > 0 && <i className="pdb-ph-plan" style={{ left: `${Math.min(100, p.planned)}%` }} />}
+                  {p.planned > 0 && <i className="pdb-ph-plan" style={{ right: `${Math.min(100, p.planned)}%` }} />}
                 </div>
-                <div className="pdb-ph-foot">
-                  <span><i className="pdb-ph-key is-act" /> واقعی {pct(p.actual)}</span>
-                  <span><i className="pdb-ph-key is-plan" /> برنامه‌ای {pct(p.planned)}</span>
-                  <button type="button" className="pdb-src" onClick={() => open(p.engine === 'epc' ? 'execution' : 'scheduling')}>
-                    {p.engine === 'epc' ? 'ماژول‌های EPC' : p.engine === 'basic_design' ? 'مستر پلن (طراحی پایه)' : 'مستر پلن'}
-                  </button>
+                <div className="pdb-ph-nums">
+                  <b>{pct(p.actual)}</b>
+                  <span className="pdb-ph-sub">برنامه {pct(p.planned)}{showDev && <span className={`pdb-ph-dev ${devTone}`}>{dev > 0 ? '+' : ''}{pct(dev)}</span>}</span>
                 </div>
+                <button type="button" className="pdb-src pdb-ph-src" onClick={() => open(p.engine === 'epc' ? 'execution' : 'scheduling')} title="منبع محاسبهٔ پیشرفت این فاز">
+                  {p.engine === 'epc' ? 'ماژول‌های EPC' : p.engine === 'basic_design' ? 'مستر پلن (طراحی پایه)' : 'مستر پلن'}
+                </button>
               </div>
             </li>
           )

@@ -57,6 +57,18 @@ const RADAR_GRID_FADE_MASK = `conic-gradient(from 0deg,
   white 330deg, white 360deg)`
 const DEGREE_MARKS = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
 
+/** One wedge of the scope when it is read by domain: [from, to) in compass degrees. */
+export interface RadarSector { key: string; label: string; count: number; from: number; to: number }
+/** The severity bands, outer edge first — where the band labels sit (see SEVERITY_RADIUS_RANGE). */
+const BAND_LABELS: { sev: SignalSeverity; r: number }[] = [{ sev: 'critical', r: 0.25 }, { sev: 'high', r: 0.45 }, { sev: 'medium', r: 0.66 }, { sev: 'low', r: 0.84 }]
+const BAND_EDGES = [0.34, 0.56, 0.76]
+
+function wedgePath(from: number, to: number, r0: number, r1: number) {
+  const p = (a: number, r: number) => { const t = (a * Math.PI) / 180; return `${50 + r * 46 * Math.sin(t)} ${50 - r * 46 * Math.cos(t)}` }
+  const large = to - from > 180 ? 1 : 0
+  return `M ${p(from, r0)} L ${p(from, r1)} A ${r1 * 46} ${r1 * 46} 0 ${large} 1 ${p(to, r1)} L ${p(to, r0)} A ${r0 * 46} ${r0 * 46} 0 ${large} 0 ${p(from, r0)} Z`
+}
+
 function polarToPercent(angle: number, radius: number) {
   const rad = (angle * Math.PI) / 180
   const x = 50 + radius * 46 * Math.sin(rad)
@@ -65,8 +77,12 @@ function polarToPercent(angle: number, radius: number) {
 }
 
 export function RadarDisplay({
-  signals, dimmed, onOpenDetail, hideCallout,
+  signals, dimmed, onOpenDetail, hideCallout, sectors, activeSector, onSector,
 }: {
+  /** read the scope by domain: labelled wedges and labelled severity bands replace the compass degrees */
+  sectors?: RadarSector[]
+  activeSector?: string | null
+  onSector?: (key: string) => void
   /** the details are shown elsewhere (the cockpit's signal list): no floating callout */
   hideCallout?: boolean
   signals: RadarSignal[]
@@ -112,17 +128,38 @@ export function RadarDisplay({
           ))}
         </g>
         <g style={{ filter: `drop-shadow(0 0 0.5px ${RADAR_RING_GREEN})` }}>
-          {DEGREE_MARKS.map((deg) => {
+          {(sectors ? sectors.map((x) => x.from) : DEGREE_MARKS).map((deg) => {
             const rad = (deg * Math.PI) / 180
             const x2 = 50 + 46 * Math.sin(rad)
             const y2 = 50 - 46 * Math.cos(rad)
-            return <line key={deg} x1="50" y1="50" x2={x2} y2={y2} stroke="url(#radar-spoke-fade)" strokeWidth="0.15" />
+            return <line key={deg} x1="50" y1="50" x2={x2} y2={y2} stroke={sectors ? 'var(--radar-grid-text)' : 'url(#radar-spoke-fade)'} strokeOpacity={sectors ? 0.35 : 1} strokeWidth={sectors ? 0.22 : 0.15} />
           })}
         </g>
+        {sectors && <>
+          {/* the chosen domain's wedge */}
+          {sectors.filter((x) => x.key === activeSector).map((x) => <path key={x.key} d={wedgePath(x.from, x.to, 0.06, 0.92)} fill={RADAR_RING_GREEN} fillOpacity="0.1" stroke={RADAR_RING_GREEN} strokeOpacity="0.5" strokeWidth="0.25" />)}
+          {/* severity band edges */}
+          {BAND_EDGES.map((r) => <circle key={r} cx="50" cy="50" r={r * 46} fill="none" stroke="var(--radar-grid-text)" strokeOpacity="0.28" strokeWidth="0.18" strokeDasharray="0.8 1.2" />)}
+        </>}
       </svg>
+      {sectors && BAND_LABELS.map((b) => {
+        const { x, y } = polarToPercent(sectors[0]?.from ?? 0, b.r)
+        return <span key={b.sev} className="radar-band-label" style={{ left: `${x}%`, top: `${y}%`, color: SEVERITY_COLOR[b.sev] }}>{SEVERITY_LABEL_FA[b.sev]}</span>
+      })}
 
+      {/* Domain labels on the rim: what each wedge holds, and how many — a click reads that domain alone */}
+      {sectors?.map((x) => {
+        const { x: lx, y: ly } = polarToPercent((x.from + x.to) / 2, 1.075)
+        const on = activeSector === x.key
+        return (
+          <button key={x.key} type="button" className={`radar-sector-label${on ? ' is-on' : ''}`} style={{ left: `${lx}%`, top: `${ly}%` }}
+            onClick={() => onSector?.(x.key)} aria-pressed={on} aria-label={`${x.label}: ${x.count} مورد`}>
+            {x.label}<i>{x.count.toLocaleString('fa-IR')}</i>
+          </button>
+        )
+      })}
       {/* Degree labels, HTML so text stays crisp at any zoom */}
-      {DEGREE_MARKS.map((deg) => {
+      {!sectors && DEGREE_MARKS.map((deg) => {
         const { x, y } = polarToPercent(deg, 1.06)
         return (
           <span

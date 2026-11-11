@@ -1,9 +1,7 @@
-import type { LucideIcon } from 'lucide-react'
 import {
-  Factory,
-  BadgeDollarSign, CalendarClock, Droplets, Handshake, HeartPulse, LayoutDashboard, ShieldCheck, ClipboardList, Cpu, GitPullRequestArrow, HardHat, PackageCheck,
-  PencilRuler, Radar, ReceiptText, Route, ShieldAlert, Sparkles, Sprout,
-} from 'lucide-react'
+  IcBarrelCoin, IcColumn, IcControlPanel, IcCrane, IcFlare, IcGateValve, IcHardHats, IcHydroTest, IcManifold, IcPig, IcPipeStack,
+  IcPulseGauge, IcRadarScope, IcReroute, IcRowMarker, IcSafetyValve, IcScheduleBars, IcSpectacleBlind, IcStatement, IcWellhead, type NavIcon,
+} from './industryIcons'
 import { PROJECT_SCOPED_MODULES, type ModuleKey } from '../../../store/useModuleStore'
 import type { MasterProject } from '../../../modules/masterdata/types'
 
@@ -16,42 +14,43 @@ export interface ProjectNavItem {
   /** null = the radar overview itself */
   module: ModuleKey | null
   label: string
-  icon: LucideIcon
+  /** an industrial line icon (industryIcons.tsx), drawn on lucide's grid */
+  icon: NavIcon
   accent: string
 }
 export interface ProjectNavGroup { id: string; label: string; items: ProjectNavItem[] }
 
 export const PROJECT_NAV: ProjectNavGroup[] = [
   { id: 'watch', label: 'پایش', items: [
-    { id: 'overview', module: null, label: 'رادار پروژه', icon: Radar, accent: '#22c55e' },
-    { id: 'dashboard', module: 'projectdashboard', label: 'داشبورد پروژه', icon: LayoutDashboard, accent: '#60a5fa' },
-    { id: 'health', module: 'healthcenter', label: 'مرکز سلامت پروژه', icon: HeartPulse, accent: '#2dd4bf' },
+    { id: 'overview', module: null, label: 'رادار پروژه', icon: IcRadarScope, accent: '#22c55e' },
+    { id: 'dashboard', module: 'projectdashboard', label: 'داشبورد پروژه', icon: IcControlPanel, accent: '#60a5fa' },
+    { id: 'health', module: 'healthcenter', label: 'مرکز سلامت پروژه', icon: IcPulseGauge, accent: '#2dd4bf' },
     // Stage-Gate is the lifecycle of record; the EPC control tower lives inside it as a tab
-    { id: 'stagegate', module: 'stagegate', label: 'چرخهٔ عمر (Stage-Gate)', icon: Route, accent: '#38bdf8' },
+    { id: 'stagegate', module: 'stagegate', label: 'چرخهٔ عمر (Stage-Gate)', icon: IcGateValve, accent: '#38bdf8' },
   ] },
   { id: 'time', label: 'زمان و اجرا', items: [
-    { id: 'scheduling', module: 'scheduling', label: 'برنامه‌ریزی و کنترل زمان', icon: CalendarClock, accent: '#14b8a6' },
-    { id: 'engineering', module: 'engineering', label: 'پیشرفت مهندسی', icon: PencilRuler, accent: '#818cf8' },
-    { id: 'material', module: 'material', label: 'کنترل و تأمین کالا', icon: PackageCheck, accent: '#f59e0b' },
-    { id: 'execution', module: 'execution', label: 'مدیریت اجرا', icon: HardHat, accent: '#fb923c' },
-    { id: 'testing', module: 'testing', label: 'آزمایش‌ها (هیدروتست و پوشش)', icon: Droplets, accent: '#0ea5e9' },
-    { id: 'stationpiping', module: 'stationpiping', label: 'ایستگاه‌ها (پایپینگ و جوشکاری)', icon: Factory, accent: '#6366f1' },
-    { id: 'pssr', module: 'pssr', label: 'آمادگی راه‌اندازی (PSSR)', icon: ShieldCheck, accent: '#f97316' },
+    { id: 'scheduling', module: 'scheduling', label: 'برنامه‌ریزی و کنترل زمان', icon: IcScheduleBars, accent: '#14b8a6' },
+    { id: 'engineering', module: 'engineering', label: 'پیشرفت مهندسی', icon: IcColumn, accent: '#818cf8' },
+    { id: 'material', module: 'material', label: 'کنترل و تأمین کالا', icon: IcPipeStack, accent: '#f59e0b' },
+    { id: 'execution', module: 'execution', label: 'مدیریت اجرا', icon: IcCrane, accent: '#fb923c' },
+    { id: 'testing', module: 'testing', label: 'آزمایش‌ها (هیدروتست و پوشش)', icon: IcHydroTest, accent: '#0ea5e9' },
+    { id: 'stationpiping', module: 'stationpiping', label: 'ایستگاه‌ها (پایپینگ و جوشکاری)', icon: IcManifold, accent: '#6366f1' },
+    { id: 'pssr', module: 'pssr', label: 'آمادگی راه‌اندازی (PSSR)', icon: IcSafetyValve, accent: '#f97316' },
   ] },
   { id: 'money', label: 'قرارداد و هزینه', items: [
-    { id: 'finance', module: 'finance', label: 'قراردادها و مالی', icon: BadgeDollarSign, accent: '#10b981' },
-    { id: 'statements', module: 'statements', label: 'تولید صورت‌وضعیت (E·P·C)', icon: ReceiptText, accent: '#14b8a6' },
-    { id: 'change', module: 'change', label: 'مدیریت تغییرات', icon: GitPullRequestArrow, accent: '#eab308' },
+    { id: 'finance', module: 'finance', label: 'قراردادها و مالی', icon: IcBarrelCoin, accent: '#10b981' },
+    { id: 'statements', module: 'statements', label: 'تولید صورت‌وضعیت (E·P·C)', icon: IcStatement, accent: '#14b8a6' },
+    { id: 'change', module: 'change', label: 'مدیریت تغییرات', icon: IcReroute, accent: '#eab308' },
   ] },
   { id: 'risk', label: 'ریسک و مسائل', items: [
-    { id: 'risk', module: 'risk', label: 'مدیریت ریسک', icon: ShieldAlert, accent: '#f43f5e' },
-    { id: 'taskissue', module: 'taskissue', label: 'موانع و اقدامات', icon: ClipboardList, accent: '#f97316' },
-    { id: 'stakeholders', module: 'stakeholders', label: 'مدیریت ذینفعان', icon: Handshake, accent: '#a78bfa' },
+    { id: 'risk', module: 'risk', label: 'مدیریت ریسک', icon: IcFlare, accent: '#f43f5e' },
+    { id: 'taskissue', module: 'taskissue', label: 'موانع و اقدامات', icon: IcSpectacleBlind, accent: '#f97316' },
+    { id: 'stakeholders', module: 'stakeholders', label: 'مدیریت ذینفعان', icon: IcHardHats, accent: '#a78bfa' },
   ] },
   { id: 'assets', label: 'زمین و دارایی', items: [
-    { id: 'landacq', module: 'landacq', label: 'تملک و آزادسازی اراضی', icon: Sprout, accent: '#84cc16' },
-    { id: 'pipepulse', module: 'pipepulse', label: 'PipePulse', icon: Sparkles, accent: '#0ea5e9' },
-    { id: 'twin', module: 'pipelinedigitaltwin', label: 'دوقلوی دیجیتال', icon: Cpu, accent: '#38bdf8' },
+    { id: 'landacq', module: 'landacq', label: 'تملک و آزادسازی اراضی', icon: IcRowMarker, accent: '#84cc16' },
+    { id: 'pipepulse', module: 'pipepulse', label: 'PipePulse', icon: IcPig, accent: '#0ea5e9' },
+    { id: 'twin', module: 'pipelinedigitaltwin', label: 'دوقلوی دیجیتال', icon: IcWellhead, accent: '#38bdf8' },
   ] },
 ]
 

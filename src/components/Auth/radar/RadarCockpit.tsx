@@ -10,7 +10,9 @@ import { HEALTH_VERDICT_FA, HealthGuideButton, healthColor as healthColorOf } fr
 import { HEALTH_COLOR, statusFromScore } from '../../../modules/lifecycle/lib/health'
 import { HEALTH_DIMENSION_LABEL_FA } from '../../../modules/lifecycle/types'
 import { ModuleHeaderActions } from '../../common/ModuleHeaderActions'
-import { RadarDisplay } from './RadarDisplay'
+import { RadarDisplay, type RadarSector } from './RadarDisplay'
+import { daysOverdue, isOverdue, radarBrief, SEVERITY_ORDER } from './radarBrief'
+import { todayTehran } from '../../../lib/today'
 import { HeartbeatBar } from './HeartbeatBar'
 import {
   SEVERITY_COLOR, SEVERITY_LABEL_FA, SIGNAL_CATEGORY_LABEL_FA, STATUS_COLOR, STATUS_LABEL_FA,
@@ -59,6 +61,31 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
   const statusColor = hd ? (hd.status === 'black' ? HEALTH_COLOR[statusFromScore(hd.score)] : healthColorOf(hd)) : STATUS_COLOR[data.status]
   const go = (m: ModuleKey) => { if (canSee(m)) onOpen(m) }
   const k = data.kpi
+  const today = todayTehran()
+  const brief = useMemo(() => radarBrief(data, today), [data, today])
+  const overdue = useMemo(() => signals.filter((s) => isOverdue(s, today)).length, [signals, today])
+
+  // the scope read by domain: one wedge per kind of signal present, each signal placed inside its own wedge
+  // (distance from the centre still = severity), so position on the scope means something
+  const sectors = useMemo<RadarSector[]>(() => {
+    // wedge width follows the count (crowded domains get room), with a floor so a single item stays readable
+    const cats = CAT_ORDER.filter((c) => counts[c] > 0)
+    const total = cats.reduce((t, c) => t + counts[c], 0) || 1, floor = Math.min(28, 360 / Math.max(1, cats.length))
+    const raw = cats.map((c) => Math.max(floor, (counts[c] / total) * 360)), scale = 360 / raw.reduce((t, w) => t + w, 0)
+    let at = 0
+    return cats.map((c, i) => { const from = at; at += raw[i] * scale; return { key: c, label: SIGNAL_CATEGORY_LABEL_FA[c], count: counts[c], from, to: at } })
+  }, [counts])
+  const placed = useMemo(() => {
+    const at = new Map(sectors.map((x) => [x.key, x])), seen = new Map<string, number>()
+    return shown.map((sg) => {
+      const sec = at.get(sg.category)
+      if (!sec) return sg
+      const n = seen.get(sg.category) ?? 0; seen.set(sg.category, n + 1)
+      const pad = Math.min(8, (sec.to - sec.from) * 0.12)
+      return { ...sg, angle: sec.from + pad + ((n * 0.61803398875 + 0.31) % 1) * (sec.to - sec.from - 2 * pad) }
+    })
+  }, [shown, sectors])
+  const groups = useMemo(() => SEVERITY_ORDER.map((sv) => ({ sv, items: shown.filter((x) => x.severity === sv) })).filter((g) => g.items.length), [shown])
 
   return (
     <div className="rc" dir="rtl" data-loading={loading || undefined}>
@@ -92,6 +119,17 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
             <HeartbeatBar status={data.status} color={statusColor} />
             {canSee('projectdashboard') && <button type="button" className="rc-btn is-ghost" onClick={() => go('projectdashboard')}><LayoutDashboard size={15} aria-hidden /> داشبورد پروژه</button>}
           </div>
+          {/* what sets the status today — each fact opens the module where it is acted on */}
+          {!loading && (
+            <div className="rc-brief" aria-label="عوامل تعیین‌کنندهٔ وضعیت">
+              <span className="rc-brief-h">{brief.length ? 'چه چیزی وضعیت را تعیین می‌کند' : 'وضعیت'}</span>
+              {brief.length ? brief.map((b) => (
+                <button key={b.key} type="button" className={`rc-brief-i is-${b.tone}`} onClick={() => b.module && go(b.module)} disabled={!b.module || !canSee(b.module)}>
+                  <i aria-hidden /><b>{b.title}</b><small>{b.detail}</small>{b.module && canSee(b.module) && <ArrowLeft size={13} aria-hidden />}
+                </button>
+              )) : <span className="rc-brief-i is-ok"><i aria-hidden /><b>همه‌چیز در محدودهٔ برنامه است</b><small>موردی که تصمیم شما را لازم داشته باشد ثبت نشده</small></span>}
+            </div>
+          )}
         </section>
 
         {/* ── pulse: health, progress, SPI, CPI, finish ── */}
@@ -125,26 +163,30 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
         {/* ── radar + signal feed ── */}
         <section className="rc-row rc-row-scope">
           <article className="rc-card rc-scope rc-in" style={{ '--d': '160ms' } as CSSProperties}>
-            <header className="rc-card-head"><b><RadarIcon size={16} aria-hidden /> اسکن سیگنال‌ها</b><small>فاصله از مرکز = شدت؛ نزدیک‌تر یعنی بحرانی‌تر</small></header>
+            <header className="rc-card-head"><b><RadarIcon size={16} aria-hidden /> اسکن سیگنال‌ها</b><small>هر برش یک حوزه است · هرچه به مرکز نزدیک‌تر، شدیدتر · روی نام حوزه بزنید</small></header>
             <div className="rc-seg" role="tablist" aria-label="نوع سیگنال">
               <button type="button" role="tab" aria-selected={cat === 'all'} onClick={() => setCat('all')}>همه <i>{fa(signals.length)}</i></button>
               {CAT_ORDER.filter((c) => counts[c] > 0).map((c) => { const I = CAT_ICON[c]; return <button key={c} type="button" role="tab" aria-selected={cat === c} onClick={() => setCat(c)}><I size={13} aria-hidden /> {SIGNAL_CATEGORY_LABEL_FA[c]} <i>{fa(counts[c])}</i></button> })}
             </div>
-            <div className="rc-scope-wrap"><RadarDisplay signals={shown} dimmed={loading || refreshing} hideCallout onOpenDetail={(s) => setPicked(s.id)} /></div>
+            <div className="rc-scope-wrap"><RadarDisplay signals={placed} dimmed={loading || refreshing} hideCallout onOpenDetail={(s) => setPicked(s.id)} sectors={sectors} activeSector={cat === 'all' ? null : cat} onSector={(c) => setCat((v) => (v === c ? 'all' : (c as SignalCategory)))} /></div>
             <div className="rc-sev-legend">{(['critical', 'high', 'medium', 'low'] as SignalSeverity[]).map((s) => <span key={s}><i style={{ background: SEVERITY_COLOR[s] }} />{SEVERITY_LABEL_FA[s]} {fa(shown.filter((x) => x.severity === s).length)}</span>)}</div>
           </article>
           <article className="rc-card rc-feed rc-in" style={{ '--d': '200ms' } as CSSProperties}>
-            <header className="rc-card-head"><b><Activity size={16} aria-hidden /> نیازمند تصمیم</b><small>{cat === 'all' ? 'همهٔ سیگنال‌ها، به ترتیب شدت' : SIGNAL_CATEGORY_LABEL_FA[cat]}</small></header>
+            <header className="rc-card-head"><b><Activity size={16} aria-hidden /> نیازمند تصمیم</b><small>{cat === 'all' ? 'همهٔ حوزه‌ها' : SIGNAL_CATEGORY_LABEL_FA[cat]} · {fa(shown.length)} مورد{overdue ? <> · <em className="rc-od-sum">{fa(overdue)} از مهلت گذشته</em></> : null}</small></header>
             {loading ? <SkeletonList /> : shown.length === 0 ? <p className="rc-empty"><CheckCircle2 size={18} aria-hidden /> سیگنالی در این دسته ثبت نشده است.</p> : (
               <ul className="rc-signals">
-                {shown.slice(0, 40).map((s) => {
+                {groups.map((g) => [
+                  <li key={`h-${g.sv}`} className="rc-sig-group" style={{ '--sv': SEVERITY_COLOR[g.sv] } as CSSProperties} aria-hidden><i />{SEVERITY_LABEL_FA[g.sv]}<b>{fa(g.items.length)}</b></li>,
+                  ...g.items.slice(0, 25).map((s) => {
                   const I = CAT_ICON[s.category], open = picked === s.id, m = moduleOf(s)
+                  const od = daysOverdue(s.due, today)
                   return (
                     <li key={s.id} className={open ? 'is-open' : ''} style={{ '--sv': SEVERITY_COLOR[s.severity] } as CSSProperties}>
                       <button type="button" className="rc-sig" aria-expanded={open} onClick={() => setPicked(open ? null : s.id)}>
                         <span className="rc-sig-ico"><I size={14} aria-hidden /></span>
                         <span className="rc-sig-body"><b>{s.title}</b><small>{SIGNAL_CATEGORY_LABEL_FA[s.category]}{s.subject ? ` · ${s.subject}` : ''}</small></span>
-                        <span className="rc-sev">{SEVERITY_LABEL_FA[s.severity]}</span>
+                        {od != null && s.category !== 'milestone' && od > 0 ? <span className="rc-due is-late">{fa(od)} روز گذشته</span>
+                          : od != null && od <= 0 && od > -8 ? <span className="rc-due">{od === 0 ? 'امروز' : `${fa(-od)} روز مانده`}</span> : null}
                       </button>
                       {open && (
                         <div className="rc-sig-detail">
@@ -157,7 +199,7 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
                       )}
                     </li>
                   )
-                })}
+                })])}
               </ul>
             )}
           </article>

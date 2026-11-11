@@ -1,46 +1,72 @@
 /* ── project menu: floating glass strip ⇄ panel (RadarSidebar.tsx) ─────────
-   Dark theme: smoked glass that takes the page's colour. Light theme: frosted glass, active row in solid ink.
+   A slab of clear glass: heavy blur + saturation so the page shows through as colour, a refraction rim that is bright
+   where the light hits (top corner) and fades down the sides, a specular sheen across the top, and a faint aurora in
+   the colour of the module you are in (--pm-aura, set by the component). Rows are glass too: the active one is a tinted
+   lozenge in its module's accent, icons sit on small frosted tiles.
    Rows keep the same geometry in both states — the strip is the panel with its labels clipped — so opening is one
    continuous widening, the icons never move. */
 
 .pmenu {
-  --pm-bg: linear-gradient(180deg, rgba(30, 36, 50, 0.62), rgba(14, 18, 28, 0.7));
-  --pm-line: rgba(255, 255, 255, 0.12);
-  --pm-edge: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-  --pm-shadow: 0 28px 64px -28px rgba(0, 0, 0, 0.8), 0 2px 8px rgba(0, 0, 0, 0.28);
+  --pm-bg: linear-gradient(165deg, rgba(44, 52, 72, 0.5), rgba(12, 16, 26, 0.6));
+  --pm-line: rgba(255, 255, 255, 0.1);
+  --pm-rim: linear-gradient(160deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.08) 28%, rgba(255, 255, 255, 0.03) 62%, rgba(255, 255, 255, 0.2));
+  --pm-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0) 120px);
+  --pm-aura-mix: 30%;
+  --pm-tile: rgba(255, 255, 255, 0.055);
+  --pm-tile-line: rgba(255, 255, 255, 0.09);
+  --pm-edge: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  --pm-shadow: 0 30px 70px -28px rgba(0, 0, 0, 0.75), 0 2px 10px rgba(0, 0, 0, 0.25);
   --pm-text: #f4f1ee;
   --pm-muted: rgba(236, 232, 228, 0.62);
   --pm-icon: rgba(244, 240, 236, 0.8);
   --pm-hover: rgba(255, 255, 255, 0.075);
   --pm-hover-line: rgba(255, 255, 255, 0.1);
-  --pm-on: linear-gradient(180deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.08));
-  --pm-on-line: rgba(255, 255, 255, 0.3);
   --pm-on-text: #fff;
   --pm-field: rgba(255, 255, 255, 0.06);
 
   position: fixed; top: 12px; bottom: 12px; right: 12px; z-index: 45;
   display: flex; flex-direction: column; gap: 6px; padding: 12px;
-  border-radius: 26px; overflow: hidden;
+  border-radius: 28px; overflow: hidden; isolation: isolate;
   color: var(--pm-text); background: var(--pm-bg);
-  -webkit-backdrop-filter: blur(26px) saturate(170%); backdrop-filter: blur(26px) saturate(170%);
-  border: 1px solid var(--pm-line); box-shadow: var(--pm-edge), var(--pm-shadow);
+  -webkit-backdrop-filter: blur(30px) saturate(190%); backdrop-filter: blur(30px) saturate(190%);
+  border: 0; box-shadow: var(--pm-edge), var(--pm-shadow);
   font-size: 13px;
+  transition: --pm-aura 700ms ease;
+}
+@property --pm-aura { syntax: '<color>'; inherits: true; initial-value: #38bdf8; }
+/* aurora + sheen behind the content */
+.pmenu::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    var(--pm-sheen),
+    radial-gradient(130% 34% at 100% 0%, color-mix(in srgb, var(--pm-aura) var(--pm-aura-mix), transparent), transparent 72%),
+    radial-gradient(110% 26% at 0% 100%, color-mix(in srgb, var(--pm-aura) calc(var(--pm-aura-mix) * 0.55), transparent), transparent 70%);
+}
+/* refraction rim: a 1px gradient border, brightest at the top corner */
+.pmenu::after {
+  content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none; border-radius: inherit; padding: 1px;
+  background: var(--pm-rim);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
 }
 :root[data-theme="light"] .pmenu {
-  --pm-bg: linear-gradient(180deg, rgba(246, 246, 247, 0.66), rgba(232, 233, 236, 0.62));
-  --pm-line: rgba(255, 255, 255, 0.78);
-  --pm-edge: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 0 0 1px rgba(255, 255, 255, 0.35);
-  --pm-shadow: 0 32px 64px -32px rgba(15, 23, 42, 0.38), 0 2px 10px rgba(15, 23, 42, 0.08);
+  --pm-bg: linear-gradient(165deg, rgba(255, 255, 255, 0.58), rgba(236, 239, 245, 0.46));
+  --pm-line: rgba(19, 19, 22, 0.08);
+  --pm-rim: linear-gradient(160deg, #fff, rgba(255, 255, 255, 0.55) 30%, rgba(255, 255, 255, 0.25) 65%, rgba(255, 255, 255, 0.9));
+  --pm-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 110px);
+  --pm-aura-mix: 22%;
+  --pm-tile: rgba(255, 255, 255, 0.6);
+  --pm-tile-line: rgba(255, 255, 255, 0.95);
+  --pm-edge: inset 0 1px 0 #fff;
+  --pm-shadow: 0 32px 64px -30px rgba(15, 23, 42, 0.4), 0 2px 10px rgba(15, 23, 42, 0.08);
   --pm-text: #131316;
   --pm-muted: rgba(19, 19, 22, 0.56);
   --pm-icon: #3a3a42;
   --pm-hover: rgba(255, 255, 255, 0.86);
   --pm-hover-line: rgba(255, 255, 255, 1);
-  --pm-on: #121214;
-  --pm-on-line: #121214;
-  --pm-on-text: #fff;
-  --pm-field: rgba(255, 255, 255, 0.7);
-  -webkit-backdrop-filter: blur(30px) saturate(140%); backdrop-filter: blur(30px) saturate(140%);
+  --pm-on-text: #131316;
+  --pm-field: rgba(255, 255, 255, 0.66);
+  -webkit-backdrop-filter: blur(32px) saturate(180%); backdrop-filter: blur(32px) saturate(180%);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .pmenu { --pm-bg: #121722; } :root[data-theme="light"] .pmenu { --pm-bg: #eeeff1; }
@@ -100,8 +126,25 @@
 .pmenu-switch:hover { color: var(--pm-text); }
 
 /* ── modules ── */
+.pmenu-navwrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.pmenu-nav-in { display: flex; flex-direction: column; }
+.pmenu-scroll {
+  position: absolute; inset-inline: 0; z-index: 3; width: 40px; height: 22px; margin-inline: auto; display: grid; place-items: center; border-radius: 99px; cursor: pointer;
+  color: var(--pm-text); background: color-mix(in srgb, var(--pm-text) 12%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pm-text) 18%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 6px 14px -6px rgba(0, 0, 0, 0.5);
+  opacity: 0; pointer-events: none; transition: opacity 180ms ease, transform 220ms cubic-bezier(0.23, 1, 0.32, 1), width 300ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+:root[data-theme="light"] .pmenu-scroll { background: rgba(255, 255, 255, 0.72); box-shadow: inset 0 0 0 1px #fff, 0 6px 16px -8px rgba(15, 23, 42, 0.45); }
+.pmenu.is-open .pmenu-scroll { width: 72px; }
+.pmenu-scroll.is-up { top: 0; transform: translateY(-6px) scale(0.9); }
+.pmenu-scroll.is-down { bottom: 0; transform: translateY(6px) scale(0.9); }
+.pmenu-scroll.is-on { opacity: 1; pointer-events: auto; transform: none; }
+.pmenu-scroll.is-on:hover { background: color-mix(in srgb, var(--pm-text) 20%, transparent); }
+:root[data-theme="light"] .pmenu-scroll.is-on:hover { background: #fff; }
+.pmenu-scroll.is-on:active { transform: scale(0.94); }
 .pmenu-nav { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; margin-inline: -4px; padding-inline: 4px; scrollbar-width: none; }
-.pmenu-nav { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 22px), transparent); }
+.pmenu-nav { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 24px), transparent); }
 .pmenu.is-open .pmenu-nav { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--pm-text) 22%, transparent) transparent; }
 .pmenu-nav::-webkit-scrollbar { width: 6px; } .pmenu-nav::-webkit-scrollbar-thumb { border-radius: 6px; background: color-mix(in srgb, var(--pm-text) 22%, transparent); }
 .pmenu-group { display: flex; flex-direction: column; }
@@ -125,20 +168,42 @@
 .pmenu-pill-on, .pmenu-pill-hover { position: absolute; inset: 0; z-index: -1; border-radius: 14px; }
 .pmenu-pill-hover { background: var(--pm-hover); box-shadow: inset 0 0 0 1px var(--pm-hover-line); }
 :root[data-theme="light"] .pmenu-pill-hover { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 18px -10px rgba(15, 23, 42, 0.25); }
-.pmenu-pill-on { background: var(--pm-on); box-shadow: inset 0 0 0 1px var(--pm-on-line), inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 8px 20px -10px rgba(0, 0, 0, 0.5); }
+/* the active row: a lozenge of glass tinted with its module's accent (--a lives on the row) */
+.pmenu-pill-on {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--a) 30%, rgba(255, 255, 255, 0.1)), color-mix(in srgb, var(--a) 12%, rgba(255, 255, 255, 0.03)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a) 50%, rgba(255, 255, 255, 0.22)), inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 12px 26px -14px color-mix(in srgb, var(--a) 80%, transparent);
+}
+:root[data-theme="light"] .pmenu-pill-on {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), color-mix(in srgb, var(--a) 10%, rgba(255, 255, 255, 0.8)));
+  box-shadow: inset 0 0 0 1px #fff, 0 1px 2px rgba(15, 23, 42, 0.08), 0 12px 24px -12px color-mix(in srgb, var(--a) 60%, rgba(15, 23, 42, 0.4));
+}
 .pmenu-row.is-on { color: var(--pm-on-text); font-weight: 750; }
 .pmenu-row-ico { position: relative; flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 14px; color: var(--pm-icon); transition: color 160ms ease; }
+/* the frosted tile each icon sits on */
+.pmenu-row-ico::before {
+  content: ''; position: absolute; inset: 4px; border-radius: 11px; background: var(--pm-tile); box-shadow: inset 0 0 0 1px var(--pm-tile-line), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: background-color 200ms ease, box-shadow 200ms ease;
+}
+.pmenu-row-ico > svg { position: relative; z-index: 1; }
 .pmenu-row:hover .pmenu-row-ico { color: var(--pm-text); }
-.pmenu-row.is-on .pmenu-row-ico { color: var(--a); }
-:root[data-theme="light"] .pmenu-row.is-on .pmenu-row-ico::before { content: ''; position: absolute; inset: 7px; z-index: -1; border-radius: 99px; background: var(--a); }
-:root[data-theme="light"] .pmenu-row.is-on .pmenu-row-ico { color: #0b0b0d; }
+.pmenu-row.is-on .pmenu-row-ico { color: color-mix(in srgb, var(--a) 62%, #fff); }
+.pmenu-row.is-on .pmenu-row-ico::before {
+  background: radial-gradient(80% 80% at 50% 0%, color-mix(in srgb, var(--a) 46%, transparent), color-mix(in srgb, var(--a) 18%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a) 60%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 16px -2px color-mix(in srgb, var(--a) 70%, transparent);
+}
+:root[data-theme="light"] .pmenu-row.is-on .pmenu-row-ico { color: color-mix(in srgb, var(--a) 72%, #000); }
+:root[data-theme="light"] .pmenu-row.is-on .pmenu-row-ico::before {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--a) 22%, #fff), color-mix(in srgb, var(--a) 12%, #fff));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a) 40%, #fff), 0 4px 12px -4px color-mix(in srgb, var(--a) 60%, transparent);
+}
+.pmenu-foot .pmenu-row-ico::before { background: transparent; box-shadow: none; }
 .pmenu-row-label { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; -webkit-mask-image: linear-gradient(to right, transparent 0, #000 16px); mask-image: linear-gradient(to right, transparent 0, #000 16px); padding-inline-end: 10px; }
 .pmenu-row-val { flex: none; max-width: 92px; overflow: hidden; white-space: nowrap; font-size: 10.5px; font-weight: 600; color: var(--pm-muted); font-variant-numeric: tabular-nums; }
 .pmenu-row.is-on .pmenu-row-val { color: color-mix(in srgb, var(--pm-on-text) 70%, transparent); }
 .pmenu-badge { flex: none; min-width: 20px; height: 20px; margin-inline-end: 8px; padding: 0 6px; display: grid; place-items: center; border-radius: 99px; font-size: 10.5px; font-weight: 800; color: #fff; background: #ef4444; box-shadow: 0 2px 8px -2px rgba(239, 68, 68, 0.6); }
 .pmenu-row-val + .pmenu-badge { margin-inline-start: 2px; }
 .pmenu-row-val:last-child { margin-inline-end: 10px; }
-.pmenu-dot { position: absolute; top: 3px; left: 2px; min-width: 15px; height: 15px; padding: 0 3px; display: grid; place-items: center; border-radius: 99px; font-style: normal; font-size: 9px; font-weight: 800; line-height: 1; color: #fff; background: #ef4444; box-shadow: 0 0 0 2px rgba(14, 18, 28, 0.85); opacity: 0; transform: scale(0.6); transition: opacity 180ms ease, transform 220ms cubic-bezier(0.23, 1, 0.32, 1); }
+.pmenu-dot { position: absolute; z-index: 2; top: 3px; left: 2px; min-width: 15px; height: 15px; padding: 0 3px; display: grid; place-items: center; border-radius: 99px; font-style: normal; font-size: 9px; font-weight: 800; line-height: 1; color: #fff; background: #ef4444; box-shadow: 0 0 0 2px rgba(14, 18, 28, 0.85); opacity: 0; transform: scale(0.6); transition: opacity 180ms ease, transform 220ms cubic-bezier(0.23, 1, 0.32, 1); }
 :root[data-theme="light"] .pmenu-dot { box-shadow: 0 0 0 2px rgba(240, 241, 243, 0.95); }
 .pmenu.is-rail .pmenu-dot { opacity: 1; transform: none; }
 .pmenu-empty { padding: 14px 10px; font-size: 12px; color: var(--pm-muted); text-align: center; white-space: nowrap; }
@@ -176,8 +241,9 @@
 .pmenu-card {
   --a: #38bdf8;
   position: fixed; z-index: 46; width: 236px; padding: 14px 16px 12px; border-radius: 22px; pointer-events: none; transform-origin: right center;
-  color: #f8fafc; background: rgba(10, 12, 18, 0.9); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 30px 60px -26px rgba(0, 0, 0, 0.8);
+  color: #f8fafc; background: radial-gradient(120% 60% at 100% 0%, color-mix(in srgb, var(--a) 22%, transparent), transparent 70%), rgba(12, 15, 24, 0.78);
+  -webkit-backdrop-filter: blur(26px) saturate(180%); backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 30px 60px -26px rgba(0, 0, 0, 0.8);
 }
 .pmenu-card-h { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: rgba(248, 250, 252, 0.86); }
 .pmenu-card-ico { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 8px; color: var(--a); background: color-mix(in srgb, var(--a) 18%, transparent); }
@@ -193,4 +259,4 @@
 .pmenu-card-bar small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9.5px; color: rgba(248, 250, 252, 0.55); }
 
 @media (pointer: coarse) { .pmenu-row, .pmenu-search { min-height: 44px; } .pmenu-row-ico { height: 44px; } }
-@media (prefers-reduced-motion: reduce) { .pmenu *, .pmenu-card *, .pmenu-tip { transition-duration: 0ms !important; } }
+@media (prefers-reduced-motion: reduce) { .pmenu, .pmenu-scroll, .pmenu *, .pmenu-card *, .pmenu-tip { transition-duration: 0ms !important; } }

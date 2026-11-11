@@ -108,6 +108,7 @@ function issueToSignal(issue: ImIssue, index: number, total: number): RadarSigna
     impactEn: issue.description || '—', rootCauseEn: '—', recommendedActionEn: '—',
     angle: Math.round((index / Math.max(1, total)) * 360) + 15,
     radius: spreadRadius(rMin, rMax, index),
+    due: issue.deadlineDate || null,
   }
 }
 
@@ -589,7 +590,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
         id: `ms-${i}`, category: 'milestone', severity: m.critical ? 'medium' : 'low', title: m.name, subject: `سررسید ${formatJalaliFa(m.date)}`, detail: m.code,
         impact: m.critical ? 'روی مسیر بحرانی است؛ تأخیر آن پایان پروژه را جابه‌جا می‌کند' : 'نقطهٔ عطف برنامهٔ زمان‌بندی', rootCause: '—', recommendedAction: 'پیگیری پیش‌نیازها در «برنامه‌ریزی و کنترل زمان»',
         titleEn: m.name, subjectEn: m.date, detailEn: m.code, impactEn: '', rootCauseEn: '—', recommendedActionEn: '',
-        angle: Math.round(300 + (i / Math.max(1, arr.length)) * 50), radius: spreadRadius(rMin, rMax, i),
+        angle: Math.round(300 + (i / Math.max(1, arr.length)) * 50), radius: spreadRadius(rMin, rMax, i), due: m.date,
       }))
       result = { ...result, schedule: sum, signals: [...result.signals.filter((x) => x.category !== 'milestone'), ...ms], kpi: { ...result.kpi, delayedActivities: sum.overdue, upcomingMilestones: sum.milestones.length } }
     }

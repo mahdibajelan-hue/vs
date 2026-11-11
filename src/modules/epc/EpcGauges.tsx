@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { EpcProgress } from './epcProgress'
 
 /** The EPC contract's progress as four gauges — engineering, procurement, construction and the weighted total — from the
@@ -16,9 +16,14 @@ const CSS = `.epg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150p
 .epg-c.tot .epg-v{font-size:25px}
 .epg-s{font-size:11.5px;color:var(--im-muted,#94a3b8);text-align:center;line-height:1.7}
 .epg-s b{font-weight:800}
+.epg-mix{display:grid;gap:3px;width:100%;max-width:190px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--im-line,rgba(148,163,184,.3))}
+.epg-mix>small{font-size:10.5px;color:var(--im-muted,#94a3b8);text-align:center}
+.epg-mix>span{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:6px;font-size:11px;color:var(--im-muted,#94a3b8)}
+.epg-mix>span b{font-weight:800;color:var(--im-text,inherit);font-variant-numeric:tabular-nums}
+.epg-mix>span em{font-style:normal;font-size:10px;padding:0 5px;border-radius:99px;background:color-mix(in srgb,var(--g) 14%,transparent);color:var(--g)}
 @media (prefers-reduced-motion:reduce){.epg-arc{transition:none}}`
 
-function Gauge({ k, actual, planned, weight, note }: { k: keyof typeof EPC_COLORS; actual: number | null; planned: number | null; weight: number | null; note?: string }) {
+function Gauge({ k, actual, planned, weight, note }: { k: keyof typeof EPC_COLORS; actual: number | null; planned: number | null; weight: number | null; note?: ReactNode }) {
   const [on, setOn] = useState(false)
   useEffect(() => { const t = requestAnimationFrame(() => setOn(true)); return () => cancelAnimationFrame(t) }, [])
   const r = 52, C = 2 * Math.PI * r, arc = 0.75 // a 270° arc
@@ -42,18 +47,26 @@ function Gauge({ k, actual, planned, weight, note }: { k: keyof typeof EPC_COLOR
       <div className="epg-v">{actual == null ? '—' : `${fa(actual)}٪`}</div>
       <div className="epg-s">
         برنامه <b>{planned == null ? '—' : `${fa(planned)}٪`}</b>{varc != null && <> · <b style={{ color: varc >= 0 ? '#16a34a' : '#ef4444' }}>{varc >= 0 ? '+' : '−'}{fa(Math.abs(varc))}</b></>}
-        {weight != null && <><br />سهم از قرارداد {fa(weight * 100, 0)}٪</>}
-        {note && <><br />{note}</>}
+        {weight != null && <><br />وزن در کل قرارداد {fa(weight * 100, 0)}٪</>}
       </div>
+      {note}
     </div>
   )
 }
 
-/** construction's two sources, when the project has stations */
-function consNote(p: EpcProgress) {
+/** construction's two sources, when the project has stations: C = pipeline × its weight + stations × theirs */
+function consNote(p: EpcProgress): ReactNode {
   const c = p.consParts
   if (!c) return undefined
-  return c.line ? `خط ${fa(c.line.actual)}٪ · ایستگاه‌ها ${fa(c.stations.actual)}٪ (سهم ${fa(c.stationShare, 0)}٪)` : `فقط ایستگاه‌ها: ${fa(c.stations.actual)}٪`
+  if (!c.line) return <div className="epg-mix"><small>اجرا فقط از پیشرفت ایستگاه‌ها</small></div>
+  const sw = c.stationShare
+  return (
+    <div className="epg-mix" title={`پیشرفت اجرا = پیشرفت اجرای خط لوله × ${fa(100 - sw, 0)}٪ + پیشرفت ایستگاه‌ها × ${fa(sw, 0)}٪`}>
+      <small>این عدد از دو بخش ساخته می‌شود:</small>
+      <span>اجرای خط لوله<b>{fa(c.line.actual)}٪</b><em>وزن {fa(100 - sw, 0)}٪</em></span>
+      <span>ایستگاه‌ها<b>{fa(c.stations.actual)}٪</b><em>وزن {fa(sw, 0)}٪</em></span>
+    </div>
+  )
 }
 
 export function EpcGauges({ p }: { p: EpcProgress }) {
