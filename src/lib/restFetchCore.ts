@@ -65,6 +65,8 @@ export function createRestFetch(base: FetchFn, opts: {
   persist?: AnswerStore; onRevalidated?: (table: string, store: string) => void
   /** calls that change nothing the app reads: read-only (STABLE) functions, and writes to logs no page reads back */
   harmless?: (method: string, path: string) => boolean
+  /** told of every database write (after memory is emptied), for other short-lived caches to empty theirs */
+  onWrite?: () => void
 } = {}) {
   let clearedAt = 0 // answers kept before the last write are never served
   const keysOf = (table: string) => opts.keys?.[table] ?? ['id']
@@ -125,8 +127,8 @@ export function createRestFetch(base: FetchFn, opts: {
     // only the database's own calls can change data; auth (token refresh) and storage pass straight through
     if (method !== 'GET' && method !== 'HEAD' && (!url.pathname.includes('/rest/v1/') || opts.harmless?.(method, url.pathname.split('/rest/v1/')[1] ?? ''))) return base(input, init)
     if (method !== 'GET' && method !== 'HEAD') {
-      generation++; memory.clear(); inflight.clear(); clearedAt = now(); opts.persist?.clear()
-      try { return await base(input, init) } finally { generation++; memory.clear(); clearedAt = now(); opts.persist?.clear() }
+      generation++; memory.clear(); inflight.clear(); clearedAt = now(); opts.persist?.clear(); opts.onWrite?.()
+      try { return await base(input, init) } finally { generation++; memory.clear(); clearedAt = now(); opts.persist?.clear(); opts.onWrite?.() }
     }
     if (!isRestRead(url, method) || input instanceof Request) return base(input, init)
 

@@ -31,4 +31,15 @@ assert.deepEqual(await batched({ table: 't', column: 'project_name' }, []), [])
 
 assert.deepEqual(sortBy([{ d: '2' }, { d: '1' }], 'd').map((x) => x.d), ['1', '2'])
 assert.deepEqual(sortBy([{ d: '2' }, { d: '1' }], 'd', true).map((x) => x.d), ['2', '1'])
+
+// reuse window: a second read of the same keys within reuseMs is answered without a request; forget() ends it
+{
+  let calls = 0, clock = 0
+  const b = createBatcher(async (spec, keys) => { calls++; return { data: keys.filter((k) => k !== 'empty').map((k) => ({ pid: k, v: calls })), error: null } }, 1, { reuseMs: 100, now: () => clock })
+  assert.deepEqual(await b({ table: 't', column: 'pid' }, ['a', 'empty']), [{ pid: 'a', v: 1 }])
+  assert.deepEqual(await b({ table: 't', column: 'pid' }, ['a', 'empty']), [{ pid: 'a', v: 1 }]); assert.equal(calls, 1)
+  await b({ table: 't', column: 'pid' }, ['a', 'b']); assert.equal(calls, 2) // a new key: read again
+  b.forget(); await b({ table: 't', column: 'pid' }, ['a']); assert.equal(calls, 3)
+  clock += 200; await b({ table: 't', column: 'pid' }, ['a']); assert.equal(calls, 4)
+}
 console.log('batchedQuery ok')

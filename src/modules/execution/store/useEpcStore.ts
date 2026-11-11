@@ -175,6 +175,11 @@ function mergeScoped(cur: State, patch: Partial<State>, sc: Scope): Partial<Stat
   return out as Partial<State>
 }
 
+let templatesReadAt = 0
+const TEMPLATES_TTL = 10 * 60_000
+/** the next load reads the sheet library again (after a template was saved, approved or deleted, or changed elsewhere) */
+export function forgetTemplates() { templatesReadAt = 0 }
+
 export const useEpcStore = create<State>((set, get) => ({
   available: true, loaded: false, coverage: EMPTY_COVERAGE,
   welders: [], quals: [], pipes: [], crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], weldHistory: [], archive: [], workActions: [], actionRules: [], statements: [], statementLines: [], signSlots: [], signatures: [], requiredForms: [], mappingApprovals: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
@@ -193,7 +198,10 @@ export const useEpcStore = create<State>((set, get) => ({
     // independent groups of tables: one parallel wave instead of ten sequential round trips
     const groups: (() => Promise<void>)[] = [
       async () => {
-      const [tpl, lnk] = await Promise.all([db.from('ex_form_templates').select('*').order('form_key').order('version', { ascending: false }), S('ex_report_links', '*')])
+      // the sheet library is shared by every project (≈380 KB of layouts): read once, again only after it changed
+      const fresh = Date.now() - templatesReadAt < TEMPLATES_TTL && get().templates.length > 0
+      const [tpl, lnk] = await Promise.all([fresh ? Promise.resolve({ data: null, error: 'fresh' }) : db.from('ex_form_templates').select('*').order('form_key').order('version', { ascending: false }), S('ex_report_links', '*')])
+      if (!tpl.error) templatesReadAt = Date.now()
       if (!tpl.error) put({ templates: ((tpl.data ?? []) as Row[]).map((r): FormTemplateRow => ({ id: r.id, formKey: r.form_key, version: r.version, title: r.title ?? '', code: r.code ?? '', revision: r.revision ?? '', status: r.status, layout: r.layout, bindings: r.bindings ?? [], sourceFile: r.source_file ?? '', sourceSha256: r.source_sha256 ?? '', approvedAt: r.approved_at })) })
       if (!lnk.error) put({ reportLinks: ((lnk.data ?? []) as Row[]).map((r): ReportLinkRow => ({ id: r.id, projectId: r.project_id, lineId: r.line_id, techReportId: r.tech_report_id })) })
       },
@@ -305,18 +313,18 @@ export const useEpcStore = create<State>((set, get) => ({
     const ver = Math.max(0, ...get().templates.filter((x) => x.formKey === t.formKey).map((x) => x.version)) + 1
     const { error } = await supabase.from('ex_form_templates').insert({ form_key: t.formKey, version: ver, title: t.title, layout: t.layout, bindings: t.bindings, source_file: t.layout.source.file, source_sha256: t.layout.source.sha256, status: 'draft' })
     if (fail('ثبت الگوی فرم', error)) return false
-    await get().fetchAll(); return true
+    forgetTemplates(); await get().fetchAll(); return true
   },
   approveTemplate: async (id, code, revision) => {
     const { error } = await supabase.rpc('ex_form_template_approve', { p_id: id, p_code: code, p_revision: revision })
     if (fail('تأیید الگوی فرم', error)) return false
-    await get().fetchAll(); return true
+    forgetTemplates(); await get().fetchAll(); return true
   },
   deleteTemplate: async (id) => {
     const { error } = await supabase.rpc('ex_form_template_delete', { p_id: id })
     if (error?.message?.includes('template_in_use')) { fail('حذف نسخهٔ فرم (فرم ثبت‌شده‌ای از این نسخه استفاده می‌کند)', error); return false }
     if (fail('حذف نسخهٔ فرم', error)) return false
-    await get().fetchAll(); return true
+    forgetTemplates(); await get().fetchAll(); return true
   },
   addRequiredForm: async (projectId, activityId, formKey, note = '') => {
     const { error } = await supabase.from('ex_required_forms').insert({ project_id: projectId, activity_id: activityId, form_key: formKey, note })

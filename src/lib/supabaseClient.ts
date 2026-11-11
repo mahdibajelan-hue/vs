@@ -30,9 +30,12 @@ const READ_ONLY_RPC = new Set(['rasta_my_accessible_modules', 'inbox_my_items', 
   'my_notifications', 'my_finance_notifications', 'my_land_notifications', 'cm_my_notifications', 'my_material_notifications', 'my_engineering_notifications',
   'my_execution_notifications', 'my_supervision_notifications', 'notification_projects', 'fin_land_summary'])
 const harmless = (method: string, path: string) => (method === 'POST' && path.startsWith('rpc/') && READ_ONLY_RPC.has(path.slice(4))) || path === 'radar_project_visits'
+const writeListeners = new Set<() => void>()
+/** called on every database write (before it is sent and once it has answered) */
+export function onDatabaseWrite(fn: () => void) { writeListeners.add(fn); return () => { writeListeners.delete(fn) } }
 // a module store's own load is also kept in the browser: a repeat visit draws at once, then catches up (lib/liveRefresh)
 const restFetch = createRestFetch((input, init) => fetch(input, init), {
-  keys: KEYS, harmless, persist: browserAnswers,
+  keys: KEYS, harmless, persist: browserAnswers, onWrite: () => writeListeners.forEach((f) => f()),
   onRevalidated: (table, store) => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('rasta:revalidated', { detail: { table, store } })) },
 })
 

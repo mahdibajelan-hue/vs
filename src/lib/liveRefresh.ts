@@ -2,7 +2,7 @@ import { supabase } from './supabaseClient'
 import { browserAnswers } from './answerStore'
 import { covers, insideProject } from './projectScope'
 import { useExecutionStore } from '../modules/execution/store/useExecutionStore'
-import { useEpcStore } from '../modules/execution/store/useEpcStore'
+import { forgetTemplates, useEpcStore } from '../modules/execution/store/useEpcStore'
 import { useMaterialStore } from '../modules/material/store/useMaterialStore'
 import { useMaterialControlStore } from '../modules/material/store/useMaterialControlStore'
 import { useFinanceStore } from '../modules/finance/store/useFinanceStore'
@@ -39,7 +39,9 @@ function flush() {
 
 export function installLiveRefresh() {
   window.addEventListener('rasta:revalidated', (e) => {
-    pending.add((e as CustomEvent<{ table: string; store: string }>).detail.store)
+    const { table, store } = (e as CustomEvent<{ table: string; store: string }>).detail
+    if (table === 'ex_form_templates') forgetTemplates()
+    pending.add(store)
     if (!timer) timer = setTimeout(flush, 400)
   })
   supabase.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') browserAnswers.clear() })

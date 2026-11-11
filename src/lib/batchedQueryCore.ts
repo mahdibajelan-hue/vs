@@ -4,7 +4,9 @@
  * Loaders written for one project (`.eq('project_name', p)`) become N round trips when a portfolio page loads N projects.
  * `batchedRows` collects every call made within the same short window for the same table / column / select / filters,
  * sends ONE `.in(column, [all keys])` query (paged past the 1000-row limit) and hands each caller only its own rows.
- * Nothing is cached after the batch resolves, so a write followed by a reload always sees fresh data.
+ * With `reuseMs`, each key's rows are reused for that long (the radar and the digital twin read the same project's
+ * risks and issues minutes apart); `forget()` drops them, and the app calls it on every database write, so a write
+ * followed by a reload always sees fresh data.
  */
 
 type Row = Record<string, unknown>
@@ -24,8 +26,13 @@ const MAX_KEYS = 150
 interface Waiter { keys: string[]; resolve: (rows: Row[]) => void; reject: (e: unknown) => void }
 interface Queue { spec: Required<Omit<BatchSpec, 'eq'>> & { eq: Record<string, string | number | boolean> }; keys: Set<string>; waiters: Waiter[]; timer: ReturnType<typeof setTimeout> | null }
 
-export function createBatcher(fetcher: Fetcher, windowMs = WINDOW_MS) {
+export function createBatcher(fetcher: Fetcher, windowMs = WINDOW_MS, opts: { reuseMs?: number; now?: () => number } = {}) {
   const queues = new Map<string, Queue>()
+  const reuseMs = opts.reuseMs ?? 0
+  const now = opts.now ?? (() => Date.now())
+  // spec id → key → rows read at `at`; `epoch` stops a read that started before forget() from being kept
+  const kept = new Map<string, Map<string, { at: number; rows: Row[] }>>()
+  let epoch = 0
 
   async function fetchAll(q: Queue, keys: string[]) {
     const rows: Row[] = []
@@ -43,12 +50,18 @@ export function createBatcher(fetcher: Fetcher, windowMs = WINDOW_MS) {
     if (!q) return
     queues.delete(id)
     const keys = [...q.keys]
+    const started = epoch
     try {
       const chunks: string[][] = []
       for (let i = 0; i < keys.length; i += MAX_KEYS) chunks.push(keys.slice(i, i + MAX_KEYS))
       const rows = (await Promise.all(chunks.map((c) => fetchAll(q, c)))).flat()
       const by = new Map<string, Row[]>()
       for (const r of rows) { const k = String(r[q.spec.column]); const l = by.get(k); if (l) l.push(r); else by.set(k, [r]) }
+      if (reuseMs > 0 && started === epoch) {
+        let m = kept.get(id); if (!m) { m = new Map(); kept.set(id, m) }
+        const at = now()
+        for (const k of keys) m.set(k, { at, rows: by.get(k) ?? [] })
+      }
       for (const w of q.waiters) w.resolve(w.keys.flatMap((k) => by.get(k) ?? []))
     } catch (e) {
       for (const w of q.waiters) w.reject(e)
@@ -57,11 +70,14 @@ export function createBatcher(fetcher: Fetcher, windowMs = WINDOW_MS) {
 
   // rows are untyped database records; callers map them with their module's own row mappers
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return function batchedRows(spec: BatchSpec, keys: string | string[]): Promise<Record<string, any>[]> {
+  function batchedRows(spec: BatchSpec, keys: string | string[]): Promise<Record<string, any>[]> {
     const list = (Array.isArray(keys) ? keys : [keys]).filter((k) => k != null && k !== '').map(String)
     if (!list.length) return Promise.resolve([])
     const full = { table: spec.table, column: spec.column, select: spec.select ?? '*', eq: spec.eq ?? {} }
     const id = JSON.stringify([full.table, full.column, full.select, Object.entries(full.eq).sort()])
+    // every key read recently: answer from what was kept
+    const m = kept.get(id)
+    if (reuseMs > 0 && m && list.every((k) => { const e = m.get(k); return e && now() - e.at < reuseMs })) return Promise.resolve(list.flatMap((k) => m.get(k)!.rows))
     let q = queues.get(id)
     if (!q) { q = { spec: full, keys: new Set(), waiters: [], timer: null }; queues.set(id, q) }
     for (const k of list) q.keys.add(k)
@@ -70,6 +86,9 @@ export function createBatcher(fetcher: Fetcher, windowMs = WINDOW_MS) {
       if (!q!.timer) q!.timer = setTimeout(() => void flush(id), windowMs)
     })
   }
+  /** drop every kept row: the next read goes to the database */
+  batchedRows.forget = () => { epoch++; kept.clear() }
+  return batchedRows
 }
 
 /** rows sorted by a field, ascending (or descending) — batches come back unordered */
