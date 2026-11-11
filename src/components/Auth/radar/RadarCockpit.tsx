@@ -95,9 +95,8 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
         <section className="rc-pulse" aria-label="شاخص‌های اصلی">
           <Tile i={0} accent={statusColor} label="سلامت پروژه" onClick={canSee('healthcenter') ? () => go('healthcenter') : undefined} extra={<HealthGuideButton health={hd} />}>
             <div className="rc-health">
-              <Ring v={k.health} color={statusColor} />
-              <div><b className="rc-big">{loading ? '—' : fa(k.health)}<small>/۱۰۰</small></b>
-                <span className="rc-sub" style={{ color: statusColor }}>{hd ? `${VERDICT_FA[hd.status]}${hd.drivenBy ? ` · ${HEALTH_DIMENSION_LABEL_FA[hd.drivenBy]}` : ''}` : '—'}</span></div>
+              <RcHoloRing v={loading ? 0 : k.health} color={statusColor} loading={loading} />
+              <span className="rc-sub" style={{ color: statusColor }}>{hd ? `${VERDICT_FA[hd.status]}${hd.drivenBy ? ` · ${HEALTH_DIMENSION_LABEL_FA[hd.drivenBy]}` : ''}` : '—'}</span>
             </div>
           </Tile>
           <Tile i={1} accent="#3b82f6" label="پیشرفت کل چرخهٔ عمر" onClick={canSee('stagegate') ? () => go('stagegate') : undefined}>
@@ -254,6 +253,33 @@ function Ring({ v, color, label }: { v: number; color: string; label?: string })
     <span className="rc-ring">
       <svg viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r={r} className="rc-ring-track" /><circle cx="28" cy="28" r={r} stroke={color} strokeDasharray={`${c * f} ${c}`} transform="rotate(-90 28 28)" className="rc-ring-fill" /></svg>
       {label && <b>{label}</b>}
+    </span>
+  )
+}
+// Holographic health gauge (same language as the Health Centre's HoloRing): a tick ring that lights
+// up to the score, a glowing arc, a dashed pulsing halo, and a pedestal "floor" so the index reads as
+// a small 3-D instrument. Colour comes through --st so it works in dark and light themes.
+function RcHoloRing({ v, color, loading }: { v: number; color: string; loading?: boolean }) {
+  const R = 38, C = 2 * Math.PI * R, N = 48
+  const val = Math.max(0, Math.min(100, Math.round(v)))
+  return (
+    <span className="rc-holo" style={{ ['--st' as string]: color }} role="img" aria-label={loading ? 'سلامت پروژه در حال خواندن' : `سلامت ${fa(val)} از ۱۰۰`}>
+      <svg viewBox="0 0 100 118" aria-hidden>
+        <ellipse cx="50" cy="106" rx="45" ry="11" className="rc-holo-ped-glow" />
+        <ellipse cx="50" cy="106" rx="40" ry="8" className="rc-holo-ped-ring" />
+        <ellipse cx="50" cy="106" rx="29" ry="5.4" className="rc-holo-ped-ring is-dash" />
+        <ellipse cx="50" cy="106" rx="17" ry="3.1" className="rc-holo-ped-ring is-bright" />
+        <circle cx="50" cy="50" r="46" className="rc-holo-halo" />
+        {Array.from({ length: N }, (_, i) => {
+          const a = (i / N) * Math.PI * 2 - Math.PI / 2, r1 = 46, r2 = i % 4 ? 43.5 : 41
+          const lit = !loading && val > 0 && i / N <= val / 100
+          return <line key={i} x1={50 + r1 * Math.cos(a)} y1={50 + r1 * Math.sin(a)} x2={50 + r2 * Math.cos(a)} y2={50 + r2 * Math.sin(a)} className={lit ? 'rc-holo-tick on' : 'rc-holo-tick'} />
+        })}
+        <circle cx="50" cy="50" r={R} className="rc-holo-track" />
+        {!loading && val > 0 && <circle cx="50" cy="50" r={R} className="rc-holo-val" strokeDasharray={`${(val / 100) * C} ${C}`} transform="rotate(-90 50 50)" />}
+        <circle cx="50" cy="50" r="28" className="rc-holo-inner" />
+      </svg>
+      <span className="rc-holo-num">{loading ? '—' : fa(val)}<small>/۱۰۰</small></span>
     </span>
   )
 }
