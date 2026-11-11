@@ -7,6 +7,7 @@ import { useModuleStore, type ModuleKey } from '../../store/useModuleStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { formatJalali } from '../../lib/jalali'
 import { loadProjectMetrics } from './projectMetricsLoader'
+import { fetchCenterHealth } from './centerHealth'
 import type { ProjectMetrics, Slice } from './projectMetricsCore'
 import type { ProjectSnapshot } from './projectMetricsLoader'
 import { HealthGuideButton, HEALTH_STATUS_FA, healthColor } from './HealthGuide'
@@ -41,7 +42,11 @@ export function ProjectDashboardApp({ onExitToHub }: { onExitToHub: () => void; 
     if (!projectId) return
     let alive = true
     setM(undefined); setErr(null)
-    loadProjectMetrics(projectId).then((x) => { if (alive) setM(x) }).catch((e) => { if (alive) { setErr(String(e?.message ?? e)); setM(null) } })
+    // health is the Health Centre's index (as on the radar and in the Health Centre itself) — one number everywhere;
+    // the lifecycle engine's own health stays only as the fallback for a project the Health Centre has not scored yet
+    Promise.all([loadProjectMetrics(projectId), fetchCenterHealth(projectId).catch(() => null)])
+      .then(([x, hc]) => { if (alive) setM(x && hc ? { ...x, health: hc } : x) })
+      .catch((e) => { if (alive) { setErr(String(e?.message ?? e)); setM(null) } })
     return () => { alive = false }
   }, [projectId])
 

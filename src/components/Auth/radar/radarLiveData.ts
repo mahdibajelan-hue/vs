@@ -27,6 +27,7 @@ import { DISC_FA } from '../../../modules/stationpiping/lib/spCore'
 import { todayTehran } from '../../../lib/today'
 import { loadPssrSummary } from '../../../modules/pssr/lib/pssrSummary'
 import { loadProjectMetrics, type ProjectHealth } from '../../../modules/projectMetrics/projectMetricsLoader'
+import { fetchCenterHealth } from '../../../modules/projectMetrics/centerHealth'
 import { statusFromScore, type DerivedHealth } from '../../../modules/lifecycle/lib/health'
 import type { EpcProgress } from '../../../modules/epc/epcProgress'
 import { loadStageGateBundle } from '../../../modules/lifecycle/lib/stageGateBundleLoader'
@@ -227,35 +228,7 @@ const faPct = (v: number) => `${String(Math.round(v)).replace(/\d/g, (x) => '۰�
 
 const STATUS_OF_HEALTH: Record<'green' | 'yellow' | 'red' | 'black', ProjectRadarStatus> = { green: 'nominal', yellow: 'attention', red: 'at_risk', black: 'critical' }
 
-// --- One health number everywhere: read the Health Centre (مرکز سلامت پروژه) --------------------------
-// The radar used to show the project-dashboard health; the Health Centre computes a different index
-// (its own indicators, weights and caps). To show a single figure in both places, read the Health
-// Centre's stored snapshot (ph_snapshots) and present its index + verdict, mapped into the radar's
-// existing ProjectHealth shape. Falls back to the dashboard health only when no snapshot exists yet.
-const CENTER_DIM: Record<string, HealthDimension> = { schedule: 'schedule', finance: 'cost', execution: 'construction', quality: 'quality', supply: 'procurement', risk: 'risk' }
-const CENTER_STATUS: Record<string, HealthStatus> = { good: 'green', watch: 'yellow', bad: 'red', critical: 'red', none: 'yellow' }
-
-async function fetchCenterHealth(masterProjectId: string): Promise<ProjectHealth | null> {
-  const { data } = await supabase.from('ph_snapshots')
-    .select('health_index, status, domains, caps')
-    .eq('master_project_id', masterProjectId)
-    .order('snap_date', { ascending: false }).limit(1).maybeSingle()
-  const row = data as { health_index: number | null; status: string; domains?: { key: string; score: number }[]; caps?: { reason?: string }[] } | null
-  if (!row || row.health_index == null) return null
-  const domains = row.domains ?? []
-  const dims: DerivedHealth[] = domains.map((d) => {
-    const score = Math.round(d.score)
-    return { dimension: CENTER_DIM[d.key] ?? 'schedule', score, status: statusFromScore(score), explanation: '', isManual: false, assessed: true }
-  })
-  const weakest = domains.slice().sort((a, b) => a.score - b.score)[0]
-  return {
-    status: CENTER_STATUS[row.status] ?? 'yellow',
-    score: Math.round(row.health_index),
-    drivenBy: weakest ? (CENTER_DIM[weakest.key] ?? null) : null,
-    isOverridden: false, overrideReason: '',
-    dims, blockers: (row.caps ?? []).map((c) => c.reason ?? '').filter(Boolean),
-  }
-}
+// One health number everywhere: the Health Centre's stored snapshot (see projectMetrics/centerHealth.ts).
 
 /** A project with no Stage-Gate link has no gate to show. */
 const NO_GATE: RadarGate = { name: 'بدون گیت ثبت‌شده', nameEn: 'NO GATE RECORDED', prerequisites: 0, passed: 0, pending: 0, failed: 0, readinessPct: 0 }
