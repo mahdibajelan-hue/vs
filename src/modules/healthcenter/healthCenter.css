@@ -77,13 +77,28 @@
 .phc-empty.is-err { color: #fca5a5; }
 
 /* alerts */
-.phc-alerts { display: flex; gap: .7rem; align-items: flex-start; padding: .75rem 1rem; border-radius: 1rem; color: #fecaca; background: linear-gradient(90deg, rgb(239 68 68 / .16), rgb(239 68 68 / .05)); border: 1px solid rgb(239 68 68 / .38); box-shadow: 0 0 32px -12px rgb(239 68 68 / .6); }
-.phc-alerts > svg { flex: none; margin-top: .15rem; color: #f87171; }
-@media (prefers-reduced-motion: no-preference) { .phc-alerts > svg { animation: phc-blink 1.6s ease-in-out infinite; } }
-.phc-alerts ul { display: flex; flex-wrap: wrap; gap: .4rem .9rem; font-size: 12.5px; }
-.phc-alerts li { display: inline-flex; align-items: center; gap: .45rem; }
-.phc-alerts button { text-align: right; text-decoration: underline; text-decoration-color: rgb(248 113 113 / .45); text-underline-offset: 3px; }
-.phc-alerts em { font-style: normal; font-size: 10.5px; font-weight: 800; padding: .05rem .45rem; border-radius: 99px; background: rgb(239 68 68 / .22); color: #fff; }
+/* alerts: one summary line (what is holding the index down), details on demand */
+.phc-alerts { --al: #f87171; --al-ink: #fecaca; --al-soft: rgb(239 68 68 / .14); border-radius: .9rem; color: var(--al-ink); background: linear-gradient(90deg, rgb(239 68 68 / .14), rgb(239 68 68 / .04)); border: 1px solid rgb(239 68 68 / .32); overflow: hidden; }
+.phc-alerts-head { display: flex; align-items: center; gap: .55rem; width: 100%; min-height: 44px; padding: .45rem .8rem; text-align: right; font-size: 12.5px; }
+.phc-alerts-head > svg { flex: none; color: var(--al); }
+@media (prefers-reduced-motion: no-preference) { .phc-alerts-head > svg { animation: phc-blink 1.6s ease-in-out infinite; } }
+.phc-alerts-sum { flex: 1; min-width: 0; display: flex; align-items: center; gap: .4rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.phc-alerts-sum b { font-weight: 800; overflow: hidden; text-overflow: ellipsis; }
+.phc-alerts-sum i { font-style: normal; opacity: .6; }
+.phc-alerts-sum > span { flex: none; }
+.phc-alerts-tog { flex: none; display: inline-flex; align-items: center; gap: .2rem; padding: .2rem .55rem; border-radius: 99px; font-size: 11px; font-weight: 800; color: var(--al-ink); background: var(--al-soft); }
+.phc-alerts-tog svg { transition: transform 200ms var(--ease); }
+.phc-alerts.is-open .phc-alerts-tog svg { transform: rotate(180deg); }
+.phc-alerts-body { display: grid; gap: .6rem; padding: .1rem .8rem .7rem; border-top: 1px solid rgb(239 68 68 / .2); }
+.phc-alerts-group { display: grid; gap: .3rem; padding-top: .5rem; }
+.phc-alerts-group > small { font-size: 10.5px; font-weight: 800; opacity: .75; }
+.phc-alerts-group ul { display: grid; gap: .25rem; }
+.phc-alerts-group li { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.phc-alerts-group li > button, .phc-alerts-row { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: .45rem; text-align: right; font-size: 12px; }
+.phc-alerts-group li b { flex: none; max-width: 60%; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phc-alerts-group li > button b { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--al) 45%, transparent); text-underline-offset: 3px; }
+.phc-alerts-group li span { min-width: 0; font-size: 11px; opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.phc-alerts em { flex: none; font-style: normal; font-size: 10.5px; font-weight: 800; padding: .05rem .45rem; border-radius: 99px; background: var(--al-soft); color: var(--al-ink); white-space: nowrap; }
 
 /* hero */
 .phc-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 1rem; padding: 1.25rem; border-radius: 1.5rem; overflow: hidden; background: radial-gradient(700px 360px at 18% 60%, color-mix(in srgb, var(--c) 18%, transparent), transparent 70%), linear-gradient(180deg, rgb(14 28 52 / .8), rgb(7 16 33 / .9)); border: 1px solid color-mix(in srgb, var(--c) 28%, var(--line)); box-shadow: 0 30px 60px -36px color-mix(in srgb, var(--c) 60%, transparent); }
@@ -443,6 +458,71 @@
 @media (max-width: 460px) {
   .phc-vitals { grid-template-columns: minmax(0, 1fr); }
   .phc-brand-proj { display: none; }
+}
+
+/* ── light theme ────────────────────────────────────────────────────────────────────────────────
+   The page chrome, alerts, hero and panels follow the light theme. The vitals monitor, anatomy hologram
+   and X-ray keep their dark "instrument screen" (a monitor is dark by nature), with the dark-surface ink
+   restored inside them so their text stays readable. */
+:root[data-theme="light"] .phc {
+  --ink: #0f172a; --ink-2: #334155; --ink-3: #64748b;
+  --navy: #eef2f7; --navy-2: #f8fafc;
+  --glass: rgb(255 255 255 / .9); --glass-hi: rgb(13 148 136 / .05);
+  --line: rgb(15 23 42 / .1); --teal: #0d9488; --cyan: #0284c7;
+  background:
+    radial-gradient(1100px 520px at 12% -10%, rgb(45 212 191 / .1), transparent 60%),
+    radial-gradient(900px 600px at 100% 0%, rgb(56 189 248 / .08), transparent 55%),
+    linear-gradient(180deg, var(--navy-2), var(--navy) 40%);
+}
+:root[data-theme="light"] .phc-top { background: rgb(255 255 255 / .85); }
+:root[data-theme="light"] .phc-brand-txt b { color: #0f766e; }
+:root[data-theme="light"] .phc-btn { color: #0f766e; background: rgb(13 148 136 / .08); border-color: rgb(13 148 136 / .3); }
+:root[data-theme="light"] .phc-btn.is-primary { color: #04201c; }
+:root[data-theme="light"] .phc .vz-seg { background: #e2e8f0; }
+:root[data-theme="light"] .phc-panel { box-shadow: 0 1px 0 rgb(255 255 255 / .8) inset, 0 14px 32px -24px rgb(15 23 42 / .35); }
+:root[data-theme="light"] .phc-hero-stats > div, :root[data-theme="light"] .phc-drivers li, :root[data-theme="light"] .phc-domains button,
+:root[data-theme="light"] .phc-tabs button, :root[data-theme="light"] .phc-mri li, :root[data-theme="light"] .phc-vessel,
+:root[data-theme="light"] .phc-sring, :root[data-theme="light"] .phc-rx-list li, :root[data-theme="light"] .phc-rx-prog { background: #fff; }
+:root[data-theme="light"] .phc-lab th { background: #f1f5f9; }
+:root[data-theme="light"] .phc-lab-code { color: #0f766e; background: rgb(13 148 136 / .08); border-color: rgb(13 148 136 / .2); }
+:root[data-theme="light"] .phc-tabs button.is-on { background: rgb(13 148 136 / .1); border-color: rgb(13 148 136 / .45); }
+:root[data-theme="light"] .phc-tabs button.is-on b, :root[data-theme="light"] .phc-rx h4 { color: #0f766e; }
+:root[data-theme="light"] .phc-rx-sheet { background: linear-gradient(180deg, rgb(13 148 136 / .04), transparent), #fff; border-color: rgb(13 148 136 / .25); }
+:root[data-theme="light"] .phc-sring text { fill: #0f172a; }
+:root[data-theme="light"] .phc-sring-track { stroke: rgb(15 23 42 / .08); }
+:root[data-theme="light"] .phc-ocard { background: linear-gradient(135deg, color-mix(in srgb, var(--c) 9%, transparent), transparent 60%), #fff; }
+:root[data-theme="light"] .phc-ocard-ring .t { fill: #f1f5f9; stroke: rgb(15 23 42 / .08); }
+:root[data-theme="light"] .phc-ocard-txt em { color: color-mix(in srgb, var(--c) 80%, #000); }
+:root[data-theme="light"] .is-up { color: #15803d; } :root[data-theme="light"] .is-down { color: #b91c1c; }
+:root[data-theme="light"] .phc-domains em { color: #b45309; }
+:root[data-theme="light"] .phc-rx-prog.is-high p { color: #b91c1c; }
+:root[data-theme="light"] .phc-rx-prog.is-medium p { color: #a16207; }
+:root[data-theme="light"] .phc-rx-prog.is-low p { color: #15803d; }
+:root[data-theme="light"] .phc-prio.is-medium { color: #075985; background: rgb(56 189 248 / .18); }
+:root[data-theme="light"] .phc-empty.is-err { color: #b91c1c; }
+/* alerts on a light page: deep red ink on a pale red band */
+:root[data-theme="light"] .phc-alerts { --al: #dc2626; --al-ink: #991b1b; --al-soft: rgb(220 38 38 / .1); background: linear-gradient(90deg, rgb(254 226 226 / .9), rgb(254 242 242 / .7)); border-color: rgb(220 38 38 / .28); }
+:root[data-theme="light"] .phc-alerts-body { border-top-color: rgb(220 38 38 / .15); }
+/* hero: a bright card; the hologram keeps its glow but on a light stage */
+:root[data-theme="light"] .phc-hero {
+  background: radial-gradient(700px 360px at 18% 60%, color-mix(in srgb, var(--c) 12%, transparent), transparent 70%), linear-gradient(180deg, #ffffff, #f4f7fb);
+  box-shadow: 0 24px 48px -36px color-mix(in srgb, var(--c) 55%, transparent);
+}
+:root[data-theme="light"] .phc-hero h1 { text-shadow: none; }
+:root[data-theme="light"] .phc-holo line { stroke: rgb(15 23 42 / .12); }
+:root[data-theme="light"] .phc-holo line.on { stroke: var(--c); }
+:root[data-theme="light"] .phc-holo-track { stroke: rgb(15 23 42 / .07); }
+:root[data-theme="light"] .phc-holo-inner { fill: color-mix(in srgb, var(--c) 6%, #fff); stroke: color-mix(in srgb, var(--c) 25%, transparent); }
+:root[data-theme="light"] .phc-holo-txt b { color: #0f172a; text-shadow: 0 0 18px color-mix(in srgb, var(--c) 35%, transparent); }
+:root[data-theme="light"] .phc-pill { background: linear-gradient(180deg, color-mix(in srgb, var(--c) 14%, #fff), #fff); box-shadow: 0 10px 24px -14px var(--c); }
+:root[data-theme="light"] .phc-pill b { color: #0f172a; text-shadow: none; }
+:root[data-theme="light"] .phc-ped-ring { stroke: rgb(8 145 178 / .4); }
+:root[data-theme="light"] .phc-ped-ring.is-dash { stroke: rgb(8 145 178 / .55); }
+:root[data-theme="light"] .phc-ped-ring.is-bright { stroke: #0891b2; filter: drop-shadow(0 0 4px rgb(8 145 178 / .5)); }
+/* instrument screens stay dark: restore the dark-surface ink inside them */
+:root[data-theme="light"] .phc-monitor, :root[data-theme="light"] .phc-anat, :root[data-theme="light"] .phc-xray {
+  --ink: #e6f1ff; --ink-2: #a9bdd6; --ink-3: #6f86a4; --line: rgb(125 211 252 / .14); --teal: #2dd4bf;
+  color: var(--ink);
 }
 
 /* print: the management report */

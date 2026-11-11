@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
-  Activity, AlertOctagon, BookOpenText, CalendarDays, ClipboardList, Download, FileSpreadsheet, HeartPulse, ListOrdered, Loader2, Printer, RefreshCw,
+  Activity, AlertOctagon, BookOpenText, CalendarDays, ChevronDown, ClipboardList, Download, FileSpreadsheet, HeartPulse, ListOrdered, Loader2, Printer, RefreshCw,
   ScanLine, Settings2, ShieldCheck, Stethoscope, TrendingDown, TrendingUp,
 } from 'lucide-react'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -141,10 +141,18 @@ function Body({ r, history, settings, tab, setTab, range, setRange, open }: {
   const I = r.indicators, B = settings.bands
   const counted = INDICATORS.filter((d) => d.domain)
   const missing = counted.filter((d) => I[d.id].value == null)
-  const alerts = [
-    ...r.caps.map((c) => ({ key: `cap:${c.id}`, id: c.id === 'gate' ? null : c.id, text: c.reason, extra: `سقف شاخص: ${fa(c.cap)}` })),
-    ...counted.filter((d) => I[d.id].status === 'critical' && !r.caps.some((c) => c.id === d.id)).slice(0, 4).map((d) => ({ key: d.id, id: d.id, text: `${d.label}: ${valueText(d.id, I[d.id].value)} ${d.unit}`, extra: 'بحرانی' })),
-  ]
+  // caps that hold the index down, then critical indicators that are not already a cap — each as a short
+  // title + one-line detail so the box reads at a glance instead of wrapping long sentences
+  const capDetail = (label: string, reason: string) => {
+    const rest = reason.startsWith(label) ? reason.slice(label.length).replace(/^\s*=\s*/, '') : reason.replace(/^[^:]*:\s*/, '')
+    return rest.replace(/\(آستانهٔ بحرانی ([^)]+)\)/, '· آستانه $1').trim()
+  }
+  const capAlerts = r.caps.map((c) => ({ key: `cap:${c.id}`, id: c.id === 'gate' ? null : c.id, title: c.label, detail: capDetail(c.label, c.reason), chip: `سقف ${fa(c.cap)}` }))
+  const critAlerts = counted.filter((d) => I[d.id].status === 'critical' && !r.caps.some((c) => c.id === d.id)).slice(0, 4)
+    .map((d) => ({ key: d.id, id: d.id as string | null, title: d.label, detail: `${valueText(d.id, I[d.id].value)} ${d.unit}`, chip: 'بحرانی' }))
+  const alerts = [...capAlerts, ...critAlerts]
+  const [alertsOpen, setAlertsOpen] = useRemembered<boolean>('alerts', false, (v) => typeof v === 'boolean')
+  const lowestCap = r.caps.length ? Math.min(...r.caps.map((c) => c.cap)) : null
 
   const vitals: VitalView[] = [
     { key: 'hr', id: 'velocity', medical: 'ضربان قلب', title: 'سرعت پیشرفت', display: I.velocity.value == null ? '—' : fa(I.velocity.value * 100), unit: '٪ سرعت برنامه', range: 'هدف: ۱۰۰٪ و بیشتر', ind: I.velocity, color: STATUS_COLOR[I.velocity.status], chart: <Ecg beats={r.ecg} color={STATUS_COLOR[I.velocity.status] === STATUS_COLOR.none ? '#5eead4' : STATUS_COLOR[I.velocity.status]} /> },
@@ -157,16 +165,34 @@ function Body({ r, history, settings, tab, setTab, range, setRange, open }: {
   return (
     <main className="phc-main">
       {alerts.length > 0 && (
-        <section className="phc-alerts" aria-label="هشدارها">
-          <AlertOctagon size={18} aria-hidden />
-          <ul>
-            {alerts.map((a) => (
-              <li key={a.key}>
-                {a.id ? <button type="button" onClick={() => open({ kind: 'ind', id: a.id as string })}>{a.text}</button> : <span>{a.text}</span>}
-                <em>{a.extra}</em>
-              </li>
-            ))}
-          </ul>
+        <section className={`phc-alerts${alertsOpen ? ' is-open' : ''}`} aria-label="هشدارها">
+          <button type="button" className="phc-alerts-head" aria-expanded={alertsOpen} aria-controls="phc-alert-list" onClick={() => setAlertsOpen(!alertsOpen)}>
+            <AlertOctagon size={16} aria-hidden />
+            <span className="phc-alerts-sum">
+              {lowestCap != null && <b>سقف امتیاز {fa(lowestCap)}</b>}
+              {capAlerts.length > 0 && <><i aria-hidden>·</i><span>{fa(capAlerts.length)} محدودکننده</span></>}
+              {critAlerts.length > 0 && <>{capAlerts.length > 0 && <i aria-hidden>·</i>}<span>{fa(critAlerts.length)} شاخص بحرانی</span></>}
+            </span>
+            <span className="phc-alerts-tog">{alertsOpen ? 'بستن' : 'جزئیات'}<ChevronDown size={14} aria-hidden /></span>
+          </button>
+          {alertsOpen && (
+            <div id="phc-alert-list" className="phc-alerts-body">
+              {[{ label: 'محدودکننده‌های امتیاز', items: capAlerts }, { label: 'شاخص‌های بحرانی', items: critAlerts }].filter((g) => g.items.length).map((g) => (
+                <div key={g.label} className="phc-alerts-group">
+                  <small>{g.label}</small>
+                  <ul>
+                    {g.items.map((a) => (
+                      <li key={a.key}>
+                        {a.id ? <button type="button" onClick={() => open({ kind: 'ind', id: a.id as string })}><b>{a.title}</b><span>{a.detail}</span></button>
+                          : <span className="phc-alerts-row"><b>{a.title}</b><span>{a.detail}</span></span>}
+                        <em>{a.chip}</em>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
