@@ -5,9 +5,15 @@
  *    re-read page by page in a stable order (the query's own order plus `id` as a tie-break), so no module ever
  *    computes a figure from the first 1000 rows of a bigger table.
  * 2. One request per question. Identical reads in flight at the same moment share one network request.
- * 3. A short memory. A read repeated within `ttlMs` (going back to a page) is answered from memory. Any write
- *    (POST/PATCH/PUT/DELETE — including RPC calls, which may write) empties that memory first, so data a person just
- *    changed is always read fresh.
+ * 3. A short memory. A read repeated within `ttlMs` (going back to a page) is answered from memory. Any write to the
+ *    database (POST/PATCH/PUT/DELETE — including RPC calls, which may write) empties that memory first, so data a
+ *    person just changed is always read fresh. Calls named `harmless` (read-only functions) do not.
+ *
+ * 4. Instant repeat visits (optional `persist`). A read marked with the `x-rasta-keep: <store>` header (a module
+ *    store's own load, see lib/keepReads; the header never leaves the browser) is also kept in the browser. The next time the same question is asked with nothing in memory, the kept answer is returned at once and
+ *    the network read runs behind it; if its answer differs, `onRevalidated(table)` tells the app to read again (which
+ *    then comes from memory) with the table and the store that asked. Kept answers are keyed by the signed-in user (never by the token), and any write makes
+ *    every answer kept before it unusable at once (`clearedAt`) while the store itself is emptied.
  *
  * Only GETs to /rest/v1/<table> are touched; auth, storage, functions and RPC reads pass straight through.
  */
@@ -27,10 +33,40 @@ const headerOf = (init: RequestInit | undefined, name: string): string | null =>
   return null
 }
 
+/** marks a read whose answer may be kept in the browser; its value names the store that reads it again */
+export const KEEP_HEADER = 'x-rasta-keep'
+function withoutHeader(init: RequestInit | undefined, name: string): RequestInit | undefined {
+  if (!init?.headers) return init
+  const h = new Headers(init.headers as HeadersInit)
+  h.delete(name)
+  return { ...init, headers: h }
+}
+
 const toResponse = (s: Stored) => new Response(s.body, { status: s.status, statusText: s.statusText, headers: s.headers })
 
+export type StoredAnswer = Stored
+/** a browser-side store of answers (IndexedDB in the app, a Map in tests) */
+export interface AnswerStore { get(key: string): Promise<Stored | undefined>; set(key: string, value: Stored): void; clear(): void }
+
+/** the signed-in user of a request, from its bearer token's `sub` (the token itself changes every hour) */
+export function userOfAuth(auth: string | null): string {
+  const tok = (auth ?? '').replace(/^Bearer /i, '')
+  const part = tok.split('.')[1]
+  if (!part) return 'anon'
+  try {
+    const json = typeof atob === 'function' ? atob(part.replace(/-/g, '+').replace(/_/g, '/')) : Buffer.from(part, 'base64').toString('utf8')
+    return (JSON.parse(json) as { sub?: string }).sub ?? 'anon'
+  } catch { return 'anon' }
+}
+
 /** `keys`: primary-key columns of tables that have no `id` column, used as the tie-break of a paged read. */
-export function createRestFetch(base: FetchFn, opts: { ttlMs?: number; now?: () => number; keys?: Record<string, string[]> } = {}) {
+export function createRestFetch(base: FetchFn, opts: {
+  ttlMs?: number; now?: () => number; keys?: Record<string, string[]>
+  persist?: AnswerStore; onRevalidated?: (table: string, store: string) => void
+  /** calls that change nothing the app reads: read-only (STABLE) functions, and writes to logs no page reads back */
+  harmless?: (method: string, path: string) => boolean
+} = {}) {
+  let clearedAt = 0 // answers kept before the last write are never served
   const keysOf = (table: string) => opts.keys?.[table] ?? ['id']
   const ttl = opts.ttlMs ?? 30_000
   const now = opts.now ?? (() => Date.now())
@@ -80,17 +116,24 @@ export function createRestFetch(base: FetchFn, opts: { ttlMs?: number; now?: () 
     }
   }
 
-  return async function restFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  return async function restFetch(input: RequestInfo | URL, givenInit?: RequestInit): Promise<Response> {
+    const keepFor = headerOf(givenInit, KEEP_HEADER)
+    const init = keepFor ? withoutHeader(givenInit, KEEP_HEADER) : givenInit
     const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
     let url: URL
     try { url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url) } catch { return base(input, init) }
+    // only the database's own calls can change data; auth (token refresh) and storage pass straight through
+    if (method !== 'GET' && method !== 'HEAD' && (!url.pathname.includes('/rest/v1/') || opts.harmless?.(method, url.pathname.split('/rest/v1/')[1] ?? ''))) return base(input, init)
     if (method !== 'GET' && method !== 'HEAD') {
-      generation++; memory.clear(); inflight.clear()
-      try { return await base(input, init) } finally { generation++; memory.clear() }
+      generation++; memory.clear(); inflight.clear(); clearedAt = now(); opts.persist?.clear()
+      try { return await base(input, init) } finally { generation++; memory.clear(); clearedAt = now(); opts.persist?.clear() }
     }
     if (!isRestRead(url, method) || input instanceof Request) return base(input, init)
 
     const key = [url.toString(), headerOf(init, 'Authorization') ?? '', headerOf(init, 'Accept') ?? '', headerOf(init, 'Prefer') ?? '', headerOf(init, 'Range') ?? '', headerOf(init, 'Accept-Profile') ?? ''].join('\n')
+    const table = url.pathname.split('/rest/v1/')[1] ?? ''
+    const persistOn = !!opts.persist && !!keepFor && !headerOf(init, 'Range')
+    const pkey = persistOn ? [url.toString(), userOfAuth(headerOf(init, 'Authorization')), headerOf(init, 'Accept') ?? '', headerOf(init, 'Prefer') ?? '', headerOf(init, 'Accept-Profile') ?? ''].join('\n') : ''
     const kept = memory.get(key)
     if (kept && now() - kept.at < ttl) return toResponse(kept)
     let p = inflight.get(key)
@@ -98,10 +141,21 @@ export function createRestFetch(base: FetchFn, opts: { ttlMs?: number; now?: () 
       const gen = generation
       // shared by every caller, so one caller's abort signal must not cancel it for the others
       const shared: RequestInit | undefined = init ? { ...init, signal: undefined } : init
-      const mine: Promise<Stored> = read(url, shared).then((s) => { if (gen === generation && s.status >= 200 && s.status < 300) memory.set(key, s); return s })
-        .finally(() => { if (inflight.get(key) === mine) inflight.delete(key) })
+      const mine: Promise<Stored> = read(url, shared).then((s) => {
+        const ok = s.status >= 200 && s.status < 300
+        if (gen === generation && ok) { memory.set(key, s); if (persistOn) opts.persist!.set(pkey, s) }
+        return s
+      }).finally(() => { if (inflight.get(key) === mine) inflight.delete(key) })
       p = mine
       inflight.set(key, p)
+    }
+    if (persistOn) {
+      const old = await opts.persist!.get(pkey).catch(() => undefined)
+      if (old && old.at > clearedAt && old.status >= 200 && old.status < 300) {
+        // answer at once from the browser; the network read behind it tells the app when something changed
+        p.then((s) => { if (s.status >= 200 && s.status < 300 && s.body !== old.body) opts.onRevalidated?.(table, keepFor!) }, () => undefined)
+        return toResponse(old)
+      }
     }
     return toResponse(await p)
   }

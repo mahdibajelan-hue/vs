@@ -70,4 +70,46 @@ const g = createRestFetch(fakeFetch, { keys: { joints: ['master_project_id', 'jo
 calls.length = 0
 await g(BASE + 'joints?select=*', { headers: { Authorization: 'a' } })
 assert.equal(new URL(calls[1].url).searchParams.get('order'), 'master_project_id.asc,joint_no.asc')
+// 8. answers kept in the browser: served at once, revalidated behind, never across users, never after a write
+{
+  const { userOfAuth } = await import('./restFetchCore.ts')
+  const keep = (o) => ({ ...o, headers: { ...o.headers, 'x-rasta-keep': 'exec' } })
+  const jwt = (sub) => 'Bearer x.' + Buffer.from(JSON.stringify({ sub })).toString('base64').replace(/=+$/, '') + '.y'
+  assert.equal(userOfAuth(jwt('u1')), 'u1')
+  const box = new Map(); const store = { get: async (k) => box.get(k), set: (k, v) => box.set(k, v), clear: () => box.clear() }
+  let clock = 1000; const changed = []
+  let version = 1
+  const net = async (input, init) => { assert.equal(new Headers(init?.headers).get('x-rasta-keep'), null); const m = (init?.method ?? 'GET').toUpperCase(); if (m !== 'GET') return new Response('{}', { status: 201 }); return new Response(JSON.stringify([{ id: 1, v: version }]), { status: 200 }) }
+  const mk = () => createRestFetch(net, { ttlMs: 10, now: () => clock, persist: store, onRevalidated: (t, st) => changed.push(t + ':' + st) })
+  let a = mk()
+  assert.deepEqual(await (await a(BASE + 'ex_reports?select=*', keep({ headers: { Authorization: jwt('u1') } }))).json(), [{ id: 1, v: 1 }])
+  await new Promise((r) => setTimeout(r, 5))
+  assert.equal(box.size, 1)
+  // a new page load (new fetch, empty memory): the kept answer comes back at once, the network says it changed
+  version = 2; clock += 100
+  a = mk()
+  assert.deepEqual(await (await a(BASE + 'ex_reports?select=*', keep({ headers: { Authorization: jwt('u1') } }))).json(), [{ id: 1, v: 1 }])
+  await new Promise((r) => setTimeout(r, 5))
+  assert.deepEqual(changed, ['ex_reports:exec'])
+  // another user never gets u1's answer
+  const b = mk()
+  assert.deepEqual(await (await b(BASE + 'ex_reports?select=*', keep({ headers: { Authorization: jwt('u2') } }))).json(), [{ id: 1, v: 2 }])
+  // a read without the mark is never kept
+  await a(BASE + 'rm_risks?select=*', { headers: { Authorization: jwt('u1') } }); await new Promise((r) => setTimeout(r, 5))
+  assert.ok(![...box.keys()].some((k) => k.includes('rm_risks')))
+  // after a write nothing kept before it is served
+  await a(BASE + 'ex_reports', { method: 'PATCH', headers: { Authorization: jwt('u1') }, body: '{}' })
+  version = 3; clock += 100
+  assert.deepEqual(await (await mk()(BASE + 'ex_reports?select=*', keep({ headers: { Authorization: jwt('u1') } }))).json(), [{ id: 1, v: 3 }])
+}
+// 9. read-only calls and auth do not empty the memory
+{
+  let n = 0
+  const net = async (input, init) => { if ((init?.method ?? 'GET') === 'GET') n++; return new Response('[]', { status: 200 }) }
+  const f = createRestFetch(net, { harmless: (m, p) => p === 'rpc/my_notifications' })
+  await f(BASE + 'ex_reports?select=*'); await f(BASE + 'rpc/my_notifications', { method: 'POST', body: '{}' })
+  await f('https://x.supabase.co/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: '{}' })
+  await f(BASE + 'ex_reports?select=*'); assert.equal(n, 1)
+  await f(BASE + 'rpc/other', { method: 'POST', body: '{}' }); await f(BASE + 'ex_reports?select=*'); assert.equal(n, 2)
+}
 console.log('restFetch: all assertions passed')

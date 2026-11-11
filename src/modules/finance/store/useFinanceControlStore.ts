@@ -1,3 +1,4 @@
+import { keepReads } from '../../../lib/keepReads'
 import { create } from 'zustand'
 import { addCoverage, covers, EMPTY_COVERAGE, mergePatch, onScopeChange, resolveScope, type Coverage, type ScopeRequest } from '../../../lib/projectScope'
 import { supabase } from '../../../lib/supabaseClient'
@@ -70,20 +71,21 @@ export const useFinanceControlStore = create<State>()((set, get) => ({
   reviews: new Map(),
 
   fetchAll: async (opts) => {
+    const db = keepReads('finc') // kept in the browser for an instant repeat visit (lib/keepReads)
     // inside a project only that project is read; other projects already in memory stay (lib/projectScope)
     const sc = resolveScope(opts?.scope)
     set({ loading: true })
     const [lines, versions, items, links, changes, log, routes, plans, clearances, reviews] = await Promise.all([
-      (sc ? supabase.from('fin_budget_lines').select('*').eq('master_project_id', sc) : supabase.from('fin_budget_lines').select('*')).order('code'),
-      supabase.from('fin_settings_versions').select('*').order('version'),
-      supabase.from('fin_config_items').select('*').order('sort'),
-      (sc ? supabase.from('fin_links').select('*').eq('master_project_id', sc) : supabase.from('fin_links').select('*')).order('created_at', { ascending: false }),
-      (sc ? supabase.from('chg_change_requests').select('id, master_project_id, contract_id, cr_number, title, status, currency, proposed_change_amount, approved_change_amount, proposed_schedule_impact_days, approved_schedule_impact_days, approved_at').eq('master_project_id', sc) : supabase.from('chg_change_requests').select('id, master_project_id, contract_id, cr_number, title, status, currency, proposed_change_amount, approved_change_amount, proposed_schedule_impact_days, approved_schedule_impact_days, approved_at')).not('contract_id', 'is', null),
-      (sc ? supabase.from('fin_sync_log').select('*').eq('master_project_id', sc) : supabase.from('fin_sync_log').select('*')).order('id', { ascending: false }).limit(60),
-      (sc ? supabase.from('la_routes').select('master_project_id').eq('master_project_id', sc) : supabase.from('la_routes').select('master_project_id')),
-      (sc ? supabase.from('fin_cashflow_plans').select('*').eq('master_project_id', sc) : supabase.from('fin_cashflow_plans').select('*')),
-      (sc ? supabase.from('fin_clearances').select('*, __p:fin_contracts!inner(master_project_id)').eq('__p.master_project_id', sc) : supabase.from('fin_clearances').select('*, __p:fin_contracts!inner(master_project_id)')),
-      supabase.from('fin_insight_reviews').select('insight_key, decision'),
+      (sc ? db.from('fin_budget_lines').select('*').eq('master_project_id', sc) : db.from('fin_budget_lines').select('*')).order('code'),
+      db.from('fin_settings_versions').select('*').order('version'),
+      db.from('fin_config_items').select('*').order('sort'),
+      (sc ? db.from('fin_links').select('*').eq('master_project_id', sc) : db.from('fin_links').select('*')).order('created_at', { ascending: false }),
+      (sc ? db.from('chg_change_requests').select('id, master_project_id, contract_id, cr_number, title, status, currency, proposed_change_amount, approved_change_amount, proposed_schedule_impact_days, approved_schedule_impact_days, approved_at').eq('master_project_id', sc) : db.from('chg_change_requests').select('id, master_project_id, contract_id, cr_number, title, status, currency, proposed_change_amount, approved_change_amount, proposed_schedule_impact_days, approved_schedule_impact_days, approved_at')).not('contract_id', 'is', null),
+      (sc ? db.from('fin_sync_log').select('*').eq('master_project_id', sc) : db.from('fin_sync_log').select('*')).order('id', { ascending: false }).limit(60),
+      (sc ? db.from('la_routes').select('master_project_id').eq('master_project_id', sc) : db.from('la_routes').select('master_project_id')),
+      (sc ? db.from('fin_cashflow_plans').select('*').eq('master_project_id', sc) : db.from('fin_cashflow_plans').select('*')),
+      (sc ? db.from('fin_clearances').select('*, __p:fin_contracts!inner(master_project_id)').eq('__p.master_project_id', sc) : db.from('fin_clearances').select('*, __p:fin_contracts!inner(master_project_id)')),
+      db.from('fin_insight_reviews').select('insight_key, decision'),
     ])
     // the new objects may not exist yet on an un-migrated database: the module keeps working without them
     const ok = <T,>(r: { data: T[] | null; error: unknown }): T[] => (r.error ? [] : r.data ?? [])
@@ -97,8 +99,8 @@ export const useFinanceControlStore = create<State>()((set, get) => ({
     const issueIds = linkRows.filter((l) => l.target_type === 'issue').map((l) => l.target_id as string)
     const riskIds = linkRows.filter((l) => l.target_type === 'risk').map((l) => l.target_id as string)
     const [iss, rsk] = await Promise.all([
-      issueIds.length ? supabase.from('im_issues').select('id, code, title, status').in('id', issueIds) : Promise.resolve({ data: [], error: null }),
-      riskIds.length ? supabase.from('rm_risks').select('id, code, title, status').in('id', riskIds) : Promise.resolve({ data: [], error: null }),
+      issueIds.length ? db.from('im_issues').select('id, code, title, status').in('id', issueIds) : Promise.resolve({ data: [], error: null }),
+      riskIds.length ? db.from('rm_risks').select('id, code, title, status').in('id', riskIds) : Promise.resolve({ data: [], error: null }),
     ])
     const targets = new Map<string, LinkTarget>()
     for (const r of ok<Row>(iss as never)) targets.set(r.id, { id: r.id, kind: 'issue', title: r.title ?? '', status: r.status ?? '', code: r.code ?? '' })

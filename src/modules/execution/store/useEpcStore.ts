@@ -1,3 +1,4 @@
+import { keepReads } from '../../../lib/keepReads'
 import { create } from 'zustand'
 import { useExecutionStore } from './useExecutionStore'
 import { addCoverage, covers, EMPTY_COVERAGE, mergeRows, onScopeChange, resolveScope, viaParent, type Coverage, type Scope, type ScopeRequest } from '../../../lib/projectScope'
@@ -179,24 +180,25 @@ export const useEpcStore = create<State>((set, get) => ({
   welders: [], quals: [], pipes: [], crewLogs: [], engDocs: [], docLinks: [], prereqs: [], deps: [], lookahead: [], measurements: [], versions: [], proposals: [], imports: [], legalByProject: new Map(), templates: [], weldHistory: [], archive: [], workActions: [], actionRules: [], statements: [], statementLines: [], signSlots: [], signatures: [], requiredForms: [], mappingApprovals: [], reportLinks: [], findings: [], entries: [], welds: [], lineWelds: [], weldConflicts: [], weldSuspects: [], weldMerges: [], ncrs: [], ncrEvents: [], ncrLinks: [],
 
   fetchAll: async (opts) => {
+    const db = keepReads('epc') // kept in the browser for an instant repeat visit (lib/keepReads)
     // inside a project only that project is read; rows of other projects stay (see lib/projectScope)
     const sc = resolveScope(opts?.scope)
     const S = (name: string, sel: string) => {
       const parent = CHILD_OF[name]
-      if (parent) { const q = supabase.from(name).select(viaParent(sel, parent[0], parent[1], 'project_id', sc)); return sc ? q.eq('__p.project_id', sc) : q }
-      const q = supabase.from(name).select(sel); return sc ? q.eq('project_id', sc) : q
+      if (parent) { const q = db.from(name).select(viaParent(sel, parent[0], parent[1], 'project_id', sc)); return sc ? q.eq('__p.project_id', sc) : q }
+      const q = db.from(name).select(sel); return sc ? q.eq('project_id', sc) : q
     }
     const put = (patch: Partial<State>) => set(mergeScoped(get(), patch, sc))
     // library of approved sheets and links to work-report lines (tables of migration 015; a missing table is not an error)
     // independent groups of tables: one parallel wave instead of ten sequential round trips
     const groups: (() => Promise<void>)[] = [
       async () => {
-      const [tpl, lnk] = await Promise.all([supabase.from('ex_form_templates').select('*').order('form_key').order('version', { ascending: false }), S('ex_report_links', '*')])
+      const [tpl, lnk] = await Promise.all([db.from('ex_form_templates').select('*').order('form_key').order('version', { ascending: false }), S('ex_report_links', '*')])
       if (!tpl.error) put({ templates: ((tpl.data ?? []) as Row[]).map((r): FormTemplateRow => ({ id: r.id, formKey: r.form_key, version: r.version, title: r.title ?? '', code: r.code ?? '', revision: r.revision ?? '', status: r.status, layout: r.layout, bindings: r.bindings ?? [], sourceFile: r.source_file ?? '', sourceSha256: r.source_sha256 ?? '', approvedAt: r.approved_at })) })
       if (!lnk.error) put({ reportLinks: ((lnk.data ?? []) as Row[]).map((r): ReportLinkRow => ({ id: r.id, projectId: r.project_id, lineId: r.line_id, techReportId: r.tech_report_id })) })
       },
       async () => {
-      const [rq, ma] = await Promise.all([S('ex_required_forms', '*'), supabase.from('ex_form_mapping_approvals').select('*')])
+      const [rq, ma] = await Promise.all([S('ex_required_forms', '*'), db.from('ex_form_mapping_approvals').select('*')])
       if (!rq.error) put({ requiredForms: ((rq.data ?? []) as Row[]).map((r): RequiredFormRow => ({ id: r.id, projectId: r.project_id, activityId: r.activity_id, formKey: r.form_key, note: r.note ?? '' })) })
       if (!ma.error) put({ mappingApprovals: ((ma.data ?? []) as Row[]).map((r): MappingApprovalRow => ({ id: r.id, templateId: r.template_id, approvedAt: r.approved_at, note: r.note ?? '', revokedAt: r.revoked_at })) })
       },

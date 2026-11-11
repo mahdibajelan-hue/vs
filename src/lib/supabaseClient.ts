@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { createRestFetch } from './restFetchCore'
+import { browserAnswers } from './answerStore'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -24,6 +25,15 @@ const KEYS: Record<string, string[]> = {
   rasta_role_permissions: ['role_id', 'permission_id'], rasta_user_permission_overrides: ['user_id', 'permission_id'], radar_project_visits: ['user_id', 'project_id'],
   sch_raised: ['project_id', 'alert_key'], ex_line_welds: ['line_id'],
 }
-const restFetch = createRestFetch((input, init) => fetch(input, init), { keys: KEYS })
+// read-only (STABLE) functions the app calls on every page, and the radar's visit log: they change nothing a page reads
+const READ_ONLY_RPC = new Set(['rasta_my_accessible_modules', 'inbox_my_items', 'inbox_my_delays', 'inbox_my_finance', 'inbox_my_project_work', 'inbox_my_stakeholder_work',
+  'my_notifications', 'my_finance_notifications', 'my_land_notifications', 'cm_my_notifications', 'my_material_notifications', 'my_engineering_notifications',
+  'my_execution_notifications', 'my_supervision_notifications', 'notification_projects', 'fin_land_summary'])
+const harmless = (method: string, path: string) => (method === 'POST' && path.startsWith('rpc/') && READ_ONLY_RPC.has(path.slice(4))) || path === 'radar_project_visits'
+// a module store's own load is also kept in the browser: a repeat visit draws at once, then catches up (lib/liveRefresh)
+const restFetch = createRestFetch((input, init) => fetch(input, init), {
+  keys: KEYS, harmless, persist: browserAnswers,
+  onRevalidated: (table, store) => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('rasta:revalidated', { detail: { table, store } })) },
+})
 
 export const supabase = createClient(url ?? 'https://placeholder.supabase.co', anonKey ?? 'placeholder-anon-key', { global: { fetch: restFetch } })

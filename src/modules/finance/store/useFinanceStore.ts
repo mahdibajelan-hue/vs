@@ -1,3 +1,4 @@
+import { keepReads } from '../../../lib/keepReads'
 import { create } from 'zustand'
 import { addCoverage, covers, EMPTY_COVERAGE, mergePatch, onScopeChange, resolveScope, type Coverage, type ScopeRequest } from '../../../lib/projectScope'
 import { supabase } from '../../../lib/supabaseClient'
@@ -131,15 +132,16 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
   coverage: EMPTY_COVERAGE,
 
   fetchAll: async (opts) => {
+    const db = keepReads('fin') // kept in the browser for an instant repeat visit (lib/keepReads)
     // inside a project only that project is read; other projects already in memory stay (lib/projectScope)
     const sc = resolveScope(opts?.scope)
     set({ loading: true })
     const [{ data: budgets, error: e1 }, { data: changes, error: e2 }, { data: contracts, error: e3 }, { data: annualBudgets, error: e7 }, { data: profileRows }] = await Promise.all([
-      (sc ? supabase.from('fin_budgets').select('*').eq('master_project_id', sc) : supabase.from('fin_budgets').select('*')),
-      (sc ? supabase.from('fin_budget_changes').select('*').eq('master_project_id', sc) : supabase.from('fin_budget_changes').select('*')).order('change_date'),
-      (sc ? supabase.from('fin_contracts').select('*').eq('master_project_id', sc) : supabase.from('fin_contracts').select('*')).order('created_at', { ascending: false }),
-      (sc ? supabase.from('fin_annual_budgets').select('*').eq('master_project_id', sc) : supabase.from('fin_annual_budgets').select('*')).order('jalali_year'),
-      supabase.from('profiles').select('id, full_name'),
+      (sc ? db.from('fin_budgets').select('*').eq('master_project_id', sc) : db.from('fin_budgets').select('*')),
+      (sc ? db.from('fin_budget_changes').select('*').eq('master_project_id', sc) : db.from('fin_budget_changes').select('*')).order('change_date'),
+      (sc ? db.from('fin_contracts').select('*').eq('master_project_id', sc) : db.from('fin_contracts').select('*')).order('created_at', { ascending: false }),
+      (sc ? db.from('fin_annual_budgets').select('*').eq('master_project_id', sc) : db.from('fin_annual_budgets').select('*')).order('jalali_year'),
+      db.from('profiles').select('id, full_name'),
     ])
     if (reportError('بارگذاری داده‌های مالی', e1 ?? e2 ?? e3 ?? e7)) {
       set({ loading: false })
@@ -156,12 +158,12 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
     ] =
       contractIds.length > 0
         ? await Promise.all([
-            (sc ? supabase.from('fin_contract_amendments').select('*').in('contract_id', contractIds) : supabase.from('fin_contract_amendments').select('*')).order('amendment_date'),
-            (sc ? supabase.from('fin_payment_certificates').select('*').in('contract_id', contractIds) : supabase.from('fin_payment_certificates').select('*')).order('certificate_date'),
-            (sc ? supabase.from('fin_guarantees').select('*').in('contract_id', contractIds) : supabase.from('fin_guarantees').select('*')).order('expiry_date'),
-            (sc ? supabase.from('fin_claims').select('*').in('contract_id', contractIds) : supabase.from('fin_claims').select('*')).order('submitted_date'),
-            (sc ? supabase.from('fin_retention_releases').select('*').in('contract_id', contractIds) : supabase.from('fin_retention_releases').select('*')).order('planned_date'),
-            (sc ? supabase.from('fin_cashflow_forecasts').select('*').in('contract_id', contractIds) : supabase.from('fin_cashflow_forecasts').select('*')).order('jalali_year').order('jalali_month'),
+            (sc ? db.from('fin_contract_amendments').select('*').in('contract_id', contractIds) : db.from('fin_contract_amendments').select('*')).order('amendment_date'),
+            (sc ? db.from('fin_payment_certificates').select('*').in('contract_id', contractIds) : db.from('fin_payment_certificates').select('*')).order('certificate_date'),
+            (sc ? db.from('fin_guarantees').select('*').in('contract_id', contractIds) : db.from('fin_guarantees').select('*')).order('expiry_date'),
+            (sc ? db.from('fin_claims').select('*').in('contract_id', contractIds) : db.from('fin_claims').select('*')).order('submitted_date'),
+            (sc ? db.from('fin_retention_releases').select('*').in('contract_id', contractIds) : db.from('fin_retention_releases').select('*')).order('planned_date'),
+            (sc ? db.from('fin_cashflow_forecasts').select('*').in('contract_id', contractIds) : db.from('fin_cashflow_forecasts').select('*')).order('jalali_year').order('jalali_month'),
           ])
         : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }, { data: [], error: null }]
     if (reportError('بارگذاری داده‌های مالی', e4 ?? e5 ?? e6 ?? e9 ?? e10 ?? e11)) {
@@ -170,7 +172,7 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
     }
     const certificateIds = ((certificates ?? []) as { id: string }[]).map((c) => c.id)
     const { data: payments, error: e8 } =
-      certificateIds.length > 0 ? await (sc ? supabase.from('fin_payments').select('*').in('certificate_id', certificateIds) : supabase.from('fin_payments').select('*')).order('payment_date') : { data: [], error: null }
+      certificateIds.length > 0 ? await (sc ? db.from('fin_payments').select('*').in('certificate_id', certificateIds) : db.from('fin_payments').select('*')).order('payment_date') : { data: [], error: null }
     if (reportError('بارگذاری سوابق پرداخت', e8)) {
       set({ loading: false })
       return

@@ -1,3 +1,4 @@
+import { keepReads } from '../../../lib/keepReads'
 import { create } from 'zustand'
 import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
@@ -108,18 +109,19 @@ export const useExecutionStore = create<State>((set, get) => ({
 
   setFocus: (id, tab) => set({ focusReportId: id, focusTab: id ? tab ?? null : null }),
   fetchAll: async (opts) => {
+    const db = keepReads('exec') // kept in the browser for an instant repeat visit (lib/keepReads)
     const lite = opts?.lite === true
     // inside a project only that project is read; other projects already in memory stay (see lib/projectScope)
     const sc = resolveScope(opts?.scope)
     set({ loading: true })
-    const t = (name: string, col = 'project_id', sel = '*') => { const q = supabase.from(name).select(sel as '*'); return sc ? q.eq(col, sc) : q }
-    const child = (name: string, parent: string, fk: string) => { const q = supabase.from(name).select(viaParent('*', parent, fk, 'project_id', sc)); return sc ? q.eq('__p.project_id', sc) : q }
+    const t = (name: string, col = 'project_id', sel = '*') => { const q = db.from(name).select(sel as '*'); return sc ? q.eq(col, sc) : q }
+    const child = (name: string, parent: string, fk: string) => { const q = db.from(name).select(viaParent('*', parent, fk, 'project_id', sc)); return sc ? q.eq('__p.project_id', sc) : q }
     const none = Promise.resolve({ data: [] as Row[], error: null })
     const [roles, sets, books, items, acts, bases, blines, reps, lns, res, stp, his, maps, gaps, profs] = await Promise.all([
       t('ex_project_roles'), t('ex_settings'), lite ? none : t('ex_price_books').order('created_at'), lite ? none : child('ex_price_items', 'ex_price_books', 'ex_price_items_book_id_fkey'), t('ex_activities').order('sort'), t('ex_baselines').order('version'), child('ex_baseline_lines', 'ex_baselines', 'ex_baseline_lines_baseline_id_fkey'),
       // every column except the frozen letterhead (≈4 KB of a 4.5 KB row): the printed paper loads it on demand (loadLetterhead)
       t('ex_reports', 'project_id', REPORT_LIST_COLS).order('report_date', { ascending: false }), child('ex_report_lines', 'ex_reports', 'ex_report_lines_report_id_fkey').order('line_no'), child('ex_report_resources', 'ex_reports', 'ex_report_resources_report_id_fkey'), child('ex_report_stoppages', 'ex_reports', 'ex_report_stoppages_report_id_fkey'), lite ? none : child('ex_report_history', 'ex_reports', 'ex_report_history_report_id_fkey').order('at', { ascending: false }).limit(2000), t('ex_form_activity_map'), lite ? none : t('ex_gap_items'),
-      lite ? none : supabase.from('profiles').select('id, full_name'),
+      lite ? none : db.from('profiles').select('id, full_name'),
     ])
     // an un-migrated database leaves these empty rather than breaking the module
     const ok = <T,>(r: { data: T[] | null; error: unknown }): T[] => (r.error ? [] : r.data ?? [])

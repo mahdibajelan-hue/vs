@@ -1,3 +1,4 @@
+import { keepReads } from '../../../lib/keepReads'
 import { explainMaterialError } from '../lib/control/errors'
 import { create } from 'zustand'
 import { addCoverage, covers, EMPTY_COVERAGE, mergePatch, onScopeChange, resolveScope, scopedSelect, type Coverage, type ScopeRequest, type TableScope } from '../../../lib/projectScope'
@@ -167,9 +168,10 @@ export const useMaterialStore = create<MaterialState>()((set, get) => ({
   coverage: EMPTY_COVERAGE,
 
   fetchAll: async (opts) => {
+    const db = keepReads('mat') // kept in the browser for an instant repeat visit (lib/keepReads)
     // inside a project only that project is read; other projects already in memory stay
     const sc = resolveScope(opts?.scope)
-    const S = (name: string) => { const r = scopedSelect('*', TABLES[name], sc); const q = supabase.from(name).select(r.select as '*'); return r.key ? q.eq(r.key, sc as string) : q }
+    const S = (name: string) => { const r = scopedSelect('*', TABLES[name], sc); const q = db.from(name).select(r.select as '*'); return r.key ? q.eq(r.key, sc as string) : q }
     set({ loading: true })
     const [
       { data: revisions, error: e1 },

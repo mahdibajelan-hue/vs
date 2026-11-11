@@ -1,3 +1,4 @@
+import { keepReads } from '../../../lib/keepReads'
 import { create } from 'zustand'
 import { addCoverage, covers, EMPTY_COVERAGE, mergePatch, onScopeChange, resolveScope, scopedSelect, type Coverage, type ScopeRequest, type TableScope } from '../../../lib/projectScope'
 import { supabase } from '../../../lib/supabaseClient'
@@ -144,14 +145,15 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     return lookupsPromise
   },
   fetchAll: async (opts) => {
+    const db = keepReads('matc') // kept in the browser for an instant repeat visit (lib/keepReads)
     // inside a project only that project is read; other projects already in memory stay
     const sc = resolveScope(opts?.scope)
     set({ loading: true })
-    const t = (name: string) => { const r = scopedSelect('*', TABLES[name], sc); const q = supabase.from(name).select(r.select as '*'); return r.key ? q.eq(r.key, sc as string) : q }
+    const t = (name: string) => { const r = scopedSelect('*', TABLES[name], sc); const q = db.from(name).select(r.select as '*'); return r.key ? q.eq(r.key, sc as string) : q }
     const [groups, units, defs, pats, pw, pkgs, items, stages, bases, chg, txns, norms, disc, links, roles, sets, profs, reqs, reqLn, reqSg, lks, wsets, wlines] = await Promise.all([
       t('mtl_groups').order('sort'), t('mtl_units'), t('mtl_stage_defs').order('sort'), t('mtl_patterns'), t('mtl_pattern_weights'), t('mtl_packages'), t('mtl_package_items'), t('mtl_item_stages'), t('mtl_baselines').order('version'),
       t('mtl_changes').order('requested_at', { ascending: false }), t('mtl_txns').order('txn_date', { ascending: false }), t('mtl_norms'), t('mtl_discrepancies'), t('mtl_links'), t('mtl_project_roles'),
-      t('mtl_settings_versions').order('version'), supabase.from('profiles').select('id, full_name'),
+      t('mtl_settings_versions').order('version'), db.from('profiles').select('id, full_name'),
       t('mtl_requisitions').order('created_at', { ascending: false }), t('mtl_requisition_lines'), t('mtl_requisition_signers').order('sort'), t('mtl_lookups').order('sort'), t('mtl_weld_sets').order('created_at'), t('mtl_weld_lines'),
     ])
     // an un-migrated database leaves these empty rather than breaking the module
@@ -160,8 +162,8 @@ export const useMaterialControlStore = create<State>((set, get) => ({
     const issueIds = linkRows.filter((l) => l.target_type === 'issue').map((l) => l.target_id as string)
     const riskIds = linkRows.filter((l) => l.target_type === 'risk').map((l) => l.target_id as string)
     const [iss, rsk] = await Promise.all([
-      issueIds.length ? supabase.from('im_issues').select('id, code, title, status, owner_id, pursuer_id, resolve_due_date, deadline_date').in('id', issueIds) : Promise.resolve({ data: [], error: null }),
-      riskIds.length ? supabase.from('rm_risks').select('id, code, title, status, owner_id, next_review_date, realized_at').in('id', riskIds) : Promise.resolve({ data: [], error: null }),
+      issueIds.length ? db.from('im_issues').select('id, code, title, status, owner_id, pursuer_id, resolve_due_date, deadline_date').in('id', issueIds) : Promise.resolve({ data: [], error: null }),
+      riskIds.length ? db.from('rm_risks').select('id, code, title, status, owner_id, next_review_date, realized_at').in('id', riskIds) : Promise.resolve({ data: [], error: null }),
     ])
     const targets = new Map<string, LinkTarget>()
     for (const r of ok<Row>(iss as never)) targets.set(r.id, { id: r.id, kind: 'issue', code: r.code ?? '', title: r.title ?? '', status: r.status ?? '', ownerId: r.owner_id ?? r.pursuer_id ?? null, dueDate: r.resolve_due_date ?? r.deadline_date ?? null, realizedAt: null })
