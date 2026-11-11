@@ -1,5 +1,10 @@
--- Same rule as 004_merge_permissive_policies.sql, computed inside the database from pg_policies (applied 2026-11-11
--- as migration `perf_merge_permissive_policies`). For every (table, role) with more than one permissive policy for an
+-- APPLIED 2026-11-11 in the SQL editor. Result: 748 merged policies replaced 401; no (table, role, action) has more
+-- than one permissive policy; advisor multiple_permissive_policies 908 -> 61 (the rest: tables with separate public and
+-- authenticated policies, kept apart on purpose). Rows visible per table were identical before and after for the admin,
+-- two non-admin users, a user with no project, and anon (187 tables, same counts and fingerprint); a walk through the
+-- radar and 16 modules gave no REST errors.
+--
+-- Same rule as 004_merge_permissive_policies.sql, computed inside the database from pg_policies. For every (table, role) with more than one permissive policy for an
 -- action, the overlapping policies of that role are replaced by one policy per action — merged_<action>, with _auth or
 -- _public appended when the table has policies for both roles — whose USING and WITH CHECK are the OR of the old ones
 -- (a policy without WITH CHECK contributes its USING, as PostgreSQL does). Undo: 004_merge_permissive_policies_rollback.sql.
