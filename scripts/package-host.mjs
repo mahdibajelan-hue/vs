@@ -26,6 +26,21 @@ env.HOST_BUILD = 'true'
 await rm('dist', { recursive: true, force: true })
 execSync('npx tsc -b && npx vite build', { stdio: 'inherit', env })
 
+// Leave out what the running app never requests, so the upload stays small (checked by opening the digital twin from a
+// package build and watching every request: none of these is asked for).
+//  - Cesium extras: map-pin icons, the default world imagery (the twin brings its own satellite layer), lens flare, water
+//    textures, glTF/3D-Tiles decoders (the twin draws points and labels only), and every widget file except widgets.css —
+//    the one stylesheet the page links, which carries its images inline
+//  - logo files nothing references
+const PRUNE = [
+  'cesium/Assets/Textures/maki', 'cesium/Assets/Textures/NaturalEarthII', 'cesium/Assets/Textures/LensFlare',
+  'cesium/Assets/Textures/waterNormals.jpg', 'cesium/Assets/Textures/waterNormalsSmall.jpg',
+  'cesium/ThirdParty',
+  'logo-full.png', 'logo-icon.png', 'farin-logo.webp',
+]
+for (const rel of PRUNE) await rm(path.join('dist', rel), { recursive: true, force: true })
+for (const name of await readdir('dist/cesium/Widgets')) if (name !== 'widgets.css') await rm(path.join('dist/cesium/Widgets', name), { recursive: true, force: true })
+
 // server config: Apache/LiteSpeed (.htaccess), IIS (web.config); nginx sample stays in deploy/host for VPS setups
 await cp('deploy/host/.htaccess', 'dist/.htaccess')
 await cp('deploy/host/assets/.htaccess', 'dist/assets/.htaccess')

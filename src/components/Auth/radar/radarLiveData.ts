@@ -26,9 +26,8 @@ import { spRadarOf } from '../../../modules/stationpiping/spEpc'
 import { DISC_FA } from '../../../modules/stationpiping/lib/spCore'
 import { todayTehran } from '../../../lib/today'
 import { loadPssrSummary } from '../../../modules/pssr/lib/pssrSummary'
-import { loadProjectMetrics, type ProjectHealth } from '../../../modules/projectMetrics/projectMetricsLoader'
+import { loadProjectMetrics } from '../../../modules/projectMetrics/projectMetricsLoader'
 import { fetchCenterHealth } from '../../../modules/projectMetrics/centerHealth'
-import { statusFromScore, type DerivedHealth } from '../../../modules/lifecycle/lib/health'
 import type { EpcProgress } from '../../../modules/epc/epcProgress'
 import { loadStageGateBundle } from '../../../modules/lifecycle/lib/stageGateBundleLoader'
 import type { ScheduleSummary } from '../../../modules/scheduling/lib/summary'
@@ -41,7 +40,7 @@ import {
 } from '../../../modules/lifecycle/lib/lifecycleData'
 import { analyseProject, type ProjectAnalysis } from '../../../modules/lifecycle/lib/useProjectAnalysis'
 import type { ProjectLifecycleBundle } from '../../../modules/lifecycle/store/useLifecycleStore'
-import { STAGE_LABEL_EN, type StageKey, type HealthStatus, type HealthDimension } from '../../../modules/lifecycle/types'
+import { STAGE_LABEL_EN, type StageKey } from '../../../modules/lifecycle/types'
 
 import {
   finClaimFromRow, finContractAmendmentFromRow, finContractFromRow, finPaymentCertificateFromRow,
