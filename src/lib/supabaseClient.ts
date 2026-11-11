@@ -15,15 +15,28 @@ if (!isSupabaseConfigured) {
 }
 
 // complete reads past the 1000-row page, one request per identical read, and a 30-second memory that any write clears
-// tables without an `id` column: their primary key keeps a paged read in a stable order
+// tables without an `id` column (from the database catalogue): their primary key keeps a paged read in a stable order;
+// an empty list (a view without a key) leaves the read in the order asked
 const KEYS: Record<string, string[]> = {
-  pdt_joints: ['master_project_id', 'joint_no'], la_stages: ['parcel_id', 'stage_key'], im_issue_people: ['issue_id', 'user_id', 'role'],
-  im_project_members: ['project_id', 'user_id'], project_members: ['project_id', 'user_id'], rm_project_members: ['project_id', 'user_id'],
-  la_roles: ['master_project_id', 'user_id'], comp_inservice_ratings: ['cycle_id', 'rater_id', 'competency_id'], comp_inservice_raters: ['cycle_id', 'user_id'],
-  im_task_deps: ['task_id', 'depends_on_task_id'], mtl_pattern_weights: ['pattern_id', 'stage_key'], ex_weld_dismissals: ['project_id', 'n2'],
-  sv_month_signoffs: ['master_project_id', 'month'], rasta_user_module_access: ['user_id', 'module_key'], rasta_user_roles: ['user_id', 'role_id'],
-  rasta_role_permissions: ['role_id', 'permission_id'], rasta_user_permission_overrides: ['user_id', 'permission_id'], radar_project_visits: ['user_id', 'project_id'],
-  sch_raised: ['project_id', 'alert_key'], ex_line_welds: ['line_id'],
+  comp_inservice_raters: ['cycle_id', 'user_id'], comp_inservice_ratings: ['cycle_id', 'rater_id', 'competency_id'],
+  comp_job_role_config: ['job_role'], comp_module_admins: ['user_id'], comp_question_designer_scopes: ['user_id', 'section'],
+  comp_role_maturity_guidance: ['job_role', 'band'], comp_self_service_retired_tokens: ['token'], ex_line_welds: ['line_id'],
+  ex_settings: ['project_id'], ex_weld_dismissals: ['project_id', 'n2'], ex_weld_file: [], ex_weld_suspects: [],
+  fin_insight_reviews: ['insight_key'], ht_settings: ['master_project_id'], im_categories: ['key'], im_issue_people: ['issue_id', 'user_id', 'role'],
+  im_notif_prefs: ['user_id'], im_notif_rules: ['key'], im_notif_state: ['key'], im_project_members: ['project_id', 'user_id'],
+  im_sla_policies: ['severity'], im_task_deps: ['task_id', 'depends_on_task_id'], im_templates: ['key'], im_workflow_stages: ['workflow_key', 'key'],
+  im_workflow_transitions: ['workflow_key', 'from_stage', 'to_stage'], la_roles: ['master_project_id', 'user_id'], la_routes: ['master_project_id'],
+  la_stages: ['parcel_id', 'stage_key'], ms_roles: ['user_id', 'role'], mtl_pattern_weights: ['pattern_id', 'stage_key'], mtl_stage_defs: ['key'],
+  mtl_units: ['code'], pdt_joints: ['master_project_id', 'joint_no'], pdt_settings: ['master_project_id'], personality_module_admins: ['user_id'],
+  pf_project_scores: ['master_project_id'], plc_project_lifecycle: ['project_id'], plc_project_strategy: ['project_id'],
+  project_members: ['project_id', 'user_id'], pst_contract_cfg: ['contract_id'], radar_epc_snapshots: ['master_project_id'],
+  radar_project_visits: ['user_id', 'project_id'], rasta_modules: ['key'], rasta_role_permissions: ['role_id', 'permission_id'],
+  rasta_user_module_access: ['user_id', 'module_key'], rasta_user_permission_overrides: ['user_id', 'permission_id'],
+  rasta_user_roles: ['user_id', 'role_id'], rm_categories: ['key'], rm_project_members: ['project_id', 'user_id'], rm_risk_state: [],
+  sch_contract: ['project_id'], sch_cost_params: ['project_id'], sch_raised: ['project_id', 'alert_key'],
+  sg_lifecycle_phase_durations: ['phase_code'], sg_lifecycle_phases: ['code'], sg_projects: ['name'], sp_settings: ['master_project_id'],
+  sv_month_signoffs: ['master_project_id', 'month'], sv_punch_tokens: ['token'], sv_settings: ['master_project_id'], tm_projects: ['name'],
+  tm_users: ['user_id'], tmp_doc_map: [], user_signatures: ['user_id'],
 }
 // read-only (STABLE) functions the app calls on every page, and the radar's visit log: they change nothing a page reads
 const READ_ONLY_RPC = new Set(['rasta_my_accessible_modules', 'inbox_my_items', 'inbox_my_delays', 'inbox_my_finance', 'inbox_my_project_work', 'inbox_my_stakeholder_work',

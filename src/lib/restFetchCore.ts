@@ -1,9 +1,9 @@
 /**
  * A fetch wrapper for the Supabase REST endpoint (PostgREST), installed once on the shared client.
  *
- * 1. Complete reads. PostgREST answers at most `PAGE` rows per request. A plain read that comes back exactly full is
- *    re-read page by page in a stable order (the query's own order plus `id` as a tie-break), so no module ever
- *    computes a figure from the first 1000 rows of a bigger table.
+ * 1. Complete reads. PostgREST answers at most `PAGE` rows per request. A plain read is sent in a stable order (the
+ *    query's own order plus `id`, or the table's `keys`, as a tie-break); one that comes back exactly full is continued
+ *    page by page, so no module ever computes a figure from the first 1000 rows of a bigger table.
  * 2. One request per question. Identical reads in flight at the same moment share one network request.
  * 3. A short memory. A read repeated within `ttlMs` (going back to a page) is answered from memory. Any write to the
  *    database (POST/PATCH/PUT/DELETE — including RPC calls, which may write) empties that memory first, so data a
@@ -78,18 +78,36 @@ export function createRestFetch(base: FetchFn, opts: {
 
   const isRestRead = (url: URL, method: string) => method === 'GET' && url.pathname.includes('/rest/v1/') && !url.pathname.includes('/rest/v1/rpc/')
 
+  // tables found to have no `id` column (and no `keys` entry): their reads are sent as asked
+  const noTie = new Set<string>()
+  const stableOrder = (url: URL) => {
+    const order = url.searchParams.get('order')
+    const table = url.pathname.split('/rest/v1/')[1] ?? ''
+    const ordered = new Set((order ?? '').split(',').map((o) => o.split('.')[0]).filter(Boolean))
+    const tie = keysOf(table).filter((k) => !ordered.has(k)).map((k) => `${k}.asc`)
+    return [order, ...tie].filter(Boolean).join(',')
+  }
+
   async function read(url: URL, init: RequestInit | undefined): Promise<Stored> {
-    const res = await base(url.toString(), init)
-    const stored: Stored = { status: res.status, statusText: res.statusText, headers: [...res.headers.entries()], body: await res.text(), at: now() }
-    if (!res.ok) return stored
-    // a full page from a read that did not ask for a range: read the whole table in pages
+    const table = url.pathname.split('/rest/v1/')[1] ?? ''
     const ranged = url.searchParams.has('limit') || url.searchParams.has('offset') || headerOf(init, 'Range') != null
     const single = (headerOf(init, 'Accept') ?? '').includes('vnd.pgrst.object')
-    if (ranged || single) return stored
+    // a plain read is sent in a stable order from the start, so a full first page can be continued rather than re-read
+    const tied = !ranged && !single && !noTie.has(table) && stableOrder(url) !== (url.searchParams.get('order') ?? '')
+    let sent = url
+    if (tied) { sent = new URL(url.toString()); sent.searchParams.set('order', stableOrder(url)) }
+    let res = await base(sent.toString(), init)
+    if (tied && res.status === 400) {
+      const txt = await res.clone().text()
+      if (/42703|does not exist/.test(txt)) { noTie.add(table); sent = url; res = await base(url.toString(), init) }
+    }
+    const stored: Stored = { status: res.status, statusText: res.statusText, headers: [...res.headers.entries()], body: await res.text(), at: now() }
+    if (!res.ok || ranged || single) return stored
     let first: unknown
     try { first = JSON.parse(stored.body) } catch { return stored }
     if (!Array.isArray(first) || first.length < PAGE) return stored
-    const all = await readAll(url, init)
+    // a full page: read the rest in pages (continuing after the first page when it was already in a stable order)
+    const all = await readAll(url, init, sent === url ? null : first)
     if (!all) return stored // the paged read failed (e.g. a table without `id`): keep the first page rather than break
     const total = all.length
     const headers = stored.headers.filter(([k]) => k.toLowerCase() !== 'content-range' && k.toLowerCase() !== 'content-length')
@@ -97,16 +115,12 @@ export function createRestFetch(base: FetchFn, opts: {
     return { ...stored, headers, body: JSON.stringify(all) }
   }
 
-  async function readAll(url: URL, init: RequestInit | undefined): Promise<unknown[] | null> {
-    const order = url.searchParams.get('order')
-    const table = url.pathname.split('/rest/v1/')[1] ?? ''
-    const ordered = new Set((order ?? '').split(',').map((o) => o.split('.')[0]).filter(Boolean))
-    const tie = keysOf(table).filter((k) => !ordered.has(k)).map((k) => `${k}.asc`)
-    const stable = [order, ...tie].filter(Boolean).join(',')
-    const rows: unknown[] = []
-    for (let offset = 0; ; offset += PAGE) {
+  async function readAll(url: URL, init: RequestInit | undefined, firstPage: unknown[] | null): Promise<unknown[] | null> {
+    const stable = stableOrder(url)
+    const rows: unknown[] = firstPage ? [...firstPage] : []
+    for (let offset = firstPage ? firstPage.length : 0; ; offset += PAGE) {
       const u = new URL(url.toString())
-      u.searchParams.set('order', stable)
+      if (stable) u.searchParams.set('order', stable)
       u.searchParams.set('offset', String(offset))
       u.searchParams.set('limit', String(PAGE))
       const res = await base(u.toString(), init)

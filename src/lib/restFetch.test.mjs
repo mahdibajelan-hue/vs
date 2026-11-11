@@ -9,6 +9,7 @@ const fakeFetch = async (input, init) => {
   calls.push({ method, url: u.toString() })
   if (method !== 'GET') return new Response('{}', { status: 201 })
   if (u.pathname.endsWith('/broken')) return new Response('nope', { status: 400 })
+  if (u.pathname.endsWith('/noid') && (u.searchParams.get('order') ?? '').includes('id.')) return new Response('{"code":"42703","message":"column noid.id does not exist"}', { status: 400 })
   let rows = [...table]
   const idEq = u.searchParams.get('id'); if (idEq?.startsWith('eq.')) rows = rows.filter((x) => x.id === Number(idEq.slice(3)))
   const order = u.searchParams.get('order')
@@ -31,7 +32,15 @@ r = await f(BASE + 't?select=*&order=v.desc', { headers: { Authorization: 'a' } 
 rows = await r.json()
 assert.equal(rows.length, 2345)
 assert.ok(rows.every((x, i) => i === 0 || rows[i - 1].v > x.v || (rows[i - 1].v === x.v && rows[i - 1].id < x.id)))
-assert.ok(calls.slice(1).every((c) => new URL(c.url).searchParams.get('order') === 'v.desc,id.asc'))
+assert.ok(calls.every((c) => new URL(c.url).searchParams.get('order') === 'v.desc,id.asc'))
+// the first page is continued, not read again: 2345 rows in 3 requests
+assert.equal(calls.length, 3)
+
+// 1b. a table without `id` is learned once and then read as asked
+calls.length = 0
+r = await f(BASE + 'noid?select=*&id=eq.7', { headers: { Authorization: 'a' } }); assert.equal(r.status, 200); assert.equal(calls.length, 2)
+calls.length = 0
+await f(BASE + 'noid?select=*&id=eq.8', { headers: { Authorization: 'a' } }); assert.equal(calls.length, 1)
 
 // 2. an explicit range or single-object read is left alone
 calls.length = 0
