@@ -5,7 +5,8 @@ import { jalaliText } from '../../execution/lib/periods'
 import { useExecutionStore } from '../../execution/store/useExecutionStore'
 import { Chip, KpiCard, Section } from '../../finance/components/fn'
 import { Empty, fa } from '../../execution/components/common'
-import { EXCEL_FIELDS, findHeaderRow, parseExcelGrid, suggestMapping, templateGrid, type FieldKey, type Grid } from '../lib/excel'
+import { EXCEL_FIELDS, findHeaderRow, parseExcelGrid, suggestMapping, templateGrid, type FieldKey } from '../lib/excel'
+import { readSheets, type Sheet } from '../lib/excelRead'
 import { detectP6Format, parseP6Xml, parseXer } from '../lib/p6'
 import { countIssues, validateParsed } from '../lib/validate'
 import { KIND_LABEL_FA, type ImportIssue, type ParsedSchedule, type VersionKind, type VersionSource } from '../lib/types'
@@ -14,14 +15,8 @@ import type { ScheduleModel } from '../store/useScheduleModel'
 import { Hint } from '../components/Hint'
 import type { SchTab } from '../SchedulingApp'
 
-interface Sheet { name: string; grid: Grid }
 const LEVEL_ICON = { error: <XCircle size={13} color="#ef4444" aria-label="خطا" />, warning: <AlertTriangle size={13} color="#d97706" aria-label="هشدار" />, info: <Info size={13} color="#0ea5e9" aria-label="اطلاع" /> }
 
-async function readSheets(file: File): Promise<Sheet[]> {
-  const XLSX = await import('xlsx')
-  const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' })
-  return wb.SheetNames.map((name) => ({ name, grid: XLSX.utils.sheet_to_json<Grid[number]>(wb.Sheets[name], { header: 1, raw: true, defval: null, blankrows: false }).slice(0, 20000) }))
-}
 async function readText(file: File): Promise<string> {
   const buf = await file.arrayBuffer()
   const utf = new TextDecoder('utf-8').decode(buf)
@@ -74,7 +69,7 @@ export function SchImport({ projectId, go }: { projectId: string; m?: ScheduleMo
       const buf = await f.arrayBuffer(), hash = await fileHash(buf)
       const lower = f.name.toLowerCase()
       const base = f.name.replace(/\.[^.]+$/, '')
-      if (/\.(xlsx|xls|xlsm)$/.test(lower)) {
+      if (/\.(xlsx|xlsm)$/.test(lower)) {
         const s = await readSheets(f); setSheets(s)
         const idx = s.findIndex((x) => findHeaderRow(x.grid) >= 0); const i = idx < 0 ? 0 : idx
         setSheetIdx(i); const hr = s[i] ? findHeaderRow(s[i].grid) : -1; setHeaderRow(hr)
@@ -83,7 +78,7 @@ export function SchImport({ projectId, go }: { projectId: string; m?: ScheduleMo
         if (hr < 0) setMsg('ردیف عنوان ستون‌ها خودکار پیدا نشد؛ ردیف عنوان را دستی انتخاب کنید.')
       } else {
         const text = await readText(f); const fmt = detectP6Format(text) ?? (/\.xer$/.test(lower) ? 'xer' : /\.xml$/.test(lower) ? 'xml' : null)
-        if (!fmt) { setMsg('نوع فایل شناخته نشد. فایل‌های Excel (xlsx)، P6 XER یا P6 XML پذیرفته می‌شوند.'); setFile(null); return }
+        if (!fmt) { setMsg('نوع فایل شناخته نشد. فایل‌های Excel (xlsx یا xlsm)، P6 XER یا P6 XML پذیرفته می‌شوند. فایل‌های قدیمی xls را ابتدا در اکسل به xlsx ذخیره کنید.'); setFile(null); return }
         setFile({ name: f.name, hash, format: fmt === 'xer' ? 'p6_xer' : 'p6_xml', text }); setSheets([])
       }
       setLabel((l) => l || base)
@@ -113,7 +108,7 @@ export function SchImport({ projectId, go }: { projectId: string; m?: ScheduleMo
     <div style={{ display: 'grid', gap: 12 }}>
       <Section title={<span>ورود برنامهٔ زمان‌بندی <Hint id="import-source" /></span>} hint="Excel (xlsx)، Primavera P6 به‌صورت XER یا XML. فایل شما تغییر نمی‌کند و تا زدن «ثبت نسخه» چیزی ذخیره نمی‌شود.">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls,.xlsm,.xer,.xml" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void pick(f); e.target.value = '' }} />
+          <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xer,.xml" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void pick(f); e.target.value = '' }} />
           <button className="im-btn im-btn-primary" disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={14} /> انتخاب فایل</button>
           <button className="im-btn im-btn-sm" onClick={() => void downloadTemplate()}><Download size={13} /> دریافت فایل نمونهٔ Excel</button>
           {file && <Chip tone="neutral"><FileSpreadsheet size={12} style={{ verticalAlign: -2 }} /> {file.name}</Chip>}
