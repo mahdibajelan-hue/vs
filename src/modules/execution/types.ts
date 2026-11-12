@@ -82,6 +82,12 @@ export interface ExSettings {
   /** progress credit (percent) of an engineering document by the step reached: first submission (Rev A), a later one (Rev B, …), Approved as Noted, Approved */
   engCredits?: { first: number; later: number; noted: number; approved: number }
   rolePerms?: Partial<Record<ExRole, string[]>>
+  /** output forecast: climate of the site (a key of CLIMATE in lib/engine/outlook.ts) */
+  climate?: string
+  /** output forecast: units of each resource (by its name in the report's resource table) in ONE complete crew of a work section */
+  crewComposition?: Record<string, Record<string, number>>
+  /** output forecast: the work section (crew type) that does each activity; '' = none (decided by the user) */
+  activityCrew?: Record<string, string>
 }
 export const DEFAULT_EX_SETTINGS: ExSettings = { weekStart: 0, workDays: [0, 1, 2, 3, 4, 5], overBasePct: 0, blockOverBase: true, reviewDays: 2, gapDueDays: 2, delayNoticeDays: 14, expectedFronts: [], projectStart: '', enabledForms: [] }
 export const WEEKDAY_FA = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']

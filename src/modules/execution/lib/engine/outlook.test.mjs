@@ -1,81 +1,95 @@
 import assert from 'node:assert/strict'
-import { activityModel, outlook, monthWeather, worstWx, WX_OF } from './outlook.ts'
+import { activityModel, outlook, monthWeather, worstWx, WX_OF, completeCrews, suggestCrews } from './outlook.ts'
 import { addDays } from '../periods.ts'
 
 const ALL = [0, 1, 2, 3, 4, 5, 6]
-const sc = (o = {}) => ({ manPct: 0, equipPct: 0, climate: 'hot_dry', workDays: ALL, ...o })
+const near = (a, b, e) => assert.ok(Math.abs(a - b) <= e, `${a} ≉ ${b}`)
+// own weather record only (no climate prior), so a steady world stays steady
+const STEADY = { climatePriorDays: 0 }
 
-// ── a known world: output = 10 · (man/30)^0.8 · (equip/15)^0.3 · (0.5 on rain days); crew sizes vary
+// ── complete crews: a spare machine or person adds nothing
+const W = { 'ساید بوم': 1, 'دستگاه جوش': 2, 'جوشکار': 2 }
+assert.equal(completeCrews({ 'ساید بوم': 3, 'دستگاه جوش': 4, 'جوشکار': 5 }, W, null), 2)
+assert.equal(completeCrews({ 'ساید بوم': 1, 'دستگاه جوش': 9, 'جوشکار': 9 }, W, null), 1, 'one sideboom → one crew however many welders')
+assert.equal(completeCrews({ 'ساید بوم': 4, 'دستگاه جوش': 8, 'جوشکار': 1 }, W, null), 0)
+assert.equal(completeCrews({ a: 5 }, null, 10), 1); assert.equal(completeCrews({ a: 4 }, null, 10), 0, 'without a composition: under half the usual complement = no crew'); assert.equal(completeCrews({}, null, 10), null)
+
+// ── a known world: output = 10 per complete crew (1…4 crews), halved on rain days
 const start = '2026-03-21'
 const days = Array.from({ length: 90 }, (_, i) => {
-  const man = 20 + ((i * 7) % 21), equip = 10 + ((i * 3) % 11), rain = i % 6 === 5
-  const y = 10 * (man / 30) ** 0.8 * (equip / 15) ** 0.3 * (rain ? 0.5 : 1)
-  return { date: addDays(start, i), man, equip, wx: rain ? 'rain' : 'clear', ground: 'dry', out: { a: y } }
+  const n = 1 + (i % 4), rain = i % 6 === 5
+  return { date: addDays(start, i), crews: { W: n }, wx: rain ? 'rain' : 'clear', ground: 'dry', out: { a: 10 * n * (rain ? 0.5 : 1) } }
 })
 const today = days[days.length - 1].date
-const m = activityModel(days, 'a', today).model
-// the ridge pulls toward 0.6 / 0.3; with this much variation the data must win most of the way
-assert.ok(m.alpha > 0.68 && m.alpha <= 0.85, `alpha ${m.alpha}`)
-assert.ok(Math.abs(m.beta - 0.3) < 0.12, `beta ${m.beta}`)
-assert.ok(m.alphaData > 0.5, 'manpower variation is informative')
-// rain halves output: the estimate lies between the prior (0.65) and the truth (0.5), close to the truth with 15 rain days
+const m = activityModel(days, 'a', 'W', today).model
+near(m.gamma, 1, 0.08); assert.ok(m.gammaData > 0.5, 'crew-count variation is informative')
+near(m.perCrewRate, 10, 1.5)
 assert.ok(m.wx.rain.factor < 0.6 && m.wx.rain.factor > 0.45, `rain ${m.wx.rain.factor}`)
-assert.equal(m.wx.clear.factor, 1)
-assert.ok(m.backtest && m.backtest.origins > 0, 'backtest ran')
-// noise-free world: the resource model must beat the plain average and get the larger blend weight
-assert.ok(m.backtest.modelErrPct < m.backtest.naiveErrPct, `model ${m.backtest.modelErrPct} vs naive ${m.backtest.naiveErrPct}`)
-assert.ok(m.backtest.blendWeight > 0.5)
+assert.ok(m.backtest && m.backtest.modelErrPct < m.backtest.naiveErrPct, 'the crew model beats the plain average')
 
-// more crew → faster, with diminishing returns (α < 1)
-const base = outlook({ days, activities: [{ id: 'a', title: 'A', unit: 'm', group: 'g', weight: 100, baseQty: 2000, doneQty: 0, plannedEnd: null }], today, scenario: sc() })
-const more = outlook({ days, activities: [{ id: 'a', title: 'A', unit: 'm', group: 'g', weight: 100, baseQty: 2000, doneQty: 0, plannedEnd: null }], today, scenario: sc({ manPct: 50 }) })
-assert.ok(more.activities[0].next28 > base.activities[0].next28, 'more manpower, more output')
-assert.ok(more.activities[0].next28 < base.activities[0].next28 * 1.5, 'but less than proportional')
-assert.ok(more.finish < base.finish, 'and an earlier finish')
+// ── a steady site: one crew type W (2 crews) doing A (10/day) and B (5/day); A runs out first
+const flat = Array.from({ length: 28 }, (_, i) => ({ date: addDays('2026-06-01', i), crews: { W: 2 }, wx: 'clear', ground: 'dry', out: { A: 10, B: 5 } }))
+const t2 = flat[27].date
+const acts = (o = {}) => [
+  { id: 'A', title: 'A', unit: 'm', group: 'g', weight: 50, baseQty: 330, doneQty: 280, plannedEnd: null, crew: 'W' },
+  { id: 'B', title: 'B', unit: 'm', group: 'g', weight: 50, baseQty: 440, doneQty: 140, plannedEnd: null, crew: 'W' },
+  ...(o.withC ? [{ id: 'C', title: 'C', unit: 'm', group: 'g', weight: 20, baseQty: 100, doneQty: 0, plannedStart: '2026-07-01', plannedEnd: '2026-07-20', crew: 'W' }] : []),
+]
+const sc = (o = {}) => ({ crews: {}, climate: 'hot_dry', workDays: ALL, ...o })
+const o = outlook({ days: flat, activities: acts(), today: t2, scenario: sc(), params: STEADY })
+const [A, B] = o.activities
+assert.equal(A.finish, addDays(t2, 5), 'A: 50 left at 10/day')
+// A's crews move to B with the same value per crew-day: A was 10/330·50 per day of progress, B gets it too
+// progress per day = 10·(50/100)/330 + 5·(50/100)/440 throughout, so B finishes at (remaining value) ÷ (pool value rate)
+const rate = 10 * 0.5 / 330 + 5 * 0.5 / 440, left = 50 * 0.5 / 330 + 300 * 0.5 / 440
+assert.ok(Math.abs(Date.parse(B.finish) - Date.parse(addDays(t2, Math.ceil(left / rate - 1e-9)))) <= 86400000, `B ${B.finish}`)
+// steady crews and weather → steady weekly progress until the work runs out
+const gains = o.curve.slice(1).map((p, i) => ({ g: p.expected - o.curve[i].expected, end: p.date })).filter((x) => x.end < B.finish).map((x) => x.g)
+assert.ok(gains.length >= 2, 'several whole weeks')
+for (const g of gains) near(g, rate * 7, 1e-6)
+// … and steady monthly progress (whole months while work remains)
+const full = o.monthly.filter((x) => x.gain > 0)
+if (full.length >= 2) near(full[0].gain / 31, rate, rate * 0.05)
 
-// ── constant history: 10/day, clear, fixed crew. 100 left → about 10 working days (the climate costs a little)
-const flat = Array.from({ length: 20 }, (_, i) => ({ date: addDays('2026-06-01', i), man: 30, equip: 10, wx: 'clear', ground: 'dry', out: { b: 10 } }))
-const t2 = flat[19].date
-const o = outlook({ days: flat, activities: [{ id: 'b', title: 'B', unit: 'm', group: 'g', weight: 100, baseQty: 300, doneQty: 200, plannedEnd: addDays(t2, 8) }], today: t2, scenario: sc() })
-const a = o.activities[0]
-assert.equal(a.remaining, 100)
-assert.ok(a.finish >= addDays(t2, 10) && a.finish <= addDays(t2, 13), `finish ${a.finish}`)
-assert.ok(a.finishP10 <= a.finish && a.finish <= a.finishP90, 'band brackets the expected date')
-assert.ok(a.slipDays >= 2, 'later than planned')
-assert.equal(o.finish, a.finish)
-assert.ok(Math.abs(o.curve[0].expected - 200 / 300) < 1e-9, 'curve starts at today’s progress')
-assert.ok(o.curve[o.curve.length - 1].expected > 0.99, 'and reaches 100%')
-// a fixed crew says nothing about crew size: the elasticities stay at the prior, flagged as not from the data
-const mf = activityModel(flat, 'b', t2).model
-assert.ok(Math.abs(mf.alpha - 0.6) < 1e-6 && mf.alphaData < 1e-6, `fixed crew alpha ${mf.alpha}`)
-// working days: a 5-day week stretches the calendar
-const o5 = outlook({ days: flat, activities: [{ id: 'b', title: 'B', unit: 'm', group: 'g', weight: 100, baseQty: 300, doneQty: 200, plannedEnd: null }], today: t2, scenario: sc({ workDays: [0, 1, 2, 3, 4] }) })
-assert.ok(o5.activities[0].finish > a.finish)
+// not-started work of the same crew type is taken up when the current work is done
+const oq = outlook({ days: flat, activities: acts({ withC: true }), today: t2, scenario: sc(), params: STEADY })
+const C = oq.activities[2]
+assert.equal(C.reason, 'queued'); assert.ok(C.start >= oq.activities[1].finish, 'after B'); assert.ok(C.finish > C.start)
+assert.equal(oq.queued, 1); assert.equal(oq.unforecastable, 0)
 
-// ── an activity with no output yet cannot be forecast: the project date is withheld, the known part is kept
-const o3 = outlook({ days: flat, activities: [
-  { id: 'b', title: 'B', unit: 'm', group: 'g', weight: 50, baseQty: 300, doneQty: 200, plannedEnd: null },
-  { id: 'x', title: 'X', unit: 'm', group: 'g', weight: 50, baseQty: 50, doneQty: 0, plannedEnd: null },
-], today: t2, scenario: sc() })
-assert.equal(o3.activities[1].reason, 'no_history')
-assert.equal(o3.finish, null); assert.equal(o3.unforecastable, 1); assert.ok(o3.finishKnown)
-// …unless it has planned dates: then its planned duration, scaled by how the started work runs against its plan
-const o6 = outlook({ days: flat, activities: [
-  { id: 'b', title: 'B', unit: 'm', group: 'g', weight: 50, baseQty: 400, doneQty: 200, plannedStart: '2026-06-01', plannedEnd: addDays('2026-06-01', 19) }, // planned 20/day, runs 10/day → PI ≈ 0.5
-  { id: 'x', title: 'X', unit: 'm', group: 'g', weight: 50, baseQty: 50, doneQty: 0, plannedStart: addDays(t2, 1), plannedEnd: addDays(t2, 10) },
-], today: t2, scenario: sc() })
-assert.ok(o6.performanceIndex > 0.4 && o6.performanceIndex < 0.55, `PI ${o6.performanceIndex}`)
-assert.equal(o6.activities[1].reason, 'plan_based'); assert.equal(o6.planBased, 1); assert.equal(o6.unforecastable, 0)
-assert.ok(o6.activities[1].finish >= addDays(t2, 19) && o6.activities[1].finish <= addDays(t2, 23), `plan-based finish ${o6.activities[1].finish}`) // 10 planned days ÷ ~0.5
-assert.ok(o6.finish && o6.curve[o6.curve.length - 1].expected > 0.99, 'with it, the project gets a full date and reaches 100%')
-// a finished activity needs nothing
-const o4 = outlook({ days: flat, activities: [{ id: 'b', title: 'B', unit: 'm', group: 'g', weight: 100, baseQty: 100, doneQty: 100, plannedEnd: null }], today: t2, scenario: sc() })
-assert.equal(o4.activities[0].reason, 'done'); assert.equal(o4.finish, t2)
+// a whole extra crew adds its full output (γ stays at the prior 1 when the crew count never varied)
+const o3 = outlook({ days: flat, activities: acts(), today: t2, scenario: sc({ crews: { W: 3 } }), params: STEADY })
+near((o3.curve[1].expected - o3.curve[0].expected) / (o.curve[1].expected - o.curve[0].expected), 1.5, 1e-6)
+assert.ok(o3.finish < o.finish)
+assert.equal(o.crews[0].crew, 'W'); near(o.crews[0].recent, 2, 1e-9); near(o3.crews[0].scenario, 3, 1e-9)
+// no crew on site → no output
+const o0 = outlook({ days: flat, activities: acts(), today: t2, scenario: sc({ crews: { W: 0 } }), params: STEADY })
+assert.equal(o0.activities[1].next28, 0)
 
-// ── weather calendar: wetter climate in winter, the project's own record shifts it
+// a 5-day week stretches the calendar
+const o5 = outlook({ days: flat, activities: acts(), today: t2, scenario: sc({ workDays: [0, 1, 2, 3, 4] }), params: STEADY })
+assert.ok(o5.finish > o.finish)
+
+// ── an activity of a crew type with no output at all: its planned duration ÷ the performance index, or no date
+const plan = [{ id: 'A', title: 'A', unit: 'm', group: 'g', weight: 50, baseQty: 560, doneQty: 280, plannedStart: '2026-06-01', plannedEnd: addDays('2026-06-01', 27), crew: 'W' }]
+const op = outlook({ days: flat, activities: [...plan, { id: 'X', title: 'X', unit: 'm', group: 'g', weight: 50, baseQty: 50, doneQty: 0, plannedStart: addDays(t2, 1), plannedEnd: addDays(t2, 10), crew: 'T' }], today: t2, scenario: sc(), params: STEADY })
+near(op.performanceIndex, 0.5, 0.05) // planned 20/day, runs 10/day
+assert.equal(op.activities[1].reason, 'plan_based'); assert.ok(op.activities[1].finish >= addDays(t2, 19) && op.activities[1].finish <= addDays(t2, 22))
+const on = outlook({ days: flat, activities: [...plan, { id: 'X', title: 'X', unit: 'm', group: 'g', weight: 50, baseQty: 50, doneQty: 0, plannedEnd: null, crew: null }], today: t2, scenario: sc(), params: STEADY })
+assert.equal(on.finish, null); assert.equal(on.unforecastable, 1); assert.ok(on.finishKnown)
+
+// ── crew-type suggestion from the words of the titles; the stringing sideboom is not the welding sideboom
+const secs = ['جوشکاری و خمکاری – کانکشن – اتصال نهایی', 'بارگیری، حمل، دپو و ریسه لوله', 'حفاری کانال', 'رادیوگرافی', 'ستادی و پشتیبانی']
+const sg = suggestCrews([
+  { id: 'w', title: 'خم زدن و جوشکاری لوله به قطر 56 اینچ' }, { id: 's', title: 'ریسه لوله 2 اینچ در کنار کانال' },
+  { id: 't', title: 'حفاری کانال در زمین سخت' }, { id: 'r', title: 'رادیوگرافی سرجوش' }, { id: 'n', title: 'نصب تابلو' },
+], secs)
+assert.equal(sg.w, secs[0]); assert.equal(sg.s, secs[1]); assert.equal(sg.t, secs[2]); assert.equal(sg.r, secs[3]); assert.equal(sg.n, null)
+
+// ── weather calendar
 const mw = monthWeather([], 'cold_mountain')
 assert.ok(mw[9].snow > mw[3].snow, 'دی has more snow than تیر')
 for (const s of mw) assert.ok(Math.abs(Object.values(s).reduce((x, y) => x + y, 0) - 1) < 1e-9)
-assert.equal(worstWx('clear', 'rain'), 'rain'); assert.equal(worstWx(null, 'cloudy'), 'cloudy'); assert.equal(WX_OF.partly, 'clear')
+assert.equal(worstWx('clear', 'rain'), 'rain'); assert.equal(WX_OF.partly, 'clear')
 
 console.log('execution/engine/outlook: all assertions passed')
