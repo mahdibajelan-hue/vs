@@ -26,7 +26,7 @@ const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: S
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
   { id: 'welds', label: 'سرجوش‌ها (پروندهٔ جوش)', icon: Flame, color: '#f43f5e' },
   { id: 'progress', label: 'پیشرفت فیزیکی', icon: TrendingUp, color: '#14b8a6' },
-  { id: 'productivity', label: 'بهره‌وری و پیش‌بینی', icon: Cpu, color: '#8b5cf6', subs: [{ id: 'rates', label: 'بهره‌وری اکیپ‌ها' }, { id: 'forecast', label: 'پیش‌بینی فعالیت‌ها' }, { id: 'scenarios', label: 'سناریوهای جبرانی' }] },
+  { id: 'productivity', label: 'بهره‌وری و پیش‌بینی', icon: Cpu, color: '#8b5cf6', subs: [{ id: 'outlook', label: 'پیش‌بینی کارکرد و تاریخ اتمام' }, { id: 'rates', label: 'بهره‌وری اکیپ‌ها' }, { id: 'forecast', label: 'پیش‌بینی فعالیت‌ها' }, { id: 'scenarios', label: 'سناریوهای جبرانی' }] },
   { id: 'plan', label: 'برنامهٔ کوتاه‌مدت و آمادگی', icon: CalendarRange, color: '#0ea5e9', subs: [{ id: 'lookahead', label: 'برنامهٔ سه‌هفته‌ای' }, { id: 'readiness', label: 'آمادگی فعالیت‌ها' }, { id: 'import', label: 'ورود برنامه از اکسل' }] },
   { id: 'assistant', label: 'دستیار هوشمند', icon: Bot, color: '#ec4899' },
   { id: 'reports', label: 'گزارش‌های دوره‌ای', icon: FileBarChart2, color: '#94a3b8', subs: [{ id: 'week', label: 'هفتگی' }, { id: 'month', label: 'ماهانه' }, { id: 'cum', label: 'تجمعی از ابتدا' }, { id: 'contract', label: 'صورت‌وضعیت پیمان (۳ ستونی)' }, { id: 'statement', label: 'صورت‌وضعیت کارکرد' }, { id: 'ledger', label: 'مغایرت اجرایی و صورت‌وضعیت' }, { id: 'personnel', label: 'جوشکاران و عایق‌کاران' }, { id: 'mrs', label: 'لوله‌های ورودی (MRS)' }, { id: 'archive', label: 'بایگانی فرم‌های فنی' }, { id: 'mgmt-week', label: 'گزارش مدیریتی هفتگی' }, { id: 'mgmt-month', label: 'گزارش مدیریتی ماهانه' }, { id: 'delays', label: 'تأخیرات و کلیم' }] },
@@ -42,6 +42,7 @@ const Daily = L(() => import('./pages/DailyPage'), 'DailyPage')
 const Review = L(() => import('./pages/ReviewPage'), 'ReviewPage')
 const Progress = L(() => import('./pages/ProgressPage'), 'ProgressPage')
 const Productivity = L(() => import('./pages/ProductivityPage'), 'ProductivityPage')
+const Outlook = L(() => import('./pages/OutlookPage'), 'OutlookPage')
 const Assistant = L(() => import('./pages/AssistantPage'), 'AssistantPage')
 const Plan = L(() => import('./pages/PlanPage'), 'PlanPage')
 const Reports = L(() => import('./pages/ReportsRouter'), 'ReportsRouter')
@@ -100,7 +101,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       case 'daily': return sub === 'designed' ? <Designed {...p} /> : sub === 'today' ? <Today {...p} /> : <Daily {...p} />
       case 'review': return <Review {...p} />
       case 'progress': return <Progress {...p} />
-      case 'productivity': return <Productivity {...p} />
+      case 'productivity': return sub === 'outlook' ? <Outlook {...p} /> : <Productivity {...p} />
       case 'plan': return <Plan {...p} />
       case 'assistant': return <Assistant {...p} />
       case 'reports': return <Reports {...p} />
