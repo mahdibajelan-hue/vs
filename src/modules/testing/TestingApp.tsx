@@ -7,7 +7,9 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { useModuleStore } from '../../store/useModuleStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { formatJalali } from '../../lib/jalali'
-import { tableFromSheet, tableFromText } from '../landacq/lib/routeImport'
+import { readRouteFile, tableFromSheet, tableFromText } from '../landacq/lib/routeImport'
+import { demProfile, DEM_SOURCE_FA } from './lib/elevation'
+import { hasRealProfile, profileOf } from './lib/htCore'
 import { useTestingStore } from './store/useTestingStore'
 import { COATING_KIND_FA, coveredKm, HT_FAILED_COLOR, HT_STAGE_COLOR, HT_STAGE_FA, HT_STAGES, overlapKm, pressureAtPct, sectionize, type CoatingKind, type SectionPlan } from './lib/htCore'
 import { DEFAULT_HT_SETTINGS, type CtDefect, type HtSettings, type TargetKind } from './repo'
@@ -172,23 +174,36 @@ function LineTab({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t: T
   const preview = params && st.profile.length >= 2 ? sectionize(st.profile, params, []) : null
   const compute = () => { if (params) setPlan(sectionize(st.profile, params, st.preferredKm.map((p) => p.km))) }
   const save = async () => { if (plan && await st.savePlan(plan.sections, email)) setPlan(null) }
-  const SRC: Record<string, string> = { land: 'مسیر مشترک پروژه (KMZ ماژول تحصیل اراضی)', twin: 'مسیر دوقلوی دیجیتال', table: 'جدول پروفیل واردشده (تنظیمات)' }
+  const SRC: Record<string, string> = { land: 'مسیر مشترک پروژه (KMZ ماژول تحصیل اراضی)', twin: 'مسیر دوقلوی دیجیتال', table: st.profileName ?? 'پروفیل واردشده (تنظیمات)' }
 
   if (st.profile.length < 2) return (
     <div className="ps-hero-empty">
       <Waves size={30} aria-hidden />
       <b>پروفیل ارتفاعی خط در دسترس نیست</b>
-      <p>قطعه‌بندی هیدروتست روی پروفیل خط انجام می‌شود. فایل KMZ/KML مسیر را با ارتفاع (مختصات سه‌بعدی) در ماژول تحصیل اراضی یا دوقلوی دیجیتال وارد کنید؛ اگر فایل ارتفاع ندارد، جدول پروفیل (کیلومتر، ارتفاع) را در «تنظیمات» وارد کنید.</p>
-      <button type="button" className="ps-btn is-primary" onClick={() => onTab('settings')}><FileUp size={15} /> ورود جدول پروفیل</button>
+      {st.routeFlat ? (
+        <>
+          <p>مسیر پروژه{st.routeName ? ` («${st.routeName}»)` : ''} از فایل KMZ/KML خوانده شد ({fa(st.routeKm, 1)} کیلومتر)، ولی این فایل ارتفاع ندارد: همهٔ نقاط آن ارتفاع یکسان (معمولاً صفر) دارند. این حالت در مسیرهایی است که در Google Earth با گزینهٔ «چسبیده به زمین» کشیده شده‌اند. ارتفاع زمین در طول همین مسیر را می‌توان از {DEM_SOURCE_FA} گرفت؛ فقط مختصات نقاط مسیر ارسال می‌شود.</p>
+          <div className="ps-actions" style={{ justifyContent: 'center' }}>
+            <button type="button" className="ps-btn is-primary" disabled={!!st.demBusy} onClick={() => void st.fetchDemProfile(email)}>{st.demBusy ? <Loader2 size={15} className="animate-spin" /> : <Waves size={15} />} {st.demBusy ?? 'دریافت ارتفاع زمین در طول مسیر'}</button>
+            <button type="button" className="ps-btn" onClick={() => onTab('settings')}><FileUp size={15} /> ورود پروفیل نقشه‌برداری</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p>قطعه‌بندی هیدروتست روی پروفیل خط انجام می‌شود. فایل KMZ/KML مسیر را در ماژول تحصیل اراضی یا دوقلوی دیجیتال وارد کنید (اگر ارتفاع نداشته باشد، ارتفاع زمین از مدل رقومی گرفته می‌شود) یا پروفیل (KMZ/KML با ارتفاع، یا جدول کیلومتر و ارتفاع) را در «تنظیمات» وارد کنید.</p>
+          <button type="button" className="ps-btn is-primary" onClick={() => onTab('settings')}><FileUp size={15} /> ورود پروفیل</button>
+        </>
+      )}
     </div>
   )
   return (
     <div className="ps-stack">
       <section className="ps-card">
         <header className="ps-card-head"><b><Calculator size={15} /> مبنای محاسبه</b><small className="ps-meta">پروفیل: {SRC[st.profileSource ?? 'table']} · {fa(st.profile.length)} نقطه</small></header>
+        {st.pipeDefault && <p className="ps-hint is-warn"><AlertTriangle size={14} aria-hidden /> مشخصات لوله (قطر، ضخامت، گرید، فشار طراحی) برای این پروژه در «دوقلوی دیجیتال ← تنظیمات» ثبت نشده و مقادیر پیش‌فرض به کار رفته است؛ فشارهای آزمون تا ثبت مشخصات واقعی معتبر نیستند.</p>}
         {st.pipe && params ? (
           <div className="ht-basis">
-            <Fig k="لوله (از دوقلوی دیجیتال)" v={`Ø${fa(st.pipe.diameterIn)}″ × ${fa(st.pipe.wallMm, 1)} mm`} sub={`${st.pipe.material} · SMYS ${fa(params.smysMpa)} MPa`} />
+            <Fig k={st.pipeDefault ? "لوله (پیش‌فرض — برای این پروژه تعریف نشده)" : "لوله (از دوقلوی دیجیتال)"} v={`Ø${fa(st.pipe.diameterIn)}″ × ${fa(st.pipe.wallMm, 1)} mm`} sub={`${st.pipe.material} · SMYS ${fa(params.smysMpa)} MPa`} />
             <Fig k="فشار طراحی" v={`${fa(params.designPressureBar)} bar`} sub={`فشار در ۱۰۰٪ SMYS: ${fa(pSmys, 1)} bar`} />
             <Fig k="حداقل فشار آزمون (نقطهٔ بالا)" v={`${fa(preview?.pMin ?? 0, 1)} bar`} sub={`${fa(params.testFactor, 2)} × فشار طراحی`} />
             <Fig k="حداکثر فشار (نقطهٔ پایین)" v={`${fa(preview?.pMax ?? 0, 1)} bar`} sub={`${fa(params.maxHoopPct)}٪ SMYS`} />
@@ -416,6 +431,27 @@ function SettingsTab() {
   const [x, setX] = useState<HtSettings>(st.settings)
   const [txt, setTxt] = useState('')
   const [note, setNote] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  /** KMZ / KML: its own heights when it has them, else the ground heights along its line; Excel / CSV: «km, elevation» */
+  const importFile = async (fl: File) => {
+    const lower = fl.name.toLowerCase()
+    if (!/\.(kmz|kml|xml)$/.test(lower)) { const pts = parse(await tableFromSheet(fl)); if (pts) await st.saveSettings({ ...st.settings, profile: pts, profileName: fl.name }, email); return }
+    setBusy(true)
+    try {
+      const r = await readRouteFile(fl)
+      if (r.points.length < 2) { setNote('در این فایل خط مسیری (LineString) پیدا نشد.'); return }
+      const pts = r.points.map(([lon, lat, z]) => ({ lon, lat, elevation: z ?? null }))
+      const startKm = r.startKm ?? st.startKm
+      let prof = profileOf(pts, startKm), name = fl.name
+      if (!hasRealProfile(prof)) {
+        setNote(`این فایل (${fa(r.lengthKm, 1)} کیلومتر) ارتفاع ندارد؛ ارتفاع زمین در طول آن از ${DEM_SOURCE_FA} گرفته می‌شود…`)
+        prof = await demProfile(pts, startKm, { onProgress: (d, t) => setNote(`دریافت ارتفاع نقاط… ${fa(d)} از ${fa(t)}`) })
+        name = `${DEM_SOURCE_FA} — ${fl.name}`
+      }
+      if (prof.length < 2) { setNote('ارتفاعی برای نقاط این فایل به دست نیامد.'); return }
+      if (await st.saveSettings({ ...st.settings, profile: prof, profileName: name }, email)) setNote(`${fa(prof.length)} نقطه از کیلومتر ${fa(prof[0].km, 2)} تا ${fa(prof[prof.length - 1].km, 2)} ذخیره شد (کمترین ارتفاع ${fa(Math.min(...prof.map((p) => p.elev)))} و بیشترین ${fa(Math.max(...prof.map((p) => p.elev)))} متر).`)
+    } catch (e) { setNote((e as Error).message) } finally { setBusy(false) }
+  }
   const num = (k: keyof HtSettings) => (e: React.ChangeEvent<HTMLInputElement>) => setX({ ...x, [k]: e.target.value === '' ? null : Number(e.target.value) })
   const parse = (rows: unknown[][]) => {
     const pts = rows.map((r) => r.map((c) => Number(String(c).replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[+٫]/g, '.')))).filter((r) => r.length >= 2 && Number.isFinite(r[0]) && Number.isFinite(r[1])).map((r) => ({ km: r[0], elev: r[1] })).sort((a, b) => a.km - b.km)
@@ -447,13 +483,15 @@ function SettingsTab() {
         </div>
       </section>
       <section className="ps-card">
-        <header className="ps-card-head"><b><FileUp size={15} /> پروفیل ارتفاعی خط</b><small className="ps-meta">منبع فعلی: {st.profileSource === 'land' ? 'KMZ ماژول تحصیل اراضی' : st.profileSource === 'twin' ? 'مسیر دوقلوی دیجیتال' : st.profileSource === 'table' ? `جدول واردشده${st.profileName ? ` (${st.profileName})` : ''}` : 'ندارد'}</small></header>
-        <p className="ps-hint">اولویت با ارتفاع‌های فایل KMZ/KML مسیر پروژه است (همان فایل ماژول تحصیل اراضی). اگر فایل مسیر ارتفاع ندارد، پروفیل طولی را به‌صورت جدول دو ستونی «کیلومتر، ارتفاع» وارد کنید (اکسل، CSV یا متن).</p>
+        <header className="ps-card-head"><b><FileUp size={15} /> پروفیل ارتفاعی خط</b><small className="ps-meta">منبع فعلی: {st.profileSource === 'land' ? 'KMZ ماژول تحصیل اراضی' : st.profileSource === 'twin' ? 'مسیر دوقلوی دیجیتال' : st.profileSource === 'table' ? (st.profileName ?? 'پروفیل واردشده') : 'ندارد'}</small></header>
+        <p className="ps-hint">اولویت با ارتفاع‌های فایل KMZ/KML مسیر پروژه است (همان فایل ماژول تحصیل اراضی). اگر فایل مسیر ارتفاع ندارد، یکی از این‌ها: ارتفاع زمین در طول مسیر از {DEM_SOURCE_FA}، فایل KMZ/KML نقشه‌برداری با ارتفاع، یا جدول دو ستونی «کیلومتر، ارتفاع» (اکسل، CSV یا متن).</p>
+        {st.routeFlat && <div className="ps-actions"><button type="button" className="ps-btn is-primary" disabled={!!st.demBusy} onClick={() => void st.fetchDemProfile(email)}>{st.demBusy ? <Loader2 size={15} className="animate-spin" /> : <Waves size={15} />} {st.demBusy ?? `دریافت ارتفاع زمین برای مسیر ${st.routeName ? `«${st.routeName}»` : 'پروژه'}`}</button><small className="ps-meta">فایل مسیر پروژه ({fa(st.routeKm, 1)} کیلومتر) ارتفاع ندارد.</small></div>}
         <div className="ps-inline-form">
-          <Field label="فایل اکسل / CSV"><input type="file" accept=".xlsx,.xls,.csv,.txt" onChange={async (e) => { const fl = e.target.files?.[0]; e.target.value = ''; if (!fl) return; const pts = parse(await tableFromSheet(fl)); if (pts) await st.saveSettings({ ...st.settings, profile: pts, profileName: fl.name }, email) }} /></Field>
+          <Field label="فایل KMZ / KML، اکسل یا CSV"><input type="file" accept=".kmz,.kml,.xml,.xlsx,.xls,.csv,.txt" onChange={async (e) => { const fl = e.target.files?.[0]; e.target.value = ''; if (!fl) return; await importFile(fl) }} /></Field>
           <Field label="یا متن (هر خط: کیلومتر ارتفاع)" wide><textarea rows={3} value={txt} onChange={(e) => setTxt(e.target.value)} dir="ltr" placeholder={'0 1240\n0.5 1262\n1.0 1280'} /></Field>
           <button type="button" className="ps-btn" disabled={!txt.trim()} onClick={async () => { const pts = parse(tableFromText(txt)); if (pts) { await st.saveSettings({ ...st.settings, profile: pts, profileName: 'متن واردشده' }, email); setTxt('') } }}>ذخیرهٔ پروفیل</button>
         </div>
+        {busy && <p className="ps-loading"><Loader2 size={14} className="animate-spin" /> در حال خواندن فایل…</p>}
         {note && <p className="ps-hint">{note}</p>}
       </section>
     </div>

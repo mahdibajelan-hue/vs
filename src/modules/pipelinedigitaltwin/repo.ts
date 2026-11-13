@@ -21,6 +21,8 @@ export interface TwinData {
   assets: Asset[]
   events: AssetEvent[]
   phase: string | null
+  /** false when the project has no pipe spec of its own and `settings` is the built-in default */
+  settingsSaved?: boolean
 }
 
 const toPoints = (g: unknown): GeoPoint[] =>
@@ -69,7 +71,7 @@ export async function loadTwin(projectId: string): Promise<TwinData> {
   const ownPts = toPoints(sr?.geometry)
   const settings: TwinSettings = sr ? { diameterIn: Number(sr.diameter_in), wallMm: Number(sr.wall_mm), material: s(sr.material), designPressureBar: Number(sr.design_pressure_bar), fluid: s(sr.fluid), stockLengthM: Number(sr.stock_length_m) || 12 } : DEFAULT_SETTINGS
   return {
-    settings, rows, assets, events: (ev.data ?? []).map(eventOf), phase: ph.data?.current_phase ?? null,
+    settings, settingsSaved: !!sr, rows, assets, events: (ev.data ?? []).map(eventOf), phase: ph.data?.current_phase ?? null,
     points: landPts.length >= 2 ? landPts : ownPts,
     routeName: landPts.length >= 2 ? s(lr.data?.name) || null : sr?.geometry_name ?? null,
     routeOrigin: landPts.length >= 2 ? 'land' : ownPts.length >= 2 ? 'twin' : null,

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { loadTwin, type TwinSettings } from '../../pipelinedigitaltwin/repo'
 import { elevAt, hasRealProfile, profileOf, rangesOfJoints, smysOf, type HtParams, type HtStage, type ProfilePoint, type SectionPlan } from '../lib/htCore'
 import * as repo from '../repo'
+import { demProfile, DEM_SOURCE_FA, type RoutePoint } from '../lib/elevation'
 import { DEFAULT_HT_SETTINGS, type CtDefect, type CtRecord, type CtTest, type FormKind, type HtEvent, type HtForm, type HtPack, type HtReading, type HtSection, type HtSettings, type ReadingInput, type TargetKind } from '../repo'
 import { igsOf, PSI_PER_BAR, testLimits, type IgsParams, type WallPart } from '../lib/igs'
 
@@ -19,11 +20,21 @@ interface State {
   flash: string | null
   // the line, from the twin
   pipe: TwinSettings | null
+  /** the pipe spec is the twin's built-in default, not one defined for this project */
+  pipeDefault: boolean
   startKm: number
   routeKm: number
   profile: ProfilePoint[]
   profileSource: ProfileSource
   profileName: string | null
+  /** the shared route's vertices (land acquisition, else the twin's own) — for reading ground heights when it has none */
+  routePoints: RoutePoint[]
+  routeName: string | null
+  /** the route exists but its file carries no elevations (all equal, e.g. «clamped to ground» = 0) */
+  routeFlat: boolean
+  demBusy: string | null
+  /** ground elevations of the route from the public elevation model, saved as the project's profile */
+  fetchDemProfile: (by: string) => Promise<boolean>
   /** valves, stations, pig traps: where a section should preferably end */
   preferredKm: { km: number; tag: string }[]
   backfilled: [number, number][]
@@ -66,7 +77,7 @@ export const useTestingStore = create<State>()((set, get) => {
   }
   return {
     projectId: null, loading: false, error: null, flash: null,
-    pipe: null, startKm: 0, routeKm: 0, profile: [], profileSource: null, profileName: null, preferredKm: [], backfilled: [], coated: [], stations: [],
+    pipe: null, pipeDefault: false, startKm: 0, routeKm: 0, profile: [], profileSource: null, profileName: null, routePoints: [], routeName: null, routeFlat: false, demBusy: null, preferredKm: [], backfilled: [], coated: [], stations: [],
     settings: DEFAULT_HT_SETTINGS, sections: [], packs: [], readings: [], events: [], records: [], defects: [], forms: [], ctTests: [],
 
     load: async (pid) => {
@@ -80,9 +91,10 @@ export const useTestingStore = create<State>()((set, get) => {
         const L = tw.settings.stockLengthM
         const kmLen = fromRoute.length ? fromRoute[fromRoute.length - 1].km - tw.startKm : (table.length ? table[table.length - 1].km - table[0].km : 0)
         set({
-          loading: false, pipe: tw.settings, startKm: tw.startKm, routeKm: tw.points.length >= 2 ? kmLen : 0,
+          loading: false, pipe: tw.settings, pipeDefault: tw.settingsSaved === false, startKm: tw.startKm, routeKm: tw.points.length >= 2 ? kmLen : 0,
           profile, profileSource: routeHas ? (tw.routeOrigin === 'land' ? 'land' : 'twin') : table.length >= 2 ? 'table' : null,
           profileName: routeHas ? tw.routeName : ht.settings.profileName,
+          routePoints: tw.points.map((p) => ({ lon: p.lon, lat: p.lat })), routeName: tw.routeName, routeFlat: tw.points.length >= 2 && !routeHas,
           preferredKm: tw.assets.filter((a) => a.kind === 'valve' || a.kind === 'station' || a.kind === 'launcher').map((a) => ({ km: a.km, tag: a.tag })),
           backfilled: rangesOfJoints(tw.rows.filter((r) => r.backfill === 'completed').map((r) => r.joint_no), L, tw.startKm),
           coated: rangesOfJoints(tw.rows.filter((r) => r.coating === 'completed').map((r) => r.joint_no), L, tw.startKm),
@@ -109,6 +121,19 @@ export const useTestingStore = create<State>()((set, get) => {
       if (!smys) return null
       const g = get().igs()
       return { odMm: p.diameterIn * 25.4, wtMm: p.wallMm, smysMpa: smys, designPressureBar: p.designPressureBar, testFactor: x.testFactor, maxHoopPct: x.maxHoopPct, maxSectionKm: x.method === 'igs' ? g.maxSectionKm : x.maxSectionKm, minSectionKm: x.minSectionKm, density: x.density, igs: x.method === 'igs' ? (() => { const l = testLimits(p.diameterIn, smys * 145.038, p.wallMm / 25.4, p.designPressureBar * PSI_PER_BAR, g); return { strengthPct: l.lowPct, minHighPct: l.highMinPct, gBarPerM: g.psiPerM / PSI_PER_BAR } })() : undefined }
+    },
+    fetchDemProfile: async (by) => {
+      const { projectId: pid, routePoints, startKm, routeName, settings } = get()
+      if (!pid || routePoints.length < 2) return false
+      set({ demBusy: 'دریافت ارتفاع نقاط مسیر…', error: null })
+      const ok = await run(async () => {
+        const profile = await demProfile(routePoints, startKm, { onProgress: (d, t) => set({ demBusy: `دریافت ارتفاع نقاط مسیر… ${d.toLocaleString('fa-IR')} از ${t.toLocaleString('fa-IR')}` }) })
+        if (profile.length < 2) throw new Error('ارتفاعی برای نقاط مسیر برنگشت.')
+        await repo.saveSettings(pid, { ...settings, profile, profileName: `${DEM_SOURCE_FA} — مسیر ${routeName ?? 'پروژه'}` }, by)
+        await get().load(pid)
+      }, 'پروفیل ارتفاعی مسیر از مدل رقومی زمین ساخته و ذخیره شد')
+      set({ demBusy: null })
+      return ok
     },
     saveSettings: async (x, by) => {
       const pid = get().projectId
