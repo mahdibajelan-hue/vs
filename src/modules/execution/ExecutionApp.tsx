@@ -1,6 +1,6 @@
 import { NavScroller } from './components/NavScroller'
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Bot, Flame, CalendarRange, ClipboardList, Cpu, FileBarChart2, Gauge, HardHat, Inbox, Loader2, Settings2, ShieldCheck, TrendingUp } from 'lucide-react'
+import { AlertTriangle, Bot, Flame, CalendarRange, ClipboardList, Cpu, FileBarChart2, Gauge, HardHat, Hourglass, Inbox, Loader2, Settings2, ShieldCheck, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -18,7 +18,7 @@ import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 import { useRemembered } from '../../lib/navMemory'
 
 export const EXECUTION_ACCENT = '#f97316'
-export type ExTab = 'dashboard' | 'daily' | 'review' | 'welds' | 'progress' | 'productivity' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'settings'
+export type ExTab = 'dashboard' | 'daily' | 'review' | 'welds' | 'progress' | 'outlook' | 'productivity' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'settings'
 type Sub = { id: string; label: string }
 const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[] }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
@@ -26,7 +26,8 @@ const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: S
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
   { id: 'welds', label: 'سرجوش‌ها (پروندهٔ جوش)', icon: Flame, color: '#f43f5e' },
   { id: 'progress', label: 'پیشرفت فیزیکی', icon: TrendingUp, color: '#14b8a6' },
-  { id: 'productivity', label: 'بهره‌وری و پیش‌بینی', icon: Cpu, color: '#8b5cf6', subs: [{ id: 'outlook', label: 'پیش‌بینی کارکرد و تاریخ اتمام' }, { id: 'rates', label: 'بهره‌وری اکیپ‌ها' }, { id: 'forecast', label: 'پیش‌بینی فعالیت‌ها' }, { id: 'scenarios', label: 'سناریوهای جبرانی' }] },
+  { id: 'outlook', label: 'پیش‌بینی اتمام پروژه', icon: Hourglass, color: '#a855f7', subs: [{ id: 'dash', label: 'داشبورد اتمام' }, { id: 'acts', label: 'فعالیت‌ها و کارکرد آتی' }, { id: 'civil', label: 'ماشین‌آلات سیویل' }, { id: 'setup', label: 'تعاریف و تنظیمات' }, { id: 'guide', label: 'راهنما' }] },
+  { id: 'productivity', label: 'بهره‌وری اکیپ‌ها (لاگ اکیپ)', icon: Cpu, color: '#8b5cf6', subs: [{ id: 'rates', label: 'بهره‌وری اکیپ‌ها' }, { id: 'forecast', label: 'پیش‌بینی فعالیت‌ها' }, { id: 'scenarios', label: 'سناریوهای جبرانی' }] },
   { id: 'plan', label: 'برنامهٔ کوتاه‌مدت و آمادگی', icon: CalendarRange, color: '#0ea5e9', subs: [{ id: 'lookahead', label: 'برنامهٔ سه‌هفته‌ای' }, { id: 'readiness', label: 'آمادگی فعالیت‌ها' }, { id: 'import', label: 'ورود برنامه از اکسل' }] },
   { id: 'assistant', label: 'دستیار هوشمند', icon: Bot, color: '#ec4899' },
   { id: 'reports', label: 'گزارش‌های دوره‌ای', icon: FileBarChart2, color: '#94a3b8', subs: [{ id: 'week', label: 'هفتگی' }, { id: 'month', label: 'ماهانه' }, { id: 'cum', label: 'تجمعی از ابتدا' }, { id: 'contract', label: 'صورت‌وضعیت پیمان (۳ ستونی)' }, { id: 'statement', label: 'صورت‌وضعیت کارکرد' }, { id: 'ledger', label: 'مغایرت اجرایی و صورت‌وضعیت' }, { id: 'personnel', label: 'جوشکاران و عایق‌کاران' }, { id: 'mrs', label: 'لوله‌های ورودی (MRS)' }, { id: 'archive', label: 'بایگانی فرم‌های فنی' }, { id: 'mgmt-week', label: 'گزارش مدیریتی هفتگی' }, { id: 'mgmt-month', label: 'گزارش مدیریتی ماهانه' }, { id: 'delays', label: 'تأخیرات و کلیم' }] },
@@ -42,7 +43,7 @@ const Daily = L(() => import('./pages/DailyPage'), 'DailyPage')
 const Review = L(() => import('./pages/ReviewPage'), 'ReviewPage')
 const Progress = L(() => import('./pages/ProgressPage'), 'ProgressPage')
 const Productivity = L(() => import('./pages/ProductivityPage'), 'ProductivityPage')
-const Outlook = L(() => import('./pages/OutlookPage'), 'OutlookPage')
+const Outlook = L(() => import('./pages/outlook/OutlookRouter'), 'OutlookRouter')
 const Assistant = L(() => import('./pages/AssistantPage'), 'AssistantPage')
 const Plan = L(() => import('./pages/PlanPage'), 'PlanPage')
 const Reports = L(() => import('./pages/ReportsRouter'), 'ReportsRouter')
@@ -101,7 +102,8 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       case 'daily': return sub === 'designed' ? <Designed {...p} /> : sub === 'today' ? <Today {...p} /> : <Daily {...p} />
       case 'review': return <Review {...p} />
       case 'progress': return <Progress {...p} />
-      case 'productivity': return sub === 'outlook' ? <Outlook {...p} /> : <Productivity {...p} />
+      case 'outlook': return <Outlook {...p} />
+      case 'productivity': return <Productivity {...p} />
       case 'plan': return <Plan {...p} />
       case 'assistant': return <Assistant {...p} />
       case 'reports': return <Reports {...p} />

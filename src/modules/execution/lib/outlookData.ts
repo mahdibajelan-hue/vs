@@ -104,3 +104,30 @@ export function outlookInputs(m: ExecutionModel): OutlookInputs {
   })
   return { days, activities, sections, crewSource }
 }
+
+/**
+ * Civil machinery inputs: for every reviewed report day, the active machines of each work section with the hours each
+ * worked (the resource row's hours, else the report's useful hours, else the workday length in settings), and the
+ * approved output per activity (the same days and quantities as the crew forecast).
+ */
+export function civilDays(m: ExecutionModel, days: DayObs[]): Map<string, Map<string, Record<string, { active: number; hours: number }>>> {
+  const want = new Set(days.map((d) => d.date))
+  const dayHours = m.settings.workdayHours && m.settings.workdayHours > 0 ? m.settings.workdayHours : 8
+  const work = m.reports.filter((r) => r.formKey === 'work' && isRegistered(r) && want.has(r.reportDate))
+  const repById = new Map(work.map((r) => [r.id, r]))
+  const out = new Map<string, Map<string, Record<string, { active: number; hours: number }>>>()
+  for (const x of m.resources) {
+    if (x.kind !== 'equip' || x.activeQty <= 0) continue
+    const r = repById.get(x.reportId); if (!r) continue
+    const useful = Number(r.data.usefulHours) || 0
+    const h = x.hours > 0 ? x.hours : useful > 0 ? useful : dayHours
+    const sec = x.section.trim() || 'ماشین‌آلات (بدون بخش)'
+    const dm = out.get(r.reportDate) ?? new Map(); out.set(r.reportDate, dm)
+    const sm = dm.get(sec) ?? {}; dm.set(sec, sm)
+    const cur = sm[x.name] ?? { active: 0, hours: 0 }
+    // several reports of the day: units add up, hours are the unit-weighted mean
+    const tot = cur.active + x.activeQty
+    sm[x.name] = { active: tot, hours: tot > 0 ? (cur.active * cur.hours + x.activeQty * h) / tot : 0 }
+  }
+  return out
+}
