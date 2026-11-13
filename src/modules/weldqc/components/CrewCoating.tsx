@@ -16,7 +16,7 @@ export function CrewEditor({ weld, crew, onClose }: { weld: repo.QcWeld; crew: C
   const [pass, setPass] = useState<Pass>('root'), [quads, setQuads] = useState<Quadrant[]>([1]), [welder, setWelder] = useState('')
   const [position, setPosition] = useState('5G'), [direction, setDirection] = useState<CrewRow['direction']>('downhill'), [process, setProcess] = useState('SMAW')
   const [start, setStart] = useState(''), [end, setEnd] = useState(''), [vt, setVt] = useState<CrewRow['vt']>(''), [note, setNote] = useState('')
-  const welders = st.welders.filter((w) => w.kind !== 'applicator' && w.status === 'active')
+  const welders = st.welders.filter((w) => w.kind !== 'coater' && w.status === 'active')
   const toggle = (x: Quadrant) => setQuads(x === 0 ? [0] : quads.includes(x) ? quads.filter((y) => y !== x && y !== 0) : [...quads.filter((y) => y !== 0), x])
   const save = () => st.run(`جوشکار ${welder} برای پاس ${PASS_FA[pass]} ثبت شد`, () => repo.addCrew(quads.map((qd) => ({ project_id: st.projectId, weld_id: weld.id, pass, quadrant: qd, welder_key: welder, position, direction, process, started_at: start ? new Date(start).toISOString() : null, finished_at: end ? new Date(end).toISOString() : null, vt, note, created_name: st.me() })))).then((ok) => { if (ok) { setNote(''); setVt('') } })
   const live = crew.filter((c) => !c.removed)
@@ -51,7 +51,7 @@ export function CoatingPanel({ weld, coatings }: { weld: repo.QcWeld; coatings: 
   const [open, setOpen] = useState(false)
   const [x, setX] = useState({ kind: 'inspection' as repo.Coating['kind'], random: false, applicator: [...coatings].reverse().find((c) => c.applicatorKey)?.applicatorKey ?? '', system: weld.coat.fj?.sleeve ?? '', kv: '', count: '', dft: '', adhesion: '', visual: '' as repo.Coating['visual'], result: '' as repo.Coating['result'], defects: '', note: '' })
   const [files, setFiles] = useState<File[]>([])
-  const people = [...st.welders].sort((a, b) => Number(b.kind === 'applicator') - Number(a.kind === 'applicator'))
+  const people = [...st.welders].sort((a, b) => Number(b.kind === 'coater') - Number(a.kind === 'coater'))
   const save = () => st.run('سابقهٔ پوشش ثبت شد', async () => {
     const up: repo.Coating['files'] = []
     for (const f of files) up.push({ path: await repo.uploadFile(st.projectId!, weld.id, f, f.name), name: f.name, mime: f.type })
@@ -76,7 +76,7 @@ export function CoatingPanel({ weld, coatings }: { weld: repo.QcWeld; coatings: 
       {(st.caps.edit || st.caps.submit) && (open ? (
         <div className="wq-form">
           <label><span>نوع</span><select value={x.kind} onChange={(e) => setX({ ...x, kind: e.target.value as repo.Coating['kind'] })}>{Object.entries(KIND_FA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-          <label><span>پوشش‌کار</span><select value={x.applicator} onChange={(e) => setX({ ...x, applicator: e.target.value })}><option value="">از فهرست پوشش‌کاران / جوشکاران…</option>{people.map((w) => <option key={w.id} value={w.key}>{w.key}{w.name ? ` — ${w.name}` : ''}{w.kind === 'applicator' ? ' (پوشش‌کار)' : ''}</option>)}</select></label>
+          <label><span>پوشش‌کار</span><select value={x.applicator} onChange={(e) => setX({ ...x, applicator: e.target.value })}><option value="">از فهرست پوشش‌کاران / جوشکاران…</option>{people.map((w) => <option key={w.id} value={w.key}>{w.key}{w.name ? ` — ${w.name}` : ''}{w.kind === 'coater' ? ' (پوشش‌کار)' : ''}</option>)}</select></label>
           <label><span>سیستم پوشش</span><input value={x.system} onChange={(e) => setX({ ...x, system: e.target.value })} placeholder="مثلاً Heat shrink sleeve 3LPE" /></label>
           <label className="wq-check"><input type="checkbox" checked={x.random} onChange={(e) => setX({ ...x, random: e.target.checked })} /> آزمون تصادفی</label>
           <label><span>ولتاژ منفذیابی (kV)</span><input inputMode="decimal" value={x.kv} onChange={(e) => setX({ ...x, kv: e.target.value })} /></label>

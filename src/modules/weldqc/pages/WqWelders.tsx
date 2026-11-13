@@ -68,7 +68,7 @@ function WelderCard({ s, onOpen }: { s: WelderStat; onOpen: (id: string) => void
   }, [s.results])
   const byPass = new Map<string, number>(); for (const d of mine) if (d.pass) byPass.set(d.pass, (byPass.get(d.pass) ?? 0) + 1)
   const myRepairs = st.repairs.filter((r) => r.performedBy === s.key)
-  const top = s.rank != null && s.of >= 5 && s.rank <= Math.max(1, Math.ceil(s.of * 0.1))
+  const top = s.rank != null && s.of >= 5 && s.score >= 85 && s.rank <= Math.max(1, Math.ceil(s.of * 0.1))
   const valFrac = main?.issueDate && main.expiryDate ? Math.max(0, Math.min(1, (Date.parse(main.expiryDate) - Date.now()) / (Date.parse(main.expiryDate) - Date.parse(main.issueDate)))) : null
   const lastInspector = [...st.evaluations].reverse().find((e) => e.signedName && s.results.some((r) => r.weldId === e.weldId))?.signedName
   const warn = useMemo(() => {

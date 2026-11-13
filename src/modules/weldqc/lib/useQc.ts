@@ -57,7 +57,7 @@ export function useQc() {
 
     // welders: every weld they worked on (any pass, any quadrant), judged by its first radiography
     const ws = new Map<string, WelderStat>()
-    const stat = (k: string) => { let x = ws.get(k); if (!x) { x = { key: k, welds: 0, evaluated: 0, firstOk: 0, repaired: 0, cutOuts: 0, severe: 0, fpy: null, repairRate: null, rejectRate: null, smoothRate: 0, score: null, rank: null, of: 0, results: [], lastWeld: '', applicator: welderByKey.get(k)?.kind === 'applicator' }; ws.set(k, x) } return x }
+    const stat = (k: string) => { let x = ws.get(k); if (!x) { x = { key: k, welds: 0, evaluated: 0, firstOk: 0, repaired: 0, cutOuts: 0, severe: 0, fpy: null, repairRate: null, rejectRate: null, smoothRate: 0, score: null, rank: null, of: 0, results: [], lastWeld: '', applicator: welderByKey.get(k)?.kind === 'coater' }; ws.set(k, x) } return x }
     const weldersOf = new Map<string, string[]>()
     let ev0 = 0, rep0 = 0
     for (const w of st.welds) {

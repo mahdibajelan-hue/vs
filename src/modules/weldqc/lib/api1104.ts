@@ -109,12 +109,13 @@ export function evaluate(joint: Joint, defects: DefectIn[], c: Api1104Criteria =
   const flag = (ids: string[] | DefectIn[], why: string) => { for (const x of ids) { const id = typeof x === 'string' ? x : x.id; reasons.get(id)?.push(why) } }
   const of = (...codes: Code[]) => defects.filter((d) => codes.includes(d.code))
   const sum = (ds: DefectIn[]) => ds.reduce((s, d) => s + d.lengthMm, 0)
-  const aggRule = (ds: DefectIn[], limit: number, label: string, clause: string) => {
-    if (ds.length < 2) return
+  // `single`: the window limit also binds one indication alone (ISI, CP: no separate single-length limit in 9.3.8 / 9.3.9.3)
+  const aggRule = (ds: DefectIn[], limit: number, label: string, clause: string, single = false) => {
+    if (ds.length < (single ? 1 : 2)) return
     const done = new Set<string>()
     for (const g of windows(ds, W, win)) {
       const L = sum(g)
-      if (L > limit && g.length > 1) { const key = g.map((d) => d.id).sort().join(); if (done.has(key)) continue; done.add(key); flag(g, `مجموع طول ${label} در ${mm(win)} پیوسته ${mm(L)} است و از ${mm(limit)} بیشتر است (بند ${clause})`) }
+      if (L > limit && (single || g.length > 1)) { const key = g.map((d) => d.id).sort().join(); if (done.has(key)) continue; done.add(key); flag(g, `مجموع طول ${label} در ${mm(win)} پیوسته ${mm(L)} است و از ${mm(limit)} بیشتر است (بند ${clause})`) }
     }
   }
   const totalRule = (ds: DefectIn[], limit: number, label: string, clause: string) => { const L = sum(ds); if (ds.length && L > limit) flag(ds, `مجموع طول ${label} در کل جوش ${mm(L)} و بیش از ${mm(limit)} (${f1(c.pct8)}٪ طول جوش ${mm(W)}) است (بند ${clause})`) }
@@ -136,7 +137,7 @@ export function evaluate(joint: Joint, defects: DefectIn[], c: Api1104Criteria =
     else if (d.densityOver && dim > t) flag([d], `بیشترین بُعد سوختگی ${mm(dim)} بیش از ضخامت دیواره (${mm(t)}) و تیره‌تر از فلز پایه (بند 9.3.7)`)
   }
   const btDark = btLike.filter((d) => d.densityOver)
-  if (btDark.length > 1) for (const g of windows(btDark, W, win)) { const L = g.reduce((s, d) => s + Math.max(d.lengthMm, d.widthMm ?? 0), 0); if (g.length > 1 && L > c.bt.sumAgg) flag(g, `مجموع ابعاد سوختگی‌های تیره در ${mm(win)} برابر ${mm(L)} و بیش از ${mm(c.bt.sumAgg)} (بند 9.3.7)`) }
+  if (btDark.length) for (const g of windows(btDark, W, win)) { const L = g.reduce((s, d) => s + Math.max(d.lengthMm, d.widthMm ?? 0), 0); if (L > c.bt.sumAgg) flag(g, `مجموع ابعاد سوختگی‌های تیره در ${mm(win)} برابر ${mm(L)} و بیش از ${mm(c.bt.sumAgg)} (بند 9.3.7)`) }
   // slag (9.3.8)
   const esi = of('ESI'), isi = of('ISI')
   for (const d of esi) {
@@ -145,7 +146,7 @@ export function evaluate(joint: Joint, defects: DefectIn[], c: Api1104Criteria =
   }
   aggRule(esi, c.esi.agg, 'آخال‌های کشیده', '9.3.8')
   for (const d of isi) if ((d.widthMm ?? 0) > c.isi.width) flag([d], `عرض آخال منفرد ${mm(d.widthMm ?? 0)} بیش از ${mm(c.isi.width)} (بند 9.3.8)`)
-  aggRule(isi, c.isi.agg, 'آخال‌های منفرد', '9.3.8')
+  aggRule(isi, c.isi.agg, 'آخال‌های منفرد', '9.3.8', true)
   if (isi.length > c.isi.maxCount) for (const g of windows(isi, W, win)) { const wide = g.filter((d) => (d.widthMm ?? 0) >= c.isi.width - 0.2); if (wide.length > c.isi.maxCount) flag(wide, `بیش از ${f1(c.isi.maxCount)} آخال منفرد با عرض حدود ${mm(c.isi.width)} در ${mm(win)} (بند 9.3.8)`) }
   totalRule([...esi, ...isi], pct, 'آخال‌ها (ESI + ISI)', '9.3.8')
   // porosity (9.3.9)
@@ -156,7 +157,7 @@ export function evaluate(joint: Joint, defects: DefectIn[], c: Api1104Criteria =
     if (d.lengthMm > c.cp.dia) flag([d], `قطر خوشهٔ تخلخل ${mm(d.lengthMm)} بیش از ${mm(c.cp.dia)} (بند 9.3.9.3)`)
     if ((d.widthMm ?? 0) > c.cp.pore) flag([d], `بزرگ‌ترین حفرهٔ خوشه ${mm(d.widthMm ?? 0)} بیش از ${mm(c.cp.pore)} (بند 9.3.9.3)`)
   }
-  aggRule(cp, c.cp.agg, 'خوشه‌های تخلخل', '9.3.9.3')
+  aggRule(cp, c.cp.agg, 'خوشه‌های تخلخل', '9.3.9.3', true)
   const hb = of('HB')
   for (const d of hb) if (d.lengthMm > c.hb.single) flag([d], `طول hollow bead ${mm(d.lengthMm)} بیش از ${mm(c.hb.single)} (بند 9.3.9.4)`)
   aggRule(hb, c.hb.agg, 'hollow bead', '9.3.9.4')

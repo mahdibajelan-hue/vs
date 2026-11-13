@@ -36,6 +36,9 @@ assert.equal(V(J56, [D('a', 'ESI', 45, { widthMm: 1.8 })]).overall, 'repair')
 assert.equal(V(J56, [D('a', 'ESI', 55, { widthMm: 1 })]).overall, 'repair')
 assert.equal(V(J56, [D('a', 'ISI', 6, { widthMm: 2 }), D('b', 'ISI', 6, { widthMm: 2, positionMm: 50 })]).overall, 'accept')
 assert.equal(V(J56, [D('a', 'ISI', 7, { widthMm: 2 }), D('b', 'ISI', 7, { widthMm: 2, positionMm: 50 })]).overall, 'repair')
+// a single ISI longer than the 13 mm window limit
+assert.equal(V(J56, [D('a', 'ISI', 14, { widthMm: 2 })]).overall, 'repair')
+assert.equal(V(J56, [D('a', 'ISI', 12, { widthMm: 2 })]).overall, 'accept')
 // more than four ISI of the maximum width in 300 mm
 assert.equal(V(J56, [0, 1, 2, 3, 4].map((k) => D(`i${k}`, 'ISI', 2, { widthMm: 3, positionMm: k * 40 }))).overall, 'repair')
 
