@@ -17,6 +17,8 @@ export interface ProjectNavItem {
   /** an industrial line icon (industryIcons.tsx), drawn on lucide's grid */
   icon: NavIcon
   accent: string
+  /** shown as a sub-item of another entry (e.g. quality control, tests and stations under execution) */
+  parent?: string
 }
 export interface ProjectNavGroup { id: string; label: string; items: ProjectNavItem[] }
 
@@ -33,9 +35,9 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
     { id: 'engineering', module: 'engineering', label: 'پیشرفت مهندسی', icon: IcColumn, accent: '#818cf8' },
     { id: 'material', module: 'material', label: 'کنترل و تأمین کالا', icon: IcPipeStack, accent: '#f59e0b' },
     { id: 'execution', module: 'execution', label: 'مدیریت اجرا', icon: IcCrane, accent: '#fb923c' },
-    { id: 'weldqc', module: 'weldqc', label: 'کنترل کیفیت جوش و رادیوگرافی', icon: IcWeldXray, accent: '#0891b2' },
-    { id: 'testing', module: 'testing', label: 'آزمایش‌ها (هیدروتست و پوشش)', icon: IcHydroTest, accent: '#0ea5e9' },
-    { id: 'stationpiping', module: 'stationpiping', label: 'ایستگاه‌ها (پایپینگ و جوشکاری)', icon: IcManifold, accent: '#6366f1' },
+    { id: 'weldqc', module: 'weldqc', label: 'کنترل کیفیت', icon: IcWeldXray, accent: '#0891b2', parent: 'execution' },
+    { id: 'testing', module: 'testing', label: 'آزمایش‌ها (هیدروتست)', icon: IcHydroTest, accent: '#0ea5e9', parent: 'execution' },
+    { id: 'stationpiping', module: 'stationpiping', label: 'ایستگاه‌ها (پایپینگ و جوشکاری)', icon: IcManifold, accent: '#6366f1', parent: 'execution' },
     { id: 'pssr', module: 'pssr', label: 'آمادگی راه‌اندازی (PSSR)', icon: IcSafetyValve, accent: '#f97316' },
   ] },
   { id: 'money', label: 'قرارداد و هزینه', items: [

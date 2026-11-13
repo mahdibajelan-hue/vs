@@ -42,7 +42,7 @@ export function TestingApp({ onExitToHub }: { onExitToHub: () => void; onBackToR
   const projectId = useProjectContextStore((s) => s.projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const st = useTestingStore()
-  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string')
+  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string' && v !== 'coating') // the coating tests moved to the quality-control module
   const [open, setOpen] = useState<{ kind: TargetKind; id: string } | null>(null)
   const [guide, setGuide] = useState(false)
   useEffect(() => { if (!useMasterDataStore.getState().loaded) void useMasterDataStore.getState().fetchAll() }, [])
@@ -56,14 +56,14 @@ export function TestingApp({ onExitToHub }: { onExitToHub: () => void; onBackToR
       <header className="ps-top">
         <div className="ps-brand">
           <span className="ps-brand-ico" style={{ background: 'linear-gradient(135deg,#0ea5e9,#2563eb)' }}><Droplets size={18} /></span>
-          <span><b>آزمایش‌ها — هیدروتست و پوشش</b><small>{project?.officialName ?? '—'}</small></span>
+          <span><b>آزمایش‌ها — هیدروتست خط و ایستگاه‌ها</b><small>{project?.officialName ?? '—'}</small></span>
         </div>
         <div className="ps-top-end">
           <ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome onGuide={() => setGuide((g) => !g)} guideActive={guide} />
         </div>
       </header>
       <NavScroller label="بخش‌ها"><nav className="ps-tabs" aria-label="بخش‌ها">
-        {([['dash', 'داشبورد', ClipboardCheck], ['line', 'هیدروتست خط', Waves], ['stations', 'هیدروتست ایستگاه‌ها', Factory], ['coating', 'تست پوشش', ShieldCheck], ['settings', 'تنظیمات', Settings2]] as const).map(([k, l, I]) => (
+        {([['dash', 'داشبورد', ClipboardCheck], ['line', 'هیدروتست خط', Waves], ['stations', 'هیدروتست ایستگاه‌ها', Factory], ['settings', 'تنظیمات', Settings2]] as const).map(([k, l, I]) => (
           <button key={k} type="button" className={`ps-tab ${tab === k && !open ? 'is-on' : ''}`} onClick={() => go(k)}><I size={15} aria-hidden />{l}</button>
         ))}
       </nav></NavScroller>
@@ -75,7 +75,6 @@ export function TestingApp({ onExitToHub }: { onExitToHub: () => void; onBackToR
           : tab === 'dash' ? <Dashboard onOpen={(id) => setOpen({ kind: 'section', id })} onTab={go} />
           : tab === 'line' ? <LineTab onOpen={(id) => setOpen({ kind: 'section', id })} onTab={go} />
           : tab === 'stations' ? <Stations onOpen={(id) => setOpen({ kind: 'pack', id })} />
-          : tab === 'coating' ? <Coating />
           : <SettingsTab />}
         {st.error && !missing && <p className="ps-err" onClick={() => useTestingStore.setState({ error: null })}>{st.error}</p>}
       </main>
@@ -114,7 +113,7 @@ function Dashboard({ onOpen, onTab }: { onOpen: (id: string) => void; onTab: (t:
     <div className="ps-stack">
       <section className="ps-kpis">
         <Kpi label="قطعه‌های هیدروتست خط" value={`${fa(accepted.length)} از ${fa(st.sections.length)}`} sub={`${fa(kmAcc, 1)} کیلومتر پذیرفته‌شده · ${fa(running.length)} در جریان`} color="#22c55e" />
-        <Kpi label="هیدروتست ایستگاه‌ها" value={`${fa(st.packs.filter((p) => p.stage === 'accepted').length)} از ${fa(st.packs.length)}`} sub="بستهٔ آزمون پذیرفته‌شده" color="#0ea5e9" />
+        <Kpi label="هیدروتست ایستگاه‌ها" value={`${fa(st.packs.filter((p) => p.category !== 'pretest' && p.stage === 'accepted').length)} از ${fa(st.packs.filter((p) => p.category !== 'pretest').length)}`} sub="بستهٔ آزمون پذیرفته‌شده" color="#0ea5e9" />
         <Kpi label="پوشش تست‌شده (هالیدی)" value={`${fa(holidayKm, 1)} km`} sub={`از ${fa(coatedKm, 1)} کیلومتر پوشش‌شده (دوقلوی دیجیتال)`} color={coatedKm - holidayKm > 0.5 ? '#f59e0b' : '#22c55e'} />
         <Kpi label="عیوب پوشش باز" value={fa(openDefects.length)} sub={`${fa(openDefects.filter((d) => d.severity === 'severe').length)} مورد شدید`} color={openDefects.length ? '#ef4444' : '#22c55e'} />
       </section>
@@ -303,7 +302,8 @@ function Stations({ onOpen }: { onOpen: (id: string) => void }) {
   const [f, setF] = useState({ code: '', station: st.stations[0] ?? '', title: '', dp: st.pipe ? String(st.pipe.designPressureBar) : '', tp: '', medium: 'water' as 'water' | 'air' | 'nitrogen', date: '' })
   const tpAuto = f.dp ? (Number(f.dp) * 1.5).toFixed(1) : ''
   const save = async () => { if (await st.savePack({ code: f.code, station: f.station, title: f.title, designPressureBar: Number(f.dp), testPressureBar: Number(f.tp || tpAuto), medium: f.medium, plannedDate: f.date || null }, email)) { setAdding(false); setF({ ...f, code: '', title: '', tp: '' }) } }
-  const groups = [...new Set(st.packs.map((p) => p.station || '—'))]
+  const stPacks = st.packs.filter((p) => p.category !== 'pretest') // crossing pre-tests live in the quality-control module
+  const groups = [...new Set(stPacks.map((p) => p.station || '—'))]
   return (
     <div className="ps-stack">
       <div className="ps-row-head">
@@ -325,11 +325,11 @@ function Stations({ onOpen }: { onOpen: (id: string) => void }) {
           <div className="ps-actions"><button type="button" className="ps-btn is-primary" disabled={!f.code.trim() || !(Number(f.dp) > 0)} onClick={save}><CheckCircle2 size={15} /> ذخیره</button></div>
         </section>
       )}
-      {st.packs.length ? groups.map((g) => (
+      {stPacks.length ? groups.map((g) => (
         <section key={g} className="ps-card">
           <header className="ps-card-head"><b><Factory size={15} /> {g}</b></header>
           <div className="ps-list">
-            {st.packs.filter((p) => (p.station || '—') === g).map((p) => (
+            {stPacks.filter((p) => (p.station || '—') === g).map((p) => (
               <button key={p.id} type="button" className="ps-sys" onClick={() => onOpen(p.id)} style={{ '--c': p.failed ? HT_FAILED_COLOR : HT_STAGE_COLOR[p.stage] } as CSSProperties}>
                 <span className="ps-code" dir="ltr">{p.code}</span>
                 <span className="ps-sys-main"><b>{p.title || '—'}</b><small>طراحی {fa(p.designPressureBar)} bar · آزمون {fa(p.testPressureBar, 1)} bar · {p.medium === 'water' ? 'آب' : p.medium === 'air' ? 'هوا' : 'نیتروژن'}{p.plannedDate ? ` · ${jd(p.plannedDate)}` : ''}</small></span>
@@ -348,7 +348,8 @@ const SEV_FA = { minor: 'جزئی', moderate: 'متوسط', severe: 'شدید' }
 const SEV_COLOR = { minor: '#eab308', moderate: '#f97316', severe: '#ef4444' } as const
 const DEF_STATUS_FA = { open: 'باز', repaired: 'تعمیرشده', verified: 'تأییدشده' } as const
 type CoatSub = 'records' | 'joint' | 'electrical' | 'criteria'
-function Coating() {
+/** the coating tests of the line, shown by the quality-control module (they used to be a tab here) */
+export function Coating() {
   const [sub, setSub] = useRemembered<CoatSub>('coatSub', 'records', (v) => typeof v === 'string')
   return (
     <div className="ps-stack">
@@ -357,7 +358,7 @@ function Coating() {
     </div>
   )
 }
-function CoatingRecords() {
+export function CoatingRecords() {
   const st = useTestingStore()
   const email = useAuthStore((s) => s.profile?.email ?? '')
   const [f, setF] = useState({ kind: 'holiday' as CoatingKind, from: '', to: '', at: today(), kv: '25', result: 'pass' as 'pass' | 'fail', defects: '0', report: '', contractor: '', note: '' })

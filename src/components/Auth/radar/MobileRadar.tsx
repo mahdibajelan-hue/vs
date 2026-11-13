@@ -97,7 +97,7 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
                 return (
                   <button key={it.id} type="button" className="mr-tile" style={{ '--a': it.accent } as CSSProperties} onClick={() => onItem(it)}>
                     <span className="mr-tile-ico"><it.icon size={18} aria-hidden /></span>
-                    <span className="mr-tile-label">{it.label}</span>
+                    <span className="mr-tile-label">{it.label}{it.parent && <small className="mr-tile-parent">زیرمجموعهٔ {items.find((x) => x.id === it.parent)?.label}</small>}</span>
                     {n > 0 && <span className="mr-badge">{fa(n)}</span>}
                     <ChevronLeft size={14} className="mr-tile-go" aria-hidden />
                   </button>

@@ -1,9 +1,10 @@
 import { NavScroller } from './components/NavScroller'
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Bot, Flame, CalendarRange, ClipboardList, FileBarChart2, Gauge, HardHat, Hourglass, Inbox, Loader2, Settings2, ShieldCheck, TrendingUp } from 'lucide-react'
+import { AlertTriangle, Bot, Flame, CalendarRange, ClipboardList, FileBarChart2, Gauge, HardHat, Hourglass, Inbox, Loader2, Settings2, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
+import { useModuleStore } from '../../store/useModuleStore'
 import { StorageErrorBanner } from '../../components/Layout/StorageErrorBanner'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
 import '../issues/issues.css'
@@ -22,7 +23,7 @@ export type ExTab = 'dashboard' | 'daily' | 'review' | 'welds' | 'progress' | 'o
 type Sub = { id: string; label: string }
 const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[] }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
-  { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'کارکرد روزانه' }, { id: 'forms', label: 'فرم‌های فنی (جوش، پوشش، …)' }, { id: 'designed', label: 'فرم‌های طراحی‌شده' }, { id: 'today', label: 'امروز در کارگاه' }] },
+  { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'کارکرد روزانه' }, { id: 'forms', label: 'فرم‌های فنی اجرایی (ریسه، خمکاری، خاکی، …)' }, { id: 'designed', label: 'فرم‌های طراحی‌شده' }, { id: 'today', label: 'امروز در کارگاه' }] },
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
   { id: 'welds', label: 'سرجوش‌ها (پروندهٔ جوش)', icon: Flame, color: '#f43f5e' },
   { id: 'progress', label: 'پیشرفت فیزیکی', icon: TrendingUp, color: '#14b8a6' },
@@ -30,7 +31,6 @@ const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: S
   { id: 'plan', label: 'برنامهٔ کوتاه‌مدت و آمادگی', icon: CalendarRange, color: '#0ea5e9', subs: [{ id: 'lookahead', label: 'برنامهٔ سه‌هفته‌ای' }, { id: 'readiness', label: 'آمادگی فعالیت‌ها' }, { id: 'import', label: 'ورود برنامه از اکسل' }] },
   { id: 'assistant', label: 'دستیار هوشمند', icon: Bot, color: '#ec4899' },
   { id: 'reports', label: 'گزارش‌های دوره‌ای', icon: FileBarChart2, color: '#94a3b8', subs: [{ id: 'week', label: 'هفتگی' }, { id: 'month', label: 'ماهانه' }, { id: 'cum', label: 'تجمعی از ابتدا' }, { id: 'contract', label: 'صورت‌وضعیت پیمان (۳ ستونی)' }, { id: 'statement', label: 'صورت‌وضعیت کارکرد' }, { id: 'ledger', label: 'مغایرت اجرایی و صورت‌وضعیت' }, { id: 'personnel', label: 'جوشکاران و عایق‌کاران' }, { id: 'mrs', label: 'لوله‌های ورودی (MRS)' }, { id: 'archive', label: 'بایگانی فرم‌های فنی' }, { id: 'mgmt-week', label: 'گزارش مدیریتی هفتگی' }, { id: 'mgmt-month', label: 'گزارش مدیریتی ماهانه' }, { id: 'delays', label: 'تأخیرات و کلیم' }] },
-  { id: 'qc', label: 'کنترل کیفیت', icon: ShieldCheck, color: '#22c55e' },
   { id: 'gaps', label: 'کامل‌بودن و کسری', icon: AlertTriangle, color: '#ef4444' },
   { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#64748b', subs: [{ id: 'roles', label: 'افراد، نقش‌ها و تنظیمات پایه' }, { id: 'rules', label: 'فهرست‌ها، مقادیر پیمان، تقویم و قواعد' }, { id: 'tpl', label: 'کتابخانهٔ قالب‌های فرم‌های فنی' }, { id: 'actions', label: 'اقدام‌های کارگاهی و تطبیق با فهرست‌بها' }] },
 ]
@@ -47,7 +47,6 @@ const Plan = L(() => import('./pages/PlanPage'), 'PlanPage')
 const Reports = L(() => import('./pages/ReportsRouter'), 'ReportsRouter')
 const Today = L(() => import('./pages/TodayPage'), 'TodayPage')
 const Designed = L(() => import('./pages/DesignedForms'), 'DesignedForms')
-const Qc = L(() => import('./pages/QcPage'), 'QcPage')
 const Welds = L(() => import('./pages/WeldsPage'), 'WeldsPage')
 const Gaps = L(() => import('./pages/GapsPage'), 'GapsPage')
 const Settings = L(() => import('./pages/SettingsPage'), 'SettingsPage')
@@ -85,7 +84,10 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const cur0 = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
   const cur = useMemo(() => (cur0.subs ? { ...cur0, subs: cur0.subs.filter((x) => x.id !== 'today' || todayOn) } : cur0), [cur0, todayOn]) // experimental views stay hidden until their flag is on
   const sub = cur.subs ? (subs[tab] ?? cur.subs[0].id) : ''
-  const go = (t: ExTab, s?: string) => { setTab(t); if (s) setSubs((x) => ({ ...x, [t]: s })) }
+  const go = (t: ExTab, s?: string) => {
+    // quality control (NCRs, findings, QC forms) is its own module now
+    if (t === 'qc') { if (projectId) useProjectContextStore.getState().setProject(projectId); useModuleStore.getState().enterModule('weldqc', undefined, 'ncr'); return }
+    setTab(t); if (s) setSubs((x) => ({ ...x, [t]: s })) }
   // something outside the module (the inbox) asked to show a report: switch to the page that shows it
   const focusTab = useExecutionStore((x) => (x.focusReportId ? x.focusTab : null))
   useEffect(() => { if (!focusTab) return; if (focusTab === 'delays') { setTab('reports'); setSubs((x) => ({ ...x, reports: 'delays' })); useExecutionStore.getState().setFocus(null) } else setTab(focusTab) }, [focusTab])
@@ -105,7 +107,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       case 'assistant': return <Assistant {...p} />
       case 'reports': return <Reports {...p} />
       case 'gaps': return <Gaps {...p} />
-      case 'qc': return <Qc {...p} />
+      case 'qc': return null // moved to the quality-control module
       case 'welds': return <Welds {...p} />
       case 'settings': return <Settings {...p} />
     }

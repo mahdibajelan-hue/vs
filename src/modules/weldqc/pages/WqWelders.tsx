@@ -8,7 +8,15 @@ import { CODE_FA, CODE_TYPE, type Code } from '../lib/api1104'
 import { DEFECT_COLOR, PASS_FA, VERDICT_FA } from '../lib/rules'
 import { PASSES } from '../lib/crew'
 import { welderTrends, sameJoint, type ICrewSeg } from '../lib/insights'
-import { cardPayload } from '../../execution/lib/registers'
+import { useModuleStore } from '../../../store/useModuleStore'
+import { usePersonnelStore } from '../../competency/store/usePersonnelStore'
+import { useRemembered } from '../../../lib/navMemory'
+import { clearFocusWelder, peekFocusWelder } from '../lib/handoff'
+
+/** the competency module's ID card carries «RASTA|WC|stamp|stamp»; the performance card shows the same code */
+const cardPayload = (raw: string) => `RASTA|WC|${raw}|${raw}`
+/** open this person's qualification file (WQT, card) in the competency module */
+export function openQualification(welderId: string) { usePersonnelStore.setState({ focus: welderId }); useModuleStore.getState().enterModule('competency', undefined, 'personnel') }
 
 const tone = (p: number | null) => (p == null ? '#64748b' : p > 10 ? '#ef4444' : p > 5 ? '#f59e0b' : '#22c55e')
 
@@ -87,9 +95,9 @@ function WelderCard({ s, onOpen }: { s: WelderStat; onOpen: (id: string) => void
       </aside>
       <div className="wc-main">
         <header className="wc-head">
-          <div><h2>جوشکار</h2><p>کارت صلاحیت و عملکرد</p></div>
+          <div><h2>{w?.kind === 'coater' ? 'پوشش‌کار' : 'جوشکار'}</h2><p>کارت عملکرد حین اجرا{w ? <> · <button type="button" className="wc-qlink no-print" onClick={() => openQualification(w.id)}>پروندهٔ صلاحیت و کارت شناسایی <ArrowLeft size={12} aria-hidden /></button></> : null}</p></div>
           <span className={`wc-status ${w?.status === 'active' ? 'is-ok' : 'is-bad'}`}><CircleCheckBig size={16} aria-hidden /> {w ? (w.status === 'active' ? 'فعال' : w.status === 'suspended' ? 'تعلیق' : 'خروج') : 'خارج از فهرست'}</span>
-          <div className="wc-qr"><QRCodeSVG value={cardPayload(w?.cardNo || w?.raw || s.key, s.key)} size={84} level="M" marginSize={0} /><small>اسکن برای اعتبارسنجی</small></div>
+          <div className="wc-qr"><QRCodeSVG value={cardPayload(w?.raw || s.key)} size={84} level="M" marginSize={0} /><small>اسکن برای اعتبارسنجی</small></div>
         </header>
         <dl className="wc-facts">
           <div><dt>نام</dt><dd>{q.nameOf(s.key) !== s.key ? q.nameOf(s.key) : '—'}</dd></div><div><dt>مهر</dt><dd className="ps-code">{s.key}</dd></div>
@@ -111,7 +119,7 @@ function WelderCard({ s, onOpen }: { s: WelderStat; onOpen: (id: string) => void
           <div><dt>تاریخ آزمون</dt><dd>{faDate(main?.issueDate)}</dd></div>
           <div><dt>اعتبار تا</dt><dd>{faDate(main?.expiryDate)}</dd></div>
           {valFrac != null && <div className="wc-valid"><i style={{ '--w': `${valFrac * 100}%`, '--c': valFrac > 0.25 ? '#22c55e' : valFrac > 0 ? '#f59e0b' : '#ef4444' } as CSSProperties} /><b>{fa(valFrac * 100)}٪ اعتبار باقی‌مانده</b></div>}
-          {!quals.length && <p className="ps-hint is-warn">گواهی صلاحیتی (WPQ) برای این جوشکار در «فهرست جوشکاران» ثبت نشده است.</p>}
+          {!quals.length && <p className="ps-hint is-warn">گواهی صلاحیتی (WQT) برای این جوشکار در ماژول «ارزیابی صلاحیت» ثبت نشده است؛ آزمون و کارت شناسایی از همان‌جا صادر می‌شود.</p>}
           {valid.length > 0 && <span className="wc-stamp" aria-label="جوشکار دارای صلاحیت">جوشکار<br />دارای صلاحیت</span>}
         </div>
       </div>
@@ -132,12 +140,14 @@ function WelderCard({ s, onOpen }: { s: WelderStat; onOpen: (id: string) => void
 /** جوشکاران — ranked by quality score; each opens the performance card */
 export function WqWelders({ onOpen }: { onOpen: (id: string) => void }) {
   const st = useWqStore(); const q = useQc()
-  const [sel, setSel] = useState<string | null>(null), [text, setText] = useState('')
+  const [sel, setSel] = useRemembered<string | null>('welderCard', null, (v) => v === null || typeof v === 'string'), [text, setText] = useState('') // survives the reload of the project's records
+  // a welder another module asked for: open the card once this project's records hold them
+  useEffect(() => { const k = peekFocusWelder(); if (k && q.welderStats.has(k)) setSel(k) }, [q.welderStats]) // kept until the user moves on: the records may reload and remount this page
   const list = useMemo(() => [...q.welderStats.values()].filter((s) => !s.applicator).filter((s) => !text || `${s.key} ${q.nameOf(s.key)}`.includes(text)).sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9) || b.welds - a.welds), [q, text])
   const cur = sel ? q.welderStats.get(sel) ?? null : null
   if (cur) return (
     <div className="wq-welders">
-      <div className="wq-toolbar no-print"><button type="button" className="ps-btn is-ghost" onClick={() => setSel(null)}>همهٔ جوشکاران</button><button type="button" className="ps-btn" onClick={() => window.print()}><Printer size={14} aria-hidden /> چاپ کارت</button></div>
+      <div className="wq-toolbar no-print"><button type="button" className="ps-btn is-ghost" onClick={() => { clearFocusWelder(); setSel(null) }}>همهٔ جوشکاران</button><button type="button" className="ps-btn" onClick={() => window.print()}><Printer size={14} aria-hidden /> چاپ کارت</button></div>
       <WelderCard s={cur} onOpen={onOpen} />
     </div>
   )

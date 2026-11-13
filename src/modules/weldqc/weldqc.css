@@ -446,3 +446,45 @@
   .wq-rail { grid-template-columns: repeat(10, 5rem); }
 }
 @media print { .wq-rail, .wq-seg-tabs, .wq-pp-side .ps-link, .wc-ai { break-inside: avoid; } .wc-side, .wc-bottom { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+
+/* ── کنترل کیفیت: areas, sub-tabs, quality desk ─────────────────────────────── */
+.wq .wq-tabs .ps-tab.is-on { box-shadow: inset 0 -2px 0 var(--qc, #22c55e); }
+.wq .wq-tabs .ps-tab svg { color: var(--qc, currentColor); }
+.qc-sub { display: flex; gap: .35rem; overflow-x: auto; padding: .55rem 1rem .1rem; scrollbar-width: none; }
+.qc-sub::-webkit-scrollbar { display: none; }
+.qc-sub button { flex: none; padding: .42rem .8rem; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: var(--text-muted); border: 1px solid var(--border-soft); background: var(--bg-panel-solid); transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease; }
+.qc-sub button:hover { color: var(--text-primary); }
+.qc-sub button.is-on { color: var(--text-primary); border-color: color-mix(in srgb, var(--qc) 55%, transparent); background: color-mix(in srgb, var(--qc) 16%, var(--bg-panel-solid)); }
+.qc-sub button:active { transform: scale(.97); }
+
+.qc-home { display: grid; gap: 1rem; }
+.qc-home-head { display: flex; gap: .8rem; align-items: flex-start; }
+.qc-home-head > div { display: flex; flex-direction: column; gap: .2rem; }
+.qc-home-head b { font-size: 17px; font-weight: 900; }
+.qc-home-head small { font-size: 12.5px; color: var(--text-muted); max-width: 70ch; line-height: 1.7; }
+.qc-home-ico { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: #fff; background: linear-gradient(135deg, #22c55e, #0e7490); }
+.qc-tiles { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.qc-tile { position: relative; display: flex; flex-direction: column; gap: .65rem; padding: 1rem 1.05rem; text-align: right; border-radius: 1.1rem; border: 1px solid color-mix(in srgb, var(--c) 30%, var(--border-soft)); background: linear-gradient(160deg, color-mix(in srgb, var(--c) 11%, var(--bg-panel-solid)), var(--bg-panel-solid) 60%); color: var(--text-primary); transition: border-color 180ms ease, transform 160ms ease; animation: qc-in 420ms cubic-bezier(.23, 1, .32, 1) both; animation-delay: calc(var(--i) * 45ms); }
+.qc-tile:hover { border-color: color-mix(in srgb, var(--c) 65%, var(--border-soft)); }
+.qc-tile:active { transform: scale(.985); }
+.qc-tile-top { display: flex; align-items: center; gap: .45rem; font-size: 14px; }
+.qc-tile-top > svg:first-child { color: var(--c); }
+.qc-tile-top b { font-weight: 900; }
+.qc-tile-go { margin-inline-start: auto; color: var(--text-muted); transition: transform 180ms ease; }
+.qc-tile:hover .qc-tile-go { transform: translateX(-3px); color: var(--c); }
+.qc-tile-big { display: flex; align-items: baseline; gap: .5rem; }
+.qc-tile-big strong { font-size: 30px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.qc-tile-big small { font-size: 12px; color: var(--text-muted); }
+.qc-tile dl { margin: 0; display: grid; gap: .3rem; }
+.qc-tile dl > div { display: flex; justify-content: space-between; gap: .5rem; font-size: 12.5px; padding-top: .3rem; border-top: 1px dashed var(--border-soft); }
+.qc-tile dt { color: var(--text-muted); }
+.qc-tile dd { margin: 0; font-weight: 800; font-variant-numeric: tabular-nums; }
+.qc-tile em { font-style: normal; font-size: 12px; font-weight: 700; color: #f59e0b; }
+:root[data-theme='light'] .qc-tile em { color: #b45309; }
+@keyframes qc-in { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .qc-tile { animation: none; } }
+
+/* execution pages hosted here (NCR, forms): no full-height shell of their own */
+.wq .im-root.qc-embed { height: auto; min-height: 0; overflow: visible; background: transparent; display: block; }
+.wc-qlink { display: inline-flex; align-items: center; gap: 3px; font: inherit; font-weight: 800; color: #0891b2; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+:root[data-theme='light'] .wc-qlink { color: #0e7490; }

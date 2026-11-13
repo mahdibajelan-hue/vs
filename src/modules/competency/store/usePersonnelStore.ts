@@ -15,6 +15,8 @@ const fail = (what: string, error: { message: string } | null): boolean => {
 const norm = (v: string) => v.trim().toUpperCase().replace(/\s+/g, ' ')
 
 interface State {
+  /** a person another module asked to open (the quality-control module's welder card links here) */
+  focus: string | null
   projectId: string | null; loading: boolean; welders: Welder[]; quals: WelderQual[]; caps: Caps
   load: (projectId: string) => Promise<void>
   /** switch the project that permissions / signers / new people refer to (the register itself lists every project) */
@@ -30,7 +32,7 @@ interface State {
 const NO_CAPS: Caps = { me: null, admin: false, register: false, review: false, signers: {} }
 
 export const usePersonnelStore = create<State>((set, get) => ({
-  projectId: null, loading: false, welders: [], quals: [], caps: NO_CAPS,
+  focus: null, projectId: null, loading: false, welders: [], quals: [], caps: NO_CAPS,
   load: async (projectId) => {
     set({ projectId, loading: true, caps: NO_CAPS })
     await get().refresh()

@@ -1,3 +1,4 @@
+import { CROSSING_FA } from '../lib/crossings'
 import { useMemo, useState, type CSSProperties } from 'react'
 import { AlertTriangle, CheckCircle2, Gauge, Plus, Printer, RotateCcw, XCircle } from 'lucide-react'
 import { ShamsiDateTime } from '../../../components/common/ShamsiField'
@@ -40,14 +41,14 @@ export function TestPage({ kind, id, onBack }: { kind: TargetKind; id: string; o
   const idx = stages.indexOf(t.stage)
   const next = stages[idx + 1] as HtStage | undefined
   const minTest = sec ? sec.pHigh : pack!.testPressureBar
-  const cfg = { strengthHoldH: st.settings.strengthHoldH, leakHoldH: st.settings.leakHoldH, allowedDropBar: st.settings.allowedDropBar, minStrengthBar: sec ? undefined : minTest }
+  const cfg = { strengthHoldH: pack?.holdH ?? st.settings.strengthHoldH, leakHoldH: st.settings.leakHoldH, allowedDropBar: st.settings.allowedDropBar, minStrengthBar: sec ? undefined : minTest }
   const blocker = t.failed ? 'آزمون مردود است؛ پس از تعمیر «آزمون مجدد» را بزنید.' : advanceBlocker(t.stage, readings, cfg)
   const bfKm = sec ? overlapKm(sec.kmFrom, sec.kmTo, st.backfilled) : 0
   const notBackfilled = sec ? sec.kmTo - sec.kmFrom - bfKm : 0
   const color = t.failed ? HT_FAILED_COLOR : HT_STAGE_COLOR[t.stage]
   const strength = evaluateHold(readings, 'strength', cfg.strengthHoldH, cfg.allowedDropBar)
   const leak = evaluateHold(readings, 'leak', cfg.leakHoldH, cfg.allowedDropBar)
-  const title = sec ? `قطعهٔ ${sec.code} — کیلومتر ${fa(sec.kmFrom, 3)} تا ${fa(sec.kmTo, 3)}` : `${pack!.code} — ${pack!.title || pack!.station}`
+  const title = sec ? `قطعهٔ ${sec.code} — کیلومتر ${fa(sec.kmFrom, 3)} تا ${fa(sec.kmTo, 3)}` : pack!.category === 'pretest' ? `پیش‌تست ${pack!.code} — ${CROSSING_FA[pack!.crossing] ?? 'قطعهٔ عبوری'}${pack!.title ? ` ${pack!.title}` : ''}${pack!.km != null ? ` · کیلومتر ${fa(pack!.km, 3)}` : ''}` : `${pack!.code} — ${pack!.title || pack!.station}`
 
   // where the reading was taken: a point of the section (its km and elevation follow) or a station gauge
   const locKm = sec ? (f.loc === 'start' ? sec.kmFrom : f.loc === 'end' ? sec.kmTo : f.loc === 'low' ? sec.elevMinKm : f.loc === 'high' ? sec.elevMaxKm : f.loc === 'head' ? sec.headKm : f.km === '' ? null : Number(f.km)) : null
@@ -77,9 +78,10 @@ export function TestPage({ kind, id, onBack }: { kind: TargetKind; id: string; o
             <Fig k="فشار روی سر آزمون (گیج)" v={`${fa(sec.pHead, 1)} bar`} sub={`سر آزمون در کیلومتر ${fa(sec.headKm, 3)}`} />
             <Fig k="اختلاف ارتفاع / حجم آب" v={`${fa(sec.elevMax - sec.elevMin)} m`} sub={`${fa(sec.volumeM3)} m³ آب`} />
           </> : <>
-            <Fig k="فشار طراحی" v={`${fa(pack!.designPressureBar, 1)} bar`} sub={pack!.station} />
+            <Fig k="فشار طراحی" v={`${fa(pack!.designPressureBar, 1)} bar`} sub={pack!.category === 'pretest' ? (pack!.lengthM ? `طول قطعه ${fa(pack!.lengthM)} m` : '') : pack!.station} />
             <Fig k="فشار آزمون" v={`${fa(pack!.testPressureBar, 1)} bar`} sub={`${fa(pack!.testPressureBar / pack!.designPressureBar, 2)} × فشار طراحی`} />
             <Fig k="سیال آزمون" v={pack!.medium === 'water' ? 'آب' : pack!.medium === 'air' ? 'هوا' : 'نیتروژن'} sub={jd(pack!.plannedDate)} />
+            {pack!.category === 'pretest' && <Fig k="مدت نگهداری" v={`${fa(cfg.strengthHoldH)} ساعت`} sub={pack!.wtMm ? `ضخامت ${fa(pack!.wtMm, 2)} mm` : ''} />}
           </>}
         </div>
         {sec && notBackfilled > 0.01 && t.stage !== 'accepted' && <p className="ps-hint is-warn"><AlertTriangle size={14} /> {fa(notBackfilled, 2)} کیلومتر از این قطعه طبق دوقلوی دیجیتال هنوز خاک‌ریزی نشده است؛ آزمون هیدرو پس از خاک‌ریزی کامل انجام می‌شود.</p>}
@@ -133,7 +135,7 @@ export function TestPage({ kind, id, onBack }: { kind: TargetKind; id: string; o
         )}
         {readings.length >= 2 && <TimeChart readings={readings}
           required={sec && figIgs ? [{ label: 'فشار لازم مقاومت در کابین', psi: figIgs.pr.strength.head, color: '#f59e0b' }, { label: 'فشار لازم نشتی در کابین', psi: figIgs.pr.leak.head, color: '#f97316' }] : [{ label: 'فشار آزمون', psi: minTest * PSI_PER_BAR, color: '#f59e0b' }]}
-          verdicts={sec ? (['strength', 'leak'] as const).map((k) => ({ label: k === 'strength' ? 'آزمون مقاومت' : 'آزمون نشتی', result: st.forms.find((x) => x.targetId === id && x.kind === k)?.result ?? null })) : [{ label: 'آزمون ایستگاه', result: t.stage === 'accepted' ? 'pass' : t.failed ? 'fail' : 'pending' }]} />}
+          verdicts={sec ? (['strength', 'leak'] as const).map((k) => ({ label: k === 'strength' ? 'آزمون مقاومت' : 'آزمون نشتی', result: st.forms.find((x) => x.targetId === id && x.kind === k)?.result ?? null })) : [{ label: pack?.category === 'pretest' ? 'پیش‌تست قطعه' : 'آزمون ایستگاه', result: t.stage === 'accepted' ? 'pass' : t.failed ? 'fail' : 'pending' }]} />}
         {sec && figIgs && readings.some((r) => r.phase === 'strength' && r.volumeM3 != null) && <PvChart points={readings.filter((r) => r.phase === 'strength' && r.volumeM3 != null).map((r) => ({ p: r.pressureBar * PSI_PER_BAR, v: r.volumeM3! }))} volumeM3={figIgs.mix.volumeM3} igs={figIgs.igs} />}
         {readings.length > 0 ? (
           <div className="ps-table-wrap"><table className="ps-table"><thead><tr><th>زمان</th><th>مرحله</th><th>محل</th><th>فشار (psi / bar)</th><th>دما (°C)</th><th>توضیح</th><th>ثبت‌کننده</th></tr></thead>
@@ -178,7 +180,7 @@ function printCert(kind: TargetKind, t: HtSection | HtPack, readings: HtReading[
        <tr><th>ارتفاع کمینه / بیشینه</th><td>${sec.elevMin.toFixed(0)} m / ${sec.elevMax.toFixed(0)} m</td></tr>
        <tr><th>فشار آزمون نقطهٔ بالا / پایین</th><td>${sec.pHigh.toFixed(1)} / ${sec.pLow.toFixed(1)} bar (${sec.hoopLowPct.toFixed(1)}% SMYS)</td></tr>
        <tr><th>فشار روی سر آزمون</th><td>${sec.pHead.toFixed(1)} bar در کیلومتر ${sec.headKm.toFixed(3)}</td></tr>`
-    : `<tr><th>بستهٔ آزمون</th><td>${esc(pack!.code)} — ${esc(pack!.title)} (${esc(pack!.station)})</td></tr><tr><th>فشار طراحی / آزمون</th><td>${pack!.designPressureBar} / ${pack!.testPressureBar} bar</td></tr>`
+    : `<tr><th>${pack!.category === 'pretest' ? 'پیش‌تست قطعهٔ عبوری' : 'بستهٔ آزمون'}</th><td>${esc(pack!.code)} — ${esc(pack!.title)} (${esc(pack!.category === 'pretest' ? (CROSSING_FA[pack!.crossing] ?? '') + (pack!.km != null ? ' · km ' + pack!.km : '') : pack!.station)})</td></tr><tr><th>فشار طراحی / آزمون</th><td>${pack!.designPressureBar} / ${pack!.testPressureBar} bar</td></tr>`
   w.document.write(`<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>Hydrotest ${esc(sec?.code ?? pack!.code)}</title>
   <style>body{font-family:Vazirmatn,Tahoma,sans-serif;margin:32px;color:#0f172a}h1{font-size:19px;margin:0}h2{font-size:13px;color:#475569;margin:4px 0 16px}table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}td,th{border:1px solid #cbd5e1;padding:7px;text-align:right}th{background:#f1f5f9;width:34%}.box{border:2px solid #0f172a;padding:20px;border-radius:8px}</style></head><body><div class="box">
   <h1>گواهی آزمون هیدرواستاتیک</h1><h2>${esc(projectName)}</h2><table>${rows}

@@ -4,14 +4,17 @@ import { projectParties } from '../lib/projectParties'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { useExecutionModel } from '../lib/useExecutionModel'
-import { DAILY_FORMS, FORMS, FORM_GROUP_LABEL_FA, FORM_BY_KEY, type FormGroup } from '../lib/formCatalog'
+import { DAILY_FORMS, FORMS, FORM_GROUP_LABEL_FA, FORM_BY_KEY, inScope, type FormGroup, type FormScope } from '../lib/formCatalog'
+import { ShieldCheck } from 'lucide-react'
+import { useModuleStore } from '../../../store/useModuleStore'
+import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { Chip, DataTable, KpiCard, fmtD, type Col } from '../../finance/components/fn'
 import { ReportEditor } from '../components/ReportEditor'
 import { ReportStatusChip, Empty, fa } from '../components/common'
 import { REPORT_STATUS_LABEL_FA, type Report, type ReportStatus } from '../types'
 
 /** Daily work reports on the price-list rows, and the technical forms (welding, radiography, coating …). */
-export function DailyPage({ projectId, sub }: { projectId: string; sub: string }) {
+export function DailyPage({ projectId, sub, scope = 'execution' }: { projectId: string; sub: string; scope?: FormScope }) {
   const m = useExecutionModel(projectId)
   const ex = useExecutionStore()
   const ex0 = useExecutionStore.getState()
@@ -25,8 +28,8 @@ export function DailyPage({ projectId, sub }: { projectId: string; sub: string }
   const isWork = sub === 'work'
   const canRecord = ex.can(projectId, 'record')
   const enabled = m.settings.enabledForms
-  const forms = FORMS.filter((f) => !enabled.length || enabled.includes(f.key))
-  const rows = useMemo(() => m.reports.filter((r) => (isWork ? r.formKey === 'work' : r.formKey !== 'work' && (!formKey || r.formKey === formKey)) && (!status || r.status === status)).sort((a, b) => b.reportDate.localeCompare(a.reportDate) || b.reportNo.localeCompare(a.reportNo)), [m.reports, isWork, formKey, status])
+  const forms = FORMS.filter((f) => (!enabled.length || enabled.includes(f.key)) && inScope(f.key, scope))
+  const rows = useMemo(() => m.reports.filter((r) => (isWork ? r.formKey === 'work' : r.formKey !== 'work' && inScope(r.formKey, scope) && (!formKey || r.formKey === formKey)) && (!status || r.status === status)).sort((a, b) => b.reportDate.localeCompare(a.reportDate) || b.reportNo.localeCompare(a.reportNo)), [m.reports, isWork, formKey, status, scope])
   const orgName = (id: string | null) => orgs.find((o) => o.id === id)?.name ?? '—'
   const myOrg = ex.roles.find((x) => x.projectId === projectId && x.active && x.organizationId)?.organizationId ?? null
 
@@ -62,7 +65,14 @@ export function DailyPage({ projectId, sub }: { projectId: string; sub: string }
           <p className="im-helper" style={{ margin: 0 }}>برای هر روز و هر جبهه یک گزارش کارکرد بسازید؛ کارکرد روزانه و تجمعی از روی ردیف‌های فهرست‌بها خودکار حساب می‌شود و پس از ارسال، دستگاه نظارت هر ردیف را جداگانه تأیید یا رد می‌کند.</p>
           {canRecord && <button className="im-btn im-btn-primary im-btn-sm" style={{ marginInlineStart: 'auto' }} onClick={() => void create('work')}><Plus size={14} /> گزارش کارکرد جدید</button>}
         </div>
-      ) : canRecord && (
+      ) : <>
+      {scope === 'execution' && (
+        <div className="mt-filters no-print">
+          <p className="im-helper" style={{ margin: 0 }}><ShieldCheck size={14} style={{ verticalAlign: '-2px' }} aria-hidden /> فرم‌های جوشکاری، تعمیر جوش، درخواست و گزارش رادیوگرافی، پوشش و PQR از ماژول «کنترل کیفیت» صادر می‌شوند؛ آزمون صلاحیت و کارت جوشکار در «ارزیابی صلاحیت». کارکرد آن‌ها همچنان در پیشرفت و صورت‌وضعیت همین‌جا حساب می‌شود.</p>
+          <button className="im-btn im-btn-sm" style={{ marginInlineStart: 'auto' }} onClick={() => { useProjectContextStore.getState().setProject(projectId); useModuleStore.getState().enterModule('weldqc', undefined, 'forms') }}>رفتن به کنترل کیفیت</button>
+        </div>
+      )}
+      {canRecord && (
         <div style={{ display: 'grid', gap: 10 }}>
           {groups.map(({ g, items }) => (
             <div key={g}><div className="im-helper" style={{ margin: '0 0 6px', fontWeight: 700 }}>{FORM_GROUP_LABEL_FA[g]}</div>
@@ -70,8 +80,9 @@ export function DailyPage({ projectId, sub }: { projectId: string; sub: string }
           ))}
         </div>
       )}
+      </>}
       <div className="mt-filters no-print">
-        {!isWork && <select value={formKey} onChange={(e) => setFormKey(e.target.value)} aria-label="فرم"><option value="">همهٔ فرم‌ها</option>{DAILY_FORMS.concat(FORMS.filter((f) => f.kind === 'record')).map((f) => <option key={f.key} value={f.key}>{f.title}</option>)}</select>}
+        {!isWork && <select value={formKey} onChange={(e) => setFormKey(e.target.value)} aria-label="فرم"><option value="">همهٔ فرم‌ها</option>{DAILY_FORMS.concat(FORMS.filter((f) => f.kind === 'record')).filter((f) => inScope(f.key, scope)).map((f) => <option key={f.key} value={f.key}>{f.title}</option>)}</select>}
         <select value={status} onChange={(e) => setStatus(e.target.value as ReportStatus | '')} aria-label="وضعیت"><option value="">همهٔ وضعیت‌ها</option>{Object.entries(REPORT_STATUS_LABEL_FA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
       </div>
       {rows.length === 0 ? <Empty>گزارشی ثبت نشده است.</Empty> : <DataTable cols={cols} rows={rows} rowKey={(r) => r.id} onRow={(r) => setOpen(r.id)} />}

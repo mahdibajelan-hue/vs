@@ -62,6 +62,8 @@ function Body({ projects }: { projects: { id: string; officialName: string }[] }
   const pname = (id: string) => projects.find((p) => p.id === id)?.officialName ?? '—'
   const pick = (w: Welder) => { setSel(w.id); void st.setProject(w.projectId) }
   const all = st.welders
+  // another module (quality control) asked for this person: open their file
+  useEffect(() => { if (!st.focus) return; const w = all.find((x) => x.id === st.focus); if (!w) return; setKind(w.kind); setFp(''); pick(w); usePersonnelStore.setState({ focus: null }) }, [st.focus, all]) // eslint-disable-line react-hooks/exhaustive-deps
   const list = useMemo(() => all.filter((w) => w.kind === kind && (!fp || w.projectId === fp) && (!q || `${w.raw} ${w.fullName} ${w.nationalId}`.toLowerCase().includes(q.toLowerCase()))).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true })), [all, kind, q, fp])
   const testsOf = (id: string) => st.quals.filter((x) => x.welderId === id)
   const qualifying = (id: string) => testsOf(id).some((t) => t.wqtStatus === 'confirmed' && t.wqt.qualified === 'YES' && t.status === 'valid')

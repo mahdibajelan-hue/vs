@@ -190,7 +190,7 @@ export function RadarSidebar({ project, active, canSee, badgeFor, desktop, pinne
                           return (
                             <button
                               type="button" key={item.id}
-                              className={`pmenu-row ${on ? 'is-on' : ''}`} style={{ '--a': item.accent } as CSSProperties}
+                              className={`pmenu-row ${on ? 'is-on' : ''} ${item.parent ? 'is-child' : ''}`} style={{ '--a': item.accent } as CSSProperties}
                               aria-current={on ? 'page' : undefined}
                               aria-label={`${item.label}${n ? ` — ${fa(n)} مورد نیازمند اقدام` : ''}`}
                               onClick={() => pick(item)}

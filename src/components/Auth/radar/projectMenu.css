@@ -260,3 +260,10 @@
 
 @media (pointer: coarse) { .pmenu-row, .pmenu-search { min-height: 44px; } .pmenu-row-ico { height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .pmenu, .pmenu-scroll, .pmenu *, .pmenu-card *, .pmenu-tip { transition-duration: 0ms !important; } }
+
+/* sub-items of another entry (quality control, tests, stations under execution): indented on a tree line when the menu is open */
+.pmenu.is-open .pmenu-row.is-child { width: calc(100% - 18px); margin-inline-start: 18px; min-height: 34px; font-size: 12px; }
+.pmenu.is-open .pmenu-row.is-child .pmenu-row-ico { width: 34px; height: 34px; }
+.pmenu.is-open .pmenu-row.is-child .pmenu-row-ico > svg { width: 15px; height: 15px; }
+.pmenu.is-open .pmenu-row.is-child::before { content: ''; position: absolute; inset-inline-start: -10px; top: -2px; bottom: 50%; width: 8px; border-inline-start: 1px solid var(--pm-line); border-bottom: 1px solid var(--pm-line); border-end-start-radius: 6px; pointer-events: none; }
+.pmenu.is-rail .pmenu-row.is-child .pmenu-row-ico::before { inset: 7px; }

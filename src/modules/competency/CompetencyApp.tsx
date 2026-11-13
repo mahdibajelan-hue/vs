@@ -1,3 +1,4 @@
+import { useModuleStore } from '../../store/useModuleStore'
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { useCompetencyStore } from './store/useCompetencyStore'
@@ -75,7 +76,7 @@ export function CompetencyApp({ onExitToHub }: { onExitToHub: () => void }) {
   const personalityModuleAdmins = usePersonalityStore((s) => s.moduleAdmins)
   const fetchPersonalityModuleAdmins = usePersonalityStore((s) => s.fetchModuleAdmins)
 
-  const [view, setView] = useState<View>({ name: 'list' })
+  const [view, setView] = useState<View>(() => (useModuleStore.getState().takeEntryTab() === 'personnel' ? { name: 'personnel' } : { name: 'list' }))
 
   useEffect(() => {
     fetchAll()

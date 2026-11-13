@@ -1,5 +1,6 @@
+import { openPerformance } from '../../../weldqc/lib/handoff'
 import { useEffect, useMemo, useState } from 'react'
-import { BadgeCheck, Camera, Undo2 } from 'lucide-react'
+import { Activity, BadgeCheck, Camera, Undo2 } from 'lucide-react'
 import { useMasterDataStore, useTeam } from '../../../masterdata/store/useMasterDataStore'
 import { JalaliDateInput } from '../../../../components/common/JalaliDateInput'
 import { usePersonnelStore } from '../../store/usePersonnelStore'
@@ -105,6 +106,11 @@ export function WelderProfile({ w, tests }: { w: Welder; tests: WelderQual[] }) 
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+      <div className="im-card" style={{ padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', borderInlineStart: '3px solid #0891b2' }}>
+        <Activity size={17} style={{ color: '#0891b2', flex: 'none' }} aria-hidden />
+        <span className="sub" style={{ flex: 1, minWidth: 220 }}>صلاحیت و کارت شناسایی اینجا صادر می‌شود؛ ارزیابی عملکرد حین اجرا ({w.kind === 'coater' ? 'نتایج بازرسی پوشش سرجوش‌ها' : 'قبولی رادیوگرافی، تعمیرات و عیوب منتسب'}) در ماژول «کنترل کیفیت» از روی کار واقعی حساب می‌شود.</span>
+        <button className="im-btn im-btn-sm" onClick={() => openPerformance(w.projectId, w.key, w.kind === 'coater')}>ارزیابی عملکرد حین اجرا ←</button>
+      </div>
       <Step n={1} title={`مشخصات ${KIND_FA[w.kind]}`} state={<span className="sub">شمارهٔ نشانه / پلاک: <b dir="ltr">{w.raw}</b>{w.nationalId ? '' : ' — کد ملی را وارد کنید'}</span>}>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ display: 'grid', gap: 6, justifyItems: 'center' }}>

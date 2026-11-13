@@ -151,3 +151,11 @@ export const DAILY_FORMS = FORMS.filter((x) => x.kind === 'daily')
 export const COMMON_FIELDS = ['پروژه', 'قرارداد / پیمانکار', 'تاریخ شمسی', 'شماره گزارش (خودکار)', 'جبهه کاری', 'ایستگاه / محدوده', 'شیفت', 'وضعیت آب‌وهوا', 'امضای نماینده پیمانکار و دستگاه نظارت']
 
 export const STOPPAGE_CATEGORY_FA: Record<string, string> = { material: 'کمبود متریال', drawing: 'نقشه / مدارک', land: 'زمین / حق عبور', permit: 'مجوز', weather: 'شرایط جوی', equipment: 'ماشین‌آلات', manpower: 'نیروی انسانی', hse: 'HSE', other: 'سایر' }
+
+/** Forms issued from the quality-control module (welding, radiography, coating, PQR); the execution module keeps the rest. */
+export const QC_FORM_GROUPS: FormGroup[] = ['weld', 'rt', 'coating']
+export const isQcForm = (key: string) => { const f = FORM_BY_KEY[key]; return !!f && (QC_FORM_GROUPS.includes(f.group) || key === 'pqr') }
+/** WQT and the welder's card are issued by the competency module's personnel register */
+export const isCompetencyForm = (key: string) => key === 'wqt' || key === 'welder_card'
+export type FormScope = 'execution' | 'qc'
+export const inScope = (key: string, scope: FormScope) => (scope === 'qc' ? isQcForm(key) : !isQcForm(key) && !isCompetencyForm(key))
