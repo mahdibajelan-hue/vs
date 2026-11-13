@@ -11,6 +11,7 @@ export const MODULE_CATALOG: { key: ModuleKey | 'radar'; fa: string; en: string;
   { key: 'landacq', fa: 'تحصیل اراضی', en: 'Land Acquisition', words: 'زمین اراضی پارسل مالک عبور' },
   { key: 'statements', fa: 'تولید صورت‌وضعیت (E·P·C)', en: 'Payment statements', words: 'صورت وضعیت صورتوضعیت مهندسی کالا اجرا ماهانه کارکرد پرداخت مرحله ای توالی پرداخت کسور پیش پرداخت حسن انجام کار سقف پیمان' },
   { key: 'stationpiping', fa: 'ایستگاه‌ها (پایپینگ و جوشکاری)', en: 'Station piping & welding', words: 'ایستگاه شیر بین راهی لانچر رسیور توپک PCS CGS پایپینگ جوش جوشکاری ایزومتریک نقشه جوش weld map NDT رادیوگرافی جوشکار کارکرد روزانه پیشرفت سیویل مکانیکال برق ابزار دقیق' },
+  { key: 'weldqc', fa: 'کنترل کیفیت جوش و رادیوگرافی', en: 'Weld QC / Radiography', words: 'جوش رادیوگرافی فیلم تفسیر عیب دیفکت تعمیر ریپیر جوشکار NDT RT RS بازرس سرجوش کیفیت' },
   { key: 'testing', fa: 'آزمایش‌ها (هیدروتست و پوشش)', en: 'Hydrotest / Coating test', words: 'هیدروتست هیدرواستاتیک تست فشار قطعه بندی پروفیل پوشش هالیدی DCVG CIPS ایستگاه بسته آزمون' },
   { key: 'pssr', fa: 'آمادگی راه‌اندازی (PSSR)', en: 'PSSR / RFSU', words: 'PSSR RFSU ایمنی راه اندازی پیش راه اندازی پانچ لیست تزریق گاز گواهی آمادگی' },
   { key: 'stakeholders', fa: 'مدیریت ذینفعان', en: 'Stakeholder Management', words: 'ذینفع ذی نفع ذینفعان stakeholder قدرت علاقه تعامل جلسه نامه نگرانی انتظارات جامعه محلی مالکان فرمانداری مجوز ارتباطات' },

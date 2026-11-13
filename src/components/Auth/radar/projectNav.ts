@@ -1,5 +1,5 @@
 import {
-  IcBarrelCoin, IcColumn, IcControlPanel, IcCrane, IcFlare, IcGateValve, IcHardHats, IcHydroTest, IcManifold, IcPig, IcPipeStack,
+  IcBarrelCoin, IcColumn, IcControlPanel, IcCrane, IcFlare, IcGateValve, IcHardHats, IcHydroTest, IcManifold, IcWeldXray, IcPig, IcPipeStack,
   IcPulseGauge, IcRadarScope, IcReroute, IcRowMarker, IcSafetyValve, IcScheduleBars, IcSpectacleBlind, IcStatement, IcWellhead, type NavIcon,
 } from './industryIcons'
 import { PROJECT_SCOPED_MODULES, type ModuleKey } from '../../../store/useModuleStore'
@@ -33,6 +33,7 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
     { id: 'engineering', module: 'engineering', label: 'پیشرفت مهندسی', icon: IcColumn, accent: '#818cf8' },
     { id: 'material', module: 'material', label: 'کنترل و تأمین کالا', icon: IcPipeStack, accent: '#f59e0b' },
     { id: 'execution', module: 'execution', label: 'مدیریت اجرا', icon: IcCrane, accent: '#fb923c' },
+    { id: 'weldqc', module: 'weldqc', label: 'کنترل کیفیت جوش و رادیوگرافی', icon: IcWeldXray, accent: '#0891b2' },
     { id: 'testing', module: 'testing', label: 'آزمایش‌ها (هیدروتست و پوشش)', icon: IcHydroTest, accent: '#0ea5e9' },
     { id: 'stationpiping', module: 'stationpiping', label: 'ایستگاه‌ها (پایپینگ و جوشکاری)', icon: IcManifold, accent: '#6366f1' },
     { id: 'pssr', module: 'pssr', label: 'آمادگی راه‌اندازی (PSSR)', icon: IcSafetyValve, accent: '#f97316' },

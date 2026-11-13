@@ -77,6 +77,12 @@ export const IcManifold = make('IcManifold', <>
   <path d="M2.5 20.5h19" opacity=".6" />
 </>)
 
+/** کنترل کیفیت جوش — a girth weld on the pipe, with the radiographic film beneath it */
+export const IcWeldXray = make('IcWeldXray', <>
+  <path d="M2 4.5h20M2 11.5h20" /><path d="m11 4.5 1.5 1.75L11 8l1.5 1.75L11 11.5" />
+  <rect x="4" y="15" width="16" height="5.5" rx="1" /><path d="M11.8 15v5.5" opacity=".55" /><circle cx="15.5" cy="17.75" r=".9" />
+</>)
+
 /** آمادگی راه‌اندازی (PSSR) — a safety shield around a valve */
 export const IcSafetyValve = make('IcSafetyValve', <>
   <path d="M12 3 19 6v5c0 4.6-3 8.2-7 10-4-1.8-7-5.4-7-10V6z" /><path d="m8.8 11.6 3.2 1.6-3.2 1.6zM15.2 11.6 12 13.2l3.2 1.6z" />

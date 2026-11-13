@@ -32,6 +32,7 @@ const moduleLoaders = {
   StageGateApp: () => import('./modules/stagegate/StageGateApp').then((m) => ({ default: m.StageGateApp })),
   PssrApp: () => import('./modules/pssr/PssrApp').then((m) => ({ default: m.PssrApp })),
   TestingApp: () => import('./modules/testing/TestingApp').then((m) => ({ default: m.TestingApp })),
+  WeldQcApp: () => import('./modules/weldqc/WeldQcApp').then((m) => ({ default: m.WeldQcApp })),
   StationPipingApp: () => import('./modules/stationpiping/StationPipingApp').then((m) => ({ default: m.StationPipingApp })),
   StatementsApp: () => import('./modules/statements/StatementsApp').then((m) => ({ default: m.StatementsApp })),
   ProjectDashboardApp: () => import('./modules/projectMetrics/ProjectDashboardApp').then((m) => ({ default: m.ProjectDashboardApp })),
@@ -76,6 +77,7 @@ const StakeholdersApp = lazy(moduleLoaders.StakeholdersApp)
 const PssrApp = lazy(moduleLoaders.PssrApp)
 const TestingApp = lazy(moduleLoaders.TestingApp)
 const StationPipingApp = lazy(moduleLoaders.StationPipingApp)
+const WeldQcApp = lazy(moduleLoaders.WeldQcApp)
 const StatementsApp = lazy(moduleLoaders.StatementsApp)
 const SupervisionApp = lazy(moduleLoaders.SupervisionApp)
 const AdminApp = lazy(moduleLoaders.AdminApp)
@@ -244,6 +246,8 @@ export function RootApp() {
     <StatementsApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'testing' ? (
     <TestingApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+  ) : activeModule === 'weldqc' ? (
+    <WeldQcApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'stationpiping' ? (
     <StationPipingApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'pssr' ? (
