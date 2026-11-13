@@ -32,6 +32,7 @@
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",
     "three": "^0.185.1",
+    "utif": "3.1.0",
     "vite-plugin-cesium": "^1.2.23",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.14"

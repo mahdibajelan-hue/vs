@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { BoxSelect, Check, Contrast, Hand, Loader2, Maximize, Ruler, Save, ScanSearch, Sparkles, SunMedium, Trash2, X, ZoomIn, ZoomOut, Crosshair } from 'lucide-react'
 import { useWqStore } from '../store/useWqStore'
 import * as repo from '../repo'
-import { clahe, detectCandidates, toGray, type Candidate } from '../lib/detect'
-import { DEFECT_CODE, DEFECT_COLOR, DEFECT_FA } from '../lib/rules'
-import { DefectForm, newDraft, type DefectDraft } from './DefectForm'
+import { annotate, beadBand, clahe, detectCandidates, toGray, type Annotated } from '../lib/detect'
+import { DEFECT_COLOR } from '../lib/rules'
+import { CODE_FA, type Code } from '../lib/api1104'
+import { codeOf, useQc } from '../lib/useQc'
+import { DefectForm, defectRow, newDraft, type DefectDraft } from './DefectForm'
 import { fa } from '../lib/useQc'
 
 type Tool = 'pan' | 'measure' | 'calib' | 'defect'
@@ -33,17 +35,26 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
   const [drag, setDrag] = useState<Geo | null>(null)
   const [pending, setPending] = useState<{ tool: Tool; g: Geo } | null>(null)
   const [calMm, setCalMm] = useState('')
-  const [cands, setCands] = useState<Candidate[] | null>(null), [aiBusy, setAiBusy] = useState(false)
+  const [cands, setCands] = useState<(Annotated & { idx: number })[] | null>(null), [aiBusy, setAiBusy] = useState(false)
   const [draft, setDraft] = useState<DefectDraft | null>(null)
   const pan = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null)
   const ppm = film?.pxPerMm ?? null
+  const q = useQc()
+  const row = q.byId.get(weld.id)
+  /** the clock position of a point of the film when its segment is written as hours («12-3», «3-6») */
+  const clockAt = (x: number): string => {
+    const m = /^\s*(\d{1,2})\s*[-–تا]+\s*(\d{1,2})\s*$/.exec((film?.segment ?? '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))))
+    if (!m || !img) return ''
+    const a = Number(m[1]) % 12, b = Number(m[2]) % 12, span = ((b - a + 12) % 12) || 12
+    return String(Math.round(((a + (x / img.width) * span) % 12) * 10) / 10)
+  }
   const canWrite = !readOnly && st.caps.submit
 
   // load the film through a short-lived signed link
   useEffect(() => {
     let off = false
     void (async () => {
-      const url = await repo.signedUrl(film.path)
+      const url = await repo.signedUrl(film.displayPath ?? film.path)
       if (!url) { setErr('دسترسی به فایل فیلم ممکن نشد.'); return }
       const im = new Image(); im.crossOrigin = 'anonymous'
       im.onload = () => { if (!off) setImg(im) }; im.onerror = () => { if (!off) setErr('تصویر قابل خواندن نیست (فرمت پشتیبانی‌نشده یا فایل خراب). فرمت‌های JPG، PNG و WebP پشتیبانی می‌شوند.') }
@@ -74,9 +85,9 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
     const lw = 2 / view.s, fs = 13 / view.s
     x.font = `700 ${fs}px Vazirmatn, sans-serif`; x.textBaseline = 'bottom'
     const label = (t: string, px: number, py: number, color: string) => { const w = x.measureText(t).width + 8 / view.s; x.fillStyle = color; x.fillRect(px, py - fs - 4 / view.s, w, fs + 4 / view.s); x.fillStyle = '#fff'; x.fillText(t, px + 4 / view.s, py - 1 / view.s) }
-    for (const d of defects) if (d.bbox) { const c2 = DEFECT_COLOR[d.type]; x.strokeStyle = c2; x.lineWidth = lw; x.setLineDash([]); x.strokeRect(d.bbox.x, d.bbox.y, d.bbox.w, d.bbox.h); label(`${DEFECT_CODE[d.type]} ${fa(d.lengthMm, 1)}mm`, d.bbox.x, d.bbox.y, c2) }
+    for (const d of defects) if (d.bbox) { const c2 = DEFECT_COLOR[d.type]; x.strokeStyle = c2; x.lineWidth = lw; x.setLineDash([]); x.strokeRect(d.bbox.x, d.bbox.y, d.bbox.w, d.bbox.h); label(`${codeOf(d) || '?'} ${fa(d.lengthMm, 1)}mm`, d.bbox.x, d.bbox.y, c2) }
     for (const m of marks) { const g = m.geom, c2 = m.kind === 'calib' ? '#22c55e' : '#38bdf8'; x.strokeStyle = c2; x.lineWidth = lw; x.setLineDash(m.kind === 'calib' ? [6 / view.s, 4 / view.s] : []); x.beginPath(); x.moveTo(g.x1, g.y1); x.lineTo(g.x2, g.y2); x.stroke(); label(m.label, Math.min(g.x1, g.x2), Math.min(g.y1, g.y2), c2) }
-    if (cands) cands.forEach((k, i) => { x.strokeStyle = '#facc15'; x.lineWidth = lw; x.setLineDash([5 / view.s, 3 / view.s]); x.strokeRect(k.x, k.y, k.w, k.h); label(String(i + 1).replace(/\d/g, (n) => '۰۱۲۳۴۵۶۷۸۹'[+n]), k.x, k.y, '#a16207') })
+    if (cands) cands.forEach((k, i) => { x.strokeStyle = '#facc15'; x.lineWidth = lw; x.setLineDash([5 / view.s, 3 / view.s]); x.strokeRect(k.x, k.y, k.w, k.h); label(`${String(i + 1)}${k.code ? ' ' + k.code : ''}`.replace(/\d/g, (n) => '۰۱۲۳۴۵۶۷۸۹'[+n]), k.x, k.y, '#a16207') })
     if (draft?.bbox && !drag) { const b = draft.bbox; x.setLineDash([]); x.lineWidth = lw; x.strokeStyle = '#f43f5e'; x.strokeRect(b.x, b.y, b.w, b.h); label('عیب جدید', b.x, b.y, '#be123c') }
     const g = drag ?? pending?.g, t = drag ? tool : pending?.tool
     if (g && t) {
@@ -104,7 +115,7 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
     if (dist(g) < 3) return
     if (tool === 'defect') {
       const b = box(g)
-      setDraft(newDraft({ bbox: b, lengthMm: ppm ? (Math.max(b.w, b.h) / ppm).toFixed(1) : '', positionMm: ppm ? (b.x / ppm).toFixed(0) : '' }))
+      setDraft(newDraft({ bbox: b, lengthMm: ppm ? (Math.max(b.w, b.h) / ppm).toFixed(1) : '', clock: clockAt(b.x + b.w / 2) }))
     } else setPending({ tool, g })
   }
   const zoom = (k: number, cx = size.w / 2, cy = size.h / 2) => setView((v) => { const s = Math.min(40, Math.max(0.05, v.s * k)); return { s, tx: cx - ((cx - v.tx) * s) / v.s, ty: cy - ((cy - v.ty) * s) / v.s } })
@@ -136,17 +147,28 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
       setEnhBusy(false)
     }, 30)
   }
+  /** the assistant: find the bead, look for density anomalies along it, guess a code with its reason — and keep the run */
   const runAi = () => {
     setAiBusy(true)
     setTimeout(() => {
       try {
         const p = pixels(1200)
-        const found = detectCandidates(toGray(p.data, p.w, p.h)).map((c) => ({ ...c, x: c.x / p.k, y: c.y / p.k, w: c.w / p.k, h: c.h / p.k, lengthPx: c.lengthPx / p.k }))
+        const g = toGray(p.data, p.w, p.h), band = beadBand(g)
+        const found = annotate(detectCandidates(g, { axis: band?.axis ?? null }), band).map((c, idx) => ({ ...c, idx, x: c.x / p.k, y: c.y / p.k, w: c.w / p.k, h: c.h / p.k, lengthPx: c.lengthPx / p.k }))
         setCands(found)
+        if (canWrite) void repo.updateFilm(film.id, { ai: { at: new Date().toISOString(), band: !!band, items: found.map((c) => ({ code: c.code, why: c.why, confidence: c.confidence, clock: clockAt(c.x + c.w / 2) ? Number(clockAt(c.x + c.w / 2)) : null, bbox: { x: c.x, y: c.y, w: c.w, h: c.h }, action: '' })) } })
       } catch { setCands([]) }
       setAiBusy(false)
     }, 30)
   }
+  /** record what the interpreter did with candidate `idx` of the last run */
+  const markAi = (idx: number, action: 'accepted' | 'modified' | 'dismissed') => {
+    const cur = useWqStore.getState().films.find((f) => f.id === film.id)?.ai
+    if (!cur || !cur.items[idx]) return
+    const items = cur.items.map((it, k) => (k === idx ? { ...it, action } : it))
+    void st.run(action === 'dismissed' ? 'پیشنهاد دستیار رد شد' : 'پیشنهاد دستیار ثبت شد', () => repo.updateFilm(film.id, { ai: { ...cur, items } }))
+  }
+  const [aiIdx, setAiIdx] = useState<number | null>(null)
 
   const saveCalib = async () => {
     const mm = Number(calMm.replace('٫', '.')); if (!pending || !(mm > 0)) return
@@ -204,20 +226,20 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
               {canWrite && <button type="button" className="ps-btn" onClick={() => void saveMeasure()}><Save size={14} aria-hidden /> ذخیره روی فیلم</button>}</div>
           )}
           {draft && <div className="wq-panel"><b>عیب جدید روی این فیلم</b>
-            <DefectForm weld={weld} init={draft} onCancel={() => setDraft(null)} onSave={(d) => st.run(`عیب «${DEFECT_FA[d.type]}» ثبت شد`, () => repo.addDefect({ project_id: st.projectId, weld_id: weld.id, film_id: film.id, round: film.round, defect_type: d.type, length_mm: d.lengthMm, depth_mm: d.depthMm, position_mm: d.positionMm, pass: d.pass, welders: d.welders, bbox: d.bbox, detected_by: d.detectedBy, confidence: d.confidence, note: d.note, created_name: st.me() }))} /></div>}
+            <DefectForm weld={weld} crew={row?.crew ?? []} odMm={row?.odMm ?? null} init={draft} onCancel={() => { setDraft(null); setAiIdx(null) }} onSave={async (d) => { const ok = await st.run(`«${CODE_FA[d.code]}» ثبت شد`, () => repo.addDefect(defectRow(d, { project_id: st.projectId, weld_id: weld.id, film_id: film.id, round: film.round, created_name: st.me() }))); if (ok && aiIdx != null) { markAi(aiIdx, d.aiAction === 'modified' ? 'modified' : 'accepted'); setCands((c) => c?.filter((x) => x.idx !== aiIdx) ?? null); setAiIdx(null) } return ok }} /></div>}
           {cands && !draft && (
             <div className="wq-panel is-ai"><b><ScanSearch size={15} aria-hidden /> {cands.length ? `${fa(cands.length)} ناحیهٔ مشکوک` : 'ناحیهٔ مشکوکی پیدا نشد'}</b>
-              <p className="ps-meta">پردازش تصویر کلاسیک (نه تشخیص قطعی): نواحی با کنتراست غیرعادی نسبت به بافت اطراف. هر مورد را بررسی و نوعش را اصلاح کنید.</p>
+              <p className="ps-meta">پردازش تصویر کلاسیک در همین مرورگر (نه تشخیص قطعی): نوار جوش پیدا می‌شود، نواحی با تیرگی غیرعادی نسبت به امتداد جوش جدا می‌شوند و از شکل، تیرگی و جایگاه نسبت به خط مرکز، کد احتمالی با دلیل پیشنهاد می‌شود. هر مورد را بررسی و اصلاح کنید؛ تصمیم‌ها در «تحلیل هوشمند» شناسنامه بایگانی می‌شوند.</p>
               <ol className="wq-cands">{cands.map((c, i) => (
-                <li key={`${c.x}-${c.y}`}><span>{fa(i + 1)}. {DEFECT_FA[c.type]} · {ppm ? `${fa(c.lengthPx / ppm, 1)} mm` : `${fa(c.lengthPx)} px`} · {fa(c.confidence * 100)}٪</span>
-                  <button type="button" className="ps-btn is-ok" onClick={() => setDraft(newDraft({ type: c.type, bbox: { x: c.x, y: c.y, w: c.w, h: c.h }, lengthMm: ppm ? (c.lengthPx / ppm).toFixed(1) : '', positionMm: ppm ? (c.x / ppm).toFixed(0) : '', detectedBy: 'ai', confidence: c.confidence }))}>ثبت</button>
-                  <button type="button" className="ps-btn is-ghost" onClick={() => setCands(cands.filter((_, j) => j !== i))} aria-label="رد این ناحیه"><X size={14} aria-hidden /></button></li>
+                <li key={`${c.x}-${c.y}`} className={c.inBead ? '' : 'is-out'}><span><b>{fa(i + 1)}. {c.code ? CODE_FA[c.code as Code] : 'بدون کد'}</b> · {ppm ? `${fa(c.lengthPx / ppm, 1)} mm` : `${fa(c.lengthPx)} px`} · {fa(c.confidence * 100)}٪<small>{c.why}</small></span>
+                  {c.code && <button type="button" className="ps-btn is-ok" onClick={() => { setAiIdx(c.idx); setDraft(newDraft({ code: c.code as Code, aiCode: c.code, bbox: { x: c.x, y: c.y, w: c.w, h: c.h }, lengthMm: ppm ? (c.lengthPx / ppm).toFixed(1) : '', clock: clockAt(c.x + c.w / 2), detectedBy: 'ai', confidence: c.confidence })) }}>بررسی و ثبت</button>}
+                  <button type="button" className="ps-btn is-ghost" onClick={() => { markAi(c.idx, 'dismissed'); setCands(cands.filter((x) => x.idx !== c.idx)) }} aria-label="رد این ناحیه"><X size={14} aria-hidden /></button></li>
               ))}</ol>
               <button type="button" className="ps-btn is-ghost" onClick={() => setCands(null)}>پاک کردن نامزدها</button>
             </div>
           )}
           <div className="wq-panel"><b>عیوب این فیلم</b>
-            {defects.length ? <ul className="wq-mini">{defects.map((d) => <li key={d.id}><i style={{ background: DEFECT_COLOR[d.type] }} />{DEFECT_FA[d.type]} · {fa(d.lengthMm, 1)} mm</li>)}</ul> : <p className="ps-meta">هنوز عیبی روی این فیلم ثبت نشده.</p>}
+            {defects.length ? <ul className="wq-mini">{defects.map((d) => <li key={d.id}><i style={{ background: DEFECT_COLOR[d.type] }} />{codeOf(d) ? CODE_FA[codeOf(d) as Code] : d.type} · {fa(d.lengthMm, 1)} mm{d.clock != null ? ` · ساعت ${fa(d.clock, 1)}` : ''}</li>)}</ul> : <p className="ps-meta">هنوز عیبی روی این فیلم ثبت نشده.</p>}
           </div>
           {marks.length > 0 && <div className="wq-panel"><b>نشانه‌ها</b><ul className="wq-mini">{marks.map((m) => <li key={m.id}><i style={{ background: m.kind === 'calib' ? '#22c55e' : '#38bdf8' }} />{m.label}{canWrite && <button type="button" className="ps-x" aria-label="حذف نشانه" onClick={() => void st.run('نشانه برداشته شد', () => repo.removeMark(m.id))}><Trash2 size={13} aria-hidden /></button>}</li>)}</ul></div>}
           <p className="ps-meta wq-viewer-help">چرخ ماوس: بزرگ‌نمایی · ابزار «جابه‌جایی»: کشیدن تصویر · Esc: بستن</p>

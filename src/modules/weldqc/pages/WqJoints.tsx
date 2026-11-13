@@ -3,6 +3,7 @@ import { ArrowLeft, Search } from 'lucide-react'
 import { fa, faDate, useQc, weldLabel } from '../lib/useQc'
 import { QC_STATE_COLOR, QC_STATE_FA, type QcState } from '../lib/analytics'
 import { PASSES } from '../lib/analytics'
+import { GRADE_COLOR } from '../lib/health'
 
 const ORDER: QcState[] = ['quality', 'interpret', 'to_sign', 'repair_due', 'reshoot', 'no_film', 'accepted', 'cut_out']
 
@@ -33,15 +34,15 @@ export function WqJoints({ onOpen, filter, setFilter }: { onOpen: (id: string) =
       {!rows.length ? <p className="ps-hint">سرجوشی با این شرایط نیست.</p> : (
         <ul className="wq-jlist">
           {rows.slice(0, 400).map((r, k) => {
-            const stamps = PASSES.map((p) => r.weld.stampsBy[p].join('، ')).filter(Boolean)
             return (
               <li key={r.weld.id} style={{ '--i': Math.min(k, 12), '--c': QC_STATE_COLOR[r.state] } as CSSProperties}>
                 <button type="button" onClick={() => onOpen(r.weld.id)} aria-label={`پروندهٔ سرجوش ${weldLabel(r.weld)}`}>
                   <span className="wq-jl-id"><b>{weldLabel(r.weld)}</b><small>{r.weld.pipe ? `لوله ${r.weld.pipe}` : 'لوله —'}{r.weld.central.size ? ` · ${r.weld.central.size}″` : ''}{r.thk ? ` · t=${fa(r.thk, 2)}mm` : ''}</small></span>
-                  <span className="wq-jl-w"><small>جوشکاران</small>{stamps.length ? [...new Set(PASSES.flatMap((p) => r.weld.stampsBy[p]))].map((s) => <b key={s} className="ps-code" title={q.nameOf(s)}>{s}</b>) : <em>ثبت نشده</em>}</span>
+                  <span className="wq-jl-w"><small>جوشکاران</small>{r.welders.length ? r.welders.map((s) => <b key={s} className="ps-code" title={q.nameOf(s)}>{s}</b>) : <em>ثبت نشده</em>}</span>
                   <span className="wq-jl-m"><small>جوشکاری</small>{faDate(r.weld.weldDate || null)}</span>
                   <span className="wq-jl-m"><small>فیلم / عیب</small>{fa(r.films)} / {fa(r.defects)}</span>
                   <span className="wq-jl-m"><small>راند</small>{r.round === 0 ? 'RT' : `RS${fa(r.round)}`}</span>
+                  <span className="wq-jl-h" style={{ '--hc': GRADE_COLOR[r.health.grade] } as CSSProperties} title="شاخص سلامت سرجوش"><b>{r.health.score == null ? '—' : fa(r.health.score)}</b><small>سلامت</small></span>
                   <span className="wq-state">{QC_STATE_FA[r.state]}</span>
                   <ArrowLeft size={15} aria-hidden className="wq-jl-go" />
                 </button>

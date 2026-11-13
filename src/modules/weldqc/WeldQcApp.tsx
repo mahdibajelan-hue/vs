@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { BookOpenCheck, CheckCircle2, Flame, LayoutDashboard, Loader2, ScanSearch, SlidersHorizontal, Wrench, XCircle } from 'lucide-react'
+import { BookOpenCheck, CheckCircle2, Flame, LayoutDashboard, Loader2, PaintRoller, ScanSearch, Sheet, SlidersHorizontal, Wrench, XCircle } from 'lucide-react'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { ModuleHeaderActions } from '../../components/common/ModuleHeaderActions'
@@ -16,14 +16,18 @@ const JointFile = lazy(() => import('./pages/JointFile').then((m) => ({ default:
 const WqWelders = lazy(() => import('./pages/WqWelders').then((m) => ({ default: m.WqWelders })))
 const WqRepairs = lazy(() => import('./pages/WqRepairs').then((m) => ({ default: m.WqRepairs })))
 const WqCriteria = lazy(() => import('./pages/WqCriteria').then((m) => ({ default: m.WqCriteria })))
+const WqLog = lazy(() => import('./pages/WqLog').then((m) => ({ default: m.WqLog })))
+const WqCoating = lazy(() => import('./pages/WqCoating').then((m) => ({ default: m.WqCoating })))
 
-export type WqTab = 'dash' | 'joints' | 'welders' | 'repairs' | 'criteria' | 'guide'
+export type WqTab = 'dash' | 'joints' | 'log' | 'welders' | 'coating' | 'repairs' | 'criteria' | 'guide'
 const TABS: { k: WqTab; label: string; icon: typeof Flame }[] = [
   { k: 'dash', label: 'داشبورد', icon: LayoutDashboard },
-  { k: 'joints', label: 'سرجوش‌ها و تفسیر فیلم', icon: ScanSearch },
+  { k: 'joints', label: 'شناسنامهٔ سرجوش‌ها', icon: ScanSearch },
+  { k: 'log', label: 'دفتر جوش', icon: Sheet },
   { k: 'welders', label: 'جوشکاران', icon: Flame },
+  { k: 'coating', label: 'پوشش', icon: PaintRoller },
   { k: 'repairs', label: 'تحلیل تعمیرات', icon: Wrench },
-  { k: 'criteria', label: 'معیارهای پذیرش', icon: SlidersHorizontal },
+  { k: 'criteria', label: 'معیارهای پذیرش API 1104', icon: SlidersHorizontal },
   { k: 'guide', label: 'راهنما', icon: BookOpenCheck },
 ]
 
@@ -71,6 +75,8 @@ export function WeldQcApp({ onExitToHub }: { onExitToHub: () => void; onBackToRa
                 {weld ? <JointFile weld={weld} onBack={() => setOpen(null)} />
                   : tab === 'dash' ? <WqDashboard onOpen={setOpen} onGo={go} />
                   : tab === 'joints' ? <WqJoints onOpen={setOpen} filter={filter} setFilter={setFilter} />
+                  : tab === 'log' ? <WqLog onOpen={setOpen} />
+                  : tab === 'coating' ? <WqCoating onOpen={setOpen} />
                   : tab === 'welders' ? <WqWelders onOpen={setOpen} />
                   : tab === 'repairs' ? <WqRepairs onOpen={setOpen} />
                   : tab === 'criteria' ? <WqCriteria />

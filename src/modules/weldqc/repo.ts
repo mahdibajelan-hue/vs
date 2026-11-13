@@ -1,7 +1,10 @@
 import { supabase } from '../../lib/supabaseClient'
-import { buildWeldFiles, type WeldFile } from '../execution/lib/weldFile'
+import { buildWeldFiles, coatTestVerdict, type WeldFile } from '../execution/lib/weldFile'
 import { splitStamps } from '../execution/lib/registers'
 import type { DefectType, Pass, Verdict } from './lib/rules'
+import { sidesFromRows, type CrewRow, type PassSides, type Quadrant } from './lib/crew'
+import type { Code } from './lib/api1104'
+import type { Metrics } from './lib/filmio'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? '' : String(v))
@@ -11,12 +14,18 @@ export const BUCKET = 'wq-films'
 /** the report forms a weld's QC file needs (welders of each pass, the execution RT result, coating) */
 const FORMS = ['fitup', 'welding', 'tie_in', 'rt_request', 'rt_request_rp', 'rt_report', 'weld_repair', 'fj_coating', 'bond_test']
 
-export interface Welder { id: string; key: string; raw: string; name: string; status: string }
-export interface QcWeld extends WeldFile { stampsBy: Record<Pass, string[]>; weldDate: string }
+export interface Welder { id: string; key: string; raw: string; name: string; status: string; kind: string; hasPhoto: boolean; cardNo: string; cardStatus: string; nationalId: string }
+export interface Qual { id: string; welderId: string; wqtNo: string; process: string; position: string; materialGroup: string; thkMin: number | null; thkMax: number | null; diaMin: number | null; diaMax: number | null; issueDate: string | null; expiryDate: string | null; status: string }
+/** the coating facts of a weld from the daily reports (application form and bond / holiday test) */
+export interface CoatFacts { fj?: { date: string; reportNo: string; result: string; thkMin: number | null; sleeve: string; approved: boolean }; bond?: { date: string; reportNo: string; verdict: 'ok' | 'rej' | ''; adhesionFail: boolean; holidays: number | null; holVolt: string; approved: boolean } }
+export interface Coating { id: string; weldId: string; kind: 'application' | 'inspection' | 'repair'; random: boolean; applicatorKey: string; system: string; at: string; holidayKv: number | null; holidayCount: number | null; dftMinUm: number | null; adhesion: number | null; visual: '' | 'pass' | 'fail'; result: '' | 'pass' | 'repair' | 'fail'; defects: string; files: { path: string; name: string; mime: string }[]; note: string; createdName: string; removed: boolean }
+export interface QcWeld extends WeldFile { stampsBy: Record<Pass, string[]>; weldDate: string; sides: PassSides; lengthM: number | null; tieKm: number | null; coat: CoatFacts; vtReport: string }
 export interface Joint { weldId: string; round: number; closed: boolean; finalStatus: Verdict | null; closedAt: string | null; thkMm: number | null; odMm: number | null; service: string; note: string }
-export interface Film { id: string; weldId: string; round: number; examType: 'RT' | 'RS'; attempt: number; segment: string; path: string; fileName: string; mime: string; width: number | null; height: number | null; pxPerMm: number | null; iqi: string; density: string; quality: 'pending' | 'accepted' | 'retake' | 'reshoot'; qualityNote: string; qualityName: string; qualityAt: string | null; uploadedName: string; createdAt: string }
+export interface Film { id: string; weldId: string; round: number; examType: 'RT' | 'RS'; attempt: number; segment: string; path: string; fileName: string; mime: string; width: number | null; height: number | null; pxPerMm: number | null; iqi: string; density: string; quality: 'pending' | 'accepted' | 'retake' | 'reshoot'; qualityNote: string; qualityName: string; qualityAt: string | null; uploadedName: string; createdAt: string; displayPath: string | null; origMime: string; metrics: Partial<Metrics>; ai: AiRun | null }
+/** the last run of the candidate-region assistant on a film, and what the interpreter did with each candidate */
+export interface AiRun { at: string; band: boolean; items: { code: string | null; why: string; confidence: number; clock: number | null; bbox: { x: number; y: number; w: number; h: number }; action: '' | 'accepted' | 'modified' | 'dismissed' }[] }
 export interface Mark { id: string; filmId: string; kind: 'line' | 'box' | 'point' | 'calib'; geom: { x1: number; y1: number; x2: number; y2: number }; label: string }
-export interface Defect { id: string; weldId: string; filmId: string | null; round: number; type: DefectType; lengthMm: number; depthMm: number; positionMm: number; pass: Pass | ''; welders: string[]; bbox: { x: number; y: number; w: number; h: number } | null; detectedBy: 'manual' | 'ai'; confidence: number | null; verdict: Verdict | null; verdictReason: string; repairAdvice: string; note: string; removed: boolean; createdName: string; createdAt: string }
+export interface Defect { id: string; weldId: string; filmId: string | null; round: number; type: DefectType; lengthMm: number; depthMm: number; positionMm: number; pass: Pass | ''; welders: string[]; bbox: { x: number; y: number; w: number; h: number } | null; detectedBy: 'manual' | 'ai'; confidence: number | null; verdict: Verdict | null; verdictReason: string; repairAdvice: string; note: string; removed: boolean; createdName: string; createdAt: string; code: Code | ''; widthMm: number | null; clock: number | null; quadrant: number | null; densityOver: boolean; aiAction: '' | 'accepted' | 'modified' }
 export interface Evaluation { id: string; weldId: string; round: number; overall: Verdict; summary: string; thkMm: number | null; evaluatedName: string; evaluatedAt: string; signedName: string; signedAt: string | null; forcedCutout: boolean }
 export interface Repair { id: string; weldId: string; round: number; method: string; performedBy: string; approvedBy: string; repairWps: string; note: string; createdName: string; createdAt: string }
 export interface Vt { id: string; weldId: string; round: number; result: 'accept' | 'reject'; note: string; files: { path: string; name: string; mime: string }[]; byName: string; at: string }
@@ -25,6 +34,9 @@ export interface Opinion { id: string; weldId: string; targetKind: 'defect' | 'e
 export interface WqData {
   welds: QcWeld[]; welders: Welder[]; joints: Joint[]; films: Film[]; marks: Mark[]; defects: Defect[]
   evaluations: Evaluation[]; repairs: Repair[]; vts: Vt[]; opinions: Opinion[]; criteria: unknown
+  crew: (CrewRow & { weldId: string })[]; coatings: Coating[]; quals: Qual[]
+  /** hydrotest sections of the line (testing module) — the final test of a weld */
+  sections: { code: string; kmFrom: number; kmTo: number; stage: string; failed: boolean }[]
 }
 
 async function pages(build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<Row[]> {
@@ -37,14 +49,16 @@ async function pages(build: (from: number, to: number) => PromiseLike<{ data: un
 const byProject = (table: string, pid: string, cols = '*') => pages((a, b) => supabase.from(table).select(cols).eq('project_id', pid).range(a, b))
 
 export async function loadAll(pid: string): Promise<WqData> {
-  const [welds, links, reports, welders, joints, films, marks, defects, evals, repairs, vts, opinions, settings] = await Promise.all([
+  const [welds, links, reports, welders, joints, films, marks, defects, evals, repairs, vts, opinions, crew, coatings, quals, settings, hts] = await Promise.all([
     byProject('ex_welds', pid, 'id, project_id, section_raw, weld_raw, pipe_no, status, c_pipe, c_size, c_thk, c_length, c_bend'),
     byProject('ex_line_welds', pid, 'line_id, weld_id, project_id'),
     pages((a, b) => supabase.from('ex_reports').select('id, form_key, report_date, report_no, status').eq('project_id', pid).in('form_key', FORMS).range(a, b)),
-    byProject('ex_welders', pid, 'id, welder_key, welder_raw, full_name, status'),
+    byProject('ex_welders', pid, 'id, welder_key, welder_raw, full_name, status, kind, has_photo, card_no, card_status, national_id'),
     byProject('wq_joints', pid), byProject('wq_films', pid), byProject('wq_marks', pid), byProject('wq_defects', pid),
     byProject('wq_evaluations', pid), byProject('wq_repairs', pid), byProject('wq_vt', pid), byProject('wq_opinions', pid),
+    byProject('wq_crew', pid), byProject('wq_coating', pid), byProject('ex_welder_quals', pid, 'id, welder_id, wqt_no, process, position, material_group, thk_min, thk_max, dia_min, dia_max, issue_date, expiry_date, status'),
     supabase.from('wq_settings').select('criteria').eq('project_id', pid).maybeSingle(),
+    supabase.from('ht_sections').select('code, km_from, km_to, stage, failed').eq('master_project_id', pid),
   ])
   const lineIds = links.map((l) => l.line_id as string)
   const lines: Row[] = []
@@ -59,18 +73,45 @@ export async function loadAll(pid: string): Promise<WqData> {
     lines: lines.map((l) => ({ id: l.id, reportId: l.report_id, detail: (l.detail ?? {}) as Record<string, unknown> })),
     reports: reports.map((r) => ({ id: r.id, formKey: s(r.form_key), reportDate: s(r.report_date), reportNo: s(r.report_no), status: s(r.status) })),
   })
+  // the report rows of each weld: who welded which half of each pass, the coating application and its test
+  const repById = new Map(reports.map((r) => [r.id as string, r]))
+  const lineById = new Map(lines.map((l) => [l.id as string, l]))
+  const rowsOf = new Map<string, { formKey: string; detail: Record<string, unknown>; date: string; reportNo: string; approved: boolean }[]>()
+  for (const k of links) {
+    const l = lineById.get(k.line_id), r = l ? repById.get(l.report_id) : undefined
+    if (!l || !r || r.status === 'rejected') continue
+    const x = rowsOf.get(k.weld_id) ?? []; x.push({ formKey: s(r.form_key), detail: (l.detail ?? {}) as Record<string, unknown>, date: s(r.report_date), reportNo: s(r.report_no), approved: r.status === 'approved' }); rowsOf.set(k.weld_id, x)
+  }
+  const num = (v: unknown) => { const x = Number(String(v ?? '').replace('٫', '.')); return String(v ?? '').trim() !== '' && Number.isFinite(x) ? x : null }
+  const facts = (rows: { formKey: string; detail: Record<string, unknown>; date: string; reportNo: string; approved: boolean }[]) => {
+    const c: CoatFacts = {}
+    for (const r of [...rows].sort((a, b) => a.date.localeCompare(b.date))) {
+      const d = r.detail
+      if (r.formKey === 'fj_coating') { const t = ['thk12', 'thk3', 'thk6', 'thk9'].map((k) => num(d[k])).filter((v): v is number => v != null); c.fj = { date: r.date, reportNo: r.reportNo, result: s(d.result), thkMin: t.length ? Math.min(...t) : null, sleeve: s(d.sleeveType), approved: r.approved } }
+      if (r.formKey === 'bond_test') { const hol = num(d.holCount); c.bond = { date: r.date, reportNo: r.reportNo, verdict: coatTestVerdict(d), adhesionFail: s(d.adhPipeOk) === 'rej' || s(d.adhMainOk) === 'rej', holidays: hol, holVolt: s(d.holVolt), approved: r.approved } }
+    }
+    return c
+  }
   return {
-    welds: files.map((f) => ({ ...f, weldDate: f.welding?.date ?? '', stampsBy: { root: splitStamps(f.welding?.stamps.root), hot: splitStamps(f.welding?.stamps.hot), fill: splitStamps(f.welding?.stamps.fill), cap: splitStamps(f.welding?.stamps.cap) } })),
-    welders: welders.map((w) => ({ id: w.id, key: s(w.welder_key), raw: s(w.welder_raw), name: s(w.full_name), status: s(w.status) })),
+    welds: files.map((f) => {
+      const rows = rowsOf.get(f.id) ?? []
+      const weldRow = rows.find((r) => r.formKey === 'welding' || r.formKey === 'tie_in')
+      return { ...f, weldDate: f.welding?.date ?? '', stampsBy: { root: splitStamps(f.welding?.stamps.root), hot: splitStamps(f.welding?.stamps.hot), fill: splitStamps(f.welding?.stamps.fill), cap: splitStamps(f.welding?.stamps.cap) }, sides: sidesFromRows(rows, splitStamps), lengthM: num(f.central.length ?? weldRow?.detail.lengthM), tieKm: num(rows.find((r) => r.formKey === 'tie_in')?.detail.km), coat: facts(rows), vtReport: s(weldRow?.detail.vt) }
+    }),
+    welders: welders.map((w) => ({ id: w.id, key: s(w.welder_key), raw: s(w.welder_raw), name: s(w.full_name), status: s(w.status), kind: s(w.kind) || 'welder', hasPhoto: !!w.has_photo, cardNo: s(w.card_no), cardStatus: s(w.card_status), nationalId: s(w.national_id) })),
+    quals: quals.map((q) => ({ id: q.id, welderId: q.welder_id, wqtNo: s(q.wqt_no), process: s(q.process), position: s(q.position), materialGroup: s(q.material_group), thkMin: n(q.thk_min), thkMax: n(q.thk_max), diaMin: n(q.dia_min), diaMax: n(q.dia_max), issueDate: q.issue_date ?? null, expiryDate: q.expiry_date ?? null, status: s(q.status) })),
+    crew: crew.map((c) => ({ id: c.id, weldId: c.weld_id, pass: c.pass, quadrant: Number(c.quadrant) as Quadrant, welderKey: s(c.welder_key), position: s(c.position), direction: s(c.direction) as CrewRow['direction'], process: s(c.process), startedAt: c.started_at ?? null, finishedAt: c.finished_at ?? null, vt: s(c.vt) as CrewRow['vt'], note: s(c.note), removed: !!c.removed_at })),
+    coatings: coatings.map((c) => ({ id: c.id, weldId: c.weld_id, kind: c.kind, random: !!c.random_test, applicatorKey: s(c.applicator_key), system: s(c.system), at: s(c.at), holidayKv: n(c.holiday_kv), holidayCount: n(c.holiday_count), dftMinUm: n(c.dft_min_um), adhesion: n(c.adhesion), visual: s(c.visual) as Coating['visual'], result: s(c.result) as Coating['result'], defects: s(c.defects), files: (c.files ?? []) as Coating['files'], note: s(c.note), createdName: s(c.created_name), removed: !!c.removed_at })).sort((a, b) => a.at.localeCompare(b.at)),
     joints: joints.map((j) => ({ weldId: j.weld_id, round: Number(j.current_round) || 0, closed: !!j.is_closed, finalStatus: j.final_status ?? null, closedAt: j.closed_at ?? null, thkMm: n(j.thk_mm), odMm: n(j.od_mm), service: s(j.service_type), note: s(j.note) })),
-    films: films.map((f) => ({ id: f.id, weldId: f.weld_id, round: Number(f.round) || 0, examType: f.exam_type, attempt: Number(f.attempt) || 1, segment: s(f.segment), path: s(f.path), fileName: s(f.file_name), mime: s(f.mime), width: n(f.width), height: n(f.height), pxPerMm: n(f.px_per_mm), iqi: s(f.iqi), density: s(f.density), quality: f.quality_status, qualityNote: s(f.quality_note), qualityName: s(f.quality_name), qualityAt: f.quality_at ?? null, uploadedName: s(f.uploaded_name), createdAt: s(f.created_at) })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    films: films.map((f) => ({ id: f.id, weldId: f.weld_id, round: Number(f.round) || 0, examType: f.exam_type, attempt: Number(f.attempt) || 1, segment: s(f.segment), path: s(f.path), fileName: s(f.file_name), mime: s(f.mime), width: n(f.width), height: n(f.height), pxPerMm: n(f.px_per_mm), iqi: s(f.iqi), density: s(f.density), quality: f.quality_status, qualityNote: s(f.quality_note), qualityName: s(f.quality_name), qualityAt: f.quality_at ?? null, uploadedName: s(f.uploaded_name), createdAt: s(f.created_at), displayPath: f.display_path ?? null, origMime: s(f.orig_mime), metrics: (f.metrics ?? {}) as Partial<Metrics>, ai: (f.ai ?? null) as AiRun | null })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     marks: marks.filter((m) => !m.removed_at).map((m) => ({ id: m.id, filmId: m.film_id, kind: m.kind, geom: m.geom, label: s(m.label) })),
-    defects: defects.map((d) => ({ id: d.id, weldId: d.weld_id, filmId: d.film_id ?? null, round: Number(d.round) || 0, type: d.defect_type, lengthMm: Number(d.length_mm) || 0, depthMm: Number(d.depth_mm) || 0, positionMm: Number(d.position_mm) || 0, pass: s(d.pass) as Pass | '', welders: (d.welders ?? []) as string[], bbox: d.bbox ?? null, detectedBy: d.detected_by, confidence: n(d.confidence), verdict: d.verdict ?? null, verdictReason: s(d.verdict_reason), repairAdvice: s(d.repair_advice), note: s(d.note), removed: !!d.removed_at, createdName: s(d.created_name), createdAt: s(d.created_at) })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    defects: defects.map((d) => ({ id: d.id, weldId: d.weld_id, filmId: d.film_id ?? null, round: Number(d.round) || 0, type: d.defect_type, lengthMm: Number(d.length_mm) || 0, depthMm: Number(d.depth_mm) || 0, positionMm: Number(d.position_mm) || 0, pass: s(d.pass) as Pass | '', welders: (d.welders ?? []) as string[], bbox: d.bbox ?? null, detectedBy: d.detected_by, confidence: n(d.confidence), verdict: d.verdict ?? null, verdictReason: s(d.verdict_reason), repairAdvice: s(d.repair_advice), note: s(d.note), removed: !!d.removed_at, createdName: s(d.created_name), createdAt: s(d.created_at), code: s(d.code) as Code | '', widthMm: n(d.width_mm), clock: n(d.clock), quadrant: n(d.quadrant), densityOver: !!d.density_over, aiAction: s(d.ai_action) as Defect['aiAction'] })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     evaluations: evals.map((e) => ({ id: e.id, weldId: e.weld_id, round: Number(e.round) || 0, overall: e.overall_status, summary: s(e.summary), thkMm: n(e.thk_mm), evaluatedName: s(e.evaluated_name), evaluatedAt: s(e.evaluated_at), signedName: s(e.signed_name), signedAt: e.signed_at ?? null, forcedCutout: !!e.forced_cutout })).sort((a, b) => a.evaluatedAt.localeCompare(b.evaluatedAt)),
     repairs: repairs.map((r) => ({ id: r.id, weldId: r.weld_id, round: Number(r.round) || 0, method: s(r.method), performedBy: s(r.performed_by), approvedBy: s(r.approved_by), repairWps: s(r.repair_wps), note: s(r.note), createdName: s(r.created_name), createdAt: s(r.created_at) })),
     vts: vts.map((v) => ({ id: v.id, weldId: v.weld_id, round: Number(v.round) || 0, result: v.result, note: s(v.note), files: (v.files ?? []) as Vt['files'], byName: s(v.by_name), at: s(v.at) })).sort((a, b) => a.at.localeCompare(b.at)),
     opinions: opinions.map((o) => ({ id: o.id, weldId: o.weld_id, targetKind: o.target_kind, targetId: o.target_id, stance: o.stance, body: s(o.body), authorName: s(o.author_name), at: s(o.at) })).sort((a, b) => a.at.localeCompare(b.at)),
     criteria: (settings.data as Row | null)?.criteria ?? null,
+    sections: ((hts.data ?? []) as Row[]).map((x) => ({ code: s(x.code), kmFrom: Number(x.km_from), kmTo: Number(x.km_to), stage: s(x.stage), failed: !!x.failed })),
   }
 }
 
@@ -96,7 +137,7 @@ export async function signedUrl(path: string): Promise<string | null> {
   return r.data?.signedUrl ?? null
 }
 
-export async function addFilm(row: { project_id: string; weld_id: string; round: number; exam_type: 'RT' | 'RS'; attempt: number; segment: string; path: string; file_name: string; mime: string; width: number | null; height: number | null; iqi: string; density: string; uploaded_name: string }) {
+export async function addFilm(row: { project_id: string; weld_id: string; round: number; exam_type: 'RT' | 'RS'; attempt: number; segment: string; path: string; file_name: string; mime: string; width: number | null; height: number | null; iqi: string; density: string; uploaded_name: string; display_path?: string | null; orig_mime?: string; metrics?: unknown }) {
   await ensureJoint(row.weld_id); chk(await supabase.from('wq_films').insert(row))
 }
 export async function updateFilm(id: string, patch: Row) { chk(await supabase.from('wq_films').update(patch).eq('id', id)) }
@@ -115,6 +156,12 @@ export async function addRepair(weldId: string, r: { method: string; performedBy
 }
 export async function addVt(row: { project_id: string; weld_id: string; round: number; result: 'accept' | 'reject'; note: string; files: Vt['files']; by_name: string }) { await ensureJoint(row.weld_id); chk(await supabase.from('wq_vt').insert(row)) }
 export async function addOpinion(row: { project_id: string; weld_id: string; target_kind: Opinion['targetKind']; target_id: string; stance: Opinion['stance']; body: string; author_name: string }) { chk(await supabase.from('wq_opinions').insert(row)) }
+export async function addCrew(rows: Record<string, unknown>[]) { if (rows.length) { await ensureJoint(rows[0].weld_id as string); chk(await supabase.from('wq_crew').insert(rows)) } }
+export async function removeCrew(id: string) { chk(await supabase.from('wq_crew').update({ removed_at: new Date().toISOString() }).eq('id', id)) }
+export async function addCoating(row: Record<string, unknown>) { await ensureJoint(row.weld_id as string); chk(await supabase.from('wq_coating').insert(row)) }
+export async function removeCoating(id: string) { chk(await supabase.from('wq_coating').update({ removed_at: new Date().toISOString() }).eq('id', id)) }
+/** a person's photo (lists do not carry images) */
+export async function welderPhoto(id: string): Promise<string> { const r = await supabase.from('ex_welders').select('photo').eq('id', id).maybeSingle(); return s((r.data as Row | null)?.photo) }
 export async function saveCriteria(pid: string, criteria: unknown) { chk(await supabase.from('wq_settings').upsert({ project_id: pid, criteria, updated_at: new Date().toISOString() })) }
 
 const ERR: Record<string, string> = {

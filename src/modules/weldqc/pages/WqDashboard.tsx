@@ -5,6 +5,7 @@ import { fa, monthKey, monthLabel, useQc, weldLabel } from '../lib/useQc'
 import { QC_STATE_COLOR, QC_STATE_FA, repairAnalysis, welderReport, type QcState } from '../lib/analytics'
 import { DEFECT_COLOR, DEFECT_FA, DEFECT_TYPES } from '../lib/rules'
 import type { WqTab } from '../WeldQcApp'
+import { HealthSpread, InsightsPanel } from '../components/Insights'
 
 const STATES: QcState[] = ['no_film', 'quality', 'interpret', 'to_sign', 'repair_due', 'reshoot', 'accepted', 'cut_out']
 
@@ -14,7 +15,7 @@ export function WqDashboard({ onOpen, onGo }: { onOpen: (id: string) => void; on
   const counts = useMemo(() => { const c = Object.fromEntries(STATES.map((s) => [s, 0])) as Record<QcState, number>; for (const r of q.rows) c[r.state]++; return c }, [q.rows])
   const ra = useMemo(() => repairAnalysis({ evals: q.qEvals, defects: q.qDefects, repairs: st.repairs.map((r) => ({ weldId: r.weldId, round: r.round, performedBy: r.performedBy, method: r.method, at: r.createdAt })), monthOf: monthKey }), [q, st.repairs])
   const welders = useMemo(() => welderReport({ welds: q.qWelds, evals: q.qEvals, defects: q.qDefects, monthOf: monthKey }).filter((w) => w.evaluated > 0), [q])
-  const types = useMemo(() => { const m = new Map<string, number>(); for (const d of st.defects) if (!d.removed) m.set(d.type, (m.get(d.type) ?? 0) + 1); return DEFECT_TYPES.map((t) => ({ t, n: m.get(t) ?? 0 })).filter((x) => x.n) .sort((a, b) => b.n - a.n) }, [st.defects])
+  const types = useMemo(() => { const m = new Map<string, number>(); for (const d of st.defects) if (!d.removed) m.set(d.type, (m.get(d.type) ?? 0) + 1); return DEFECT_TYPES.map((t) => ({ t, n: m.get(t) ?? 0 })).filter((x) => x.n).sort((a, b) => b.n - a.n) }, [st.defects])
   const maxType = Math.max(1, ...types.map((x) => x.n))
   const welded = q.rows.filter((r) => r.weld.welding).length
   const total = q.rows.length
@@ -59,6 +60,9 @@ export function WqDashboard({ onOpen, onGo }: { onOpen: (id: string) => void; on
           ))}
         </section>
       )}
+
+      <InsightsPanel onWelder={() => onGo('welders')} />
+      <HealthSpread items={q.rows.map((r) => ({ id: r.weld.id, h: r.health }))} onPick={() => onGo('log')} />
 
       <section className="wq-card wq-rise" style={{ '--i': 2 } as CSSProperties}>
         <header className="wq-card-head"><ClipboardCheck size={16} aria-hidden /><h3>مسیر پرونده‌ها</h3><span className="ps-meta">روی هر مرحله بزنید تا سرجوش‌هایش را ببینید</span></header>
