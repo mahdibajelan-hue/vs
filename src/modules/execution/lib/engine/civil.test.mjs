@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { civilRate, civilForecast, isCivilSection } from './civil.ts'
+import { civilRate, civilForecast, isCivilSection, roleOf, isHaulActivity, machinesFor, fleetBalance, defaultEarthCrew, ratePerType } from './civil.ts'
 import { addDays } from '../periods.ts'
 
 const near = (a, b, e) => assert.ok(Math.abs(a - b) <= e, `${a} ≉ ${b}`)
@@ -39,4 +39,25 @@ const f3 = civilForecast({ days, activity: { id: 'z', title: 'z', unit: 'm3', re
 assert.equal(f3.rate.estimate, null); assert.equal(f3.finish, null)
 
 assert.ok(isCivilSection('حفاری کانال')); assert.ok(isCivilSection('خاک سرندی، بکفیل و گرده‌ماهی')); assert.ok(isCivilSection('مسیرسازی')); assert.ok(!isCivilSection('جوشکاری و خمکاری'))
+// ── route making: machine roles, trucks only for haulage, fleet balance
+assert.equal(roleOf('بلدوزر D8'), 'dozer'); assert.equal(roleOf('ساید بوم D8'), 'other'); assert.equal(roleOf('پیکور هیدرولیک'), 'breaker'); assert.equal(roleOf('بیل مکانیکی'), 'excavator')
+assert.equal(roleOf('لودر'), 'loader'); assert.equal(roleOf('کامیون کمپرسی'), 'truck'); assert.equal(roleOf('تانکر آب'), 'water'); assert.ok(isCivilSection('مسیرسازی'))
+assert.ok(isHaulActivity('حمل مواد حاصل از عملیات خاکی تا فاصله ۵۰۰ متر')); assert.ok(isHaulActivity('بارگیری مواد حاصل از عملیات خاکی و تخلیه'))
+assert.ok(!isHaulActivity('کندن زمین در زمین های سنگی با بولدوزر')); assert.ok(!isHaulActivity('حمل سیمان پاکتی و فولاد'))
+assert.equal(machinesFor('کندن زمین با بولدوزر')('کامیون'), false); assert.equal(machinesFor('کندن زمین با بولدوزر')('بلدوزر'), true)
+assert.equal(machinesFor('حمل خاک مازاد')('کامیون'), true); assert.equal(machinesFor('حمل خاک مازاد')('بلدوزر'), false)
+const route = Array.from({ length: 10 }, (_, i) => ({ date: addDays('2026-09-01', i), machines: { 'بلدوزر': { active: 2, hours: 8 }, 'پیکور': { active: 1, hours: 6 }, 'بیل مکانیکی': { active: 3, hours: 8 }, 'لودر': { active: 2, hours: 8 }, 'کامیون': { active: 5, hours: 9 } }, out: { cut: 400, haul: 300 } }))
+assert.deepEqual(defaultEarthCrew(['بلدوزر', 'پیکور', 'کامیون']), { 'بلدوزر': 1, 'پیکور': 1 })
+const fb = fleetBalance(route, null)
+assert.equal(fb.crews, 1, 'one breaker → one route-making crew'); assert.equal(fb.bottleneck, 'پیکور'); assert.equal(fb.defined, false)
+const L = Object.fromEntries(fb.lines.map((x) => [x.name, x]))
+assert.equal(L['بیل مکانیکی'].surplus, 2); assert.equal(L['پیکور'].forNextCrew, 1); assert.equal(L['بلدوزر'].forNextCrew, 0); assert.ok(L['کامیون'].optional && L['کامیون'].surplus === 0)
+const fb2 = fleetBalance(route, { 'بلدوزر': 1, 'بیل مکانیکی': 1, 'لودر': 1 })
+assert.equal(fb2.crews, 2); assert.equal(fb2.bottleneck, 'بلدوزر')
+// a haul activity is measured against trucks and loaders, an excavation against the rest
+const fc = civilForecast({ days: route, activity: { id: 'cut', title: 'کندن', unit: 'm3', remaining: 1000, plannedEnd: null }, today: route[9].date, workDays: ALL, include: machinesFor('کندن زمین') })
+near(fc.rate.history, 400 / (2 * 8 + 6 + 3 * 8 + 2 * 8), 1e-9)
+const fh = civilForecast({ days: route, activity: { id: 'haul', title: 'حمل خاک', unit: 'm3', remaining: 1000, plannedEnd: null }, today: route[9].date, workDays: ALL, include: machinesFor('حمل خاک مازاد') })
+near(fh.rate.history, 300 / (5 * 9 + 2 * 8), 1e-9)
+near(ratePerType(route, 'cut')['پیکور'], 400 / 6, 1e-9)
 console.log('execution/engine/civil: all assertions passed')

@@ -99,9 +99,11 @@ function afterWorkdays(from: string, n: number, wd: number[]): string {
 }
 const workdaysBetween = (from: string, to: string, wd: number[]) => { let c = 0; for (let d = addDays(from, 1); d <= to; d = addDays(d, 1)) if (wd.includes(weekdayOf(d))) c++; return c }
 
-export function civilForecast(a: { days: CivilDay[]; activity: CivilActivity; today: string; workDays: number[]; recentDays?: number; fleetOverride?: { machines?: number; hoursPerDay?: number } }): CivilForecast {
+export function civilForecast(a: { days: CivilDay[]; activity: CivilActivity; today: string; workDays: number[]; recentDays?: number; fleetOverride?: { machines?: number; hoursPerDay?: number }; include?: (machine: string) => boolean }): CivilForecast {
   const recentDays = a.recentDays ?? 14
-  const days = [...a.days].sort((x, y) => x.date.localeCompare(y.date))
+  // only the machines that do this kind of work count (trucks only for hauling — see machinesFor)
+  const keep = a.include
+  const days = [...a.days].sort((x, y) => x.date.localeCompare(y.date)).map((d) => (keep ? { ...d, machines: Object.fromEntries(Object.entries(d.machines).filter(([n]) => keep(n))) } : d))
   const rate = civilRate(days, a.activity.id, a.today, 21, recentDays)
   const span = spanOf(days, a.activity.id)
   // machines of the section over the activity's span
@@ -145,4 +147,74 @@ export function civilForecast(a: { days: CivilDay[]; activity: CivilActivity; to
 }
 
 /** Work sections whose crews are earthmoving machines (route making, trenching, backfill, grading). */
-export const isCivilSection = (s: string) => /حفار|کانال|خاک|مسیر|بکفیل|تسطیح|راه|گرده|سرند|بولدوزر|گریدر|لودر|کمپرسی/u.test(s.replace(/ي/g, 'ی').replace(/ك/g, 'ک'))
+export const isCivilSection = (s: string) => /حفار|کانال|خاک|مسیر|بکفیل|تسطیح|راه|گرده|سرند|بولدوزر|بلدوزر|گریدر|لودر|کمپرسی|پیکور/u.test(norm(s))
+const norm = (s: string) => s.replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/\u200c/g, '')
+
+/* ───────────────────────── machines of route making and earthworks ───────────────────────── */
+
+export type MachineRole = 'dozer' | 'breaker' | 'excavator' | 'loader' | 'truck' | 'grader' | 'roller' | 'water' | 'other'
+export const ROLE_FA: Record<MachineRole, string> = { dozer: 'بولدوزر', breaker: 'پیکور / چکش هیدرولیک', excavator: 'بیل مکانیکی', loader: 'لودر', truck: 'کامیون (حمل خاک مازاد)', grader: 'گریدر', roller: 'غلتک', water: 'تانکر آب', other: 'سایر' }
+export const ROLE_COLOR: Record<MachineRole, string> = { dozer: '#f59e0b', breaker: '#ef4444', excavator: '#eab308', loader: '#22c55e', truck: '#0ea5e9', grader: '#8b5cf6', roller: '#64748b', water: '#06b6d4', other: '#94a3b8' }
+/** The role of a machine from its name in the report's resource table. */
+export function roleOf(name: string): MachineRole {
+  const n = norm(name)
+  if (/بولدوزر|بلدوزر|دوزر|\bD ?(6|7|8|9|10|11)R?\b/u.test(n) && !/ساید/u.test(n)) return 'dozer'
+  if (/پیکور|چکش|بریکر|breaker|هامر/iu.test(n)) return 'breaker'
+  if (/بیل|اکسکاواتور|excavator|هیتاچی|کوماتسو PC/iu.test(n)) return 'excavator'
+  if (/لودر|loader|شاول/iu.test(n)) return 'loader'
+  if (/کامیون|کمپرسی|تریلی|dump|truck/iu.test(n) && !/تانکر/u.test(n)) return 'truck'
+  if (/گریدر|grader/iu.test(n)) return 'grader'
+  if (/غلتک|roller|کمپکتور/iu.test(n)) return 'roller'
+  if (/تانکر|آبپاش/u.test(n)) return 'water'
+  return 'other'
+}
+export const isEarthMachine = (name: string) => roleOf(name) !== 'other'
+/** Haulage of surplus or unsuitable soil (load, haul, dump): the work of trucks and the loader that fills them. */
+export const isHaulActivity = (title: string) => /حمل|بارگیری|باراندازی|تخلیه/u.test(norm(title)) && /خاک|مواد|مازاد|نامناسب|نخاله|لجن|سنگ/u.test(norm(title))
+/** Which machines count for an activity: haulage → trucks and loaders; everything else → every machine but the trucks. */
+export const machinesFor = (title: string) => (isHaulActivity(title) ? (n: string) => ['truck', 'loader'].includes(roleOf(n)) : (n: string) => roleOf(n) !== 'truck')
+
+/** Route-making crew before anyone defines one: one of each earthmoving machine the section has (trucks excluded — they come only when there is surplus soil to haul). */
+export function defaultEarthCrew(machineNames: string[]): Record<string, number> {
+  return Object.fromEntries(machineNames.filter((n) => ['dozer', 'breaker', 'excavator', 'loader', 'grader'].includes(roleOf(n))).map((n) => [n, 1]))
+}
+
+export interface FleetLine { name: string; role: MachineRole; active: number; hours: number; perCrew: number; usedByCrews: number; surplus: number; forNextCrew: number; optional: boolean }
+export interface FleetBalance { lines: FleetLine[]; crews: number; bottleneck: string | null; composition: Record<string, number>; defined: boolean }
+/**
+ * Balance of a section's fleet over the recent days: complete crews = min over the crew's machines of ⌊active ÷ per
+ * crew⌋; the machine that sets that minimum is the bottleneck; units beyond the complete crews are surplus, and what is
+ * missing for one more complete crew is listed. Trucks are optional (haulage only) and never limit the crews.
+ */
+export function fleetBalance(days: CivilDay[], composition: Record<string, number> | null, recentDays = 14): FleetBalance {
+  const rec = [...days].sort((x, y) => x.date.localeCompare(y.date)).filter((d) => Object.keys(d.machines).length).slice(-recentDays)
+  const names = [...new Set(rec.flatMap((d) => Object.keys(d.machines)))]
+  const avg = (n: string, k: 'active' | 'hours') => { const v = rec.map((d) => d.machines[n]?.[k] ?? 0); return v.length ? sum(v) / v.length : 0 }
+  const defined = !!composition && Object.values(composition).some((v) => v > 0)
+  const comp = defined ? Object.fromEntries(Object.entries(composition!).filter(([n, v]) => v > 0 && names.includes(n))) : defaultEarthCrew(names)
+  const req = Object.entries(comp).filter(([n]) => roleOf(n) !== 'truck')
+  const crews = req.length ? Math.min(...req.map(([n, per]) => Math.floor(avg(n, 'active') / per + 1e-9))) : 0
+  let bottleneck: string | null = null, low = Infinity
+  for (const [n, per] of req) { const k = avg(n, 'active') / per; if (k < low - 1e-9) { low = k; bottleneck = n } }
+  const lines: FleetLine[] = names.map((n) => {
+    const per = comp[n] ?? 0, role = roleOf(n), active = avg(n, 'active'), optional = role === 'truck' || !per
+    const used = optional ? 0 : crews * per
+    return { name: n, role, active, hours: avg(n, 'hours'), perCrew: per, usedByCrews: used, surplus: optional ? 0 : Math.max(0, active - used), forNextCrew: optional ? 0 : Math.max(0, Math.ceil(per * (crews + 1) - active - 1e-9)), optional }
+  }).sort((x, y) => Number(x.optional) - Number(y.optional) || x.role.localeCompare(y.role))
+  return { lines, crews, bottleneck, composition: comp, defined }
+}
+
+/** Output per machine-hour of each machine type, for one activity (ratio of sums over the days both worked). */
+export function ratePerType(days: CivilDay[], id: string): Record<string, number> {
+  const first = days.findIndex((d) => (d.out[id] ?? 0) > 0)
+  if (first < 0) return {}
+  const span = days.slice(first)
+  const out: Record<string, number> = {}
+  const names = [...new Set(span.flatMap((d) => Object.keys(d.machines)))]
+  for (const n of names) {
+    const on = span.filter((d) => (d.machines[n]?.active ?? 0) > 0)
+    const mh = sum(on.map((d) => d.machines[n].active * d.machines[n].hours)), q = sum(on.map((d) => d.out[id] ?? 0))
+    if (mh > 0 && q > 0) out[n] = q / mh
+  }
+  return out
+}

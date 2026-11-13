@@ -3,7 +3,7 @@ import { useExecutionModel } from './useExecutionModel'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { civilDays, outlookInputs } from './outlookData'
 import { isClimate, outlook, type ClimateKey } from './engine/outlook'
-import { isCivilSection } from './engine/civil'
+import { isCivilSection, roleOf } from './engine/civil'
 import { useRemembered } from '../../../lib/navMemory'
 
 export const WD_PRESETS: { label: string; days: number[] }[] = [
@@ -33,8 +33,10 @@ export function useOutlook(projectId: string) {
   const machines = useMemo(() => civilDays(m, inputs.days), [m, inputs.days])
   const civilSections = useMemo(() => {
     const chosen = m.settings.civilSections
-    const withMachines = new Set([...machines.values()].flatMap((dm) => [...dm.keys()]))
-    return chosen && chosen.length ? chosen : [...withMachines].filter(isCivilSection)
+    // a section is civil by its name (حفاری، مسیرسازی، خاکریزی …) or by its machines (بولدوزر، پیکور، بیل، لودر، گریدر)
+    const earth = new Set<string>(), all = new Set<string>()
+    for (const dm of machines.values()) for (const [sec, ms] of dm) { all.add(sec); if (Object.keys(ms).some((n) => ['dozer', 'breaker', 'excavator', 'loader', 'grader'].includes(roleOf(n)))) earth.add(sec) }
+    return chosen && chosen.length ? chosen : [...all].filter((s) => isCivilSection(s) || earth.has(s))
   }, [m.settings.civilSections, machines])
 
   const setup = useMemo<SetupStep[]>(() => {
