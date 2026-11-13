@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;import{t as e}from"./react-D5gPMIdr.js";var t=e()(e=>({pendingMasterId:null,request:t=>e({pendingMasterId:t}),clear:()=>e({pendingMasterId:null})}));export{t};

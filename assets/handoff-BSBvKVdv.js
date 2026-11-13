@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;import{a as e,o as t}from"./useAuthStore-Clg4ZXxS.js";var n=null,r=()=>n,i=()=>{n=null};function a(r,i,a=!1){n=a?null:i,t.getState().setProject(r),e.getState().enterModule(`weldqc`,void 0,a?`coating`:`welders`)}export{a as n,r,i as t};

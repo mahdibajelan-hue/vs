@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;function e(e,t={}){return e?{onClick:e,onKeyDown:t=>{t.target!==t.currentTarget||t.key!==`Enter`&&t.key!==` `||(t.preventDefault(),e(t))},tabIndex:0,...t.row?{}:{role:`button`}}:{}}export{e as t};

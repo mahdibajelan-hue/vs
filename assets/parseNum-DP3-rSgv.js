@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;var e=`۰۱۲۳۴۵۶۷۸۹`,t=`٠١٢٣٤٥٦٧٨٩`,n=n=>{let r=n.replace(/[۰-۹]/g,t=>String(e.indexOf(t))).replace(/[٠-٩]/g,e=>String(t.indexOf(e))).replace(/[٬,\s]/g,``).replace(`٫`,`.`),i=Number(r);return Number.isFinite(i)?i:0};export{n as t};
