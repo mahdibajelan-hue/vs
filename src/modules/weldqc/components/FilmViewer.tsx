@@ -2,13 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { BoxSelect, Check, Contrast, Hand, Loader2, Maximize, Ruler, Save, ScanSearch, Sparkles, SunMedium, Trash2, X, ZoomIn, ZoomOut, Crosshair } from 'lucide-react'
 import { useWqStore } from '../store/useWqStore'
 import * as repo from '../repo'
-import { annotate, beadBand, clahe, detectCandidates, toGray, type Annotated } from '../lib/detect'
+import { analyzeFilm, clahe, toGray, DETECTOR_VERSION, type Found } from '../lib/detect'
+import { segmentHours } from '../lib/coverage'
+import { learnedCode, pReal, MIN_REAL } from '../lib/learn'
+import { aiSamples, currentModel, iou, recordAi } from '../lib/aiSamples'
 import { DEFECT_COLOR } from '../lib/rules'
 import { CODE_FA, type Code } from '../lib/api1104'
 import { codeOf, useQc } from '../lib/useQc'
 import { DefectForm, defectRow, newDraft, type DefectDraft } from './DefectForm'
 import { fa } from '../lib/useQc'
 
+/** a candidate of the assistant, in the film's own pixels; `p` = share of similar past candidates the interpreters kept */
+type Cand = Found & { idx: number; p: number | null; ruleCode: string | null }
 type Tool = 'pan' | 'measure' | 'calib' | 'defect'
 interface Geo { x1: number; y1: number; x2: number; y2: number }
 const dist = (g: Geo) => Math.hypot(g.x2 - g.x1, g.y2 - g.y1)
@@ -35,7 +40,8 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
   const [drag, setDrag] = useState<Geo | null>(null)
   const [pending, setPending] = useState<{ tool: Tool; g: Geo } | null>(null)
   const [calMm, setCalMm] = useState('')
-  const [cands, setCands] = useState<(Annotated & { idx: number })[] | null>(null), [aiBusy, setAiBusy] = useState(false)
+  const [cands, setCands] = useState<Cand[] | null>(null), [aiBusy, setAiBusy] = useState(false)
+  const [aiNote, setAiNote] = useState<{ decisions: number; learned: boolean; cv: number | null; hidden: number } | null>(null)
   const [draft, setDraft] = useState<DefectDraft | null>(null)
   const pan = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null)
   const ppm = film?.pxPerMm ?? null
@@ -43,9 +49,9 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
   const row = q.byId.get(weld.id)
   /** the clock position of a point of the film when its segment is written as hours («12-3», «3-6») */
   const clockAt = (x: number): string => {
-    const m = /^\s*(\d{1,2})\s*[-–تا]+\s*(\d{1,2})\s*$/.exec((film?.segment ?? '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))))
-    if (!m || !img) return ''
-    const a = Number(m[1]) % 12, b = Number(m[2]) % 12, span = ((b - a + 12) % 12) || 12
+    const hrs = segmentHours(film?.segment ?? '')
+    if (!hrs || !img) return ''
+    const [a, b] = hrs, span = ((b - a + 12) % 12) || 12
     return String(Math.round(((a + (x / img.width) * span) % 12) * 10) / 10)
   }
   const canWrite = !readOnly && st.caps.submit
@@ -147,28 +153,42 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
       setEnhBusy(false)
     }, 30)
   }
-  /** the assistant: find the bead, look for density anomalies along it, guess a code with its reason — and keep the run */
+  /** the assistant: find the bead, measure what stands out of the film's grain, rank it by what the interpreters decided before */
   const runAi = () => {
     setAiBusy(true)
-    setTimeout(() => {
+    setTimeout(() => void (async () => {
       try {
-        const p = pixels(1200)
-        const g = toGray(p.data, p.w, p.h), band = beadBand(g)
-        const found = annotate(detectCandidates(g, { axis: band?.axis ?? null }), band).map((c, idx) => ({ ...c, idx, x: c.x / p.k, y: c.y / p.k, w: c.w / p.k, h: c.h / p.k, lengthPx: c.lengthPx / p.k }))
-        setCands(found)
-        if (canWrite) void repo.updateFilm(film.id, { ai: { at: new Date().toISOString(), band: !!band, items: found.map((c) => ({ code: c.code, why: c.why, confidence: c.confidence, clock: clockAt(c.x + c.w / 2) ? Number(clockAt(c.x + c.w / 2)) : null, bbox: { x: c.x, y: c.y, w: c.w, h: c.h }, action: '' })) } })
-      } catch { setCands([]) }
+        const p = pixels(2000)
+        const a = analyzeFilm(toGray(p.data, p.w, p.h))
+        const [{ model, decisions }, past] = await Promise.all([currentModel(), aiSamples()])
+        const mine = past.filter((r) => r.filmId === film.id && r.bbox)
+        let hidden = 0
+        const found: Cand[] = a.items.map((c, idx) => {
+          const pr = model && c.f.cnr > 0 ? pReal(model, c.f) : null, lc = model && c.code ? learnedCode(model, c.f) : null
+          const code = lc && lc.code !== c.code ? (lc.code as Found['code']) : c.code
+          const why = lc && lc.code !== c.code ? `${c.why} — طبق ${fa(lc.votes)} از ${fa(lc.of)} تصمیم قبلی مفسران برای نشانه‌های مشابه، «${CODE_FA[lc.code as Code] ?? lc.code}» پیشنهاد می‌شود` : c.why
+          return { ...c, code, why, ruleCode: c.code, p: pr, confidence: pr == null ? c.confidence : Math.round(((c.confidence + 2 * pr) / 3) * 100) / 100, idx, x: c.x / p.k, y: c.y / p.k, w: c.w / p.k, h: c.h / p.k, lengthPx: c.lengthPx / p.k, widthPx: c.widthPx / p.k }
+        }).filter((c) => {
+          // already decided on this film (a recorded defect, or a candidate dismissed before): not shown again
+          const done = defects.some((d) => d.bbox && iou(d.bbox, c) > 0.3) || mine.some((r) => r.action === 'dismissed' && iou(r.bbox!, c) > 0.5)
+          if (done) hidden++
+          return !done
+        }).sort((x, y) => Number(y.inBead) - Number(x.inBead) || y.confidence - x.confidence)
+        setCands(found); setAiNote({ decisions, learned: !!model, cv: model?.cv ?? null, hidden })
+        if (canWrite) void repo.updateFilm(film.id, { ai: { at: new Date().toISOString(), band: !!a.band, version: a.version, items: found.map((c) => ({ code: c.code, why: c.why, confidence: c.confidence, clock: clockAt(c.x + c.w / 2) ? Number(clockAt(c.x + c.w / 2)) : null, bbox: { x: c.x, y: c.y, w: c.w, h: c.h }, action: '' })) } })
+      } catch { setCands([]); setAiNote(null) }
       setAiBusy(false)
-    }, 30)
+    })(), 30)
   }
-  /** record what the interpreter did with candidate `idx` of the last run */
-  const markAi = (idx: number, action: 'accepted' | 'modified' | 'dismissed') => {
+  /** record what the interpreter did with candidate `idx` of the last run — on the film (for the passport) and in the learning record */
+  const markAi = (c: Cand, action: 'accepted' | 'modified' | 'dismissed', finalCode: string | null, defectId: string | null) => {
     const cur = useWqStore.getState().films.find((f) => f.id === film.id)?.ai
-    if (!cur || !cur.items[idx]) return
-    const items = cur.items.map((it, k) => (k === idx ? { ...it, action } : it))
-    void st.run(action === 'dismissed' ? 'پیشنهاد دستیار رد شد' : 'پیشنهاد دستیار ثبت شد', () => repo.updateFilm(film.id, { ai: { ...cur, items } }))
+    const k = cur?.items.findIndex((it) => iou(it.bbox, c) > 0.9) ?? -1
+    const jobs: Promise<unknown>[] = [recordAi({ project_id: st.projectId, weld_id: weld.id, film_id: film.id, detector: DETECTOR_VERSION, bbox: { x: c.x, y: c.y, w: c.w, h: c.h }, feats: c.f, ai_code: c.code, confidence: c.confidence, action, final_code: finalCode, defect_id: defectId, by_name: st.me() })]
+    if (cur && k >= 0) jobs.push(repo.updateFilm(film.id, { ai: { ...cur, items: cur.items.map((it, i) => (i === k ? { ...it, action } : it)) } }))
+    void st.run(action === 'dismissed' ? 'پیشنهاد دستیار رد شد و در سابقهٔ یادگیری ثبت شد' : 'پیشنهاد دستیار ثبت شد', () => Promise.all(jobs))
   }
-  const [aiIdx, setAiIdx] = useState<number | null>(null)
+  const [aiCand, setAiCand] = useState<Cand | null>(null)
 
   const saveCalib = async () => {
     const mm = Number(calMm.replace('٫', '.')); if (!pending || !(mm > 0)) return
@@ -226,16 +246,25 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
               {canWrite && <button type="button" className="ps-btn" onClick={() => void saveMeasure()}><Save size={14} aria-hidden /> ذخیره روی فیلم</button>}</div>
           )}
           {draft && <div className="wq-panel"><b>عیب جدید روی این فیلم</b>
-            <DefectForm weld={weld} crew={row?.crew ?? []} odMm={row?.odMm ?? null} init={draft} onCancel={() => { setDraft(null); setAiIdx(null) }} onSave={async (d) => { const ok = await st.run(`«${CODE_FA[d.code]}» ثبت شد`, () => repo.addDefect(defectRow(d, { project_id: st.projectId, weld_id: weld.id, film_id: film.id, round: film.round, created_name: st.me() }))); if (ok && aiIdx != null) { markAi(aiIdx, d.aiAction === 'modified' ? 'modified' : 'accepted'); setCands((c) => c?.filter((x) => x.idx !== aiIdx) ?? null); setAiIdx(null) } return ok }} /></div>}
+            <DefectForm weld={weld} crew={row?.crew ?? []} odMm={row?.odMm ?? null} init={draft} onCancel={() => { setDraft(null); setAiCand(null) }} onSave={async (d) => {
+              let id: string | null = null
+              const ok = await st.run(`«${CODE_FA[d.code]}» ثبت شد`, async () => { id = await repo.addDefect(defectRow(d, { project_id: st.projectId, weld_id: weld.id, film_id: film.id, round: film.round, created_name: st.me() })) })
+              if (!ok) return ok
+              if (aiCand) { markAi(aiCand, d.code !== aiCand.code ? 'modified' : 'accepted', d.code, id); setCands((c) => c?.filter((x) => x.idx !== aiCand.idx) ?? null); setAiCand(null) }
+              // drawn by hand on a film the assistant had analysed and it had nothing there: a miss, kept for the record
+              else if (d.bbox && film.ai && !(cands ?? []).some((c) => iou(c, d.bbox!) > 0.3)) void recordAi({ project_id: st.projectId, weld_id: weld.id, film_id: film.id, detector: film.ai.version ?? '', bbox: d.bbox, feats: null, ai_code: null, confidence: null, action: 'missed', final_code: d.code, defect_id: id, by_name: st.me() }).catch(() => undefined)
+              return ok
+            }} /></div>}
           {cands && !draft && (
             <div className="wq-panel is-ai"><b><ScanSearch size={15} aria-hidden /> {cands.length ? `${fa(cands.length)} ناحیهٔ مشکوک` : 'ناحیهٔ مشکوکی پیدا نشد'}</b>
-              <p className="ps-meta">پردازش تصویر کلاسیک در همین مرورگر (نه تشخیص قطعی): نوار جوش پیدا می‌شود، نواحی با تیرگی غیرعادی نسبت به امتداد جوش جدا می‌شوند و از شکل، تیرگی و جایگاه نسبت به خط مرکز، کد احتمالی با دلیل پیشنهاد می‌شود. هر مورد را بررسی و اصلاح کنید؛ تصمیم‌ها در «تحلیل هوشمند» شناسنامه بایگانی می‌شوند.</p>
+              <p className="ps-meta">دستیار نوار جوش را پیدا می‌کند و فقط نواحی‌ای را نشان می‌دهد که از دانه‌بندی همین فیلم بیرون می‌زنند؛ برای هر مورد کد احتمالی و دلیل آن می‌آید. تشخیص قطعی نیست و هر مورد را باید خودتان بررسی کنید.{aiNote?.hidden ? ` ${fa(aiNote.hidden)} مورد که قبلاً دربارهٔ آن تصمیم گرفته‌اید دوباره نشان داده نشد.` : ''}</p>
+              {aiNote && <p className={`wq-learn ${aiNote.learned ? 'is-on' : ''}`}><Sparkles size={13} aria-hidden /> {aiNote.learned ? `رتبه‌بندی با یادگیری از ${fa(aiNote.decisions)} تصمیم قبلی مفسران${aiNote.cv != null ? ` (هم‌خوانی با تصمیم‌های دیده‌نشده ${fa(aiNote.cv * 100)}٪)` : ''}` : `یادگیری هنوز فعال نیست: ${fa(aiNote.decisions)} تصمیم ثبت شده؛ با ${fa(MIN_REAL)} تصمیم (تأیید و رد) رتبه‌بندی از تصمیم‌های شما یاد می‌گیرد.`}</p>}
               <ol className="wq-cands">{cands.map((c, i) => (
-                <li key={`${c.x}-${c.y}`} className={c.inBead ? '' : 'is-out'}><span><b>{fa(i + 1)}. {c.code ? CODE_FA[c.code as Code] : 'بدون کد'}</b> · {ppm ? `${fa(c.lengthPx / ppm, 1)} mm` : `${fa(c.lengthPx)} px`} · {fa(c.confidence * 100)}٪<small>{c.why}</small></span>
-                  {c.code && <button type="button" className="ps-btn is-ok" onClick={() => { setAiIdx(c.idx); setDraft(newDraft({ code: c.code as Code, aiCode: c.code, bbox: { x: c.x, y: c.y, w: c.w, h: c.h }, lengthMm: ppm ? (c.lengthPx / ppm).toFixed(1) : '', clock: clockAt(c.x + c.w / 2), detectedBy: 'ai', confidence: c.confidence })) }}>بررسی و ثبت</button>}
-                  <button type="button" className="ps-btn is-ghost" onClick={() => { markAi(c.idx, 'dismissed'); setCands(cands.filter((x) => x.idx !== c.idx)) }} aria-label="رد این ناحیه"><X size={14} aria-hidden /></button></li>
+                <li key={`${c.x}-${c.y}`} className={!c.inBead || (c.p != null && c.p < 0.2) ? 'is-out' : ''}><span><b>{fa(i + 1)}. {c.code ? CODE_FA[c.code as Code] : 'بدون کد'}</b> · {ppm ? `${fa(c.lengthPx / ppm, 1)} mm` : `${fa(c.lengthPx)} px`} · {fa(c.confidence * 100)}٪{c.f.cnr ? ` · CNR ${fa(c.f.cnr, 1)}` : ''}<small>{c.why}{c.p != null && c.p < 0.2 ? ' — مفسران موارد مشابه را بیشتر رد کرده‌اند' : ''}</small></span>
+                  <button type="button" className="ps-btn is-ok" onClick={() => { setAiCand(c); setDraft(newDraft({ code: (c.code ?? 'ISI') as Code, aiCode: c.code, bbox: { x: c.x, y: c.y, w: c.w, h: c.h }, lengthMm: ppm ? (c.lengthPx / ppm).toFixed(1) : '', widthMm: ppm ? (c.widthPx / ppm).toFixed(1) : '', clock: clockAt(c.x + c.w / 2), detectedBy: 'ai', confidence: c.confidence })) }}>بررسی و ثبت</button>
+                  <button type="button" className="ps-btn is-ghost" onClick={() => { markAi(c, 'dismissed', null, null); setCands(cands.filter((x) => x.idx !== c.idx)) }} aria-label="رد این ناحیه (هشدار کاذب)" title="هشدار کاذب — رد"><X size={14} aria-hidden /></button></li>
               ))}</ol>
-              <button type="button" className="ps-btn is-ghost" onClick={() => setCands(null)}>پاک کردن نامزدها</button>
+              <button type="button" className="ps-btn is-ghost" onClick={() => setCands(null)}>بستن فهرست</button>
             </div>
           )}
           <div className="wq-panel"><b>عیوب این فیلم</b>

@@ -1,5 +1,5 @@
 import { useMemo, type CSSProperties } from 'react'
-import { ArrowLeft, ClipboardCheck, FileImage, Flame, Gauge, ScanSearch, ShieldCheck, Signature, Wrench } from 'lucide-react'
+import { ArrowLeft, ClipboardCheck, FileImage, Flame, Gauge, Hourglass, ScanSearch, ShieldCheck, Signature, Wrench } from 'lucide-react'
 import { useWqStore } from '../store/useWqStore'
 import { fa, monthKey, monthLabel, useQc, weldLabel } from '../lib/useQc'
 import { QC_STATE_COLOR, QC_STATE_FA, repairAnalysis, welderReport, type QcState } from '../lib/analytics'
@@ -18,6 +18,14 @@ export function WqDashboard({ onOpen, onGo }: { onOpen: (id: string) => void; on
   const types = useMemo(() => { const m = new Map<string, number>(); for (const d of st.defects) if (!d.removed) m.set(d.type, (m.get(d.type) ?? 0) + 1); return DEFECT_TYPES.map((t) => ({ t, n: m.get(t) ?? 0 })).filter((x) => x.n).sort((a, b) => b.n - a.n) }, [st.defects])
   const maxType = Math.max(1, ...types.map((x) => x.n))
   const welded = q.rows.filter((r) => r.weld.welding).length
+  // the radiography queue (welded, no film yet) by age, the repair queue, and what repeated films cost
+  const queue = useMemo(() => {
+    const now = Date.now(), age = (d: string) => (d ? Math.max(0, Math.floor((now - Date.parse(d)) / 864e5)) : 0)
+    const wait = q.rows.filter((r) => r.weld.welding && r.state === 'no_film').map((r) => ({ id: r.weld.id, label: weldLabel(r.weld), days: age(r.weld.weldDate) })).sort((a, b) => b.days - a.days)
+    const rep = q.rows.filter((r) => r.state === 'repair_due' || r.state === 'reshoot').map((r) => ({ id: r.weld.id, label: weldLabel(r.weld), days: age(r.lastEval?.signedAt ?? r.lastEval?.evaluatedAt ?? '') })).sort((a, b) => b.days - a.days)
+    const films = st.films.length, retake = st.films.filter((f) => f.quality === 'retake').length, reshoot = st.films.filter((f) => f.quality === 'reshoot').length
+    return { wait, rep, films, retake, reshoot, old: wait.filter((x) => x.days > 3).length }
+  }, [q.rows, st.films])
   const total = q.rows.length
 
   // the work waiting for the signed-in person, by what they may do here
@@ -63,6 +71,17 @@ export function WqDashboard({ onOpen, onGo }: { onOpen: (id: string) => void; on
 
       <InsightsPanel onWelder={() => onGo('welders')} />
       <HealthSpread items={q.rows.map((r) => ({ id: r.weld.id, h: r.health }))} onPick={() => onGo('log')} />
+
+      <section className="wq-card wq-rise" style={{ '--i': 2 } as CSSProperties}>
+        <header className="wq-card-head"><Hourglass size={16} aria-hidden /><h3>صف‌ها و هزینهٔ تکرار</h3><span className="ps-meta">برای سرپرست کارگاه و دفتر فنی</span></header>
+        <div className="wq-queue">
+          <div><small>جوش‌شده، منتظر رادیوگرافی</small><b>{fa(queue.wait.length)}</b><span className={queue.old ? 'is-warn' : ''}>{queue.old ? `${fa(queue.old)} سرجوش بیش از ۳ روز` : queue.wait.length ? 'همه کمتر از ۳ روز' : 'صف خالی است'}</span></div>
+          <div><small>منتظر تعمیر یا فیلم پس از تعمیر</small><b>{fa(queue.rep.length)}</b><span className={queue.rep[0]?.days > 3 ? 'is-warn' : ''}>{queue.rep.length ? `قدیمی‌ترین ${fa(queue.rep[0].days)} روز` : 'موردی نیست'}</span></div>
+          <div><small>ریتیک (هزینه با کارفرما)</small><b>{fa(queue.retake)}</b><span>{queue.films ? `${fa((queue.retake / queue.films) * 100, 1)}٪ از ${fa(queue.films)} فیلم` : '—'}</span></div>
+          <div><small>ریشوت (هزینه با پیمانکار RT)</small><b>{fa(queue.reshoot)}</b><span className={queue.films && queue.reshoot / queue.films > 0.05 ? 'is-warn' : ''}>{queue.films ? `${fa((queue.reshoot / queue.films) * 100, 1)}٪ از ${fa(queue.films)} فیلم` : '—'}</span></div>
+        </div>
+        {(queue.wait.length > 0 || queue.rep.length > 0) && <ul className="wq-queue-list">{[...queue.wait.slice(0, 6).map((x) => ({ ...x, what: 'منتظر رادیوگرافی' })), ...queue.rep.slice(0, 4).map((x) => ({ ...x, what: 'منتظر تعمیر / RS' }))].map((x) => <li key={x.id + x.what}><button type="button" onClick={() => onOpen(x.id)}><b className="ps-code">{x.label}</b><span>{x.what}</span><small className={x.days > 3 ? 'is-warn' : ''}>{fa(x.days)} روز</small></button></li>)}</ul>}
+      </section>
 
       <section className="wq-card wq-rise" style={{ '--i': 2 } as CSSProperties}>
         <header className="wq-card-head"><ClipboardCheck size={16} aria-hidden /><h3>مسیر پرونده‌ها</h3><span className="ps-meta">روی هر مرحله بزنید تا سرجوش‌هایش را ببینید</span></header>

@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabaseClient'
+import type { Feat } from './lib/detect'
 import { buildWeldFiles, coatTestVerdict, type WeldFile } from '../execution/lib/weldFile'
 import { splitStamps } from '../execution/lib/registers'
 import type { DefectType, Pass, Verdict } from './lib/rules'
@@ -23,10 +24,10 @@ export interface QcWeld extends WeldFile { stampsBy: Record<Pass, string[]>; wel
 export interface Joint { weldId: string; round: number; closed: boolean; finalStatus: Verdict | null; closedAt: string | null; thkMm: number | null; odMm: number | null; service: string; note: string }
 export interface Film { id: string; weldId: string; round: number; examType: 'RT' | 'RS'; attempt: number; segment: string; path: string; fileName: string; mime: string; width: number | null; height: number | null; pxPerMm: number | null; iqi: string; density: string; quality: 'pending' | 'accepted' | 'retake' | 'reshoot'; qualityNote: string; qualityName: string; qualityAt: string | null; uploadedName: string; createdAt: string; displayPath: string | null; origMime: string; metrics: Partial<Metrics>; ai: AiRun | null }
 /** the last run of the candidate-region assistant on a film, and what the interpreter did with each candidate */
-export interface AiRun { at: string; band: boolean; items: { code: string | null; why: string; confidence: number; clock: number | null; bbox: { x: number; y: number; w: number; h: number }; action: '' | 'accepted' | 'modified' | 'dismissed' }[] }
+export interface AiRun { at: string; band: boolean; version?: string; items: { code: string | null; why: string; confidence: number; clock: number | null; bbox: { x: number; y: number; w: number; h: number }; action: '' | 'accepted' | 'modified' | 'dismissed' }[] }
 export interface Mark { id: string; filmId: string; kind: 'line' | 'box' | 'point' | 'calib'; geom: { x1: number; y1: number; x2: number; y2: number }; label: string }
 export interface Defect { id: string; weldId: string; filmId: string | null; round: number; type: DefectType; lengthMm: number; depthMm: number; positionMm: number; pass: Pass | ''; welders: string[]; bbox: { x: number; y: number; w: number; h: number } | null; detectedBy: 'manual' | 'ai'; confidence: number | null; verdict: Verdict | null; verdictReason: string; repairAdvice: string; note: string; removed: boolean; createdName: string; createdAt: string; code: Code | ''; widthMm: number | null; clock: number | null; quadrant: number | null; densityOver: boolean; aiAction: '' | 'accepted' | 'modified' }
-export interface Evaluation { id: string; weldId: string; round: number; overall: Verdict; summary: string; thkMm: number | null; evaluatedName: string; evaluatedAt: string; signedName: string; signedAt: string | null; forcedCutout: boolean }
+export interface Evaluation { id: string; weldId: string; round: number; overall: Verdict; summary: string; thkMm: number | null; evaluatedName: string; evaluatedAt: string; signedName: string; signedAt: string | null; forcedCutout: boolean; /** the round was signed by the person who evaluated it (allowed to the QC manager only, and shown) */ samePerson: boolean }
 export interface Repair { id: string; weldId: string; round: number; method: string; performedBy: string; approvedBy: string; repairWps: string; note: string; createdName: string; createdAt: string }
 export interface Vt { id: string; weldId: string; round: number; result: 'accept' | 'reject'; note: string; files: { path: string; name: string; mime: string }[]; byName: string; at: string }
 export interface Opinion { id: string; weldId: string; targetKind: 'defect' | 'evaluation' | 'joint'; targetId: string; stance: 'agree' | 'disagree' | 'note'; body: string; authorName: string; at: string }
@@ -106,7 +107,7 @@ export async function loadAll(pid: string): Promise<WqData> {
     films: films.map((f) => ({ id: f.id, weldId: f.weld_id, round: Number(f.round) || 0, examType: f.exam_type, attempt: Number(f.attempt) || 1, segment: s(f.segment), path: s(f.path), fileName: s(f.file_name), mime: s(f.mime), width: n(f.width), height: n(f.height), pxPerMm: n(f.px_per_mm), iqi: s(f.iqi), density: s(f.density), quality: f.quality_status, qualityNote: s(f.quality_note), qualityName: s(f.quality_name), qualityAt: f.quality_at ?? null, uploadedName: s(f.uploaded_name), createdAt: s(f.created_at), displayPath: f.display_path ?? null, origMime: s(f.orig_mime), metrics: (f.metrics ?? {}) as Partial<Metrics>, ai: (f.ai ?? null) as AiRun | null })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     marks: marks.filter((m) => !m.removed_at).map((m) => ({ id: m.id, filmId: m.film_id, kind: m.kind, geom: m.geom, label: s(m.label) })),
     defects: defects.map((d) => ({ id: d.id, weldId: d.weld_id, filmId: d.film_id ?? null, round: Number(d.round) || 0, type: d.defect_type, lengthMm: Number(d.length_mm) || 0, depthMm: Number(d.depth_mm) || 0, positionMm: Number(d.position_mm) || 0, pass: s(d.pass) as Pass | '', welders: (d.welders ?? []) as string[], bbox: d.bbox ?? null, detectedBy: d.detected_by, confidence: n(d.confidence), verdict: d.verdict ?? null, verdictReason: s(d.verdict_reason), repairAdvice: s(d.repair_advice), note: s(d.note), removed: !!d.removed_at, createdName: s(d.created_name), createdAt: s(d.created_at), code: s(d.code) as Code | '', widthMm: n(d.width_mm), clock: n(d.clock), quadrant: n(d.quadrant), densityOver: !!d.density_over, aiAction: s(d.ai_action) as Defect['aiAction'] })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
-    evaluations: evals.map((e) => ({ id: e.id, weldId: e.weld_id, round: Number(e.round) || 0, overall: e.overall_status, summary: s(e.summary), thkMm: n(e.thk_mm), evaluatedName: s(e.evaluated_name), evaluatedAt: s(e.evaluated_at), signedName: s(e.signed_name), signedAt: e.signed_at ?? null, forcedCutout: !!e.forced_cutout })).sort((a, b) => a.evaluatedAt.localeCompare(b.evaluatedAt)),
+    evaluations: evals.map((e) => ({ id: e.id, weldId: e.weld_id, round: Number(e.round) || 0, overall: e.overall_status, summary: s(e.summary), thkMm: n(e.thk_mm), evaluatedName: s(e.evaluated_name), evaluatedAt: s(e.evaluated_at), signedName: s(e.signed_name), signedAt: e.signed_at ?? null, forcedCutout: !!e.forced_cutout, samePerson: !!e.same_person })).sort((a, b) => a.evaluatedAt.localeCompare(b.evaluatedAt)),
     repairs: repairs.map((r) => ({ id: r.id, weldId: r.weld_id, round: Number(r.round) || 0, method: s(r.method), performedBy: s(r.performed_by), approvedBy: s(r.approved_by), repairWps: s(r.repair_wps), note: s(r.note), createdName: s(r.created_name), createdAt: s(r.created_at) })),
     vts: vts.map((v) => ({ id: v.id, weldId: v.weld_id, round: Number(v.round) || 0, result: v.result, note: s(v.note), files: (v.files ?? []) as Vt['files'], byName: s(v.by_name), at: s(v.at) })).sort((a, b) => a.at.localeCompare(b.at)),
     opinions: opinions.map((o) => ({ id: o.id, weldId: o.weld_id, targetKind: o.target_kind, targetId: o.target_id, stance: o.stance, body: s(o.body), authorName: s(o.author_name), at: s(o.at) })).sort((a, b) => a.at.localeCompare(b.at)),
@@ -143,7 +144,7 @@ export async function addFilm(row: { project_id: string; weld_id: string; round:
 export async function updateFilm(id: string, patch: Row) { chk(await supabase.from('wq_films').update(patch).eq('id', id)) }
 export async function addMark(row: { project_id: string; film_id: string; kind: Mark['kind']; geom: Mark['geom']; label: string }) { chk(await supabase.from('wq_marks').insert(row)) }
 export async function removeMark(id: string) { chk(await supabase.from('wq_marks').update({ removed_at: new Date().toISOString() }).eq('id', id)) }
-export async function addDefect(row: Row) { await ensureJoint(row.weld_id as string); chk(await supabase.from('wq_defects').insert(row)) }
+export async function addDefect(row: Row): Promise<string> { await ensureJoint(row.weld_id as string); const r = chk(await supabase.from('wq_defects').insert(row).select('id').single()); return (r.data as Row).id as string }
 export async function updateDefect(id: string, patch: Row) { chk(await supabase.from('wq_defects').update(patch).eq('id', id)) }
 export async function evaluate(weldId: string, overall: Verdict, summary: string, verdicts: { id: string; verdict: Verdict; reason: string; advice: string }[], thk: number, name: string) {
   chk(await supabase.rpc('wq_evaluate', { p_weld: weldId, p_overall: overall, p_summary: summary, p_verdicts: verdicts, p_thk: thk, p_name: name }))
@@ -166,6 +167,7 @@ export async function saveCriteria(pid: string, criteria: unknown) { chk(await s
 
 const ERR: Record<string, string> = {
   not_allowed: 'دسترسی این کار را ندارید (سطح دسترسی در «مدیریت کاربران» تعیین می‌شود).', file_closed: 'پروندهٔ این سرجوش بسته شده است.',
+  film_quality_pending: 'کیفیت همهٔ فیلم‌های این راند هنوز بررسی نشده؛ ابتدا برای هر فیلم تأیید، ریتیک یا ریشوت را ثبت کنید.', same_person: 'ارزیاب و تأییدکنندهٔ نهایی نباید یک نفر باشند؛ بازرس NDT دیگری (یا مدیر کنترل کیفیت) تأیید کند.',
   no_accepted_film: 'هیچ فیلمی از این راند از نظر کیفیت تأیید نشده؛ ابتدا کیفیت فیلم را بررسی کنید.', no_evaluation: 'هنوز ارزیابی‌ای برای این راند ثبت نشده است.',
   cutout_not_allowed: 'تبدیل به «برش» فقط در راند سوم و برای نتیجهٔ «تعمیر» مجاز است.', max_repairs: 'سقف دو بار تعمیر تکمیل شده؛ طبق رویه باید برش کامل انجام شود.',
   not_repair: 'ثبت تعمیر فقط برای راندی که نتیجهٔ آن «نیاز به تعمیر» است مجاز است.', not_signed: 'پیش از ثبت تعمیر، بازرس NDT باید ارزیابی این راند را تأیید کند.',
@@ -176,3 +178,12 @@ export function explain(e: unknown): string {
   for (const [k, v] of Object.entries(ERR)) if (m.includes(k)) return v
   return m
 }
+
+// ── the image assistant's learning record (append-only): what the interpreter did with each candidate, and what it missed
+export interface AiSample { id: string; projectId: string; weldId: string; filmId: string; detector: string; bbox: { x: number; y: number; w: number; h: number } | null; feats: Feat | null; aiCode: string | null; confidence: number | null; action: 'accepted' | 'modified' | 'dismissed' | 'missed'; finalCode: string | null; byName: string; at: string }
+/** every row the user may see (their projects): more decisions make a steadier ranking */
+export async function loadAiSamples(): Promise<AiSample[]> {
+  const rows = await pages((a, b) => supabase.from('wq_ai_samples').select('*').order('at').range(a, b))
+  return rows.map((r) => ({ id: r.id, projectId: r.project_id, weldId: r.weld_id, filmId: r.film_id, detector: s(r.detector), bbox: r.bbox ?? null, feats: (r.feats ?? null) as Feat | null, aiCode: r.ai_code ?? null, confidence: n(r.confidence), action: r.action, finalCode: r.final_code ?? null, byName: s(r.by_name), at: s(r.at) }))
+}
+export async function addAiSample(row: Row) { chk(await supabase.from('wq_ai_samples').insert(row)) }

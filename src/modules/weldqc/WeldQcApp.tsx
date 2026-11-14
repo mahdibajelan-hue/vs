@@ -28,6 +28,7 @@ const WqRepairs = lazy(() => import('./pages/WqRepairs').then((m) => ({ default:
 const WqCriteria = lazy(() => import('./pages/WqCriteria').then((m) => ({ default: m.WqCriteria })))
 const WqLog = lazy(() => import('./pages/WqLog').then((m) => ({ default: m.WqLog })))
 const WqCoating = lazy(() => import('./pages/WqCoating').then((m) => ({ default: m.WqCoating })))
+const WqAssistant = lazy(() => import('./pages/WqAssistant').then((m) => ({ default: m.WqAssistant })))
 const QcPretest = lazy(() => import('./pages/QcPretest').then((m) => ({ default: m.QcPretest })))
 const JointQc = lazy(() => import('../testing/components/CoatingQc').then((m) => ({ default: m.JointQc })))
 const ElectricalTest = lazy(() => import('../testing/components/CoatingQc').then((m) => ({ default: m.ElectricalTest })))
@@ -36,13 +37,13 @@ const CoatingRecords = lazy(() => import('../testing/TestingApp').then((m) => ({
 const NcrPage = lazy(() => import('../execution/pages/QcPage').then((m) => ({ default: m.QcPage })))
 const FormsPage = lazy(() => import('../execution/pages/DailyPage').then((m) => ({ default: m.DailyPage })))
 
-export type QcTab = 'home' | 'dash' | 'joints' | 'log' | 'welders' | 'repairs' | 'criteria' | 'coating' | 'jointqc' | 'linecoat' | 'electrical' | 'coatcrit' | 'pretest' | 'ncr' | 'forms' | 'guide'
+export type QcTab = 'home' | 'dash' | 'joints' | 'log' | 'welders' | 'repairs' | 'criteria' | 'assistant' | 'coating' | 'jointqc' | 'linecoat' | 'electrical' | 'coatcrit' | 'pretest' | 'ncr' | 'forms' | 'guide'
 /** kept for the weld pages, which navigate inside their own area */
 export type WqTab = QcTab
 type Area = { k: string; label: string; icon: LucideIcon; color: string; tabs: [QcTab, string][] }
 const AREAS: Area[] = [
   { k: 'home', label: 'میز کیفیت', icon: LayoutDashboard, color: '#22c55e', tabs: [['home', 'میز کیفیت']] },
-  { k: 'weld', label: 'جوش و رادیوگرافی', icon: Flame, color: '#f43f5e', tabs: [['dash', 'داشبورد جوش'], ['joints', 'شناسنامهٔ سرجوش‌ها'], ['log', 'دفتر جوش'], ['welders', 'عملکرد جوشکاران'], ['repairs', 'تحلیل تعمیرات'], ['criteria', 'معیارهای پذیرش API 1104']] },
+  { k: 'weld', label: 'جوش و رادیوگرافی', icon: Flame, color: '#f43f5e', tabs: [['dash', 'داشبورد جوش'], ['joints', 'شناسنامهٔ سرجوش‌ها'], ['log', 'دفتر جوش'], ['welders', 'عملکرد جوشکاران'], ['repairs', 'تحلیل تعمیرات'], ['criteria', 'معیارهای پذیرش API 1104'], ['assistant', 'دستیار هوشمند و آموزش']] },
   { k: 'jcoat', label: 'پوشش سرجوش', icon: PaintRoller, color: '#a855f7', tabs: [['coating', 'پوشش‌کاران و بایگانی'], ['jointqc', 'بازرسی و تست پوشش سرجوش']] },
   { k: 'lcoat', label: 'تست پوشش خط', icon: ShieldCheck, color: '#0ea5e9', tabs: [['linecoat', 'آزمون‌ها و عیوب (هالیدی، DCVG، …)'], ['electrical', 'آزمون الکتریکی (I/S)'], ['coatcrit', 'معیارهای پذیرش پوشش']] },
   { k: 'pretest', label: 'پیش‌تست قطعات', icon: Gauge, color: '#14b8a6', tabs: [['pretest', 'پیش‌تست قطعات عبوری']] },
@@ -94,6 +95,7 @@ export function WeldQcApp({ onExitToHub }: { onExitToHub: () => void; onBackToRa
       case 'welders': return <WqWelders onOpen={setOpen} />
       case 'repairs': return <WqRepairs onOpen={setOpen} />
       case 'criteria': return <WqCriteria />
+      case 'assistant': return <WqAssistant />
       case 'coating': return <WqCoating onOpen={setOpen} />
       case 'jointqc': return <div className="ht ps-stack"><JointQc /></div>
       case 'linecoat': return <div className="ht"><CoatingRecords /></div>

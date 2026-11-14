@@ -231,3 +231,175 @@ export function annotate(cands: Candidate[], band: Band | null): Annotated[] {
   }
   return out.sort((a, b) => Number(b.inBead) - Number(a.inBead) || b.confidence - a.confidence)
 }
+
+// ══ detector v2 ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// What changed from the first version, and why:
+//  · it looks only inside the weld bead and a margin beside it (lead letters, IQI and film edges no longer raise alarms);
+//  · an area counts only when it stands out of the film's own grain: the threshold is a multiple of the noise measured on
+//    that film (robust MAD), not Otsu — a clean film now yields no candidates instead of always the «top 25»;
+//  · each candidate is measured (contrast-to-noise, length, width and direction from its second moments, place across the
+//    bead) — these measurements are what the learning step is trained on;
+//  · a continuous line running the whole film (unbroken IP, wagon track) is uniform along the weld and was invisible to
+//    the along-weld background; it is now found on the across-weld profile;
+//  · films shown as positives (bead darker than the pipe) are handled: «void-like» is defined against the bead's tone.
+export const DETECTOR_VERSION = 'cv2.0'
+/** measurements of one candidate — the input of the learning step (learn.ts) */
+export interface Feat { cnr: number; area: number; len: number; wid: number; elong: number; /** 0 = along the weld … 90 = across */ angle: number; /** 0 … 1 across the bead; outside it below 0 or above 1 */ pos: number; fill: number; voidLike: 0 | 1; lenRel: number; widRel: number; /** runs the whole film */ through: 0 | 1 }
+export interface Found { x: number; y: number; w: number; h: number; lengthPx: number; widthPx: number; confidence: number; code: Guess | null; why: string; inBead: boolean; f: Feat }
+export interface Analysis { band: (Band & { bright: boolean }) | null; sigma: number; items: Found[]; version: string }
+
+const transpose = (g: Gray): Gray => { const d = new Uint8Array(g.w * g.h); for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) d[x * g.h + y] = g.d[y * g.w + x]; return { w: g.h, h: g.w, d } }
+const medianOf = (a: Float64Array | number[]) => { const s = Array.from(a).sort((p, q) => p - q); return s.length ? s[s.length >> 1] : 0 }
+
+/** the bead as a band lighter (film negative) or darker (digital positive) than the pipe beside it */
+export function beadBand2(g: Gray): (Band & { bright: boolean }) | null {
+  let best: (Band & { bright: boolean }) | null = null
+  for (const axis of ['h', 'v'] as const) {
+    const L = axis === 'h' ? g.h : g.w, M = axis === 'h' ? g.w : g.h, p = new Float64Array(L)
+    for (let i = 0; i < L; i++) { let s = 0; for (let j = 0; j < M; j++) s += axis === 'h' ? g.d[i * g.w + j] : g.d[j * g.w + i]; p[i] = s / M }
+    const r = Math.max(2, Math.round(L / 60)), sm = new Float64Array(L)
+    for (let i = 0; i < L; i++) { let s = 0, c = 0; for (let k = -r; k <= r; k++) { const q = i + k; if (q >= 0 && q < L) { s += p[q]; c++ } } sm[i] = s / c }
+    const a0 = Math.floor(L * 0.1), b0 = Math.ceil(L * 0.9), med = medianOf(sm.slice(a0, b0))
+    let hi = -Infinity, hiAt = a0, lo = Infinity, loAt = a0
+    for (let i = a0; i < b0; i++) { if (sm[i] > hi) { hi = sm[i]; hiAt = i } if (sm[i] < lo) { lo = sm[i]; loAt = i } }
+    for (const bright of [true, false]) {
+      const prom = bright ? hi - med : med - lo, at = bright ? hiAt : loAt
+      if (prom < 6 || (!bright && prom < (hi - med) * 1.5)) continue
+      const cut = bright ? med + prom / 2 : med - prom / 2
+      let a = at, b = at
+      while (a > 0 && (bright ? sm[a - 1] >= cut : sm[a - 1] <= cut)) a--
+      while (b < L - 1 && (bright ? sm[b + 1] >= cut : sm[b + 1] <= cut)) b++
+      const share = (b - a + 1) / L
+      if (share < 0.05 || share > 0.7) continue
+      if (!best || prom > best.strength) best = { axis, from: a, to: b, strength: prom, bright }
+    }
+  }
+  return best
+}
+
+const sigmoid = (x: number) => 1 / (1 + Math.exp(-x))
+const r2 = (x: number) => Math.round(x * 100) / 100
+
+function classify(f: Feat): { code: Guess | null; why: string } {
+  if (!f.voidLike) return { code: null, why: 'چگال‌تر از اطراف (نفوذ اضافی، پاشش جوش یا جسم خارجی) — ناپیوستگی حجمی نیست' }
+  const along = f.angle < 30, across = f.angle > 55
+  if (f.pos < -0.05 || f.pos > 1.05) {
+    if (f.elong >= 3 && along && f.pos > -0.3 && f.pos < 1.3) return { code: 'EU', why: 'خط تیره در فلز پایه، چسبیده به لبهٔ گرده — الگوی بریدگی کناره' }
+    return { code: null, why: 'بیرون از نوار جوش (نشانهٔ سربی، خراش یا لکهٔ فیلم)' }
+  }
+  const centre = f.pos > 0.35 && f.pos < 0.65, edge = f.pos < 0.22 || f.pos > 0.78
+  if (f.through) return centre ? { code: 'IP', why: 'خط تیرهٔ پیوسته در تمام طول فیلم روی خط مرکز جوش — الگوی نفوذ ناقص ریشهٔ سراسری' } : edge ? { code: 'IF', why: 'خط تیرهٔ پیوسته در تمام طول فیلم کنار لبهٔ جوش — الگوی ذوب ناقص دیواره یا بریدگی کنارهٔ سراسری' } : { code: 'ESI', why: 'خط تیرهٔ پیوسته در تمام طول فیلم بین مرکز و لبه — الگوی خط سرباره (Wagon track)' }
+  if (f.elong >= 3 && across) return { code: 'C', why: 'نشانهٔ خطی نازک عمود بر امتداد جوش — احتمال ترک عرضی؛ با بزرگ‌نمایی و نگاتیو بررسی شود' }
+  if (centre && f.elong >= 3 && along) return { code: 'IP', why: 'خط تیرهٔ کشیده روی خط مرکز جوش — الگوی نفوذ ناقص ریشه' }
+  if (centre && f.elong < 2 && f.widRel > 0.3) return { code: 'BT', why: 'لکهٔ تیرهٔ بزرگ و فشرده روی خط مرکز — الگوی سوختگی؛ تیرگی نسبت به فلز پایه را بررسی کنید' }
+  if (edge && f.elong >= 4 && along) return { code: 'IF', why: 'خط تیرهٔ نازک در لبهٔ نوار جوش — الگوی ذوب ناقص یا بریدگی کناره' }
+  if (f.elong >= 3 && along) return { code: 'ESI', why: 'نشانهٔ تیرهٔ کشیده بین مرکز و لبه — الگوی آخال سربارهٔ کشیده' }
+  if (f.elong < 1.7 && f.widRel < 0.3 && f.fill > 0.55) return { code: 'P', why: 'نقطهٔ تیرهٔ گرد و کوچک — الگوی تخلخل' }
+  return { code: 'ISI', why: 'نشانهٔ تیرهٔ فشرده و نامنظم — الگوی آخال منفرد' }
+}
+
+/** the whole analysis of one film: bead, noise, measured candidates with a first code and its reason */
+export function analyzeFilm(g0: Gray, opt: { max?: number } = {}): Analysis {
+  const band0 = beadBand2(g0)
+  if (!band0) {
+    // no clear bead: the earlier whole-frame search, marked as such
+    const items: Found[] = annotate(detectCandidates(g0, { max: opt.max ?? 12 }), null).map((c) => {
+      const len = Math.max(c.w, c.h), wid = Math.min(c.w, c.h)
+      return { x: c.x, y: c.y, w: c.w, h: c.h, lengthPx: len, widthPx: wid, confidence: r2(c.confidence * 0.6), code: c.code, why: `${c.why} (نوار جوش پیدا نشد؛ جست‌وجو در کل تصویر)`, inBead: true,
+        f: { cnr: 0, area: c.areaPx, len, wid, elong: len / Math.max(1, wid), angle: c.w >= c.h ? 0 : 90, pos: 0.5, fill: c.areaPx / Math.max(1, c.w * c.h), voidLike: c.dark ? 1 : 0, lenRel: 0, widRel: 0, through: 0 } }
+    })
+    return { band: null, sigma: 0, items, version: DETECTOR_VERSION }
+  }
+  const g = band0.axis === 'v' ? transpose(g0) : g0 // the weld runs along x from here on
+  const { w, h } = g, bw = band0.to - band0.from + 1, margin = Math.max(4, Math.round(bw * 0.3))
+  const y0 = Math.max(0, band0.from - margin), y1 = Math.min(h - 1, band0.to + margin), rows = y1 - y0 + 1
+  const s = gaussian5(g).d
+  // background along the weld: running median per row, half the film wide
+  const bgR = Math.max(20, Math.round(w / 4)), res = new Float32Array(rows * w), hist = new Uint32Array(256), rowMed = new Float64Array(rows)
+  for (let ry = 0; ry < rows; ry++) {
+    const o = (y0 + ry) * w; hist.fill(0); let n = 0
+    for (let i = 0; i <= Math.min(w - 1, bgR); i++) { hist[s[o + i]]++; n++ }
+    for (let x = 0; x < w; x++) {
+      if (x > 0) { const add = x + bgR, drop = x - bgR - 1; if (add < w) { hist[s[o + add]]++; n++ } if (drop >= 0) { hist[s[o + drop]]--; n-- } }
+      let acc = 0, v = 0; const half = n / 2
+      for (; v < 255; v++) { acc += hist[v]; if (acc >= half) break }
+      res[ry * w + x] = s[o + x] - v
+    }
+    const full = new Float64Array(w); for (let x = 0; x < w; x++) full[x] = s[o + x]
+    rowMed[ry] = medianOf(full)
+  }
+  // noise of this film: 1.4826 × median |residual|
+  const sample: number[] = []; for (let i = 0; i < res.length; i += 7) sample.push(Math.abs(res[i]))
+  const sigma = Math.max(0.6, 1.4826 * medianOf(sample)), thr = Math.max(3.2 * sigma, 2.5)
+  const voidSign = band0.bright ? -1 : 1 // a void is darker than a light bead, lighter than a dark one
+  let m: Uint8Array = new Uint8Array(rows * w)
+  for (let i = 0; i < m.length; i++) m[i] = Math.abs(res[i]) > thr ? 1 : 0
+  m = morph(morph(m, w, rows, false), w, rows, true)
+  m = morph(morph(m, w, rows, true), w, rows, false)
+  const minArea = Math.max(8, Math.round((w / 1200) ** 2 * 14))
+  interface Blob { x0: number; y0: number; x1: number; y1: number; area: number; dsum: number; ssum: number; sx: number; sy: number; sxx: number; syy: number; sxy: number }
+  const blobs: Blob[] = [], seen = new Uint8Array(rows * w), stack: number[] = []
+  for (let st = 0; st < m.length; st++) {
+    if (!m[st] || seen[st]) continue
+    const b: Blob = { x0: w, y0: rows, x1: 0, y1: 0, area: 0, dsum: 0, ssum: 0, sx: 0, sy: 0, sxx: 0, syy: 0, sxy: 0 }
+    stack.push(st); seen[st] = 1
+    while (stack.length) {
+      const p = stack.pop()!, x = p % w, y = (p - x) / w
+      b.area++; b.dsum += Math.abs(res[p]); b.ssum += res[p]; b.sx += x; b.sy += y; b.sxx += x * x; b.syy += y * y; b.sxy += x * y
+      if (x < b.x0) b.x0 = x; if (x > b.x1) b.x1 = x; if (y < b.y0) b.y0 = y; if (y > b.y1) b.y1 = y
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= w || yy >= rows) continue; const q = yy * w + xx; if (m[q] && !seen[q]) { seen[q] = 1; stack.push(q) } }
+    }
+    if (b.area >= minArea && b.x1 - b.x0 + 1 <= w * 0.6) blobs.push(b)
+  }
+  // fragments of one line (same tone, in line along the weld, a short gap apart) are one indication
+  blobs.sort((a, b) => a.x0 - b.x0)
+  for (let i = 0; i < blobs.length; i++) for (let j = i + 1; j < blobs.length; j++) {
+    const a = blobs[i], b = blobs[j]
+    if (Math.sign(a.ssum) !== Math.sign(b.ssum)) continue
+    const la = a.x1 - a.x0 + 1, lb = b.x1 - b.x0 + 1, ha = a.y1 - a.y0 + 1, hb = b.y1 - b.y0 + 1
+    if (la < ha * 2 && lb < hb * 2) continue // two round spots stay two (pores)
+    const gap = b.x0 - a.x1, dy = Math.abs(a.sy / a.area - b.sy / b.area)
+    if (gap >= 0 && gap <= 0.6 * Math.max(la, lb) && dy <= Math.max(ha, hb) * 0.8 + 1) {
+      blobs[i] = { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1), area: a.area + b.area, dsum: a.dsum + b.dsum, ssum: a.ssum + b.ssum, sx: a.sx + b.sx, sy: a.sy + b.sy, sxx: a.sxx + b.sxx, syy: a.syy + b.syy, sxy: a.sxy + b.sxy }
+      blobs.splice(j, 1); j = i
+    }
+  }
+  const mk = (x: number, y: number, bwid: number, bh: number, f: Feat, conf: number): Found => {
+    const c = classify(f), inBead = f.pos >= -0.05 && f.pos <= 1.05
+    const k = (inBead ? 1 : 0.5) * (c.code ? 1 : 0.6)
+    const box = band0.axis === 'v' ? { x: y, y: x, w: bh, h: bwid } : { x, y, w: bwid, h: bh }
+    return { ...box, lengthPx: f.len, widthPx: f.wid, confidence: r2(Math.min(0.97, Math.max(0.05, conf * k))), code: c.code, why: c.why, inBead, f }
+  }
+  const items: Found[] = []
+  for (const b of blobs) {
+    const n = b.area, mx = b.sx / n, my = b.sy / n
+    const cxx = b.sxx / n - mx * mx + 1 / 12, cyy = b.syy / n - my * my + 1 / 12, cxy = b.sxy / n - mx * my
+    const tr = cxx + cyy, det = cxx * cyy - cxy * cxy, dd = Math.sqrt(Math.max(0, (tr * tr) / 4 - det))
+    const l1 = tr / 2 + dd, l2 = Math.max(1 / 12, tr / 2 - dd)
+    const len = Math.max(1, 4 * Math.sqrt(l1)), wid = Math.max(1, 4 * Math.sqrt(l2))
+    const ang = Math.abs((Math.atan2(2 * cxy, cxx - cyy) / 2) * 180 / Math.PI) // major axis against x (the weld)
+    const cnr = b.dsum / n / sigma
+    if (cnr < 4) continue
+    const f: Feat = { cnr: r2(cnr), area: n, len: r2(len), wid: r2(wid), elong: r2(len / wid), angle: r2(len / wid < 1.3 ? 0 : ang), pos: r2((y0 + my - band0.from) / Math.max(1, bw - 1)), fill: r2(n / ((b.x1 - b.x0 + 1) * (b.y1 - b.y0 + 1))), voidLike: Math.sign(b.ssum) === voidSign ? 1 : 0, lenRel: r2(len / bw), widRel: r2(wid / bw), through: 0 }
+    items.push(mk(b.x0, y0 + b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, f, sigmoid((cnr - 5.5) / 1.3) * (n < minArea * 2 ? 0.8 : 1)))
+  }
+  // a line that runs the whole film: a narrow valley (or ridge) of the across-weld profile inside the bead
+  const pr = Math.max(3, Math.round(bw / 5)), dev = new Float64Array(rows)
+  for (let ry = 0; ry < rows; ry++) { const a = Math.max(0, ry - pr), b = Math.min(rows - 1, ry + pr); dev[ry] = (rowMed[ry] - medianOf(rowMed.slice(a, b + 1))) * voidSign }
+  const pSig = Math.max(0.8, 1.4826 * medianOf(Array.from(dev, Math.abs))), pThr = Math.max(4 * pSig, 3)
+  for (let ry = 0; ry < rows; ry++) {
+    if (dev[ry] <= pThr) continue
+    let e = ry, peak = dev[ry]; while (e + 1 < rows && dev[e + 1] > pThr) { e++; peak = Math.max(peak, dev[e]) }
+    const wid = e - ry + 1, pos = (y0 + (ry + e) / 2 - band0.from) / Math.max(1, bw - 1)
+    if (wid <= bw / 4 && pos > 0.08 && pos < 0.92) {
+      const f: Feat = { cnr: r2(peak / pSig), area: wid * w, len: w, wid, elong: r2(w / wid), angle: 0, pos: r2(pos), fill: 1, voidLike: 1, lenRel: r2(w / bw), widRel: r2(wid / bw), through: 1 }
+      items.push(mk(0, y0 + ry, w, wid, f, sigmoid((peak / pSig - 5) / 1.5) * 0.85))
+    }
+    ry = e
+  }
+  // three or more pores close together → cluster porosity
+  const pores = items.filter((c) => c.code === 'P')
+  for (const p of pores) { const near = pores.filter((q) => Math.hypot(q.x - p.x, q.y - p.y) < 6 * Math.max(p.w, p.h, 4)); if (near.length >= 3) for (const q of near) { q.code = 'CP'; q.why = 'چند حفرهٔ نزدیک به هم — الگوی تخلخل خوشه‌ای' } }
+  items.sort((a, b) => Number(b.inBead) - Number(a.inBead) || b.confidence - a.confidence)
+  return { band: band0, sigma: r2(sigma), items: items.slice(0, opt.max ?? 15), version: DETECTOR_VERSION }
+}

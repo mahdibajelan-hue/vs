@@ -5,6 +5,7 @@ begin;
 create temporary table _p (id uuid) on commit drop;
 insert into _p values ('5aa1afc2-c569-4546-a07f-2ca4160c2e63'), ('6b25ebd9-e2f7-4385-90e7-c954a0880232');
 delete from wq_opinions where project_id in (select id from _p);
+delete from wq_ai_samples where project_id in (select id from _p);
 delete from wq_coating where project_id in (select id from _p);
 delete from wq_crew where project_id in (select id from _p);
 delete from wq_repairs where project_id in (select id from _p);

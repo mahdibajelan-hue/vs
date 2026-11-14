@@ -11,6 +11,7 @@ import { FilmViewer } from '../components/FilmViewer'
 import { DefectForm, defectRow, newDraft } from '../components/DefectForm'
 import { CrewTable, HealthRing, StageRail, WeldClock, type Stage } from '../components/PassportParts'
 import { CoatingPanel, CrewEditor } from '../components/CrewCoating'
+import { coveredHours } from '../lib/coverage'
 import { DefectTable, EvalCard, FilmQuality, FilmUpload, History, Opinions, QUALITY_COLOR, QUALITY_FA, RepairForm, roundName, Thumb, ThkEdit, VERDICT_COLOR, VtBlock } from '../components/FileParts'
 
 type Sec = 'overview' | 'welding' | 'vt' | 'rt' | 'ai' | 'interp' | 'repair' | 'coating' | 'final'
@@ -42,6 +43,8 @@ export function JointFile({ weld, onBack }: { weld: repo.QcWeld; onBack: () => v
   const firstEval = [...evals].reverse().find((e) => e.round === 0)
   const uncoded = rDefects.filter((d) => !codeOf(d))
   const calc = useMemo(() => (thk && od ? evaluate({ odMm: od, thkMm: thk }, rDefects.filter((d) => codeOf(d) && (!d.filmId || rFilms.some((f) => f.id === d.filmId && f.quality === 'accepted'))).map((d) => ({ id: d.id, code: codeOf(d) as Code, lengthMm: d.lengthMm, widthMm: d.widthMm, depthMm: d.depthMm, positionMm: d.positionMm, densityOver: d.densityOver })), st.crit) : null), [thk, od, rDefects, rFilms, st.crit])
+  const pendingFilms = rFilms.filter((f) => f.quality === 'pending').length
+  const cover = coveredHours(rFilms.filter((f) => f.quality === 'accepted').map((f) => f.segment))
   const ht = st.sections ?? []
   const htSec = weld.tieKm != null ? ht.find((s) => weld.tieKm! >= s.kmFrom && weld.tieKm! <= s.kmTo) : undefined
   const allTested = ht.length > 0 && ht.every((s) => s.stage === 'accepted' && !s.failed)
@@ -162,7 +165,10 @@ export function JointFile({ weld, onBack }: { weld: repo.QcWeld; onBack: () => v
                   {(!thk || !od) && <p className="ps-hint is-warn">{!od ? 'قطر لوله' : 'ضخامت دیواره'} در فهرست مرکزی جوش‌ها نیست؛ برای محاسبهٔ طول جوش و حدود پذیرش لازم است.</p>}
                   {rEval ? <EvalCard e={rEval} defects={rDefects} round={round} /> : <p className="ps-hint">هنوز ارزیابی‌ای برای این راند ثبت نشده است.</p>}
                   {can.submit && calc && (!rEval || rEval.signedAt == null) && !rFilms.some((f) => f.quality === 'accepted') && <p className="ps-hint">ارزیابی پس از بارگذاری فیلم این راند و تأیید کیفیت آن ممکن است.</p>}
-                  {can.submit && calc && thk && (!rEval || rEval.signedAt == null) && rFilms.some((f) => f.quality === 'accepted') && (preview ? (
+                  {pendingFilms > 0 && <p className="ps-hint is-warn">کیفیت {fa(pendingFilms)} فیلم این راند هنوز بررسی نشده است؛ پیش از ارزیابی برای هر فیلم تأیید، ریتیک یا ریشوت ثبت کنید.</p>}
+                  {cover && cover.hours < 12 && <p className="ps-hint is-warn">فیلم‌های تأییدشده {fa(cover.hours, 1)} از ۱۲ ساعت محیط جوش را می‌پوشانند؛ بازهٔ {cover.gaps.map(([a, b]) => `${fa(a, 1)} تا ${fa(b, 1)}`).join(' و ')} فیلم تأییدشده ندارد. ارزیابی بدون پوشش کامل محیط معتبر نیست.</p>}
+                  {!cover && rFilms.some((f) => f.quality === 'accepted') && <p className="ps-meta">قطعهٔ فیلم‌ها به ساعت نوشته نشده (مثلاً ۱۲-۳)؛ سامانه نمی‌تواند پوشش کامل محیط جوش را کنترل کند.</p>}
+                  {can.submit && calc && thk && !pendingFilms && (!rEval || rEval.signedAt == null) && rFilms.some((f) => f.quality === 'accepted') && (preview ? (
                     <div className="wq-preview" style={{ '--c': VERDICT_COLOR[calc.overall] } as CSSProperties}>
                       <b>نتیجه طبق API 1104: {VERDICT_FA[calc.overall]}</b>
                       <div className="wq-limits">{calc.limits.map((l) => <span key={l.label}><small>{l.label}</small>{l.value}</span>)}</div>

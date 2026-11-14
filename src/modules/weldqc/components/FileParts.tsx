@@ -8,6 +8,7 @@ import { QUAD_SHORT, type Quadrant } from '../lib/crew'
 import { PASSES } from '../lib/analytics'
 import { codeOf, fa, faDate, useQc } from '../lib/useQc'
 import { FilmConvert, type Converted } from './FilmConvert'
+import { densityIssue } from '../lib/coverage'
 
 export const QUALITY_FA: Record<repo.Film['quality'], string> = { pending: 'در انتظار بررسی کیفیت', accepted: 'کیفیت تأیید شد', retake: 'ریتیک — تکرار به درخواست کارفرما', reshoot: 'ریشوت — تکرار به هزینهٔ پیمانکار RT' }
 export const QUALITY_COLOR: Record<repo.Film['quality'], string> = { pending: '#0ea5e9', accepted: '#22c55e', retake: '#f59e0b', reshoot: '#ef4444' }
@@ -31,8 +32,12 @@ export function FilmQuality({ film }: { film: repo.Film }) {
   const st = useWqStore(); const [note, setNote] = useState(''); const [open, setOpen] = useState(false)
   const set = (q: repo.Film['quality']) => st.run(`کیفیت فیلم: ${QUALITY_FA[q]}`, () => repo.updateFilm(film.id, { quality_status: q, quality_note: note.trim(), quality_name: st.me(), quality_at: new Date().toISOString() })).then((ok) => ok && setOpen(false))
   if (!open) return <button type="button" className="ps-btn" onClick={() => setOpen(true)}><Eye size={14} aria-hidden /> بررسی کیفیت فیلم</button>
+  const dens = densityIssue(film.density)
   return (
     <div className="wq-quality">
+      {dens && <p className="ps-hint is-warn">{dens} (محدودهٔ پذیرش API 1104 در ناحیهٔ جوش: ۱٫۸ تا ۴٫۰). چنین فیلمی معمولاً ریشوت می‌شود.</p>}
+      {!film.iqi && <p className="ps-hint is-warn">IQI این فیلم ثبت نشده؛ دیده‌شدن سیم اصلی IQI شرط تأیید کیفیت است.</p>}
+      {film.metrics?.verdict === 'poor' && <p className="ps-hint is-warn">سنجش خودکار، کیفیت تصویر را ضعیف برآورد کرده است{film.metrics.notes?.length ? `: ${film.metrics.notes.join('؛ ')}` : ''}.</p>}
       <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="توضیح (دانسیته، IQI، خوانایی)" aria-label="توضیح کیفیت" />
       <div className="wq-form-actions">
         <button type="button" className="ps-btn is-ok" onClick={() => void set('accepted')}>تأیید کیفیت</button>
@@ -103,7 +108,7 @@ export function EvalCard({ e, defects, round }: { e: repo.Evaluation; defects: r
       <div className="wq-evalcard-top"><b>{VERDICT_FA[e.overall]}</b><small>ارزیاب: {e.evaluatedName || '—'} · {faDate(e.evaluatedAt)}</small></div>
       {defects.filter((d) => d.verdict && d.verdict !== 'accept').map((d) => <p key={d.id} className="wq-advice"><b>{codeOf(d) ? CODE_FA[codeOf(d) as keyof typeof CODE_FA] : d.type}:</b> {d.verdictReason}<br /><span>پیشنهاد تعمیر: {d.repairAdvice}</span></p>)}
       <p className="ps-meta">{e.summary}</p>
-      {e.signedAt ? <p className="wq-signed"><Signature size={14} aria-hidden /> تأیید نهایی بازرس NDT: {e.signedName || '—'} · {faDate(e.signedAt)}{e.forcedCutout ? ' · تبدیل به برش' : ''}</p>
+      {e.signedAt ? <p className="wq-signed"><Signature size={14} aria-hidden /> تأیید نهایی بازرس NDT: {e.signedName || '—'} · {faDate(e.signedAt)}{e.forcedCutout ? ' · تبدیل به برش' : ''}{e.samePerson ? ' · ارزیاب و تأییدکننده یک نفرند (با اختیار مدیر کنترل کیفیت)' : ''}</p>
         : st.caps.approve ? (
           <div className="wq-sign">
             {lastRound && e.overall === 'repair' && <label className="wq-check"><input type="checkbox" checked={force} onChange={(x) => setForce(x.target.checked)} /> سقف دو تعمیر تکمیل شده؛ نتیجه به «برش» تبدیل شود</label>}
@@ -119,14 +124,20 @@ export function RepairForm({ weld, round }: { weld: repo.QcWeld; round: number }
   const st = useWqStore(); const q = useQc()
   const [r, setR] = useState({ method: '', performedBy: '', approvedBy: '', repairWps: '', note: '' })
   if (!st.caps.edit) return <p className="ps-hint">منتظر ثبت تعمیر توسط مهندس ناظر جوش.</p>
-  const options = [...new Set([...PASSES.flatMap((p) => weld.stampsBy[p]), ...st.welders.filter((w) => w.status === 'active').map((w) => w.key)])]
+  const options = [...new Set([...PASSES.flatMap((p) => weld.stampsBy[p]), ...st.welders.filter((w) => w.status === 'active' && w.kind !== 'coater').map((w) => w.key)])]
+  const today = new Date().toISOString().slice(0, 10)
+  const rw = st.welders.find((w) => w.key === r.performedBy)
+  const qualified = !!rw && st.quals.some((x) => x.welderId === rw.id && x.status !== 'revoked' && (!x.expiryDate || x.expiryDate >= today))
+  const crack = st.defects.some((d) => d.weldId === weld.id && d.round === round && !d.removed && d.verdict === 'repair' && codeOf(d) === 'C')
   return (
     <form className="wq-form wq-repair" onSubmit={(e) => { e.preventDefault(); void st.run(`تعمیر ثبت شد؛ راند RS${fa(round + 1)} باز شد`, () => repo.addRepair(weld.id, r, st.me())) }}>
       <b className="is-wide"><Wrench size={15} aria-hidden /> ثبت تعمیر {round === 0 ? 'اول' : 'دوم'}</b>
       <label className="is-wide"><span>روش تعمیر</span><input value={r.method} onChange={(e) => setR({ ...r, method: e.target.value })} placeholder="مثلاً سنگ‌زنی تا فلز سالم و جوش مجدد ریشه" required /></label>
       <label><span>جوشکار تعمیر</span><select value={r.performedBy} onChange={(e) => setR({ ...r, performedBy: e.target.value })} required><option value="">انتخاب از فهرست جوشکاران…</option>{options.map((k) => <option key={k} value={k}>{k}{q.nameOf(k) !== k ? ` — ${q.nameOf(k)}` : ''}</option>)}</select></label>
       <label><span>Repair WPS</span><input value={r.repairWps} onChange={(e) => setR({ ...r, repairWps: e.target.value })} /></label>
-      <label><span>تأییدکننده</span><input value={r.approvedBy} onChange={(e) => setR({ ...r, approvedBy: e.target.value })} /></label>
+      <label><span>تأییدکننده{crack ? ' (نمایندهٔ کارفرما) *' : ''}</span><input value={r.approvedBy} onChange={(e) => setR({ ...r, approvedBy: e.target.value })} required={crack} /></label>
+      {crack && <p className="is-wide ps-hint is-warn">این راند ترک دارد: طبق بند 10 استاندارد API 1104 تعمیر ترک فقط با مجوز کارفرما مجاز است؛ نام تأییدکننده الزامی است.</p>}
+      {r.performedBy && !qualified && <p className="is-wide ps-hint is-warn">برای جوشکار «{r.performedBy}» آزمون صلاحیت معتبری در «ارزیابی صلاحیت» ثبت نیست{rw ? '' : ' (در فهرست جوشکاران هم نیست)'}؛ تعمیر باید توسط جوشکار دارای صلاحیت تعمیر انجام شود.</p>}
       <label><span>توضیح</span><input value={r.note} onChange={(e) => setR({ ...r, note: e.target.value })} /></label>
       <div className="is-wide wq-form-actions"><button type="submit" className="ps-btn is-primary"><Wrench size={14} aria-hidden /> ثبت تعمیر و باز کردن راند بعد</button></div>
     </form>
@@ -171,7 +182,7 @@ export function History({ evals, defects, repairs, films, current, onFilm }: { e
           <details key={r} className="wq-hist" open={current === 99}>
             <summary><b>{roundName(r)}</b>{e && <span className="wq-verdict" style={{ '--c': VERDICT_COLOR[e.overall] } as CSSProperties}>{VERDICT_FA[e.overall]}</span>}</summary>
             <p className="ps-meta">{fa(films.filter((f) => f.round === r).length)} فیلم · ارزیاب {e?.evaluatedName || '—'} · بازرس {e?.signedName || '—'} {e?.signedAt ? `(${faDate(e.signedAt)})` : ''}</p>
-            {films.some((f) => f.round === r) && <div className="wq-hist-films">{films.filter((f) => f.round === r).map((f) => <button key={f.id} type="button" className="wq-thumb" onClick={() => onFilm(f.id)} aria-label={`دیدن فیلم ${f.segment || f.fileName}`}><Thumb path={f.path} alt={f.fileName} /><span><Eye size={13} aria-hidden /> {f.segment || 'فیلم'}</span></button>)}</div>}
+            {films.some((f) => f.round === r) && <div className="wq-hist-films">{films.filter((f) => f.round === r).map((f) => <button key={f.id} type="button" className="wq-thumb" onClick={() => onFilm(f.id)} aria-label={`دیدن فیلم ${f.segment || f.fileName}`}><Thumb path={f.displayPath ?? f.path} alt={f.fileName} /><span><Eye size={13} aria-hidden /> {f.segment || 'فیلم'}</span></button>)}</div>}
             <ul className="wq-mini">{defects.filter((d) => d.round === r).map((d) => <li key={d.id}><i style={{ background: DEFECT_COLOR[d.type] }} />{codeOf(d) || d.type} {fa(d.lengthMm, 1)} mm{d.clock != null ? ` · ساعت ${fa(d.clock, 1)}` : ''} · {d.pass ? PASS_FA[d.pass] : '—'} · {d.welders.join('، ') || 'جوشکار نامشخص'}{d.verdict ? ` · ${VERDICT_FA[d.verdict]}` : ''}</li>)}</ul>
             {rp && <p className="wq-repair-line"><Wrench size={14} aria-hidden /> تعمیر: {rp.method} · جوشکار {rp.performedBy}{q.nameOf(rp.performedBy) !== rp.performedBy ? ` (${q.nameOf(rp.performedBy)})` : ''}{rp.repairWps ? ` · WPS ${rp.repairWps}` : ''} · {faDate(rp.createdAt)}</p>}
           </details>
