@@ -4,13 +4,16 @@ import { EXECUTION, METHODS, PRICING, PROCUREMENT } from '../lib/bank'
 import type { Result, Weights } from '../lib/engine'
 import type { Caps, Decision, DecisionKind, Study, Version } from '../repo'
 import { DECISION_FA, STATUS_FA, fa, nameOf } from '../lib/useLive'
+import { LifecycleHandoff } from '../components/LifecycleHandoff'
+import type { LifecycleStrategy } from '../lib/handoff'
 
 const FLOW = ['draft', 'analysed', 'in_review', 'approved'] as const
 const when = (s: string) => { try { return new Date(s).toLocaleString('fa-IR-u-ca-persian', { dateStyle: 'medium', timeStyle: 'short' }) } catch { return s } }
 
-export function DsDecision({ study, live, current, versions, decisions, caps, busy, dirty, locked, onSaveVersion, onDecide }: {
+export function DsDecision({ study, live, current, versions, decisions, caps, busy, dirty, locked, onSaveVersion, onDecide, onApplyLifecycle }: {
   study: Study; live: Result | null; current: Version | null; versions: Version[]; decisions: Decision[]; caps: Caps; busy: boolean; dirty: boolean; locked: boolean
   onSaveVersion: (r: Result, w: Weights, note: string) => void; onDecide: (d: DecisionKind, method: string | null, pricing: string[], procurement: string[], execution: string[], rationale: string) => void
+  onApplyLifecycle: (k: LifecycleStrategy) => Promise<boolean>
 }) {
   const r = current?.result ?? null
   const rec = r?.recommendation ?? null
@@ -89,6 +92,8 @@ export function DsDecision({ study, live, current, versions, decisions, caps, bu
           ) : <p className="ds-muted">ابتدا تحلیل را ثبت و برای تصمیم ارسال کنید.</p>}
         </section>
       </div>
+
+      {study.status === 'approved' && <LifecycleHandoff study={study} approval={[...decisions].reverse().find((d) => d.decision === 'approve' || d.decision === 'approve_override') ?? null} canApply={canApprove} busy={busy} onApply={onApplyLifecycle} />}
 
       <section className="ds-card" aria-labelledby="ds-h-h">
         <header><h3 id="ds-h-h"><History size={15} aria-hidden />سابقهٔ نسخه‌ها و تصمیم‌ها</h3></header>

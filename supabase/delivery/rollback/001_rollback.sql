@@ -1,4 +1,5 @@
 -- rollback of delivery 001. Run by hand; it removes every delivery-strategy study, version and decision.
+-- (if 002 was applied, run 002_rollback.sql first)
 drop function if exists ds_decide(uuid, text, text, text[], text[], text[], text);
 drop function if exists ds_set_narrative(uuid, jsonb);
 drop function if exists ds_save_version(uuid, jsonb, jsonb, jsonb, text, text);

@@ -422,6 +422,16 @@ export function createStageGateEngine(env) {
                 lcState.strategyDeps[d.strategy].push(d);
             });
             lcState.masterSchedule = masterSchedule || null;
+            // the execution strategy proposed by an approved study of «راهبرد و روش اجرای پروژه» (delivery module), if any
+            lcState.dsProposal = null;
+            try {
+                const { data: sgp } = await _supabase.from('sg_projects').select('master_project_id').eq('name', projectName).maybeSingle();
+                if (sgp?.master_project_id) {
+                    const { data: dsr } = await _supabase.from('ds_studies').select('title, lifecycle_strategy, lifecycle_applied_at, lifecycle_applied_name')
+                        .eq('project_id', sgp.master_project_id).eq('status', 'approved').not('lifecycle_strategy', 'is', null).order('lifecycle_applied_at', { ascending: false }).limit(1);
+                    if (dsr && dsr[0]) lcState.dsProposal = dsr[0];
+                }
+            } catch (_) { /* the delivery module is optional */ }
             lcState.scheduleVersions = scheduleVersions || [];
             lcState.strategyDraft = null;
             lcState.successTemplates = successTemplates || [];
@@ -2455,10 +2465,23 @@ export function createStageGateEngine(env) {
             </table>`;
         }
 
+        function lcDsProposalHtml(current) {
+            const p = lcState.dsProposal;
+            if (!p) return '';
+            const applied = lcState.masterSchedule?.execution_strategy === p.lifecycle_strategy;
+            const at = p.lifecycle_applied_at ? formatJalali(String(p.lifecycle_applied_at).slice(0, 10)) : '';
+            return `<div class="flex flex-wrap items-center gap-2 mb-2 text-[11px] px-3 py-2 rounded-lg" style="background:rgba(45,212,191,.08); color:#99f6e4; border:1px solid rgba(45,212,191,.3);">
+                <span>راهبرد پیشنهادی مطالعهٔ مصوب «${esc(p.title)}» (ماژول راهبرد و روش اجرا): <b>${esc(LC_STRATEGY_LABELS[p.lifecycle_strategy] || p.lifecycle_strategy)}</b> — ${esc(p.lifecycle_applied_name || '')}${at ? '، ' + at : ''}${applied ? ' · اعمال شده' : ''}</span>
+                ${!applied && current !== p.lifecycle_strategy && lcState.canEdit ? `<button type="button" data-lc-set-strategy="${esc(p.lifecycle_strategy)}" class="mr-auto text-[10.5px] font-bold px-3 py-1 rounded-lg border" style="border-color:rgba(45,212,191,.5); color:#5eead4;">انتخاب این راهبرد</button>` : ''}
+                ${!applied && current === p.lifecycle_strategy ? '<span class="mr-auto" style="color:#fbbf24;">انتخاب شد؛ برای ثبت، «اعمال به برنامه فازها» را بزنید.</span>' : ''}
+            </div>`;
+        }
+
         function lcMasterScheduleStrategyRowHtml() {
             const current = lcMasterScheduleStrategy();
             const startIso = lcMasterScheduleStartIso() || todayTehran();
             return `<div class="mb-3">
+                ${lcDsProposalHtml(current)}
                 <div class="flex flex-wrap items-center gap-2 mb-2">
                     ${LC_STRATEGIES.map(s => `<button type="button" data-lc-set-strategy="${s.key}" title="${esc(s.desc)}" class="text-[10.5px] font-bold px-3 py-1.5 rounded-lg border transition ${current === s.key ? 'bg-blue-900 text-white border-blue-900' : 'text-slate-200 hover:bg-white/5'}">${esc(s.label)}</button>`).join('')}
                     <span class="mr-auto flex items-center gap-1.5 text-[10.5px]" style="color:#93c5fd;">
@@ -2545,7 +2568,7 @@ export function createStageGateEngine(env) {
                 </div>
                 ${lcGovernanceStepperHtml()}
                 ${lcMasterScheduleKpiHtml()}
-                ${lcState.canEdit ? lcMasterScheduleStrategyRowHtml() : lcStrategyComparisonTableHtml(lcMasterScheduleStartIso())}
+                ${lcState.canEdit ? lcMasterScheduleStrategyRowHtml() : lcDsProposalHtml(lcMasterScheduleStrategy()) + lcStrategyComparisonTableHtml(lcMasterScheduleStartIso())}
                 ${lcExecutiveSummaryCardHtml()}
                 ${lcMasterScheduleHistoryHtml()}
                 ${lcSuccessTemplatesListHtml()}

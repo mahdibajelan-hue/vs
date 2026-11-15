@@ -10,13 +10,13 @@ const chk = <T extends { error: unknown }>(r: T): T => { if (r.error) throw r.er
 const s = (v: unknown) => (v == null ? '' : String(v))
 
 export type StudyStatus = 'draft' | 'analysed' | 'in_review' | 'approved' | 'rejected'
-export interface Study { id: string; projectId: string; title: string; status: StudyStatus; answers: Answers; weights: Partial<Weights> | null; sources: Record<string, string>; currentVersion: number; createdName: string; createdAt: string; updatedAt: string }
+export interface Study { id: string; projectId: string; title: string; status: StudyStatus; answers: Answers; weights: Partial<Weights> | null; sources: Record<string, string>; currentVersion: number; createdName: string; createdAt: string; updatedAt: string; lifecycle: { strategy: string; at: string; by: string } | null }
 export interface Version { id: string; studyId: string; version: number; answers: Answers; weights: Weights; result: Result; engineVersion: string; recommended: string | null; confidence: number | null; decisive: boolean; note: string; narrative: { sentences: NarrativeSentence[]; rejected: number } | null; narrativeAt: string | null; createdBy: string | null; createdName: string; createdAt: string }
 export type DecisionKind = 'submitted' | 'approve' | 'approve_override' | 'return' | 'reject' | 'reopen'
 export interface Decision { id: string; studyId: string; versionId: string; decision: DecisionKind; method: string | null; pricing: string[]; procurement: string[]; execution: string[]; rationale: string; overridesEngine: boolean; samePerson: boolean; decidedName: string; decidedAt: string }
 export type Caps = Record<'view' | 'create' | 'edit' | 'submit' | 'approve' | 'export' | 'configure' | 'admin', boolean>
 
-const studyOf = (r: Row): Study => ({ id: r.id, projectId: r.project_id, title: s(r.title), status: r.status, answers: (r.answers ?? {}) as Answers, weights: (r.weights ?? null) as Partial<Weights> | null, sources: (r.sources ?? {}) as Record<string, string>, currentVersion: Number(r.current_version) || 0, createdName: s(r.created_name), createdAt: s(r.created_at), updatedAt: s(r.updated_at) })
+const studyOf = (r: Row): Study => ({ id: r.id, projectId: r.project_id, title: s(r.title), status: r.status, answers: (r.answers ?? {}) as Answers, weights: (r.weights ?? null) as Partial<Weights> | null, sources: (r.sources ?? {}) as Record<string, string>, currentVersion: Number(r.current_version) || 0, createdName: s(r.created_name), createdAt: s(r.created_at), updatedAt: s(r.updated_at), lifecycle: r.lifecycle_strategy ? { strategy: s(r.lifecycle_strategy), at: s(r.lifecycle_applied_at), by: s(r.lifecycle_applied_name) } : null })
 const versionOf = (r: Row): Version => ({ id: r.id, studyId: r.study_id, version: Number(r.version), answers: r.answers, weights: r.weights, result: r.result as Result, engineVersion: s(r.engine_version), recommended: r.recommended ?? null, confidence: r.confidence == null ? null : Number(r.confidence), decisive: !!r.decisive, note: s(r.note), narrative: r.narrative ?? null, narrativeAt: r.narrative_at ?? null, createdBy: r.created_by ?? null, createdName: s(r.created_name), createdAt: s(r.created_at) })
 const decisionOf = (r: Row): Decision => ({ id: r.id, studyId: r.study_id, versionId: r.version_id, decision: r.decision, method: r.method ?? null, pricing: r.pricing ?? [], procurement: r.procurement ?? [], execution: r.execution ?? [], rationale: s(r.rationale), overridesEngine: !!r.overrides_engine, samePerson: !!r.same_person, decidedName: s(r.decided_name), decidedAt: s(r.decided_at) })
 
@@ -41,6 +41,15 @@ export async function saveStudy(id: string | null, pid: string, title: string, a
 export async function saveVersion(studyId: string, answers: Answers, weights: Weights, result: Result, note: string): Promise<string> {
   return chk(await supabase.rpc('ds_save_version', { p_study: studyId, p_answers: answers, p_weights: weights, p_result: result, p_engine: result.engineVersion, p_note: note })).data as string
 }
+/** the Stage-Gate lifecycle of the project (linked by sg_projects.master_project_id) and its current master-schedule strategy */
+export async function lifecycleNow(pid: string): Promise<{ linked: boolean; name: string; strategy: string | null; govStatus: string | null }> {
+  const p = await supabase.from('sg_projects').select('name').eq('master_project_id', pid).maybeSingle()
+  const name = s(p.data?.name)
+  if (!name) return { linked: false, name: '', strategy: null, govStatus: null }
+  const m = await supabase.from('sg_lifecycle_master_schedule').select('execution_strategy, governance_status').eq('project_name', name).maybeSingle()
+  return { linked: true, name, strategy: m.data?.execution_strategy ?? null, govStatus: m.data?.governance_status ?? null }
+}
+export async function applyToLifecycle(studyId: string, strategy: string) { chk(await supabase.rpc('ds_apply_to_lifecycle', { p_study: studyId, p_strategy: strategy })) }
 export async function decide(studyId: string, d: DecisionKind, method: string | null, pricing: string[], procurement: string[], execution: string[], rationale: string) {
   chk(await supabase.rpc('ds_decide', { p_study: studyId, p_decision: d, p_method: method, p_pricing: pricing, p_procurement: procurement, p_execution: execution, p_rationale: rationale }))
 }
@@ -111,6 +120,8 @@ const ERR: Record<string, string> = {
   ds_same_person: 'تصمیم‌گیرنده نباید همان کسی باشد که تحلیل را تهیه کرده است.', ds_rationale: 'برای این تصمیم نوشتن دلیل (دست‌کم یک جمله) الزامی است.',
   ds_rationale_indicative: 'تحلیل قطعی نیست (اطمینان کم یا گزینه‌های هم‌امتیاز)؛ تصویب آن با نوشتن دلیل مدیریتی ممکن است.', ds_no_method: 'روش اجرای تصویب‌شده را انتخاب کنید.',
   ds_bad_step: 'این مرحله اکنون مجاز نیست.', ds_no_version: 'ابتدا تحلیل را اجرا و نسخه را ثبت کنید.', ds_no_title: 'عنوان مطالعه را بنویسید.', ds_narrative_exists: 'متن هوشمند این نسخه پیش‌تر ثبت شده است.',
+  ds_not_approved: 'فقط راهبرد تصویب‌شده به چرخهٔ عمر منتقل می‌شود.', ds_bad_strategy: 'راهبرد زمان‌بندی نامعتبر است.',
+  ds_lifecycle_locked: 'برنامهٔ چرخهٔ عمر این پروژه تصویب، خط مبنا یا در حال اجراست؛ تغییر راهبرد آن باید از مسیر بازنگری در ماژول چرخهٔ عمر انجام شود.',
 }
 export function explain(e: unknown): string {
   const m = (e as { message?: string })?.message ?? String(e)

@@ -24,6 +24,7 @@ interface DsState {
   saveDraft: () => Promise<boolean>
   saveVersion: (result: Result, weights: Weights, note: string) => Promise<boolean>
   decide: (d: DecisionKind, method: string | null, pricing: string[], procurement: string[], execution: string[], rationale: string) => Promise<boolean>
+  applyToLifecycle: (strategy: string) => Promise<boolean>
   narrate: (v: Version, items: { id: string; text: string }[]) => Promise<void>
   clearFlash: () => void
 }
@@ -84,6 +85,11 @@ export const useDsStore = create<DsState>()((set, get) => {
         const msg: Record<DecisionKind, string> = { submitted: 'برای تصمیم مدیریت ارسال شد.', approve: 'راهبرد تصویب شد.', approve_override: 'راهبرد با تصمیم متفاوت مدیریت تصویب شد.', return: 'برای اصلاح برگشت داده شد.', reject: 'مطالعه رد شد.', reopen: 'مطالعه برای بازبینی بازگشایی شد.' }
         set({ busy: false, flash: { tone: 'ok', text: msg[d] } }); return true
       } catch (e) { return fail(e) }
+    },
+    async applyToLifecycle(strategy) {
+      const { activeId } = get(); if (!activeId) return false
+      set({ busy: true })
+      try { await repo.applyToLifecycle(activeId, strategy); await refresh(); set({ busy: false, flash: { tone: 'ok', text: 'راهبرد پیشنهادی برای چرخهٔ عمر ثبت شد؛ در «مستر پلن چرخهٔ عمر» کنار انتخاب راهبرد نمایش داده می‌شود و با «اعمال به برنامه فازها» به برنامه می‌رود.' } }); return true } catch (e) { return fail(e) }
     },
     async narrate(v, items) {
       set({ busy: true })

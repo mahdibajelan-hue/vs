@@ -66,7 +66,7 @@ export function DeliveryApp({ onExitToHub }: { onExitToHub: () => void; onBackTo
       case 'options': return shown ? <DsOptions key={focus ?? ''} r={shown} focus={focus} /> : null
       case 'scenarios': return shown ? <DsScenarios r={shown} /> : null
       case 'report': return reportResult ? <DsReport r={reportResult} answers={answers} meta={meta} version={current} saved={reportSaved && !!current} busy={st.busy} canNarrate={st.caps.admin || st.caps.edit || st.caps.create || st.caps.export} canExport={st.caps.admin || st.caps.export || st.caps.view} onNarrate={() => { if (current) void st.narrate(current, narrativeItems(current.result)) }} /> : null
-      case 'decision': return <DsDecision study={study} live={live} current={current} versions={versions} decisions={decisions} caps={st.caps} busy={st.busy} dirty={st.dirty} locked={locked} onSaveVersion={(r, w, n) => void st.saveVersion(r, w, n)} onDecide={(d, m, p, pr, e, why) => void st.decide(d, m, p, pr, e, why)} />
+      case 'decision': return <DsDecision study={study} live={live} current={current} versions={versions} decisions={decisions} caps={st.caps} busy={st.busy} dirty={st.dirty} locked={locked} onSaveVersion={(r, w, n) => void st.saveVersion(r, w, n)} onDecide={(d, m, p, pr, e, why) => void st.decide(d, m, p, pr, e, why)} onApplyLifecycle={st.applyToLifecycle} />
       case 'validation': return null
     }
   }
