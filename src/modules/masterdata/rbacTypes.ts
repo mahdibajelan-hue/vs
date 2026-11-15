@@ -23,6 +23,7 @@ export type ModuleKeyRef =
   | 'pssr'
   | 'testing'
   | 'stationpiping'
+  | 'delivery'
   | 'stakeholders'
   | 'admin'
 

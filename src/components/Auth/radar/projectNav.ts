@@ -1,5 +1,5 @@
 import {
-  IcBarrelCoin, IcColumn, IcControlPanel, IcCrane, IcFlare, IcGateValve, IcHardHats, IcHydroTest, IcManifold, IcWeldXray, IcPig, IcPipeStack,
+  IcBarrelCoin, IcColumn, IcControlPanel, IcCrane, IcDiverter, IcFlare, IcGateValve, IcHardHats, IcHydroTest, IcManifold, IcWeldXray, IcPig, IcPipeStack,
   IcPulseGauge, IcRadarScope, IcReroute, IcRowMarker, IcSafetyValve, IcScheduleBars, IcSpectacleBlind, IcStatement, IcWellhead, type NavIcon,
 } from './industryIcons'
 import { PROJECT_SCOPED_MODULES, type ModuleKey } from '../../../store/useModuleStore'
@@ -41,6 +41,7 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
     { id: 'pssr', module: 'pssr', label: 'آمادگی راه‌اندازی (PSSR)', icon: IcSafetyValve, accent: '#f97316' },
   ] },
   { id: 'money', label: 'قرارداد و هزینه', items: [
+    { id: 'delivery', module: 'delivery', label: 'راهبرد و روش اجرا', icon: IcDiverter, accent: '#2dd4bf' },
     { id: 'finance', module: 'finance', label: 'قراردادها و مالی', icon: IcBarrelCoin, accent: '#10b981' },
     { id: 'statements', module: 'statements', label: 'تولید صورت‌وضعیت (E·P·C)', icon: IcStatement, accent: '#14b8a6' },
     { id: 'change', module: 'change', label: 'مدیریت تغییرات', icon: IcReroute, accent: '#eab308' },

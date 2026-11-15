@@ -15,6 +15,7 @@ export const MODULE_CATALOG: { key: ModuleKey | 'radar'; fa: string; en: string;
   { key: 'testing', fa: 'آزمایش‌ها (هیدروتست)', en: 'Hydrotest', words: 'هیدروتست هیدرواستاتیک تست فشار قطعه بندی پروفیل ایستگاه بسته آزمون' },
   { key: 'pssr', fa: 'آمادگی راه‌اندازی (PSSR)', en: 'PSSR / RFSU', words: 'PSSR RFSU ایمنی راه اندازی پیش راه اندازی پانچ لیست تزریق گاز گواهی آمادگی' },
   { key: 'stakeholders', fa: 'مدیریت ذینفعان', en: 'Stakeholder Management', words: 'ذینفع ذی نفع ذینفعان stakeholder قدرت علاقه تعامل جلسه نامه نگرانی انتظارات جامعه محلی مالکان فرمانداری مجوز ارتباطات' },
+  { key: 'delivery', fa: 'راهبرد و روش اجرای پروژه', en: 'Delivery strategy', words: 'روش اجرا راهبرد استراتژی EPC EPCM DBB طرح و ساخت سه عاملی پیمان مدیریت پیمان BOT ترکیبی هیبرید مسیر سریع مدولار قیمت مقطوع مناقصه تصمیم' },
   { key: 'stagegate', fa: 'چرخه عمر پروژه (Stage-Gate)', en: 'Stage-Gate', words: 'گیت مرحله چرخه عمر فاز تصویب' },
   { key: 'taskissue', fa: 'مدیریت موانع و اقدامات', en: 'Issue & Task', words: 'مانع مسئله اقدام پیگیری issue' },
   { key: 'supervision', fa: 'حضور و غیاب دستگاه نظارت', en: 'Supervision Attendance', words: 'ناظر نظارت نماینده کارفرما حضور غیاب اضافه کار ساعت کار صبحانه ناهار شام خودرو استیجاری کارت ساعت' },

@@ -101,6 +101,12 @@ export const IcStatement = make('IcStatement', <>
   <path d="M8.5 9.5h3M8.5 13h7M8.5 16.5h7" />
 </>)
 
+/** راهبرد و روش اجرا — a three-way diverter: one header, three routes, one of them chosen (filled valve) */
+export const IcDiverter = make('IcDiverter', <>
+  <path d="M3 12h6" /><path d="M9 12c3 0 4-6 8-6h4M9 12h12M9 12c3 0 4 6 8 6h4" />
+  <circle cx="9" cy="12" r="2" fill="currentColor" stroke="none" /><path d="M18.5 4v4" opacity=".55" /><path d="M18.5 16v4" opacity=".55" />
+</>)
+
 /** مدیریت تغییرات — a re-route: the line leaves the old path at a tee */
 export const IcReroute = make('IcReroute', <>
   <path d="M2 8.5h9" /><path d="M11 8.5h11" strokeDasharray="2 2.6" opacity=".6" />
