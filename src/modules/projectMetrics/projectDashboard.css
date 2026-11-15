@@ -1,5 +1,5 @@
 /* ===== داشبورد پروژه ===== one accent per measure (planned blue, earned green, cost purple…), shared by tile, curve and legend. */
-.pdb { min-height: 100dvh; background: var(--bg-app); color: var(--text-primary); overflow-x: clip; }
+.pdb { min-height: var(--app-h, 100dvh); background: var(--bg-app); color: var(--text-primary); overflow-x: clip; }
 .pdb-top {
   position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem;
   padding: 0.7rem 1rem; border-bottom: 1px solid var(--border-soft);

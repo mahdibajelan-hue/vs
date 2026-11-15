@@ -6,7 +6,7 @@
   --text-primary: #e8eeff; --text-secondary: #aab6d6; --text-muted: #7181a8;
   color-scheme: dark;
 }
-.sh { min-height: 100dvh; color: var(--text-primary); overflow-x: clip;
+.sh { min-height: var(--app-h, 100dvh); color: var(--text-primary); overflow-x: clip;
   background:
     radial-gradient(1000px 520px at 85% -10%, rgb(139 92 246 / .16), transparent 60%),
     radial-gradient(900px 560px at 0% 10%, rgb(34 211 238 / .09), transparent 55%),

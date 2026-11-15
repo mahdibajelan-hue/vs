@@ -1,4 +1,8 @@
-import { Fragment, lazy, Suspense, useEffect } from 'react'
+import { Fragment, lazy, Suspense, useEffect, type ReactNode } from 'react'
+import { useNotificationStore } from './store/useNotificationStore'
+import type { ModuleKey } from './store/useModuleStore'
+import { ModuleTicker, TickerTab, useTicker } from './components/common/ModuleTicker'
+import { useInboxStore } from './modules/inbox/store/useInboxStore'
 import { useMasterDataStore } from './modules/masterdata/store/useMasterDataStore'
 import { ArrowRight, Loader2 } from 'lucide-react'
 import { useAppThemeSync } from './components/common/useAppTheme'
@@ -281,12 +285,25 @@ export function RootApp() {
     <>
       <Suspense fallback={<div className="flex h-screen w-screen items-center justify-center" style={{ background: 'var(--bg-app)' }}><Loader2 size={26} className="animate-spin text-brand-400" /></div>}>
         {workspace === 'project' && PROJECT_SCOPED_MODULES.has(activeModule)
-          ? <ProjectWorkspace><Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment></ProjectWorkspace>
-          : <Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment>}
+          ? <ProjectWorkspace><TickerFrame module={activeModule}><Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment></TickerFrame></ProjectWorkspace>
+          : <TickerFrame module={activeModule}><Fragment key={`${activeModule}-${moduleResetKey}`}>{moduleView}</Fragment></TickerFrame>}
       </Suspense>
       {workspace === 'portfolio' && PROJECT_SCOPED_MODULES.has(activeModule) && <PortfolioReturn />}
       <InboxOverlay />
       <GlobalSearch />
     </>
+  )
+}
+
+/** the news line of the active module above it; the module is laid out in the height that is left (--app-h) */
+function TickerFrame({ module, children }: { module: ModuleKey; children: ReactNode }) {
+  const t = useTicker(module)
+  useEffect(() => { void useInboxStore.getState().refreshIfStale(); void useNotificationStore.getState().refreshIfStale() }, [module])
+  return (
+    <div className={t.shown ? 'has-ticker' : undefined}>
+      {t.shown && <ModuleTicker heads={t.heads} onFold={() => t.fold(true)} />}
+      {!t.shown && t.heads.length > 0 && t.hidden && <TickerTab count={t.heads.length} onOpen={() => t.fold(false)} />}
+      {children}
+    </div>
   )
 }

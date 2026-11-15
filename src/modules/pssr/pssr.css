@@ -1,5 +1,5 @@
 /* ===== PSSR module — app tokens (light & dark) ===== */
-.ps { min-height: 100dvh; background: var(--bg-app); color: var(--text-primary); overflow-x: clip; }
+.ps { min-height: var(--app-h, 100dvh); background: var(--bg-app); color: var(--text-primary); overflow-x: clip; }
 .ps-top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; padding: .7rem 1rem; border-bottom: 1px solid var(--border-soft); background: color-mix(in srgb, var(--bg-app) 88%, transparent); backdrop-filter: blur(10px); }
 .ps-brand { display: inline-flex; align-items: center; gap: .6rem; min-width: 0; }
 .ps-brand-ico { display: inline-grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: .8rem; color: #fff; background: linear-gradient(140deg, #f97316, #ef4444); box-shadow: 0 8px 18px -10px #f97316; flex: none; }

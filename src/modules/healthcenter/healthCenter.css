@@ -13,7 +13,7 @@
   --teal: #2dd4bf;
   --cyan: #38bdf8;
   --ease: cubic-bezier(.23, 1, .32, 1);
-  min-height: 100dvh;
+  min-height: var(--app-h, 100dvh);
   color: var(--ink);
   background:
     radial-gradient(1100px 520px at 12% -10%, rgb(45 212 191 / .13), transparent 60%),

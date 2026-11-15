@@ -222,7 +222,7 @@ function BottomBtn({ on, onClick, icon, label }: { on: boolean; onClick: () => v
 }
 
 const SHELL_STYLE = `
-  .est-app { display: grid; grid-template-columns: 1fr; height: 100vh; height: 100dvh; width: 100vw; overflow: hidden; color: ${INK};
+  .est-app { display: grid; grid-template-columns: 1fr; height: var(--app-h, 100vh); height: var(--app-h, 100dvh); width: 100vw; overflow: hidden; color: ${INK};
     background:
       radial-gradient(900px 500px at 85% -10%, rgba(57,135,229,.13), transparent 60%),
       radial-gradient(700px 420px at 0% 110%, rgba(242,183,5,.07), transparent 60%),
