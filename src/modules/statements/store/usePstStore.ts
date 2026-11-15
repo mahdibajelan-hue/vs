@@ -123,7 +123,7 @@ export const usePstStore = create<State>()((set, get) => {
     await Promise.all([ex.loaded ? null : ex.fetchAll(), epc.loaded ? null : epc.fetchAll()])
     const core = executionCore(useExecutionStore.getState(), useEpcStore.getState(), pid, p.to)
     const acts = cfg.cBooks?.length ? core.activities.filter((a) => a.bookId && cfg.cBooks!.includes(a.bookId)) : core.activities
-    const st = buildStatement({ activities: acts, reports: core.reports, lines: core.lines }, { from: p.from, to: p.to }, (a, d) => effectiveBase(a, core.baselines, core.blines, d).baseQty, () => '')
+    const st = buildStatement({ activities: acts, reports: core.reports, lines: core.lines, baselines: core.baselines, blines: core.blines }, { from: p.from, to: p.to }, (a, d) => effectiveBase(a, core.baselines, core.blines, d).baseQty, () => '', 0, { employer: core.employer })
     const rows = st.books.flatMap((b) => b.chapters.flatMap((ch) => ch.rows.map((r) => ({ activityId: r.activity.id, itemNo: r.activity.itemNo, title: r.activity.title, unit: r.activity.unit, chapter: [ch.chapterNo, ch.title].filter(Boolean).join(' — '), unitPrice: r.unitPrice, base: r.base, cum: r.cum, pending: r.pending }))))
     return buildC(rows, core.unmappedActions.length)
   }

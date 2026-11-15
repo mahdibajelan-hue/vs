@@ -26,7 +26,7 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; sub: str
   const dev = m.planned.overall == null ? null : m.approved.overall - m.planned.overall
   const recent = useMemo(() => m.reports.slice().sort((a, b) => b.reportDate.localeCompare(a.reportDate) || b.createdAt.localeCompare(a.createdAt)).slice(0, 8), [m.reports])
   // contract value of the work done: approved quantities × contract unit price, against the value of the contract quantities; waiting quantities shown apart
-  const money = useMemo(() => { const st = buildStatement({ activities: m.activities, reports: m.reports, lines: m.lines }, { from: '0000-01-01', to: m.today }, (a, d) => m.baseOf(a, d), () => ''); const contract = m.activities.filter((a) => a.active && a.approval === 'approved').reduce((t, a) => t + m.baseOf(a, m.today) * a.unitPrice, 0); return { done: st.grand.cumAmt, pending: st.grand.pendingAmt, contract } }, [m])
+  const money = useMemo(() => { const st = buildStatement({ activities: m.activities, reports: m.reports, lines: m.lines, baselines: m.baselines, blines: m.blines }, { from: '0000-01-01', to: m.today }, (a, d) => m.baseOf(a, d), () => '', 0, { employer: m.employer }); const contract = m.activities.filter((a) => a.active && a.approval === 'approved').reduce((t, a) => t + m.baseOf(a, m.today) * a.unitPrice, 0); return { done: st.grand.cumAmt, pending: st.grand.pendingAmt, contract } }, [m])
   if (!m.activities.length && !m.reports.length) return (
     <Empty>
       <b style={{ display: 'block', marginBottom: 6 }}>شروع کار در «مدیریت اجرا»</b>

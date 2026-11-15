@@ -30,15 +30,15 @@ export function PeriodReportsPage({ projectId, sub }: { projectId: string; sub: 
   const pi = periods.indexOf(period)
   const ctx = { activities: m.activities, reports: m.reports, lines: m.lines, resources: m.resources, stoppages: m.stoppages }
   const orgName = (id: string | null) => orgs.find((o) => o.id === id)?.name ?? '—'
-  const rows = useMemo(() => activityRows(ctx, period, (a) => m.baseOf(a, period.to)), [m.reports, m.lines, m.activities, period.key, period.from, period.to]) // eslint-disable-line react-hooks/exhaustive-deps
+  const rows = useMemo(() => activityRows(ctx, period, (a) => m.baseOf(a, period.to), m.employer), [m.reports, m.lines, m.activities, period.key, period.from, period.to]) // eslint-disable-line react-hooks/exhaustive-deps
   const matrix = useMemo(() => (sub === 'week' ? dailyMatrix(ctx, period) : null), [m.reports, m.lines, m.activities, sub, period.key]) // eslint-disable-line react-hooks/exhaustive-deps
   const dimRows = useMemo(() => byDimension(ctx, period, dim, orgName), [m.reports, m.lines, m.activities, period.key, dim]) // eslint-disable-line react-hooks/exhaustive-deps
   const resRows = useMemo(() => resourceSummary(ctx, period), [m.reports, m.resources, period.key]) // eslint-disable-line react-hooks/exhaustive-deps
   const stopRows = useMemo(() => stoppageSummary(ctx, period), [m.reports, m.stoppages, period.key]) // eslint-disable-line react-hooks/exhaustive-deps
   const st = useMemo(() => statusSummary(ctx, period), [m.reports, m.lines, period.key]) // eslint-disable-line react-hooks/exhaustive-deps
   const base = { activities: m.activities, baselines: m.baselines, blines: m.blines, reports: m.reports, lines: m.lines }
-  const actualEnd = physicalProgress({ ...base, asOf: period.to, mode: 'approved', groupWeights: m.settings.groupWeights }).overall
-  const actualStart = physicalProgress({ ...base, asOf: period.from === first ? '0000-01-01' : addDays(period.from, -1), mode: 'approved', groupWeights: m.settings.groupWeights }).overall
+  const actualEnd = physicalProgress({ ...base, asOf: period.to, mode: 'approved', groupWeights: m.settings.groupWeights, employer: m.employer }).overall
+  const actualStart = physicalProgress({ ...base, asOf: period.from === first ? '0000-01-01' : addDays(period.from, -1), mode: 'approved', groupWeights: m.settings.groupWeights, employer: m.employer }).overall
   const plannedEnd = plannedOverall({ activities: m.activities, baselines: m.baselines, blines: m.blines, asOf: period.to, groupWeights: m.settings.groupWeights }).overall
   const periodGain = actualEnd - (sub === 'cum' ? 0 : actualStart)
   const reps = m.reports.filter((r) => r.formKey === 'work' && r.reportDate >= period.from && r.reportDate <= period.to)

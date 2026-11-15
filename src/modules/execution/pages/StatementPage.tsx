@@ -30,7 +30,7 @@ export function StatementPage({ projectId }: { projectId: string }) {
   const pi = Math.min(idx ?? periods.length - 1, periods.length - 1)
   const period: Period | undefined = periods[pi]
   const bookTitle = (id: string | null) => ex.books.find((b) => b.id === id)?.title ?? 'بدون فهرست‌بها'
-  const st = useMemo(() => (period ? buildStatement({ activities: m.activities, reports: m.reports, lines: m.lines }, period, (a, d) => m.baseOf(a, d), bookTitle, m.settings.overBasePct) : null), [m.activities, m.reports, m.lines, period?.key]) // eslint-disable-line react-hooks/exhaustive-deps
+  const st = useMemo(() => (period ? buildStatement({ activities: m.activities, reports: m.reports, lines: m.lines, baselines: m.baselines, blines: m.blines }, period, (a, d) => m.baseOf(a, d), bookTitle, m.settings.overBasePct, { employer: m.employer }) : null), [m.activities, m.reports, m.lines, period?.key]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!period || !st) return <Empty>ابتدا فعالیت‌ها و گزارش‌های روزانه ثبت شود.</Empty>
   const contractAll = m.activities.filter((a) => a.active && a.approval === 'approved').reduce((s, a) => s + m.baseOf(a, period.to) * a.unitPrice, 0)
 

@@ -38,5 +38,5 @@ export function executionCore(st: ExState, epc: EpcState, projectId: string, tod
   const approved = physicalProgress({ ...base, asOf: today, mode: 'approved', groupWeights, employer })
   const registered = physicalProgress({ ...base, asOf: today, mode: 'registered', groupWeights })
   const planned = plannedOverall({ activities, baselines, blines, asOf: today, groupWeights })
-  return { pid, settings, today, activities, baselines, blines, reports, repIds, enteredLines, lines, unmappedActions: res.unmapped, base, approved, registered, planned }
+  return { employer, pid, settings, today, activities, baselines, blines, reports, repIds, enteredLines, lines, unmappedActions: res.unmapped, base, approved, registered, planned }
 }

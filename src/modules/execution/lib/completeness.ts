@@ -1,12 +1,14 @@
-import type { Activity, DetectedGap, ExSettings, Report, ReportLine, ReportResource } from '../types'
+import type { Activity, DetectedGap, ExSettings, FormMap, Report, ReportLine, ReportResource } from '../types'
 import { FORMS, FORM_BY_KEY } from './formCatalog'
-import { inconsistenciesForReport, missingForReport } from './forms'
+import { computeMetrics, inconsistenciesForReport, missingForReport } from './forms'
 import { cumulative, isRegistered, effectiveBase } from './progress'
 import type { Baseline, BaselineLine } from '../types'
 import { addDays, daysBetween, jalaliText, periodsBetween, workingDays } from './periods'
 
 export interface CompletenessInput {
   today: string; settings: ExSettings; reports: Report[]; lines: ReportLine[]; resources: ReportResource[]; activities: Activity[]; baselines: Baseline[]; blines: BaselineLine[]
+  /** technical-form counters linked to price-book rows («اتصال فرم فنی به فعالیت») */
+  maps?: FormMap[]
 }
 
 const fp = (...p: (string | number)[]) => p.join('|')
@@ -93,6 +95,30 @@ export function detectGaps(c: CompletenessInput): DetectedGap[] {
         if (open.length) out.push({ fingerprint: fp('period', p.key), kind: 'period_open', formKey: '', periodKey: p.key, front: '', subject: `گزارش ${kind === 'week' ? 'هفتگی' : 'ماهانه'} — ${p.label}`, existing: { reports: inP.length, open: open.length }, missing: [`${open.length} گزارش از ${inP.length} هنوز تأیید نهایی نشده است`], dueDate: due(p.to) })
       }
     }
+  }
+
+  // 7. a technical form whose counted work (welded joints, coated joints, metres backfilled …) is linked to a price-book
+  //    row but did not reach a work report — so it is in neither the progress nor the statement; and the reverse: work
+  //    taken from a technical form that was later rejected, or more than the form holds
+  const maps = c.maps ?? []
+  if (maps.length) {
+    const actsBy = new Map(c.activities.map((a) => [a.id, a]))
+    const fromTech = new Map<string, number>() // `${techId}|${activityId}` → quantity carried into work reports
+    const work = new Map(c.reports.filter((r) => r.formKey === 'work').map((r) => [r.id, r]))
+    for (const l of c.lines) { if (!l.sourceReportId || !l.activityId || l.status === 'rejected') continue; const w = work.get(l.reportId); if (!w || w.status === 'rejected') continue; const k = `${l.sourceReportId}|${l.activityId}`; fromTech.set(k, (fromTech.get(k) ?? 0) + l.qty) }
+    const techById = new Map(c.reports.filter((r) => r.formKey !== 'work').map((r) => [r.id, r]))
+    for (const t of techById.values()) {
+      if (t.status === 'draft' || t.status === 'rejected' || t.status === 'incomplete' || t.reportDate >= today) continue
+      const f = FORM_BY_KEY[t.formKey]; if (!f) continue
+      const want = new Map<string, number>()
+      for (const mr of computeMetrics(f, linesBy.get(t.id) ?? [])) { const m = maps.find((x) => x.formKey === t.formKey && x.metricKey === mr.metric.key && (x.groupValue === mr.group || x.groupValue === '')); if (m && mr.value > 0) want.set(m.activityId, (want.get(m.activityId) ?? 0) + mr.value) }
+      for (const [aid, v] of want) {
+        const got = fromTech.get(`${t.id}|${aid}`) ?? 0, a = actsBy.get(aid)
+        if (got + 1e-6 < v) out.push({ fingerprint: fp('carry', t.id, aid), kind: 'inconsistent', formKey: t.formKey, periodKey: t.reportDate, front: t.front, subject: `${FORM_BY_KEY[t.formKey]?.title ?? t.formKey} ${t.reportNo}: ${+(v - got).toFixed(2)} ${a?.unit ?? ''} «${a?.title ?? ''}» به گزارش کارکرد منتقل نشده`, existing: { form: v, carried: got }, missing: ['ثبت در گزارش کارکرد همان روز (دکمهٔ «از فرم‌های فنی امروز»)'], dueDate: due(t.reportDate), reportId: t.id })
+        else if (got > v * 1.001 + 1e-6) out.push({ fingerprint: fp('carry+', t.id, aid), kind: 'inconsistent', formKey: 'work', periodKey: t.reportDate, front: t.front, subject: `کارکرد «${a?.title ?? ''}» از ${t.reportNo} بیشتر از مقدار خود فرم است (${+got.toFixed(2)} در برابر ${+v.toFixed(2)})`, existing: { form: v, carried: got }, missing: ['اصلاح مقدار در گزارش کارکرد'], dueDate: due(t.reportDate) })
+      }
+    }
+    for (const [k, q] of fromTech) { const [tid] = k.split('|'); const t = c.reports.find((r) => r.id === tid); if (t && t.status === 'rejected' && q > 0) out.push({ fingerprint: fp('carry-x', k), kind: 'inconsistent', formKey: 'work', periodKey: t.reportDate, front: t.front, subject: `کارکرد گرفته‌شده از ${t.reportNo} (فرم ردشده) هنوز در گزارش کارکرد حساب می‌شود`, existing: { qty: q }, missing: ['حذف یا اصلاح ردیف کارکرد'], dueDate: due(t.reportDate) }) }
   }
 
   // 6. paper-form content that is not built (static, from the catalog)

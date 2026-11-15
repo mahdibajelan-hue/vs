@@ -1,7 +1,7 @@
 import type { Activity, Report, ReportLine, ReportResource, Stoppage, StoppageCategory } from '../types'
 import type { Period } from './periods'
 import { addDays } from './periods'
-import { isRegistered, lineValue } from './progress'
+import { isRegistered, lineValue, type EmployerMode } from './progress'
 
 export interface PeriodCtx { activities: Activity[]; reports: Report[]; lines: ReportLine[]; resources: ReportResource[]; stoppages: Stoppage[] }
 const inP = (r: Report, p: Period) => r.reportDate >= p.from && r.reportDate <= p.to
@@ -11,24 +11,27 @@ export interface ActivityPeriodRow {
   /** approved cumulative at the end of the day before the period */
   prevApproved: number
   approved: number; pending: number; rejected: number; returned: number
+  /** of the period's approved quantity, what counts towards progress and the statement (with a binding employer step: what the employer confirmed) */
+  approvedCounted: number
   cumApproved: number; cumRegistered: number; pct: number; remaining: number
 }
 
 /** The rows of the weekly / monthly / any-period work report — straight from the daily reports, nothing re-entered. */
-export function activityRows(c: PeriodCtx, p: Period, baseOf: (a: Activity) => number): ActivityPeriodRow[] {
+export function activityRows(c: PeriodCtx, p: Period, baseOf: (a: Activity) => number, employer: EmployerMode = 'off'): ActivityPeriodRow[] {
   const work = c.reports.filter((r) => r.formKey === 'work' && r.status !== 'draft' && r.status !== 'incomplete')
   const byId = new Map(work.map((r) => [r.id, r]))
   const rows = new Map<string, ActivityPeriodRow>()
-  const row = (a: Activity): ActivityPeriodRow => { let x = rows.get(a.id); if (!x) { const base = baseOf(a); x = { activity: a, base, prevApproved: 0, approved: 0, pending: 0, rejected: 0, returned: 0, cumApproved: 0, cumRegistered: 0, pct: 0, remaining: base }; rows.set(a.id, x) } return x }
+  const row = (a: Activity): ActivityPeriodRow => { let x = rows.get(a.id); if (!x) { const base = baseOf(a); x = { activity: a, base, prevApproved: 0, approved: 0, approvedCounted: 0, pending: 0, rejected: 0, returned: 0, cumApproved: 0, cumRegistered: 0, pct: 0, remaining: base }; rows.set(a.id, x) } return x }
   const acts = new Map(c.activities.map((a) => [a.id, a]))
   for (const l of c.lines) {
     if (!l.activityId) continue
     const r = byId.get(l.reportId), a = acts.get(l.activityId); if (!r || !a) continue
     const x = row(a)
-    const ap = lineValue(l, 'approved'), reg = lineValue(l, 'registered')
+    const ap = lineValue(l, 'approved', employer), reg = lineValue(l, 'registered', employer)
     if (r.reportDate <= p.to && isRegistered(r)) { x.cumApproved += ap; x.cumRegistered += reg }
     if (r.reportDate < p.from && isRegistered(r)) x.prevApproved += ap
     if (inP(r, p)) {
+      if (isRegistered(r)) x.approvedCounted += ap
       if (l.status === 'approved') x.approved += l.approvedQty ?? l.qty
       else if (l.status === 'pending') x.pending += l.qty
       else if (l.status === 'rejected') x.rejected += l.qty

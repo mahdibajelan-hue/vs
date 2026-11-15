@@ -29,7 +29,7 @@ export function ExecutionPulse({ m, kind }: { m: ExecutionModel; kind: 'pipeline
   const fc = useMemo(() => forecast({ curve: m.curve, actual: m.approved.overall, planned: m.planned.overall, activities: m.activities, today: m.today }), [m])
   const cur = pts[Math.min(idx, pts.length - 1)]
   const date = cur?.date ?? m.today
-  const atDate = useMemo(() => physicalProgress({ activities: m.activities, baselines: m.baselines, blines: m.blines, reports: m.reports, lines: m.lines, asOf: date, mode: 'approved', groupWeights: m.settings.groupWeights }), [m, date])
+  const atDate = useMemo(() => physicalProgress({ activities: m.activities, baselines: m.baselines, blines: m.blines, reports: m.reports, lines: m.lines, asOf: date, mode: 'approved', groupWeights: m.settings.groupWeights, employer: m.employer }), [m, date])
   const metrics = useMemo(() => {
     const cum = cumulative(m.reports, m.lines, { until: date, mode: 'approved' })
     const all = metricTotals(m.activities.filter((a) => a.active && a.approval === 'approved').map((a) => ({ id: a.id, metric: a.metric, baseQty: m.baseOf(a, date), unit: a.unit })), cum)
