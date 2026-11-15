@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { Plus, X } from 'lucide-react'
 import { useEpcModel } from '../lib/useEpcModel'
 import { useEpcStore } from '../store/useEpcStore'
@@ -31,7 +32,7 @@ function Inner({ projectId }: { projectId: string }) {
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <Section title={`امروز در کارگاه — ${jalaliText(day)}`} hint="فعالیت‌هایی که امروز در بازهٔ برنامه‌ای‌اند یا کارکرد دارند، با فرم‌های فنیِ لازم برای آن‌ها. فقط نمایش است؛ در پیشرفت و صورت‌وضعیت دخالتی ندارد."
-        action={<input type="date" value={day} onChange={(x) => setDay(x.target.value || m.today)} aria-label="تاریخ" />}>
+        action={<JalaliDateInput value={day} onChange={(v) => setDay(v || m.today)} />}>
         {req.length === 0 ? <p className="im-helper">برای این پروژه هنوز «فرم لازم» هیچ فعالیتی تعریف نشده است؛ از بخش زیر تعریف کنید.</p>
           : items.length === 0 ? <p className="im-helper">امروز فعالیتی با فرم لازم در برنامه یا کارکرد نیست.</p>
           : <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><thead><tr><th>فعالیت</th><th>فرم لازم</th><th>وضعیت امروز</th></tr></thead><tbody>

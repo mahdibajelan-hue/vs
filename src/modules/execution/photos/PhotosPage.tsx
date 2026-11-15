@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { Camera } from 'lucide-react'
 import { formatJalali } from '../../../lib/jalali'
 import { todayTehran } from '../../../lib/today'
@@ -26,7 +27,7 @@ export function PhotosPage({ projectId }: { projectId: string }) {
       </section>
       <section className="fn-sec">
         <header><div><h2><Camera size={15} style={{ verticalAlign: '-2px' }} aria-hidden /> همهٔ عکس‌ها</h2><p>{st.photos.length.toLocaleString('fa-IR')} عکس · عکس‌های هر گزارش روزانه از داخل همان گزارش هم اضافه می‌شوند.</p></div></header>
-        {can && <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}><label className="im-helper" style={{ margin: 0 }}>تاریخ عکس <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value || today)} /></label><div style={{ flex: 1, minWidth: 260 }}><PhotoUpload takenOn={date} /></div></div>}
+        {can && <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}><label className="im-helper" style={{ margin: 0 }}>تاریخ عکس <JalaliDateInput value={date} onChange={(v) => setDate(!v || v > today ? today : v)} /></label><div style={{ flex: 1, minWidth: 260 }}><PhotoUpload takenOn={date} /></div></div>}
         <div className="mt-filters no-print" style={{ marginBottom: 6 }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="جست‌وجو در شرح، جبهه یا عکاس" aria-label="جست‌وجو در عکس‌ها" />
           <select value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="موضوع"><option value="">همهٔ موضوع‌ها</option>{subjects.map((x) => <option key={x} value={x}>{x}</option>)}</select>

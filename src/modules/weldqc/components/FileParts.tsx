@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { Camera, ClipboardList, Eye, FileImage, Flame, MessageSquareText, Plus, Signature, Trash2, Upload, Wrench, XCircle, CheckCircle2 } from 'lucide-react'
 import { useWqStore } from '../store/useWqStore'
 import * as repo from '../repo'
@@ -98,7 +99,7 @@ export function FilmUpload({ weldId, round, films, odMm, filmCount, zone }: { we
       <div className="wq-form is-row">
         <label><span>شروع فیلم (mm از ساعت ۱۲)</span><input inputMode="numeric" value={start !== '' ? start : startMm ?? ''} onChange={(e) => setStart(e.target.value)} /></label>
         <label><span>طول جوش زیر فیلم (mm)</span><input inputMode="numeric" value={len !== '' ? len : lenMm ?? ''} onChange={(e) => setLen(e.target.value)} /></label>
-        <label><span>تاریخ پرتونگاری</span><input type="date" value={shot} onChange={(e) => setShot(e.target.value)} /></label>
+        <label><span>تاریخ پرتونگاری</span><JalaliDateInput value={shot} onChange={setShot} /></label>
         <label><span>IQI</span><input value={iqi} onChange={(e) => setIqi(e.target.value)} placeholder="مثلاً 10 FE EN" /></label>
         <label><span>دانسیته</span><input value={density} onChange={(e) => setDensity(e.target.value)} placeholder="2.0–4.0" /></label>
         <button type="button" className="ps-btn is-primary" disabled={!files.length} onClick={() => setConv(true)}><Upload size={14} aria-hidden /> تبدیل، بهبود و بارگذاری {round === 0 ? `فیلم ${fa(seq)}` : `RS${fa(round)}`}</button>

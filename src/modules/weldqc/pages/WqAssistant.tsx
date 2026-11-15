@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { jalaliFileDate } from '../../../lib/jalali'
 import { Bot, Database, Download, GraduationCap, Target } from 'lucide-react'
 import { useWqStore } from '../store/useWqStore'
 import type { AiSample } from '../repo'
@@ -37,7 +38,7 @@ export function WqAssistant() {
       annotations: boxed.filter((d) => ids.has(d.filmId ?? '')).map((d, i) => ({ id: i + 1, image_id: ids.get(d.filmId!), category_id: CODES.indexOf(codeOf(d) as Code) + 1, bbox: [d.bbox!.x, d.bbox!.y, d.bbox!.w, d.bbox!.h], area: d.bbox!.w * d.bbox!.h, iscrowd: 0, length_mm: d.lengthMm, width_mm: d.widthMm, clock: d.clock, pass: d.pass, verdict: d.verdict, source: d.detectedBy, by: d.createdName })),
       false_alarms: mine.filter((r) => r.action === 'dismissed' && r.bbox && ids.has(r.filmId)).map((r) => ({ image_id: ids.get(r.filmId), bbox: [r.bbox!.x, r.bbox!.y, r.bbox!.w, r.bbox!.h], proposed: r.aiCode, features: r.feats })),
     }
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' })); a.download = `rt-labels-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href)
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' })); a.download = `rt-labels-${jalaliFileDate(new Date().toISOString())}.json`; a.click(); URL.revokeObjectURL(a.href)
   }
 
   const need = Math.max(0, MIN_REAL - all.length)

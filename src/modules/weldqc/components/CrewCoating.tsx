@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { JalaliDateTimeInput } from '../../../components/common/JalaliDateTimeInput'
 import { Camera, Plus, Save, ShieldCheck, Trash2, Users, X } from 'lucide-react'
 import { useWqStore } from '../store/useWqStore'
 import * as repo from '../repo'
@@ -31,8 +32,8 @@ export function CrewEditor({ weld, crew, onClose }: { weld: repo.QcWeld; crew: C
         <label><span>وضعیت (Position)</span><select value={position} onChange={(e) => setPosition(e.target.value)}>{POSITIONS.map((p) => <option key={p}>{p}</option>)}</select></label>
         <label><span>جهت</span><select value={direction} onChange={(e) => setDirection(e.target.value as CrewRow['direction'])}><option value="downhill">سرپایین (Downhill)</option><option value="uphill">سربالا (Uphill)</option><option value="">—</option></select></label>
         <label><span>فرایند</span><select value={process} onChange={(e) => setProcess(e.target.value)}>{PROCESSES.map((p) => <option key={p}>{p}</option>)}</select></label>
-        <label><span>شروع</span><input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} /></label>
-        <label><span>پایان</span><input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+        <label><span>شروع</span><JalaliDateTimeInput label="شروع" value={start} onChange={setStart} /></label>
+        <label><span>پایان</span><JalaliDateTimeInput label="پایان" value={end} onChange={setEnd} /></label>
         <label><span>VT این بخش</span><select value={vt} onChange={(e) => setVt(e.target.value as CrewRow['vt'])}><option value="">—</option><option value="accept">قبول</option><option value="reject">رد</option></select></label>
         <label className="is-wide"><span>توضیح</span><input value={note} onChange={(e) => setNote(e.target.value)} /></label>
         <div className="is-wide wq-form-actions"><button type="button" className="ps-btn is-primary" disabled={!welder || !quads.length} onClick={() => void save()}><Save size={14} aria-hidden /> ثبت</button></div>

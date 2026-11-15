@@ -157,3 +157,9 @@ export function formatJalaliFa(iso: string | null | undefined): string {
   if (!iso) return ''
   return formatJalali(iso.slice(0, 10)).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])
 }
+
+/** a Jalali date for file names and spreadsheet cells: yyyy-mm-dd in Latin digits (sorts and filters as text) */
+export function jalaliFileDate(iso: string | null | undefined): string {
+  if (!iso) return ''
+  return formatJalali(iso.slice(0, 10)).replace(/\//g, '-')
+}

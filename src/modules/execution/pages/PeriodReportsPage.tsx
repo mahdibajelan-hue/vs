@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { jalaliFileDate } from '../../../lib/jalali'
 import { ChevronLeft, ChevronRight, Download, Printer } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useMaterialModel } from '../../material/lib/control/useMaterialModel'
@@ -65,7 +66,7 @@ export function PeriodReportsPage({ projectId, sub }: { projectId: string; sub: 
     for (const [k, l] of DIMS) add(`به‌تفکیک ${l}`, byDimension(ctx, period, k, orgName).map((x) => ({ [l]: x.key, 'ردیف': x.activity.itemNo, 'شرح': x.activity.title, 'واحد': x.activity.unit, 'ثبت‌شده': x.registered, 'تأییدشده': x.approved })))
     add('منابع', resRows.map((x) => ({ 'نوع': x.kind === 'man' ? 'نیرو' : 'ماشین', 'عنوان': x.name, 'میانگین فعال': x.avgActive, 'میانگین غیرفعال': x.avgIdle, 'ساعت کار': x.hours, 'روز': x.days })))
     add('توقف‌ها', stopRows.map((x) => ({ 'عامل': STOPPAGE_CATEGORY_FA[x.category], 'ساعت': x.hours, 'دفعات': x.count })))
-    XLSX.writeFile(wb, `گزارش-${sub === 'week' ? 'هفتگی' : sub === 'month' ? 'ماهانه' : 'تجمعی'}-${period.from}.xlsx`)
+    XLSX.writeFile(wb, `گزارش-${sub === 'week' ? 'هفتگی' : sub === 'month' ? 'ماهانه' : 'تجمعی'}-${jalaliFileDate(period.from)}.xlsx`)
   }
   if (!m.activities.length) return <Empty>ابتدا فعالیت‌ها و گزارش‌های روزانه ثبت شود.</Empty>
   const kindLabel = sub === 'week' ? 'هفتگی' : sub === 'month' ? 'ماهانه' : 'تجمعی'

@@ -6,6 +6,7 @@ import { useAuthStore } from '../../../store/useAuthStore'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { EMPTY_MEMBERS, useIssuesMembersStore } from '../../issues/store/useIssuesMembersStore'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
+import { JalaliDateTimeInput } from '../../../components/common/JalaliDateTimeInput'
 import { todayTehran } from '../../../lib/today'
 import * as repo from '../repo'
 import { fa, faDate, useQc, weldLabel } from '../lib/useQc'
@@ -175,7 +176,7 @@ export function CapaCase({ item, onBack, onOpenWeld }: { item: Item; onBack: () 
 
           <Sec n={2} icon={<Users size={16} aria-hidden />} title="جلسهٔ ریشه‌یابی و حاضران" on={c.status === 'rca'} done={step > 1} extra={<small className="ps-meta wq-head-link">مهلت: {faDate(c.meetingDue)}</small>}>
             <div className="wq-form">
-              <label><span>زمان برگزاری *</span>{editable ? <input type="datetime-local" value={d.meetingAt} max={toLocal(new Date().toISOString())} onChange={(e) => setD({ ...d, meetingAt: e.target.value })} /> : <p className="cp-text">{faTime(c.meetingAt)}</p>}</label>
+              <label><span>زمان برگزاری *</span>{editable ? <JalaliDateTimeInput label="جلسه" value={d.meetingAt} max={toLocal(new Date().toISOString())} onChange={(v) => setD({ ...d, meetingAt: v })} /> : <p className="cp-text">{faTime(c.meetingAt)}</p>}</label>
               <label><span>محل</span>{editable ? <input value={d.meetingPlace} onChange={(e) => setD({ ...d, meetingPlace: e.target.value })} placeholder="دفتر کارگاه / جبههٔ ۲" /> : <p className="cp-text">{c.meetingPlace || '—'}</p>}</label>
             </div>
             <p className="ps-meta">{c.mandatory ? 'حد نصاب پروندهٔ الزامی: دست‌کم سه نفر، شامل نماینده‌ای از پیمانکار یا کنترل کیفیت و نماینده‌ای از نظارت، مشاور یا کارفرما.' : 'حد نصاب: دست‌کم دو نفر.'} هر عضو دارای حساب کاربری فقط خودش می‌تواند امضا کند.</p>

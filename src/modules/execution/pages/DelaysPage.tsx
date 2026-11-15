@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { jalaliFileDate } from '../../../lib/jalali'
 import { Download } from 'lucide-react'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { useExecutionModel } from '../lib/useExecutionModel'
@@ -24,7 +25,7 @@ export function DelaysPage({ projectId }: { projectId: string }) {
   const excel = async () => {
     const XLSX = await import('xlsx')
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.rows.map((r) => ({ 'تاریخ': r.date, 'گزارش': r.report.reportNo, 'جبهه': r.report.front, 'عامل': STOPPAGE_CATEGORY_FA[r.category], 'ساعت': r.hours, 'شرح': r.stoppage.description, 'مسئولیت': RESPONSIBILITY_FA[r.responsibility], 'روی مسیر بحرانی': r.critical ? 'بله' : '', 'تاریخ اخطار': r.noticeDate ?? '', 'شمارهٔ نامه': r.stoppage.noticeRef, 'وضعیت اخطار': NOTICE_CHIP[r.notice].label, 'نظر ارزیاب': r.stoppage.assessNote, 'تأخیر همزمان': d.concurrentDates.includes(r.date) && r.critical ? 'بله' : '' }))), 'دفتر تأخیرات')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.rows.map((r) => ({ 'تاریخ': jalaliFileDate(r.date), 'گزارش': r.report.reportNo, 'جبهه': r.report.front, 'عامل': STOPPAGE_CATEGORY_FA[r.category], 'ساعت': r.hours, 'شرح': r.stoppage.description, 'مسئولیت': RESPONSIBILITY_FA[r.responsibility], 'روی مسیر بحرانی': r.critical ? 'بله' : '', 'تاریخ اخطار': jalaliFileDate(r.noticeDate), 'شمارهٔ نامه': r.stoppage.noticeRef, 'وضعیت اخطار': NOTICE_CHIP[r.notice].label, 'نظر ارزیاب': r.stoppage.assessNote, 'تأخیر همزمان': d.concurrentDates.includes(r.date) && r.critical ? 'بله' : '' }))), 'دفتر تأخیرات')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.windows.map((w) => ({ 'ماه': w.month, 'کل ساعت': w.total, 'قابل ادعا': w.excusable, 'قابل ادعا روی مسیر بحرانی': w.criticalExcusable, 'ناشی از پیمانکار': w.contractor, 'ارزیابی‌نشده': w.unassessed }))), 'پنجره‌های ماهانه')
     XLSX.writeFile(wb, 'دفتر-تأخیرات-و-کلیم.xlsx')
   }

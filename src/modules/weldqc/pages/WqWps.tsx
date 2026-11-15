@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { BadgeCheck, FileText, Pencil, Plus, Save, Trash2, Users, X } from 'lucide-react'
 import { useWqStore } from '../store/useWqStore'
 import * as repo from '../repo'
@@ -43,7 +44,7 @@ export function WqWps() {
             {F('pqrNos', 'شمارهٔ PQRهای مرتبط', { wide: true, ltr: true, ph: 'PQR-01, PQR-02' })}
             <label><span>وضعیت</span><select value={d.status} onChange={(e) => setD({ ...d, status: e.target.value as repo.Wps['status'] })}>{Object.entries(STATUS_FA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
             {F('approvedBy', 'تأییدکننده (کارفرما / مشاور)')}
-            <label><span>تاریخ تأیید</span><input type="date" value={d.approvedAt ?? ''} onChange={(e) => setD({ ...d, approvedAt: e.target.value || null })} /></label>
+            <label><span>تاریخ تأیید</span><JalaliDateInput value={d.approvedAt ?? ''} onChange={(v) => setD({ ...d, approvedAt: v || null })} /></label>
             {F('note', 'توضیح', { wide: true })}
             {d.status === 'approved' && !d.pqrNos?.trim() && <p className="is-wide ps-hint is-warn">WPS تأییدشده باید دست‌کم یک PQR مرتبط داشته باشد (API 1104 بند 5).</p>}
             <div className="is-wide wq-form-actions"><button type="submit" className="ps-btn is-primary" disabled={!d.wpsNo.trim()}><Save size={14} aria-hidden /> ذخیره</button><button type="button" className="ps-btn is-ghost" onClick={() => setD(null)}><X size={14} aria-hidden /> انصراف</button></div>

@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
+import { jalaliFileDate } from '../../../lib/jalali'
 import { ChevronLeft, ChevronRight, Download, Printer } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useExecutionStore } from '../store/useExecutionStore'
@@ -40,7 +41,7 @@ export function StatementPage({ projectId }: { projectId: string }) {
     for (const b of st.books) for (const c of b.chapters) for (const r of c.rows) out.push({ 'فهرست‌بها': b.title, 'فصل': c.title, 'ردیف': r.activity.rowNo, 'کد': r.activity.itemNo, 'شرح': r.activity.title, 'واحد': r.activity.unit, 'مقدار پیمان': r.base, 'قیمت واحد': r.unitPrice, 'مقدار تا قبل': r.prev, 'مقدار این دوره': r.period, 'مقدار تجمعی': r.cum, 'مبلغ این دوره': r.periodAmt, 'مبلغ تجمعی': r.cumAmt, 'درصد پیشرفت': Math.round(r.pct * 1000) / 10, 'در انتظار تأیید (مقدار)': r.pending, 'بیش از مقدار پیمان': r.over ? 'بله' : '' })
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out.length ? out : [{ '—': '' }]), 'صورت‌وضعیت کارکرد')
-    XLSX.writeFile(wb, `صورت-وضعیت-کارکرد-${period.from}.xlsx`)
+    XLSX.writeFile(wb, `صورت-وضعیت-کارکرد-${jalaliFileDate(period.from)}.xlsx`)
   }
   return (
     <div style={{ display: 'grid', gap: 12 }}>

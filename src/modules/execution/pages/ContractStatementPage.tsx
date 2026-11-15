@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { jalaliFileDate } from '../../../lib/jalali'
 import { Download, Printer, Search } from 'lucide-react'
 import { useEpcModel } from '../lib/useEpcModel'
 import { useEpcStore } from '../store/useEpcStore'
@@ -113,7 +114,7 @@ function Monthly({ projectId }: { projectId: string }) {
     const XLSX = await import('xlsx')
     const out = view.map(({ a, l, r }) => { const c = calcRow(r); return { 'فهرست‌بها': bookTitle(a.bookId), 'فصل': a.chapter, 'ردیف': a.rowNo, 'کد': a.itemNo, 'شرح': a.title, 'واحد': a.unit, 'فهای واحد': l.unitPrice, 'مقدار پیمان': l.baseQty,
       'سیستمی تجمعی': l.sys, 'درخواست پیمانکار تجمعی': l.req ?? '', 'نظر مشاور تجمعی': l.con ?? '', 'قبلی (مشاور)': l.prevCon, 'کارکرد ماه (سیستمی)': c.sysMonth, 'کارکرد ماه (درخواست)': c.reqMonth, 'کارکرد ماه (مشاور)': c.conMonth, 'مبلغ ماه (مشاور)': c.monthAmt, 'مبلغ تجمعی (مشاور)': c.cumAmt } })
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out.length ? out : [{ '—': '' }]), 'صورت‌وضعیت پیمان'); XLSX.writeFile(wb, `صورت-وضعیت-پیمان-${st?.no ?? ''}-${period.from}.xlsx`)
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out.length ? out : [{ '—': '' }]), 'صورت‌وضعیت پیمان'); XLSX.writeFile(wb, `صورت-وضعیت-پیمان-${st?.no ?? ''}-${jalaliFileDate(period.from)}.xlsx`)
   }
   let lastCh = ''
   return (

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { Archive, Eye } from 'lucide-react'
 import { useEpcModel } from '../lib/useEpcModel'
 import { useEpcStore } from '../store/useEpcStore'
@@ -56,8 +57,8 @@ function Inner({ projectId }: { projectId: string }) {
       <Section title="بایگانی فرم‌های فنی" hint="هر فرم فنیِ تأییدشده خودکار با تاریخ و دستهٔ نوع فرم بایگانی می‌شود؛ محتوا (با مشخصات سرجوش همان روز) تغییرناپذیر است. شمارنده‌های «تا امروز» هنگام نمایش از داده‌های جاری محاسبه می‌شوند."
         action={can && pending.length > 0 ? <button className="im-btn im-btn-primary im-btn-sm" disabled={busy} onClick={async () => { setBusy(true); for (const r of pending) await epc.archiveReport(r.id, true); setBusy(false) }}><Archive size={13} /> بایگانی {fa(pending.length)} فرم تأییدشده</button> : undefined}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-          <label className="im-helper">از <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
-          <label className="im-helper">تا <input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+          <label className="im-helper">از <JalaliDateInput value={from} onChange={setFrom} /></label>
+          <label className="im-helper">تا <JalaliDateInput value={to} onChange={setTo} /></label>
           <select value={cat} onChange={(e) => { setCat(e.target.value); setForm('') }} aria-label="دسته"><option value="">همهٔ دسته‌ها</option>{Object.entries(FORM_GROUP_LABEL_FA).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           <select value={form} onChange={(e) => setForm(e.target.value)} aria-label="نوع فرم"><option value="">همهٔ فرم‌ها</option>{forms.map((f) => <option key={f.key} value={f.key}>{f.title}</option>)}</select>
           <input placeholder="شمارهٔ گزارش یا عنوان" value={q} onChange={(e) => setQ(e.target.value)} aria-label="جست‌وجو" />

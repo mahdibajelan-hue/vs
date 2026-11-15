@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { jalaliFileDate } from '../../../lib/jalali'
 import { Download, FilePlus2, RefreshCw } from 'lucide-react'
 import { projectParties } from '../lib/projectParties'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
@@ -104,7 +105,7 @@ export function GapsPage({ projectId, onGo }: { projectId: string; sub: string; 
         {can && !g.id.startsWith('virt:') && <button className="im-btn im-btn-sm" onClick={() => setEdit(g)}>پیگیری</button>}
       </span>) },
   ]
-  const toXlsx = () => writeXlsx(gaps.map((g) => ({ 'نوع': GAP_KIND_LABEL_FA[g.kind], 'گزارش / فرم': g.subject, 'جبهه': g.front, 'اطلاعات مفقود': g.missing.join(' | '), 'مسئول تکمیل': g.responsible ? ex.people.get(g.responsible) ?? '' : '', 'مهلت': g.dueDate ?? '', 'وضعیت': GAP_STATUS_LABEL_FA[g.status], 'یادداشت': g.note })), `کسری-گزارش‌ها-${m.today}.xlsx`, 'کسری‌ها')
+  const toXlsx = () => writeXlsx(gaps.map((g) => ({ 'نوع': GAP_KIND_LABEL_FA[g.kind], 'گزارش / فرم': g.subject, 'جبهه': g.front, 'اطلاعات مفقود': g.missing.join(' | '), 'مسئول تکمیل': g.responsible ? ex.people.get(g.responsible) ?? '' : '', 'مهلت': jalaliFileDate(g.dueDate), 'وضعیت': GAP_STATUS_LABEL_FA[g.status], 'یادداشت': g.note })), `کسری-گزارش‌ها-${jalaliFileDate(m.today)}.xlsx`, 'کسری‌ها')
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div className="fn-kpis">

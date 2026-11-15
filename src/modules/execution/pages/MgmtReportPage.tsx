@@ -1,4 +1,5 @@
 import { PickFigure } from '../photos/PhotoParts'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useState } from 'react'
 import { Printer } from 'lucide-react'
 import { useEpcModel } from '../lib/useEpcModel'
@@ -51,7 +52,7 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
     <div style={{ display: 'grid', gap: 10 }}>
       <PickFigure projectId={projectId} period={sub === 'mgmt-month' ? 'month' : 'week'} iso={per.to > m.today ? m.today : per.to} />
       <div className="mt-filters no-print">
-        <input type="date" value={anchor} onChange={(x) => setAnchor(x.target.value || m.today)} aria-label="تاریخ" />
+        <JalaliDateInput value={anchor} onChange={(v) => setAnchor(v || m.today)} />
         <button className="im-btn im-btn-sm" onClick={() => setAnchor(addDays(per.from, -1))}>دورهٔ قبل</button>
         <button className="im-btn im-btn-sm" onClick={() => setAnchor(addDays(per.to, 1))}>دورهٔ بعد</button>
         <button className="im-btn im-btn-primary im-btn-sm" style={{ marginInlineStart: 'auto' }} onClick={() => { document.body.classList.add('mt-printing'); const off = () => { document.body.classList.remove('mt-printing'); window.removeEventListener('afterprint', off) }; window.addEventListener('afterprint', off); window.print() }}><Printer size={13} /> چاپ / PDF</button>
