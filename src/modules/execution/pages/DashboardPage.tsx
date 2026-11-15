@@ -1,3 +1,4 @@
+import { PhotoRotator } from '../photos/PhotoParts'
 import { useMemo, useState } from 'react'
 import { AlertTriangle, ArrowLeft } from 'lucide-react'
 import { useExecutionModel } from '../lib/useExecutionModel'
@@ -35,6 +36,7 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; sub: str
   )
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+      <PhotoRotator projectId={projectId} height={240} onOpenGallery={() => onGo('photos')} />
       <RoleDesk m={m} onGo={onGo} />
       <div className="fn-kpis">
         <KpiCard i={0} label="پیشرفت فیزیکی (تأییدشده)" value={pct(m.approved.overall)} tone="good" sub={m.planned.overall != null ? `برنامه ${pct(m.planned.overall)}` : undefined} />

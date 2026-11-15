@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Download, Printer } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { useMaterialModel } from '../../material/lib/control/useMaterialModel'
 import { useExecutionModel } from '../lib/useExecutionModel'
+import { PickFigure } from '../photos/PhotoParts'
 import { activityRows, byDimension, dailyMatrix, resourceSummary, statusSummary, stoppageSummary, type Dim } from '../lib/periodReport'
 import { addDays, jalaliText, monthOf, periodsBetween, weekOf, type Period } from '../lib/periods'
 import { physicalProgress, plannedOverall } from '../lib/progress'
@@ -70,6 +71,7 @@ export function PeriodReportsPage({ projectId, sub }: { projectId: string; sub: 
   const kindLabel = sub === 'week' ? 'هفتگی' : sub === 'month' ? 'ماهانه' : 'تجمعی'
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+      {sub !== 'cum' && <PickFigure projectId={projectId} period={sub === 'week' ? 'week' : 'month'} iso={period.to > m.today ? m.today : period.to} />}
       <div className="mt-filters no-print">
         {sub !== 'cum' && <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
           <button className="im-btn im-btn-sm" disabled={pi <= 0} onClick={() => setIdx(pi - 1)} aria-label="دورهٔ قبل"><ChevronRight size={14} /></button>

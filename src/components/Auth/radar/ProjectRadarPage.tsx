@@ -1,3 +1,4 @@
+import { PhotoRotator } from '../../../modules/execution/photos/PhotoParts'
 import { useEffect, useMemo, useState } from 'react'
 import { useModuleStore, type ModuleKey } from '../../../store/useModuleStore'
 import { hasModuleAccess, useModuleAccessStore } from '../../../store/useModuleAccessStore'
@@ -120,6 +121,7 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
           refreshing={refreshing}
           canSee={isVisible}
         />
+        {selectedProject && <div className="rc-photos"><PhotoRotator projectId={selectedProject.id} height={300} onOpenGallery={() => { useModuleStore.getState().enterModule('execution', 'project', 'photos') }} /></div>}
       </div>
       {selectedProject && (
         <RadarSidebar project={selectedProject} active="overview" canSee={isVisible} badgeFor={badgeFor} desktop={isDesktop} pinned={pinned} onPin={pin}

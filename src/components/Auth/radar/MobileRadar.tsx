@@ -1,3 +1,4 @@
+import { PhotoRotator } from '../../../modules/execution/photos/PhotoParts'
 import { HEALTH_VERDICT_FA, HealthGuideButton, healthColor as healthColorOf } from '../../../modules/projectMetrics/HealthGuide'
 import { HEALTH_COLOR, statusFromScore } from '../../../modules/lifecycle/lib/health'
 import { useEffect, type CSSProperties } from 'react'
@@ -87,6 +88,7 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
         <Kpi loading={loading} icon={RefreshCw} label="تغییر در انتظار" value={k.pendingChanges} color="#38bdf8" onClick={() => open('change')} />
       </section>
 
+      <div className="mr-photos"><PhotoRotator projectId={project.id} height={200} /></div>
       <section className="mr-mods" aria-label="ماژول‌های پروژه">
         {groups.map((g) => (
           <div key={g.id} className="mr-group">

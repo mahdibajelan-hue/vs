@@ -1,3 +1,4 @@
+import { PickFigure } from '../photos/PhotoParts'
 import { useState } from 'react'
 import { Printer } from 'lucide-react'
 import { useEpcModel } from '../lib/useEpcModel'
@@ -48,6 +49,7 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
   const T = ({ children }: { children: React.ReactNode }) => <h3 style={{ margin: '14px 0 6px', fontSize: 14 }}>{children}</h3>
   return (
     <div style={{ display: 'grid', gap: 10 }}>
+      <PickFigure projectId={projectId} period={sub === 'mgmt-month' ? 'month' : 'week'} iso={per.to > m.today ? m.today : per.to} />
       <div className="mt-filters no-print">
         <input type="date" value={anchor} onChange={(x) => setAnchor(x.target.value || m.today)} aria-label="تاریخ" />
         <button className="im-btn im-btn-sm" onClick={() => setAnchor(addDays(per.from, -1))}>دورهٔ قبل</button>

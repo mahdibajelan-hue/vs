@@ -21,7 +21,7 @@ const KEYS: Record<string, string[]> = {
   comp_inservice_raters: ['cycle_id', 'user_id'], comp_inservice_ratings: ['cycle_id', 'rater_id', 'competency_id'],
   comp_job_role_config: ['job_role'], comp_module_admins: ['user_id'], comp_question_designer_scopes: ['user_id', 'section'],
   comp_role_maturity_guidance: ['job_role', 'band'], comp_self_service_retired_tokens: ['token'], ex_line_welds: ['line_id'],
-  ex_settings: ['project_id'], wq_settings: ['project_id'], wq_joints: ['weld_id'], ex_weld_dismissals: ['project_id', 'n2'], ex_weld_file: [], ex_weld_suspects: [],
+  ex_settings: ['project_id'], ex_photo_picks: ['project_id', 'period', 'period_key'], wq_settings: ['project_id'], wq_joints: ['weld_id'], ex_weld_dismissals: ['project_id', 'n2'], ex_weld_file: [], ex_weld_suspects: [],
   fin_insight_reviews: ['insight_key'], ht_settings: ['master_project_id'], im_categories: ['key'], im_issue_people: ['issue_id', 'user_id', 'role'],
   im_notif_prefs: ['user_id'], im_notif_rules: ['key'], im_notif_state: ['key'], im_project_members: ['project_id', 'user_id'],
   im_sla_policies: ['severity'], im_task_deps: ['task_id', 'depends_on_task_id'], im_templates: ['key'], im_workflow_stages: ['workflow_key', 'key'],

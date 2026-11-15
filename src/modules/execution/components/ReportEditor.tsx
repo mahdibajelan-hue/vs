@@ -21,6 +21,7 @@ import { PaperModal, type PaperCtx } from './ReportPaper'
 import { ActivityPicker } from './ActivityPicker'
 import { ActionLines } from './ActionLines'
 import { SignaturesCard } from './SignaturesCard'
+import { ReportPhotos } from '../photos/PhotoParts'
 import { actionOf } from '../lib/workActions'
 import { ResourcePanel } from './ResourcePanel'
 import { CrewLogsPanel, type CrewDraft } from './epc/CrewLogsPanel'
@@ -354,6 +355,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
       {form && regWarnings.length > 0 && <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: `3px solid ${strictRegs ? 'var(--im-coral)' : 'var(--im-amber)'}` }}><b>{strictRegs ? 'موارد رجیستر که پیش از ارسال باید اصلاح شود' : 'هشدار رجیستر لوله و جوشکار'} ({fa(regWarnings.length)})</b>
         <ul style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>{regWarnings.slice(0, 12).map((w) => <li key={w}>{w}</li>)}{regWarnings.length > 12 && <li>و {fa(regWarnings.length - 12)} مورد دیگر…</li>}</ul>
         <small className="sub">جوشکاران در «ارزیابی شایستگی ← صلاحیت جوشکاران و عایق‌کاران» و لوله‌ها در «کالا ← ورود لوله به کارگاه (MRS)» ثبت می‌شوند؛ شناسهٔ تازه را آنجا ثبت کنید.</small></div>}
+      <ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />
       <SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} />
 
       {form && epcAvailable && <LinkCard reportId={reportId} projectId={m.projectId} date={head.reportDate} front={head.front} model={m} />}

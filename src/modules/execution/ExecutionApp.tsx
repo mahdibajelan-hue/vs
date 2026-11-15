@@ -1,6 +1,6 @@
 import { NavScroller } from './components/NavScroller'
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Bot, Flame, CalendarRange, ClipboardList, FileBarChart2, Gauge, HardHat, Hourglass, Inbox, Loader2, Settings2, TrendingUp } from 'lucide-react'
+import { AlertTriangle, Bot, Camera, Flame, CalendarRange, ClipboardList, FileBarChart2, Gauge, HardHat, Hourglass, Inbox, Loader2, Settings2, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -19,7 +19,7 @@ import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 import { useRemembered } from '../../lib/navMemory'
 
 export const EXECUTION_ACCENT = '#f97316'
-export type ExTab = 'dashboard' | 'daily' | 'review' | 'welds' | 'progress' | 'outlook' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'settings'
+export type ExTab = 'dashboard' | 'daily' | 'review' | 'welds' | 'progress' | 'outlook' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'photos' | 'settings'
 type Sub = { id: string; label: string }
 const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[] }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
@@ -31,6 +31,7 @@ const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: S
   { id: 'plan', label: 'برنامهٔ کوتاه‌مدت و آمادگی', icon: CalendarRange, color: '#0ea5e9', subs: [{ id: 'lookahead', label: 'برنامهٔ سه‌هفته‌ای' }, { id: 'readiness', label: 'آمادگی فعالیت‌ها' }, { id: 'import', label: 'ورود برنامه از اکسل' }] },
   { id: 'assistant', label: 'دستیار هوشمند', icon: Bot, color: '#ec4899' },
   { id: 'reports', label: 'گزارش‌های دوره‌ای', icon: FileBarChart2, color: '#94a3b8', subs: [{ id: 'week', label: 'هفتگی' }, { id: 'month', label: 'ماهانه' }, { id: 'cum', label: 'تجمعی از ابتدا' }, { id: 'contract', label: 'صورت‌وضعیت پیمان (۳ ستونی)' }, { id: 'statement', label: 'صورت‌وضعیت کارکرد' }, { id: 'ledger', label: 'مغایرت اجرایی و صورت‌وضعیت' }, { id: 'personnel', label: 'جوشکاران و عایق‌کاران' }, { id: 'mrs', label: 'لوله‌های ورودی (MRS)' }, { id: 'archive', label: 'بایگانی فرم‌های فنی' }, { id: 'mgmt-week', label: 'گزارش مدیریتی هفتگی' }, { id: 'mgmt-month', label: 'گزارش مدیریتی ماهانه' }, { id: 'delays', label: 'تأخیرات و کلیم' }] },
+  { id: 'photos', label: 'عکس‌های کارگاه', icon: Camera, color: '#0891b2' },
   { id: 'gaps', label: 'کامل‌بودن و کسری', icon: AlertTriangle, color: '#ef4444' },
   { id: 'settings', label: 'تنظیمات', icon: Settings2, color: '#64748b', subs: [{ id: 'roles', label: 'افراد، نقش‌ها و تنظیمات پایه' }, { id: 'rules', label: 'فهرست‌ها، مقادیر پیمان، تقویم و قواعد' }, { id: 'tpl', label: 'کتابخانهٔ قالب‌های فرم‌های فنی' }, { id: 'actions', label: 'اقدام‌های کارگاهی و تطبیق با فهرست‌بها' }] },
 ]
@@ -47,6 +48,7 @@ const Plan = L(() => import('./pages/PlanPage'), 'PlanPage')
 const Reports = L(() => import('./pages/ReportsRouter'), 'ReportsRouter')
 const Today = L(() => import('./pages/TodayPage'), 'TodayPage')
 const Designed = L(() => import('./pages/DesignedForms'), 'DesignedForms')
+const Photos = L(() => import('./photos/PhotosPage'), 'PhotosPage')
 const Welds = L(() => import('./pages/WeldsPage'), 'WeldsPage')
 const Gaps = L(() => import('./pages/GapsPage'), 'GapsPage')
 const Settings = L(() => import('./pages/SettingsPage'), 'SettingsPage')
@@ -59,7 +61,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const exLoaded = useExecutionStore((s) => s.loaded)
   const fetchEx = useExecutionStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
-  const [tab, setTab] = useRemembered<ExTab>('tab', 'dashboard', (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
+  const [tab, setTab] = useRemembered<ExTab>('tab', () => { const e = useModuleStore.getState().takeEntryTab() as ExTab | null; return e && NAV.some((x) => x.id === e) ? e : 'dashboard' }, (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
   const [subs, setSubs] = useRemembered<Partial<Record<ExTab, string>>>('subs', {}, (v) => !!v && typeof v === 'object')
   const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string')
   const [locked, setLocked] = useState(false)
@@ -109,6 +111,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       case 'gaps': return <Gaps {...p} />
       case 'qc': return null // moved to the quality-control module
       case 'welds': return <Welds {...p} />
+      case 'photos': return <Photos {...p} />
       case 'settings': return <Settings {...p} />
     }
   }
