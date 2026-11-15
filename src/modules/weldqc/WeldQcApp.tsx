@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react'
-import { BookOpenCheck, CheckCircle2, ClipboardList, FileWarning, Flame, Gauge, LayoutDashboard, Loader2, PaintRoller, ScanSearch, ShieldCheck, XCircle, type LucideIcon } from 'lucide-react'
+import { BookOpenCheck, CheckCircle2, ClipboardList, FileWarning, Flame, Gauge, LayoutDashboard, Loader2, PaintRoller, Radar, ScanSearch, ShieldCheck, XCircle, type LucideIcon } from 'lucide-react'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useModuleStore } from '../../store/useModuleStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
@@ -14,6 +14,7 @@ import { WqJoints } from './pages/WqJoints'
 import { WqGuide } from './pages/WqGuide'
 import { QcHome } from './pages/QcHome'
 import { clearFocusWelder } from './lib/handoff'
+import { useCapaAuto } from './lib/useCapa'
 import '../pssr/pssr.css'
 import '../testing/testing.css'
 import '../issues/issues.css'
@@ -32,6 +33,8 @@ const WqWps = lazy(() => import('./pages/WqWps').then((m) => ({ default: m.WqWps
 const WqSearch = lazy(() => import('./pages/WqSearch').then((m) => ({ default: m.WqSearch })))
 const WqFilmUse = lazy(() => import('./pages/WqFilmUse').then((m) => ({ default: m.WqFilmUse })))
 const WqAssistant = lazy(() => import('./pages/WqAssistant').then((m) => ({ default: m.WqAssistant })))
+const QcCapa = lazy(() => import('./pages/QcCapa').then((m) => ({ default: m.QcCapa })))
+const QcKpi = lazy(() => import('./pages/QcKpi').then((m) => ({ default: m.QcKpi })))
 const QcPretest = lazy(() => import('./pages/QcPretest').then((m) => ({ default: m.QcPretest })))
 const JointQc = lazy(() => import('../testing/components/CoatingQc').then((m) => ({ default: m.JointQc })))
 const ElectricalTest = lazy(() => import('../testing/components/CoatingQc').then((m) => ({ default: m.ElectricalTest })))
@@ -40,7 +43,7 @@ const CoatingRecords = lazy(() => import('../testing/TestingApp').then((m) => ({
 const NcrPage = lazy(() => import('../execution/pages/QcPage').then((m) => ({ default: m.QcPage })))
 const FormsPage = lazy(() => import('../execution/pages/DailyPage').then((m) => ({ default: m.DailyPage })))
 
-export type QcTab = 'home' | 'dash' | 'joints' | 'log' | 'welders' | 'repairs' | 'criteria' | 'assistant' | 'wps' | 'search' | 'filmuse' | 'coating' | 'jointqc' | 'linecoat' | 'electrical' | 'coatcrit' | 'pretest' | 'ncr' | 'forms' | 'guide'
+export type QcTab = 'home' | 'dash' | 'joints' | 'log' | 'welders' | 'repairs' | 'criteria' | 'assistant' | 'wps' | 'search' | 'filmuse' | 'coating' | 'jointqc' | 'linecoat' | 'electrical' | 'coatcrit' | 'pretest' | 'ncr' | 'capa' | 'kpi' | 'forms' | 'guide'
 /** kept for the weld pages, which navigate inside their own area */
 export type WqTab = QcTab
 type Area = { k: string; label: string; icon: LucideIcon; color: string; tabs: [QcTab, string][] }
@@ -51,6 +54,7 @@ const AREAS: Area[] = [
   { k: 'lcoat', label: 'تست پوشش خط', icon: ShieldCheck, color: '#0ea5e9', tabs: [['linecoat', 'آزمون‌ها و عیوب (هالیدی، DCVG، …)'], ['electrical', 'آزمون الکتریکی (I/S)'], ['coatcrit', 'معیارهای پذیرش پوشش']] },
   { k: 'pretest', label: 'پیش‌تست قطعات', icon: Gauge, color: '#14b8a6', tabs: [['pretest', 'پیش‌تست قطعات عبوری']] },
   { k: 'ncr', label: 'NCR و عدم انطباق', icon: FileWarning, color: '#ef4444', tabs: [['ncr', 'NCR و مغایرت‌ها']] },
+  { k: 'capa', label: 'بهبود کیفیت (CAPA)', icon: Radar, color: '#f97316', tabs: [['capa', 'اقدام اصلاحی و پیشگیرانه (CAPA / RCA)'], ['kpi', 'شاخص‌های کیفیت و تحلیل عیوب']] },
   { k: 'forms', label: 'فرم‌ها و گزارش‌های کیفی', icon: ClipboardList, color: '#eab308', tabs: [['forms', 'صدور فرم‌ها']] },
   { k: 'guide', label: 'راهنما', icon: BookOpenCheck, color: '#64748b', tabs: [['guide', 'راهنما']] },
 ]
@@ -82,6 +86,9 @@ export function WeldQcApp({ onExitToHub }: { onExitToHub: () => void; onBackToRa
   useEffect(() => { if (!st.flash) return; const t = setTimeout(() => st.clearFlash(), 3200); return () => clearTimeout(t) }, [st.flash, st])
   const htFlash = useTestingStore((s) => s.flash), htErr = useTestingStore((s) => s.error)
   useEffect(() => { if (!htFlash) return; const t = setTimeout(() => useTestingStore.setState({ flash: null }), 2600); return () => clearTimeout(t) }, [htFlash])
+  useCapaAuto()
+  // a headline of the ticker asks for a CAPA case
+  useEffect(() => { const h = () => { clearFocusWelder(); setTab('capa'); setOpen(null) }; window.addEventListener('qc:capa', h); return () => window.removeEventListener('qc:capa', h) }, [setTab, setOpen])
   const go = (t: QcTab, f?: string) => { clearFocusWelder(); setTab(t); setOpen(null); if (f) setFilter(f) }
   const weld = open ? st.welds.find((w) => w.id === open) ?? null : null
   const missing = !!st.error && /wq_|does not exist|relation/.test(st.error)
@@ -109,6 +116,8 @@ export function WeldQcApp({ onExitToHub }: { onExitToHub: () => void; onBackToRa
       case 'coatcrit': return <div className="ht ps-stack"><CoatCriteria /></div>
       case 'pretest': return <QcPretest />
       case 'ncr': return <div className="im-root fn-root mt-root ex-root qc-embed">{exLoaded ? <NcrPage projectId={projectId} sub="" onGo={() => undefined} /> : <div className="wq-skel"><span /></div>}</div>
+      case 'capa': return <QcCapa onOpenWeld={setOpen} />
+      case 'kpi': return <QcKpi />
       case 'forms': return <div className="im-root fn-root mt-root ex-root qc-embed">{exLoaded ? <FormsPage projectId={projectId} sub="forms" scope="qc" /> : <div className="wq-skel"><span /></div>}</div>
       case 'guide': return <WqGuide onGo={go} />
     }
@@ -136,7 +145,7 @@ export function WeldQcApp({ onExitToHub }: { onExitToHub: () => void; onBackToRa
       <main className="ps-main wq-main">
         {!projectId ? <p className="ps-hint">ابتدا از رادار پروژه یک پروژه را انتخاب کنید.</p>
           : isWeld && missing ? <p className="ps-hint is-warn">جدول‌های جوش و رادیوگرافی هنوز در پایگاه داده ساخته نشده‌اند (supabase/weldqc/001_weldqc.sql).</p>
-          : (isWeld || tab === 'home' || tab === 'coating') && st.loading ? <div className="wq-skel" aria-busy="true"><span /><span /><span /><p className="ps-loading"><Loader2 size={16} className="animate-spin" /> بارگذاری سرجوش‌ها و پرونده‌های کیفی…</p></div>
+          : (isWeld || tab === 'home' || tab === 'coating' || tab === 'capa' || tab === 'kpi') && st.loading ? <div className="wq-skel" aria-busy="true"><span /><span /><span /><p className="ps-loading"><Loader2 size={16} className="animate-spin" /> بارگذاری سرجوش‌ها و پرونده‌های کیفی…</p></div>
           : (
             <Suspense fallback={<div className="wq-skel"><span /><span /></div>}>
               <div className="wq-page" key={weld ? `w:${weld.id}` : tab}>

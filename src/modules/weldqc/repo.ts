@@ -6,6 +6,7 @@ import type { DefectType, Pass, Verdict } from './lib/rules'
 import { sidesFromRows, type CrewRow, type PassSides, type Quadrant } from './lib/crew'
 import type { Code } from './lib/api1104'
 import type { Metrics } from './lib/filmio'
+import type { ActionKind, CapaStatus, CauseCat, Metric, Party, Rule, Severity, Trigger } from './lib/capa'
 
 type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const s = (v: unknown) => (v == null ? '' : String(v))
@@ -36,6 +37,7 @@ export interface WqData {
   welds: QcWeld[]; welders: Welder[]; joints: Joint[]; films: Film[]; marks: Mark[]; defects: Defect[]
   evaluations: Evaluation[]; repairs: Repair[]; vts: Vt[]; opinions: Opinion[]; criteria: unknown
   wps: Wps[]; pipes: StrungPipe[]
+  capa: CapaCase[]; capaAttendees: CapaAttendee[]; capaActions: CapaAction[]; capaEvents: CapaEvent[]
   crew: (CrewRow & { weldId: string })[]; coatings: Coating[]; quals: Qual[]
   /** hydrotest sections of the line (testing module) — the final test of a weld */
   sections: { code: string; kmFrom: number; kmTo: number; stage: string; failed: boolean }[]
@@ -63,6 +65,7 @@ export async function loadAll(pid: string): Promise<WqData> {
     supabase.from('ht_sections').select('code, km_from, km_to, stage, failed').eq('master_project_id', pid),
   ])
   const [wpsRows, pipes] = await Promise.all([byProject('wq_wps', pid).then((r) => r.filter((x) => !x.removed_at)).catch(() => [] as Row[]), loadStrung(pid).catch(() => [] as StrungPipe[])])
+  const [capa, capaAtt, capaAct, capaEv] = await Promise.all(['wq_capa', 'wq_capa_attendees', 'wq_capa_actions', 'wq_capa_events'].map((t) => byProject(t, pid).catch(() => [] as Row[])))
   const lineIds = links.map((l) => l.line_id as string)
   const lines: Row[] = []
   for (let i = 0; i < lineIds.length; i += 150) {
@@ -115,6 +118,8 @@ export async function loadAll(pid: string): Promise<WqData> {
     opinions: opinions.map((o) => ({ id: o.id, weldId: o.weld_id, targetKind: o.target_kind, targetId: o.target_id, stance: o.stance, body: s(o.body), authorName: s(o.author_name), at: s(o.at) })).sort((a, b) => a.at.localeCompare(b.at)),
     criteria: (settings.data as Row | null)?.criteria ?? null,
     wps: wpsRows.map(wpsOf), pipes,
+    capa: capa.map(capaOf).sort((a, b) => b.seq - a.seq), capaAttendees: capaAtt.map(attOf).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    capaActions: capaAct.filter((a) => !a.removed_at).map(actOf).sort((a, b) => a.createdAt.localeCompare(b.createdAt)), capaEvents: capaEv.map((e) => ({ id: Number(e.id), caseId: e.case_id, at: s(e.at), byName: s(e.by_name), kind: s(e.kind), note: s(e.note) })).sort((a, b) => a.at.localeCompare(b.at)),
     sections: ((hts.data ?? []) as Row[]).map((x) => ({ code: s(x.code), kmFrom: Number(x.km_from), kmTo: Number(x.km_to), stage: s(x.stage), failed: !!x.failed })),
   }
 }
@@ -174,6 +179,12 @@ const ERR: Record<string, string> = {
   no_accepted_film: 'هیچ فیلمی از این راند از نظر کیفیت تأیید نشده؛ ابتدا کیفیت فیلم را بررسی کنید.', no_evaluation: 'هنوز ارزیابی‌ای برای این راند ثبت نشده است.',
   cutout_not_allowed: 'تبدیل به «برش» فقط در راند سوم و برای نتیجهٔ «تعمیر» مجاز است.', max_repairs: 'سقف دو بار تعمیر تکمیل شده؛ طبق رویه باید برش کامل انجام شود.',
   not_repair: 'ثبت تعمیر فقط برای راندی که نتیجهٔ آن «نیاز به تعمیر» است مجاز است.', not_signed: 'پیش از ثبت تعمیر، بازرس NDT باید ارزیابی این راند را تأیید کند.',
+  capa_no_containment: 'ابتدا اقدام فوری مهار را بنویسید (دست‌کم یک جمله).', capa_no_owner: 'مسئول پرونده را تعیین کنید.', capa_no_meeting: 'زمان برگزاری جلسهٔ ریشه‌یابی ثبت نشده یا هنوز نرسیده است.', capa_no_minutes: 'شرح مذاکرات جلسه نوشته نشده است.',
+  capa_no_root: 'علت ریشه‌ای توافق‌شده نوشته نشده است.', capa_no_corrective: 'دست‌کم یک اقدام اصلاحی با مسئول و مهلت لازم است.', capa_no_preventive: 'دست‌کم یک اقدام پیشگیرانه با مسئول و مهلت لازم است.',
+  capa_quorum: 'تعداد حاضران جلسه به حد نصاب نرسیده است.', capa_parties: 'در جلسهٔ پروندهٔ الزامی باید هم پیمانکار / کنترل کیفیت و هم نظارت / مشاور / کارفرما حاضر باشند.', capa_unsigned: 'همهٔ حاضران هنوز صورتجلسه را امضا نکرده‌اند.',
+  capa_sign_self: 'هر عضو فقط خودش می‌تواند صورتجلسه را امضا کند.', capa_actions_open: 'هنوز همهٔ اقدام‌ها انجام نشده‌اند.', capa_same_person: 'سنجش اثربخشی باید توسط کسی غیر از مسئول پرونده انجام شود.', capa_locked: 'این پرونده در این مرحله قابل تغییر نیست.',
+  capa_bad_step: 'این مرحله اکنون مجاز نیست.', capa_action_incomplete: 'عنوان اقدام، مسئول و مهلت را کامل کنید.', capa_dup_attendee: 'این فرد پیش‌تر به جلسه اضافه شده است.', capa_no_title: 'عنوان پرونده را بنویسید.', capa_no_name: 'نام عضو جلسه را بنویسید.', note_required: 'برای این کار نوشتن توضیح لازم است.',
+  capa_required: 'این NCR نیازمند تحلیل علت ریشه‌ای است؛ تا پروندهٔ CAPA آن بسته نشود، NCR بسته نمی‌شود.',
   weld_not_found: 'این سرجوش در فهرست مرکزی جوش‌ها پیدا نشد.', 'row-level security': 'دسترسی این کار را ندارید یا پرونده بسته است.',
 }
 export function explain(e: unknown): string {
@@ -216,3 +227,30 @@ async function loadStrung(pid: string): Promise<StrungPipe[]> {
   }
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.reportNo.localeCompare(b.reportNo) || a.order - b.order).map((p, i) => ({ ...p, order: i }))
 }
+
+// ── corrective / preventive action cases (every write is a database function: the gates live there)
+export interface CapaCase {
+  id: string; projectId: string; seq: number; code: string; fingerprint: string | null; rule: Rule; source: 'system' | 'manual' | 'ncr'; mandatory: boolean; severity: Severity; status: CapaStatus; round: number
+  title: string; problem: string; evidence: string; scope: Trigger['scope']; baseline: Partial<Metric>; containment: string; ncrId: string | null; ownerId: string | null; ownerName: string
+  meetingDue: string; meetingAt: string | null; meetingPlace: string; minutes: string; whys: string[]; causes: { cat: CauseCat; text: string; root: boolean }[]; rootCause: string
+  agreedAt: string | null; verifyDue: string | null; verifyResult: 'effective' | 'ineffective' | null; verifyNote: string; verifyMetric: Partial<Metric> | null; verifiedName: string; verifiedAt: string | null
+  closedAt: string | null; voidReason: string; openedName: string; openedAt: string
+}
+export interface CapaAttendee { id: string; caseId: string; round: number; userId: string | null; name: string; party: Party; role: string; present: boolean; signedAt: string | null; paper: boolean; createdAt: string }
+export interface CapaAction { id: string; caseId: string; round: number; kind: ActionKind; title: string; ownerId: string | null; ownerName: string; dueDate: string; status: 'open' | 'done'; doneAt: string | null; doneNote: string; doneName: string; createdAt: string }
+export interface CapaEvent { id: number; caseId: string; at: string; byName: string; kind: string; note: string }
+const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
+const capaOf = (r: Row): CapaCase => ({ id: r.id, projectId: r.project_id, seq: Number(r.seq), code: s(r.code), fingerprint: r.fingerprint ?? null, rule: s(r.rule) as Rule, source: r.source, mandatory: !!r.mandatory, severity: r.severity, status: r.status, round: Number(r.round) || 1,
+  title: s(r.title), problem: s(r.problem), evidence: s(r.evidence), scope: (r.scope ?? {}) as Trigger['scope'], baseline: (r.baseline ?? {}) as Partial<Metric>, containment: s(r.containment), ncrId: r.ncr_id ?? null, ownerId: r.owner_id ?? null, ownerName: s(r.owner_name),
+  meetingDue: s(r.meeting_due), meetingAt: r.meeting_at ?? null, meetingPlace: s(r.meeting_place), minutes: s(r.minutes), whys: arr<string>(r.whys).map(s), causes: arr<CapaCase['causes'][number]>(r.causes), rootCause: s(r.root_cause),
+  agreedAt: r.agreed_at ?? null, verifyDue: r.verify_due ?? null, verifyResult: r.verify_result ?? null, verifyNote: s(r.verify_note), verifyMetric: (r.verify_metric ?? null) as Partial<Metric> | null, verifiedName: s(r.verified_name), verifiedAt: r.verified_at ?? null,
+  closedAt: r.closed_at ?? null, voidReason: s(r.void_reason), openedName: s(r.opened_name), openedAt: s(r.opened_at) })
+const attOf = (r: Row): CapaAttendee => ({ id: r.id, caseId: r.case_id, round: Number(r.round) || 1, userId: r.user_id ?? null, name: s(r.name), party: r.party, role: s(r.role), present: !!r.present, signedAt: r.signed_at ?? null, paper: !!r.paper, createdAt: s(r.created_at) })
+const actOf = (r: Row): CapaAction => ({ id: r.id, caseId: r.case_id, round: Number(r.round) || 1, kind: r.kind, title: s(r.title), ownerId: r.owner_id ?? null, ownerName: s(r.owner_name), dueDate: s(r.due_date), status: r.status, doneAt: r.done_at ?? null, doneNote: s(r.done_note), doneName: s(r.done_name), createdAt: s(r.created_at) })
+export async function capaOpen(pid: string, p: Record<string, unknown>): Promise<string> { return chk(await supabase.rpc('wq_capa_open', { p_project: pid, p })).data as string }
+export async function capaSave(id: string, p: Record<string, unknown>) { chk(await supabase.rpc('wq_capa_save', { p_id: id, p })) }
+export async function capaAttendee(caseId: string, op: 'add' | 'remove' | 'present', p: Record<string, unknown>) { chk(await supabase.rpc('wq_capa_attendee', { p_case: caseId, p_op: op, p })) }
+export async function capaSign(attendeeId: string) { chk(await supabase.rpc('wq_capa_sign', { p_attendee: attendeeId })) }
+export async function capaAction(caseId: string, op: 'add' | 'remove' | 'done' | 'undo', p: Record<string, unknown>) { chk(await supabase.rpc('wq_capa_action', { p_case: caseId, p_op: op, p })) }
+export async function capaAdvance(id: string, to: 'rca' | 'agreed' | 'verifying' | 'void', note = '', verifyDays = 30) { chk(await supabase.rpc('wq_capa_advance', { p_id: id, p_to: to, p_note: note, p_verify_days: verifyDays })) }
+export async function capaVerify(id: string, result: 'effective' | 'ineffective', note: string, metric: unknown) { chk(await supabase.rpc('wq_capa_verify', { p_id: id, p_result: result, p_note: note, p_metric: metric })) }

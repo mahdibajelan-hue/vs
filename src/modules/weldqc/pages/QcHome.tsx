@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type CSSProperties } from 'react'
-import { ArrowLeft, ClipboardList, FileWarning, Flame, Gauge, PaintRoller, ScanSearch, ShieldCheck, type LucideIcon } from 'lucide-react'
+import { ArrowLeft, ClipboardList, Radar, Siren, FileWarning, Flame, Gauge, PaintRoller, ScanSearch, ShieldCheck, type LucideIcon } from 'lucide-react'
 import { useWqStore } from '../store/useWqStore'
 import { useQc, fa } from '../lib/useQc'
 import { useTestingStore } from '../../testing/store/useTestingStore'
@@ -7,6 +7,8 @@ import { coveredKm } from '../../testing/lib/htCore'
 import { useEpcStore } from '../../execution/store/useEpcStore'
 import { useExecutionStore } from '../../execution/store/useExecutionStore'
 import { isQcForm } from '../../execution/lib/formCatalog'
+import { useCapa } from '../lib/useCapa'
+import { ESCALATE_FA } from '../lib/capa'
 import type { QcTab } from '../WeldQcApp'
 
 const pct = (a: number, b: number) => (b ? (a / b) * 100 : 0)
@@ -19,6 +21,7 @@ export function QcHome({ projectId, onGo }: { projectId: string; onGo: (t: QcTab
   const ht = useTestingStore()
   const epc = useEpcStore()
   const ex = useExecutionStore()
+  const capa = useCapa()
   useEffect(() => { if (!epc.loaded) void epc.fetchAll() }, [epc.loaded, epc])
 
   const tiles = useMemo<Tile[]>(() => {
@@ -42,6 +45,7 @@ export function QcHome({ projectId, onGo }: { projectId: string; onGo: (t: QcTab
     const forms = ex.reports.filter((r) => r.projectId === projectId && isQcForm(r.formKey) && r.status !== 'rejected')
     const waiting = forms.filter((r) => r.status === 'submitted' || r.status === 'partially_approved').length
     const returned = forms.filter((r) => r.status === 'returned' || r.status === 'incomplete').length
+    const cLive = capa.cases.filter((x) => x.c.status !== 'closed' && x.c.status !== 'void'), cLate = cLive.filter((x) => x.late.late)
     return [
       { tab: 'dash', icon: Flame, color: '#f43f5e', title: 'جوش و رادیوگرافی', big: shot.length ? `${fa(pct(firstOk, shot.length), 1)}٪` : '—', unit: 'قبولی در اولین رادیوگرافی',
         lines: [['سرجوش', fa(rows.length)], ['پذیرفته', fa(acc)], ['منتظر تعمیر / عکس مجدد', fa(due)], ['برش', fa(cut)], ['میانگین شاخص سلامت', scored.length ? fa(health, 0) : '—']], warn: due ? `${fa(due)} سرجوش منتظر تعمیر است` : undefined },
@@ -53,17 +57,23 @@ export function QcHome({ projectId, onGo }: { projectId: string; onGo: (t: QcTab
         lines: [['در جریان', fa(pre.length - preAcc - preFail)], ['مردود', fa(preFail)], ['طول لولهٔ آزمون‌شده', `${fa(pre.filter((p) => p.stage === 'accepted').reduce((s, p) => s + (p.lengthM ?? 0), 0))} m`]], warn: preFail ? `${fa(preFail)} قطعه مردود شده است` : undefined },
       { tab: 'ncr', icon: FileWarning, color: '#ef4444', title: 'NCR و عدم انطباق', big: fa(ncrOpen.length), unit: 'NCR باز',
         lines: [['کل NCR', fa(ncr.length)], ['مهلت‌گذشته', fa(late)], ['مغایرت باز', fa(findOpen)]], warn: late ? `${fa(late)} NCR از مهلت گذشته است` : undefined },
+      { tab: 'capa', icon: Radar, color: '#f97316', title: 'بهبود کیفیت (CAPA)', big: fa(cLive.length), unit: 'پروندهٔ باز',
+        lines: [['الزامی', fa(cLive.filter((x) => x.c.mandatory).length)], ['در ریشه‌یابی و توافق', fa(cLive.filter((x) => x.c.status === 'open' || x.c.status === 'rca').length)], ['در اجرای اقدام‌ها', fa(cLive.filter((x) => x.c.status === 'agreed').length)], ['در سنجش اثربخشی', fa(cLive.filter((x) => x.c.status === 'verifying').length)]], warn: cLate.length ? `${fa(cLate.length)} پرونده از مهلت گذشته است` : capa.pending.filter((t) => t.mandatory).length ? `${fa(capa.pending.filter((t) => t.mandatory).length)} الگوی الزامی هنوز پرونده ندارد` : undefined },
       { tab: 'forms', icon: ClipboardList, color: '#22c55e', title: 'فرم‌ها و گزارش‌های کیفی', big: fa(forms.length), unit: 'فرم صادرشده',
         lines: [['در انتظار بررسی', fa(waiting)], ['برگشتی / ناقص', fa(returned)], ['جوشکاری روزانه', fa(forms.filter((r) => r.formKey === 'welding').length)], ['درخواست / گزارش RT', `${fa(forms.filter((r) => r.formKey.startsWith('rt_request')).length)} / ${fa(forms.filter((r) => r.formKey === 'rt_report').length)}`]], warn: returned ? `${fa(returned)} فرم برگشت خورده است` : undefined },
     ]
-  }, [qc.rows, wq.coatings, ht.coated, ht.records, ht.defects, ht.packs, ht.ctTests, epc.ncrs, epc.findings, ex.reports, projectId])
+  }, [qc.rows, wq.coatings, ht.coated, ht.records, ht.defects, ht.packs, ht.ctTests, epc.ncrs, epc.findings, ex.reports, projectId, capa.cases, capa.pending])
 
+  const late = capa.cases.filter((x) => x.late.late && x.c.status !== 'closed' && x.c.status !== 'void')
   return (
     <div className="qc-home">
       <header className="qc-home-head">
         <span className="qc-home-ico" aria-hidden><ScanSearch size={20} /></span>
         <div><b>میز کیفیت پروژه</b><small>هر کاشی خلاصهٔ یک جریان کیفی است؛ با کلیک، بخش مربوط باز می‌شود. داده‌ها از همان ثبت‌های اجرا، آزمایش‌ها و ارزیابی صلاحیت خوانده می‌شوند و جایی دوباره وارد نمی‌شوند.</small></div>
       </header>
+      {late.length > 0 && (
+        <button type="button" className="cp-alarm is-btn" onClick={() => onGo('capa')}><Siren size={17} aria-hidden /><span><b>{fa(late.length)} پروندهٔ اقدام اصلاحی از مهلت گذشته است.</b> {late.slice(0, 3).map((x) => `${x.c.code}: ${fa(x.late.days)} روز تأخیر در ${x.late.what} (ارجاع به ${ESCALATE_FA[x.late.level]})`).join(' · ')}</span><ArrowLeft size={15} aria-hidden /></button>
+      )}
       <div className="qc-tiles">
         {tiles.map((t, i) => (
           <button key={t.tab} type="button" className="qc-tile" style={{ '--c': t.color, '--i': i } as CSSProperties} onClick={() => onGo(t.tab)}>

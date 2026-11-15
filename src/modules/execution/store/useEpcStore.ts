@@ -23,11 +23,12 @@ function fail(action: string, error: { message: string } | null): boolean {
 }
 /** Messages of the migration-010 guards, translated; anything else goes through the shared explainer. */
 export function explainEpcError(msg: string): string {
-  const m = msg.match(/measured_exceeds_approved|billed_exceeds_measured|paid_exceeds_billed|employer_step_off|supervision_not_approved|note_required|empty_text|self_approval|use_rpc/)
+  const m = msg.match(/measured_exceeds_approved|billed_exceeds_measured|paid_exceeds_billed|employer_step_off|supervision_not_approved|note_required|empty_text|self_approval|use_rpc|capa_required/)
   const map: Record<string, string> = {
     measured_exceeds_approved: 'مجموع حجم اندازه‌گیری‌شده از مقدار تأییدشدهٔ این فعالیت بیشتر می‌شود.', billed_exceeds_measured: 'مقدار صورت‌وضعیت‌شده از حجم اندازه‌گیری‌شده بیشتر می‌شود.', paid_exceeds_billed: 'مقدار پرداخت‌شده از مقدار صورت‌وضعیت‌شده بیشتر می‌شود.',
     employer_step_off: 'مرحلهٔ کارفرما برای این پروژه فعال نیست (تنظیمات ← مرحلهٔ کارفرما).', supervision_not_approved: 'فقط ردیف‌هایی که نظارت تأیید کرده‌اند قابل بررسی کارفرما هستند.', note_required: 'برای رد یا بازگرداندن، علت کتبی لازم است.',
     empty_text: 'متن خالی است.', self_approval: 'پیشنهاددهنده نمی‌تواند پیشنهاد خودش را تأیید کند.', use_rpc: 'این مقدار فقط از مسیر مجاز قابل تغییر است.',
+    capa_required: 'این NCR (شدت زیاد یا با الزام RCA) تا بسته‌شدن پروندهٔ اقدام اصلاحی و پیشگیرانه‌اش در «کنترل کیفیت ← بهبود کیفیت» بسته نمی‌شود.',
   }
   return m ? map[m[0]] : explainExecutionError({ message: msg })
 }
