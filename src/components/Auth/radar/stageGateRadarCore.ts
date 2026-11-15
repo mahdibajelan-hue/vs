@@ -17,8 +17,8 @@ export interface SgRadarInput {
 export interface SgRadarSection { lifecycle: RadarLifecycleStage[]; currentStageLabel: string; nextGate: RadarGate | null; overallPct?: number; overallPlannedPct?: number }
 
 const VERIFIED = new Set(['verified', 'completed'])
-/** English labels for the radar's English panels (G1…G9 of the 9-gate model) */
-const EN: Record<string, string> = { G1: 'Definition', G2: 'Identification', G3: 'Consultant Procurement', G4: 'Basic Design', G5: 'Tender & Award', G6: 'Execution', G7: 'Commissioning', G8: 'Maintenance', G9: 'Closeout' }
+/** English labels for the radar's English panels (the company's 10-stage lifecycle) */
+const EN: Record<string, string> = { G1: 'Definition', G2: 'Clarification', G3: 'Master Planning', G4: 'Basic-Design Consultant', G5: 'Basic Design', G6: 'Contractor & Supervisor Tender', G7: 'Execution', G8: 'Commissioning', G9: 'Maintenance Period', G10: 'Final Settlement' }
 const faDate = (iso: string | null) => (iso ? new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)) : '—')
 
 export function stageGateRadarSection(input: SgRadarInput, today = new Date()): SgRadarSection | null {

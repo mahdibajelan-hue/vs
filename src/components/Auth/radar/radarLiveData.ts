@@ -414,7 +414,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   // --- Lifecycle / Gate / EPC ------------------------------------------------
   let plcLive = false
   try {
-    // the control tower's engines run on Stage-Gate (G1…G9) for linked projects; the former lifecycle rows only otherwise
+    // the control tower's engines run on Stage-Gate (ten stages, gates G1…G9) for linked projects; the former lifecycle rows only otherwise
     const plcBundle = await val(pPlc)
     if (plcBundle && plcBundle.lifecycle) {
       plcLive = true
@@ -445,7 +445,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
     console.warn('[radar] live lifecycle fetch failed, showing mock lifecycle/gate/EPC instead', err)
   }
 
-  // --- Lifecycle / next gate of record: Stage-Gate (G1…G9) -----------------------
+  // --- Lifecycle / next gate of record: Stage-Gate (10 stages) -----------------------
   // Health comes from the control tower engines above; the lifecycle strip and the next gate from Stage-Gate's own
   // readiness; its EPC phase from the engineering / material / execution modules (the same figures they show).
   let epc: EpcProgress | null = null

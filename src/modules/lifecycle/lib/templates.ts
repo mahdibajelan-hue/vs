@@ -208,15 +208,16 @@ export const DEFAULT_TEMPLATE_STAGES: TemplateStageSeed[] = [
  * reused from the closest-matching generic stage rather than invented from scratch.
  * gateReadinessThreshold mirrors the source model's own per-gate thresholds (30/50/70/80/90/100…). */
 const EPC_PIPELINE_BASE: TemplateStageSeed[] = [
-  { stageKey: 'idea', nameFa: 'تعریف پروژه', nameEn: 'G1 — Project Definition', typicalDurationMonths: 1, gateName: 'تصویب و ابلاغ', gateReadinessThreshold: 30, checklist: [] },
-  { stageKey: 'pre_project', nameFa: 'شناسایی پروژه', nameEn: 'G2 — Project Identification', typicalDurationMonths: 2, gateName: 'صدور مجوز خرید خدمات', gateReadinessThreshold: 50, checklist: [] },
-  { stageKey: 'initiation', nameFa: 'خرید خدمات مشاور', nameEn: 'G3 — Consultant Procurement', typicalDurationMonths: 2, gateName: 'ابلاغ شروع به کار مهندسی', gateReadinessThreshold: 70, checklist: [] },
-  { stageKey: 'planning', nameFa: 'طراحی پایه', nameEn: 'G4 — Basic Design', typicalDurationMonths: 4, gateName: 'مجوز کمیسیون/هیات فنی برای برگزاری مناقصات', gateReadinessThreshold: 80, checklist: [] },
-  { stageKey: 'procurement', nameFa: 'مناقصه انتخاب پیمانکار و انعقاد قرارداد', nameEn: 'G5 — Contractor Tender & Contract', typicalDurationMonths: 3, gateName: 'ابلاغ شروع به کار اجرا', gateReadinessThreshold: 90, checklist: [] },
-  { stageKey: 'execution', nameFa: 'اجرای پروژه', nameEn: 'G6 — Execution', typicalDurationMonths: 18, gateName: 'تایید شروع پیش‌راه‌اندازی', gateReadinessThreshold: 100, checklist: [] },
-  { stageKey: 'commissioning', nameFa: 'پیش‌راه‌اندازی و راه‌اندازی', nameEn: 'G7 — Pre-commissioning & Commissioning', typicalDurationMonths: 3, gateName: 'تحویل موقت توسط بهره‌بردار', gateReadinessThreshold: 100, checklist: [] },
-  { stageKey: 'handover', nameFa: 'دوره نگهداری', nameEn: 'G8 — Maintenance Period', typicalDurationMonths: 12, gateName: 'تحویل قطعی', gateReadinessThreshold: 100, checklist: [] },
-  { stageKey: 'close_out', nameFa: 'تسویه حساب', nameEn: 'G9 — Final Settlement', typicalDurationMonths: 1, gateName: 'تایید نهایی و بستن پروژه', gateReadinessThreshold: 100, checklist: [] },
+  { stageKey: 'idea', nameFa: 'تعریف پروژه', nameEn: 'G1 — Project Definition', typicalDurationMonths: 2, gateName: '', gateReadinessThreshold: 30, checklist: [] },
+  { stageKey: 'pre_project', nameFa: 'شفاف‌سازی پروژه', nameEn: 'G2 — Project Clarification', typicalDurationMonths: 1, gateName: '', gateReadinessThreshold: 50, checklist: [] },
+  { stageKey: 'initiation', nameFa: 'برنامه‌ریزی کلان پروژه', nameEn: 'G3 — Master Planning', typicalDurationMonths: 2, gateName: '', gateReadinessThreshold: 70, checklist: [] },
+  { stageKey: 'planning', nameFa: 'خرید خدمات مشاور طراحی پایه', nameEn: 'G4 — Basic-Design Consultant Procurement', typicalDurationMonths: 4, gateName: '', gateReadinessThreshold: 80, checklist: [] },
+  { stageKey: 'engineering', nameFa: 'طراحی پایه', nameEn: 'G5 — Basic Design', typicalDurationMonths: 6, gateName: '', gateReadinessThreshold: 90, checklist: [] },
+  { stageKey: 'procurement', nameFa: 'مناقصه انتخاب پیمانکار و ناظر', nameEn: 'G6 — Contractor & Supervisor Tender', typicalDurationMonths: 6, gateName: '', gateReadinessThreshold: 100, checklist: [] },
+  { stageKey: 'execution', nameFa: 'اجرا', nameEn: 'G7 — Execution', typicalDurationMonths: 20, gateName: '', gateReadinessThreshold: 100, checklist: [] },
+  { stageKey: 'commissioning', nameFa: 'پیش‌راه‌اندازی و راه‌اندازی', nameEn: 'G8 — Pre-commissioning & Commissioning', typicalDurationMonths: 2, gateName: '', gateReadinessThreshold: 100, checklist: [] },
+  { stageKey: 'handover', nameFa: 'دوره نگهداری', nameEn: 'G9 — Maintenance Period', typicalDurationMonths: 4, gateName: '', gateReadinessThreshold: 100, checklist: [] },
+  { stageKey: 'close_out', nameFa: 'تسویه حساب', nameEn: 'Final Settlement & Close-out', typicalDurationMonths: 1, gateName: '', gateReadinessThreshold: 100, checklist: [] },
 ]
 
 
@@ -240,7 +241,7 @@ const EPC_PIPELINE_STAGES: TemplateStageSeed[] = EPC_PIPELINE_BASE.map((s, i) =>
 export const TEMPLATE_SEEDS: TemplateSeed[] = [
   {
     name: 'خط لوله EPC',
-    description: 'چرخه عمر ۹ گیتی (G1 تا G9) پروژه‌های EPC خط لوله، مطابق مدل گیت واقعی شرکت.',
+    description: 'مدل چرخه عمر شرکت مهندسی و توسعه گاز ایران (Rev. 01): ده مرحله در سه فاز، گیت‌های G1 تا G9 و خاتمهٔ پروژه.',
     projectType: 'pipeline_epc',
     isDefault: true,
     stages: EPC_PIPELINE_STAGES,

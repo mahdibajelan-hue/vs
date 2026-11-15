@@ -5,9 +5,9 @@ import { SG_HOW_TO, SG_PHASE_GUIDE, SG_READING, SG_SOURCE_LABEL } from './sgGuid
 import '../projectMetrics/healthGuide.css'
 
 const fa = (n: number) => n.toLocaleString('fa-IR')
-const TITLES: Record<string, string> = { G1: 'تعریف پروژه', G2: 'شناسایی پروژه', G3: 'خرید خدمات مشاور', G4: 'طراحی پایه', G5: 'مناقصه و انعقاد قرارداد', G6: 'اجرای پروژه (EPC)', G7: 'پیش‌راه‌اندازی و راه‌اندازی', G8: 'دوره نگهداری', G9: 'تسویه حساب' }
+const TITLES: Record<string, string> = { G1: 'تعریف پروژه', G2: 'شفاف‌سازی پروژه', G3: 'برنامه‌ریزی کلان پروژه', G4: 'خرید خدمات مشاور طراحی پایه', G5: 'طراحی پایه', G6: 'مناقصه انتخاب پیمانکار و ناظر', G7: 'اجرا', G8: 'پیش‌راه‌اندازی و راه‌اندازی', G9: 'دوره نگهداری', G10: 'تسویه حساب' }
 
-/** «راهنمای چرخهٔ عمر» — how to use the module, how to read the orbit, and what to do in each of the nine phases. */
+/** «راهنمای چرخهٔ عمر» — how to use the module, how to read the orbit, and what to do in each of the ten stages of the company model. */
 export function SgGuideDialog({ phase, onClose }: { phase: string | null; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState<string | null>(phase)
@@ -25,7 +25,7 @@ export function SgGuideDialog({ phase, onClose }: { phase: string | null; onClos
           <button type="button" className="hg-x" onClick={onClose} aria-label="بستن"><X size={16} /></button>
         </header>
         <p className="hg-why" style={{ marginBottom: '.8rem', lineHeight: 1.9 }}>
-          چرخهٔ عمر، پروژه را از تعریف تا تسویه در ۹ فاز دنبال می‌کند. هر فاز با یک «گیت» بسته می‌شود: تا معیارهای الزامی آن فاز تأیید نشود، عبور از گیت ثبت نمی‌شود. پیشرفت کل پروژه که در رادار، داشبورد و این صفحه می‌بینید از همین فازها حساب می‌شود.
+          چرخهٔ عمر، مطابق «مدل چرخه عمر پروژه‌های شرکت مهندسی و توسعه گاز ایران» (Rev. 01)، پروژه را در سه فاز و ده مرحله دنبال می‌کند: تعریف و آماده‌سازی (FEL: مراحل ۱ تا ۳)، اجرای پروژه (مراحل ۴ تا ۷) و راه‌اندازی و تحویل (مراحل ۸ تا ۱۰). مراحل ۱ تا ۹ هر کدام با یک گیت (G1 تا G9) بسته می‌شوند و مرحلهٔ دهم، تسویه حساب، با «تأیید گزارش نهایی و اعلام خاتمه پروژه». تا معیار عبور هر مرحله تأیید نشود، عبور ثبت نمی‌شود. پیشرفت کل پروژه که در رادار، داشبورد و این صفحه می‌بینید از همین فازها حساب می‌شود.
         </p>
         <h5 className="sgg-h">سه قدم کار</h5>
         <ol className="hg-rules">{SG_HOW_TO.map((h) => <li key={h.title}><b>{h.title}:</b> {h.text}</li>)}</ol>

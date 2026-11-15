@@ -27,16 +27,16 @@ assert.equal(r.tasks.get('b').float, 7); assert.ok(!r.tasks.get('b').critical)
 
 // strategies: durations preserved, overlap shortens total
 const total = s.STANDARD_DAYS.reduce((a,b)=>a+b,0)
-assert.equal(total, 1380)
+assert.equal(total, 1440) // ten stages of the company model (G3 «برنامه‌ریزی کلان» adds 60 days)
 const seq = s.computeMasterSchedule('sequential','2026-01-01')
-assert.equal(seq.totalDays, 1380)
+assert.equal(seq.totalDays, 1440)
 for (const k of ['overlapping','fast_track','emergency']) {
   const m = s.computeMasterSchedule(k,'2026-01-01')
   assert.ok(m.ok); m.gates.forEach((g,i)=>assert.equal(g.days, s.STANDARD_DAYS[i]))
 }
 const ov = s.computeMasterSchedule('overlapping','2026-01-01')
 assert.ok(ov.totalDays < seq.totalDays)
-assert.equal(ov.gates[4].es, ov.gates[3].es + 90)
+assert.equal(ov.gates[5].es, ov.gates[4].es + 90) // طراحی پایه → مناقصه (G5→G6) با SS+90
 const ft = s.computeMasterSchedule('fast_track','2026-01-01'), em = s.computeMasterSchedule('emergency','2026-01-01')
 assert.ok(em.totalDays <= ft.totalDays && ft.totalDays <= ov.totalDays, `${em.totalDays} ${ft.totalDays} ${ov.totalDays}`)
 assert.equal(seq.gates[0].start, '2026-01-01')

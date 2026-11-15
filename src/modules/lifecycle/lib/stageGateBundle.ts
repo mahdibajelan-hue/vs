@@ -1,5 +1,5 @@
 /**
- * برج کنترل روی Stage-Gate — builds the control tower's project bundle from the Stage-Gate model (G1…G9), so every
+ * برج کنترل روی Stage-Gate — builds the control tower's project bundle from the Stage-Gate model (10 stages, gates G1…G9), so every
  * engine of this module (readiness, gate status, health, early warning, milestone KPIs) runs on the lifecycle of record:
  *  - stages      ← sg phases + the project's phase rows (dates, manual progress); current phase = after the last passed gate
  *  - gates       ← each phase's gate (name, threshold) + Stage-Gate decisions / gate status
@@ -50,10 +50,10 @@ export interface SgBundleInput {
 }
 
 /** Stage keys of the Stage-Gate model the health engine reads its stage-bound dimensions from. */
-export const SG_DIMENSION_STAGES = { engineering: ['G4'], procurement: ['G3', 'G5'], construction: ['G6', 'G7'] }
+export const SG_DIMENSION_STAGES = { engineering: ['G5'], procurement: ['G4', 'G6'], construction: ['G7', 'G8'] }
 export const isStageGateKey = (key: string) => /^G\d+$/.test(key)
 /** The former module's 11 stage keys → Stage-Gate phases (used once to move milestones over; kept for reading old rows). */
-export const PLC_TO_SG: Record<string, string> = { idea: 'G1', pre_project: 'G1', initiation: 'G2', planning: 'G3', engineering: 'G4', procurement: 'G5', execution: 'G6', commissioning: 'G7', handover: 'G8', close_out: 'G9', lessons_learned: 'G9' }
+export const PLC_TO_SG: Record<string, string> = { idea: 'G1', pre_project: 'G2', initiation: 'G3', planning: 'G4', engineering: 'G5', procurement: 'G6', execution: 'G7', commissioning: 'G8', handover: 'G9', close_out: 'G10', lessons_learned: 'G10' }
 
 const ITEM_STATUSES = new Set<ChecklistStatus>(['not_started', 'in_progress', 'completed', 'pending', 'submitted', 'verified', 'rejected', 'failed', 'waived'])
 const PHASE_GROUPS = new Set<PhaseGroup>(['fel', 'execution', 'commissioning'])

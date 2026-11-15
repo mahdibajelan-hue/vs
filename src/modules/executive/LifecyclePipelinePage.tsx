@@ -15,7 +15,7 @@ const shareBands = [{ to: 15, color: '#22c55e' }, { to: 35, color: '#f59e0b' }, 
 type Sort = 'phase' | 'days' | 'idle'
 
 /**
- * پروژه‌ها در مراحل چرخهٔ عمر (Stage-Gate، G1…G9): the journey rail shows how many projects stand at each gate; the
+ * پروژه‌ها در مراحل چرخهٔ عمر (Stage-Gate، ده مرحله و گیت‌های G1 تا G9): the journey rail shows how many projects stand at each gate; the
  * charts below it pick a phase or a warning; the cards narrow to that pick and each opens to its steps and last action.
  */
 export function LifecyclePipelinePage({ onBack }: { onBack: () => void }) {

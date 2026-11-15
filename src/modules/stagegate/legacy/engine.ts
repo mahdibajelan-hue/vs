@@ -271,7 +271,7 @@ export function createStageGateEngine(env) {
         // ============================================================
         // PROJECT LIFECYCLE & STAGE-GATE MODULE
         //
-        // Renders the org's 9-gate lifecycle (lifecycle_phases +
+        // Renders the org's 10-stage lifecycle (lifecycle_phases +
         // objectives/outputs/criteria, all fetched — nothing about a phase's
         // content is hard-coded here) as an orbit around a Project Core with
         // dual planned/actual rings. Progress is always DERIVED from item
@@ -731,9 +731,9 @@ export function createStageGateEngine(env) {
             } else if (engine === 'basic_design') {
                 sections.push(lcSectionHtml('lcSec-bd', 'پیشرفت دوره‌ای طراحی پایه', 'input', 'در پایان هر دوره (مثلاً هفته یا ماه) برچسب دوره و درصد پیشرفت تجمعی طراحی پایه را وارد و «ثبت پیشرفت دوره» را بزنید.', lcBasicDesignHtml(phase, pp)));
             }
-            // G7 (pre-commissioning & start-up): the commissioning systems' readiness from the PSSR module
-            const pssr = phase.code === 'G7' && env.getPssr ? env.getPssr(lcState.projectName) : null;
-            if (phase.code === 'G7' && env.getPssr) {
+            // G8 (pre-commissioning & start-up): the commissioning systems' readiness from the PSSR module
+            const pssr = phase.code === 'G8' && env.getPssr ? env.getPssr(lcState.projectName) : null;
+            if (phase.code === 'G8' && env.getPssr) {
                 const t = pssr?.totals;
                 sections.push(lcSectionHtml('lcSec-pssr', 'آمادگی راه‌اندازی از ماژول PSSR', 'auto',
                     'وضعیت سیستم‌های راه‌اندازی، پانچ‌های باز و گواهی‌های RFSU از ماژول «آمادگی راه‌اندازی (PSSR)» خوانده می‌شود؛ چک‌لیست، جلسه، پانچ و امضای RFSU را در همان ماژول ثبت کنید.',
@@ -779,7 +779,7 @@ export function createStageGateEngine(env) {
                         <div class="min-w-0">
                             <p class="sgx-hero-kicker">مرحلهٔ ${toPersianDigits(idx + 1)} از ${toPersianDigits(lcState.phases.length)} · <span class="sgx-chip"><i class="sgx-dot"></i>${esc(meta.label)}</span></p>
                             <h3 class="sgx-hero-title">${esc(phase.title)}</h3>
-                            <p class="sgx-hero-sub">مسئول: ${esc(phase.responsible || '—')} · گیت: ${esc(gateName.clean)}${gateName.needsReview ? ' ⚠' : ''}</p>
+                            <p class="sgx-hero-sub">مسئول: ${esc(phase.responsible || '—')} · معیار عبور: ${esc(gateName.clean)}${gateName.needsReview ? ' ⚠' : ''}${phase.gate_threshold_pct != null ? ` · احتمال ادامهٔ روند توسعهٔ کسب‌وکار: ${toPersianDigits(Math.round(Number(phase.gate_threshold_pct)))}٪` : ''}</p>
                         </div>
                     </div>
                     <div class="sgx-stats">
@@ -910,7 +910,7 @@ export function createStageGateEngine(env) {
             // indicator: the stretch behind an already-passed gate glows
             // neon green, the stretch still ahead stays a dim dotted line,
             // and a small chevron on each stretch points in the direction
-            // of travel (clockwise, G1 -> G2 -> ... -> G9).
+            // of travel (clockwise, stage 1 -> 2 -> ... -> 10).
             let nodesHtml = '', connectorsHtml = '';
             layout.forEach(({ phase: p, index: i, angle, nx, ny }) => {
                 const nextAngle = -90 + (360 / N) * (i + 1);
@@ -971,7 +971,9 @@ export function createStageGateEngine(env) {
                 // just past its glow halo, so titles fan out around the
                 // circle instead of all sitting directly underneath.
                 const boxSize = nodeR * 2;
-                const labelDist = nodeR + 24;
+                // ten stages sit closer together: a node on the sides gets its title further out, so the
+                // (wider than tall) title clears the node and its rings instead of running over them
+                const labelDist = nodeR + 24 + Math.abs(Math.cos(rad)) * 58;
                 const titleLeftPct = 50 + (labelDist * Math.cos(rad) / boxSize) * 100;
                 const titleTopPct = 50 + (labelDist * Math.sin(rad) / boxSize) * 100;
                 const delay = lcMostDelayedScheduleItem(p.code);
@@ -2204,7 +2206,7 @@ export function createStageGateEngine(env) {
             const lastCode = order[order.length - 1];
             return {
                 order, start, finish,
-                startupDate: finish['G7'] ?? null,
+                startupDate: finish['G8'] ?? null,
                 completionDate: finish[lastCode] ?? null,
                 totalDays: finish[lastCode] ? lcDaysBetween(startIso, finish[lastCode]) : null,
             };
@@ -2414,7 +2416,7 @@ export function createStageGateEngine(env) {
             const sched = startIso ? lcComputeMasterSchedule(strategy, startIso) : null;
             const isDraft = lcMasterScheduleIsDraft();
             const g9 = lcState.phases[lcState.phases.length - 1];
-            const appliedStartup = lcState.projectPhases['G7']?.planned_finish || null;
+            const appliedStartup = lcState.projectPhases['G8']?.planned_finish || null;
             const appliedCompletion = g9 ? (lcState.projectPhases[g9.code]?.planned_finish || null) : null;
             const startupIso = isDraft ? (sched?.startupDate || null) : (appliedStartup || sched?.startupDate || null);
             const completionIso = isDraft ? (sched?.completionDate || null) : (appliedCompletion || sched?.completionDate || null);

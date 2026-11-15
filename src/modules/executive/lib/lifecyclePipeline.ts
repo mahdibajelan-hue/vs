@@ -1,12 +1,12 @@
 /**
- * پروژه‌ها در مراحل چرخهٔ عمر — every Stage-Gate project placed on G1…G9, with the step it is on and its last action.
+ * پروژه‌ها در مراحل چرخهٔ عمر — every Stage-Gate project placed on the ten stages (gates G1…G9), with the step it is on and its last action.
  * Pure: takes the sg_* rows, returns one line per project. All rules live here so the report and its tests agree.
  *
  * Rules
  *  - A gate is passed when its latest decision is 'pass' or 'conditional' (a 'cancelled' decision undoes it), or the
  *    project's phase row says gate_status 'passed'/'conditional' when no decision was recorded.
  *  - Current phase = the phase after the last passed gate (gates whose decision was never recorded do not pull a project
- *    back). No gate passed → the first phase; G9 passed → 'done'. No gate decision, phase row or item at all → 'nodata'.
+ *    back). No gate passed → the first phase; the last stage passed → 'done'. No gate decision, phase row or item at all → 'nodata'.
  *  - Steps = the phase's objectives in their order. Current step = the first one in progress, else the first not completed.
  *  - Last action = the latest of: any item change of the project (step / output / criterion) and any gate decision.
  *  - Entered the phase = the decision that passed the previous gate, else the phase's actual start.
@@ -22,7 +22,7 @@ export interface StepState { title: string; status: 'done' | 'active' | 'todo' }
 export interface LastAction { text: string; at: string; by: string | null; phase: string }
 export interface PipelineLine {
   project: string
-  /** phase code; 'done' when G9 is passed; 'nodata' when Stage-Gate holds nothing for the project */
+  /** phase code; 'done' when the last stage is passed; 'nodata' when Stage-Gate holds nothing for the project */
   phase: string
   steps: StepState[]
   stepIndex: number | null

@@ -30,7 +30,7 @@ assert.equal(m.validateDecision({kind:'conditional', conditionText:'x', conditio
 assert.ok(m.validateDecision({kind:'return'}, r))
 assert.equal(m.decisionToStatus('cancel'), 'blocked')
 assert.equal(m.overallProgress([{progress:100,weight:60},{progress:0,weight:40}]), 60)
-assert.equal(m.GATE_META.length, 9)
+assert.equal(m.GATE_META.length, 10)
 assert.equal(m.gateProgressFromLog('epc', [], [{series:'construction',pct:100,recordedAt:'a'}]), 50)
 assert.equal(m.gateProgressFromLog('epc', [it('objective','completed')], []), 100)
 assert.equal(m.gateProgressFromLog('basic_design', [], [{series:'overall',pct:30,recordedAt:'a'},{series:'overall',pct:40,recordedAt:'b'}]), 40)

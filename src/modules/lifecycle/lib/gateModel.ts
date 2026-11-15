@@ -1,4 +1,4 @@
-/** Nine-gate (G1–G9) model: metadata, weighted progress and readiness rules.
+/** The company's ten-stage lifecycle model (gates G1–G9 + closure): metadata, weighted progress and readiness rules.
  * Pure functions only — no store / Supabase imports — so they are unit-testable. */
 
 export type GateItemKind = 'objective' | 'output' | 'criterion'
@@ -19,7 +19,7 @@ export const ITEM_STATUS_LABEL_FA: Record<GateItemStatus, string> = {
 }
 
 export const PHASE_LABEL_FA: Record<PhaseGroup, string> = {
-  fel: 'پیش از اجرا (FEL)', execution: 'اجرا', commissioning: 'راه‌اندازی و تحویل',
+  fel: 'تعریف و آماده‌سازی پروژه (FEL)', execution: 'اجرای پروژه', commissioning: 'راه‌اندازی و تحویل پروژه',
 }
 
 export interface GateMeta {
@@ -28,16 +28,20 @@ export interface GateMeta {
   standardDays: number
 }
 
+/** The company's lifecycle model (مدل چرخه عمر پروژه‌های شرکت مهندسی و توسعه گاز ایران, Rev. 01): ten stages, each
+ * closed by its exit criterion — gates G1…G9 after stages 1…9, the tenth closes the project. `threshold` is the model's
+ * «احتمال ادامه روند توسعه کسب و کار» at that gate. */
 export const GATE_META: GateMeta[] = [
-  { code: 'G1', order: 1, owner: 'مدیر برنامه‌ریزی راهبردی', approvalDoc: 'ابلاغیه تصویب و تعریف پروژه', threshold: 30, engine: 'step', phase: 'fel', icon: '🎯', standardDays: 60 },
-  { code: 'G2', order: 2, owner: 'مدیر پروژه', approvalDoc: 'مجوز خرید خدمات مشاور', threshold: 50, engine: 'step', phase: 'fel', icon: '🔍', standardDays: 30 },
-  { code: 'G3', order: 3, owner: 'مدیر قراردادها', approvalDoc: 'ابلاغ شروع به کار مهندسی', threshold: 70, engine: 'step', phase: 'execution', icon: '🤝', standardDays: 120 },
-  { code: 'G4', order: 4, owner: 'مدیر مهندسی', approvalDoc: 'مجوز کمیسیون/هیئت فنی برای برگزاری مناقصات', threshold: 80, engine: 'basic_design', phase: 'execution', icon: '📐', standardDays: 180 },
-  { code: 'G5', order: 5, owner: 'مدیر قراردادها', approvalDoc: 'ابلاغ شروع به کار اجرا', threshold: 90, engine: 'step', phase: 'execution', icon: '📜', standardDays: 180 },
-  { code: 'G6', order: 6, owner: 'مدیر اجرا', approvalDoc: 'تأیید شروع پیش‌راه‌اندازی', threshold: 100, engine: 'epc', phase: 'execution', icon: '🏗️', standardDays: 600 },
-  { code: 'G7', order: 7, owner: 'مدیر راه‌اندازی', approvalDoc: 'تحویل موقت توسط بهره‌بردار', threshold: 100, engine: 'step', phase: 'commissioning', icon: '⚡', standardDays: 60 },
-  { code: 'G8', order: 8, owner: 'مدیر بهره‌برداری', approvalDoc: 'تحویل قطعی', threshold: 100, engine: 'step', phase: 'commissioning', icon: '🛠️', standardDays: 120 },
-  { code: 'G9', order: 9, owner: 'مدیر مالی', approvalDoc: 'تأیید نهایی و بستن پروژه', threshold: 100, engine: 'step', phase: 'commissioning', icon: '✅', standardDays: 30 },
+  { code: 'G1', order: 1, owner: 'شرکت ملی گاز', approvalDoc: 'تصویب و ابلاغ', threshold: 30, engine: 'step', phase: 'fel', icon: '🎯', standardDays: 60 },
+  { code: 'G2', order: 2, owner: 'برنامه‌ریزی و کنترل طرح‌ها', approvalDoc: 'تصویب منشور و ابلاغ آغاز مقدمات پروژه', threshold: 50, engine: 'step', phase: 'fel', icon: '🔍', standardDays: 30 },
+  { code: 'G3', order: 3, owner: 'مجری طرح', approvalDoc: 'صدور مجوز خرید خدمات', threshold: 70, engine: 'step', phase: 'fel', icon: '🗺️', standardDays: 60 },
+  { code: 'G4', order: 4, owner: 'مجری طرح', approvalDoc: 'ابلاغ شروع به کار مهندسی', threshold: 80, engine: 'step', phase: 'execution', icon: '🤝', standardDays: 120 },
+  { code: 'G5', order: 5, owner: 'مجری طرح', approvalDoc: 'مجوز کمیسیون / هیات برای برگزاری مناقصات', threshold: 90, engine: 'basic_design', phase: 'execution', icon: '📐', standardDays: 180 },
+  { code: 'G6', order: 6, owner: 'مجری طرح', approvalDoc: 'ابلاغ شروع به کار اجرا', threshold: 100, engine: 'step', phase: 'execution', icon: '📜', standardDays: 180 },
+  { code: 'G7', order: 7, owner: 'مجری طرح', approvalDoc: 'تایید شروع پیش‌راه‌اندازی', threshold: 100, engine: 'epc', phase: 'execution', icon: '🏗️', standardDays: 600 },
+  { code: 'G8', order: 8, owner: 'مجری طرح', approvalDoc: 'امضای صورتجلسه تحویل موقت توسط بهره‌بردار', threshold: 100, engine: 'step', phase: 'commissioning', icon: '⚡', standardDays: 60 },
+  { code: 'G9', order: 9, owner: 'مجری طرح', approvalDoc: 'امضای صورتجلسه تحویل قطعی', threshold: 100, engine: 'step', phase: 'commissioning', icon: '🛠️', standardDays: 120 },
+  { code: 'G10', order: 10, owner: 'مجری طرح', approvalDoc: 'تأیید گزارش نهایی و اعلام خاتمه پروژه', threshold: 100, engine: 'step', phase: 'commissioning', icon: '✅', standardDays: 30 },
 ]
 
 export function gateMetaByOrder(order: number): GateMeta | undefined {

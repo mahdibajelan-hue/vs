@@ -11,8 +11,8 @@ export const STRATEGY_LABEL_FA: Record<StrategyKey, string> = {
 }
 export const STRATEGY_HINT_FA: Record<StrategyKey, string> = {
   sequential: 'زنجیرهٔ خالص پایان‌به‌شروع، بدون همپوشانی',
-  overlapping: 'G4→G5 با SS+۹۰ و G6→G7 با SS+۵۴۰ روز',
-  fast_track: 'همپوشانی بیشتر بین G2 تا G5 و G6 تا G8',
+  overlapping: 'طراحی پایه→مناقصه (G5→G6) با SS+۹۰ و اجرا→راه‌اندازی (G7→G8) با SS+۵۴۰ روز',
+  fast_track: 'همپوشانی بیشتر بین G3 تا G6 و G7 تا G9',
   emergency: 'بیشترین همپوشانی؛ از G1 آغاز می‌شود',
 }
 
@@ -39,11 +39,11 @@ export const STANDARD_DAYS: number[] = GATE_META.map((g) => g.standardDays)
 const SS = (lag: number): { type: 'SS' | 'FS'; lag: number } => ({ type: 'SS', lag })
 const FS0 = { type: 'FS' as const, lag: 0 }
 const LINKS: Record<StrategyKey, ({ type: 'SS' | 'FS'; lag: number })[]> = {
-  //                G1→2  2→3  3→4  4→5   5→6   6→7    7→8  8→9
-  sequential:  [FS0, FS0, FS0, FS0, FS0, FS0, FS0, FS0],
-  overlapping: [FS0, FS0, FS0, SS(90), FS0, SS(540), FS0, FS0],
-  fast_track:  [FS0, SS(0), SS(60), SS(60), FS0, SS(510), SS(30), FS0],
-  emergency:   [SS(30), SS(0), SS(30), SS(60), SS(90), SS(480), SS(15), FS0],
+  //                G1→2     2→3  3→4    4→5     5→6     6→7     7→8      8→9     9→10
+  sequential:  [FS0, FS0, FS0, FS0, FS0, FS0, FS0, FS0, FS0],
+  overlapping: [FS0, FS0, FS0, FS0, SS(90), FS0, SS(540), FS0, FS0],
+  fast_track:  [FS0, FS0, SS(0), SS(60), SS(60), FS0, SS(510), SS(30), FS0],
+  emergency:   [SS(30), FS0, SS(0), SS(30), SS(60), SS(90), SS(480), SS(15), FS0],
 }
 
 export function strategyDeps(strategy: StrategyKey): CpmDep[] {
@@ -70,9 +70,9 @@ export function computeMasterSchedule(
     const r = out.tasks.get(t.id)!
     return { ...r, code: t.id, days: t.duration, start: addDaysIso(startDate, r.es), finish: addDaysIso(startDate, r.ef) }
   })
-  const g7 = gates[6]
+  const g8 = gates[7] // پیش‌راه‌اندازی و راه‌اندازی
   return {
-    gates, startDate, commissioningStart: g7.start,
+    gates, startDate, commissioningStart: g8.start,
     finishDate: addDaysIso(startDate, out.finish), totalDays: out.finish, ok: !out.cycle,
   }
 }
