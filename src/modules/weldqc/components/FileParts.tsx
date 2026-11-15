@@ -9,6 +9,7 @@ import { PASSES } from '../lib/analytics'
 import { codeOf, fa, faDate, useQc } from '../lib/useQc'
 import { FilmConvert, type Converted } from './FilmConvert'
 import { densityIssue } from '../lib/coverage'
+import { circOf, clockOfMm, defaultFilmCount, mmOfClock, plan, repairZone } from '../lib/filmplan'
 
 export const QUALITY_FA: Record<repo.Film['quality'], string> = { pending: 'در انتظار بررسی کیفیت', accepted: 'کیفیت تأیید شد', retake: 'ریتیک — تکرار به درخواست کارفرما', reshoot: 'ریشوت — تکرار به هزینهٔ پیمانکار RT' }
 export const QUALITY_COLOR: Record<repo.Film['quality'], string> = { pending: '#0ea5e9', accepted: '#22c55e', retake: '#f59e0b', reshoot: '#ef4444' }
@@ -49,31 +50,60 @@ export function FilmQuality({ film }: { film: repo.Film }) {
   )
 }
 
-export function FilmUpload({ weldId, round, films }: { weldId: string; round: number; films: repo.Film[] }) {
+/**
+ * Upload of the films of one round. On a large pipe several films go round the weld: each is given its number, where it
+ * starts on the circumference (mm from 12 o'clock, clockwise) and the length of weld it covers — filled from the plan of
+ * `n` equal films and editable. In an RS round only the repaired zone is shot, so the start and length follow that zone.
+ */
+export function FilmUpload({ weldId, round, films, odMm, filmCount, zone }: { weldId: string; round: number; films: repo.Film[]; odMm: number | null; filmCount: number | null; zone: { from: number; to: number } | null }) {
   const st = useWqStore()
-  const [files, setFiles] = useState<File[]>([]), [segment, setSegment] = useState(''), [iqi, setIqi] = useState(''), [density, setDensity] = useState(''), [conv, setConv] = useState(false)
+  const circ = odMm ? circOf(odMm) : null
+  const [n, setN] = useState(filmCount ?? (odMm ? defaultFilmCount(odMm) : 3))
+  const slots = odMm ? plan(odMm, Math.max(1, n)) : []
+  const nextSeq = () => { const used = new Set(films.filter((f) => f.quality !== 'retake' && f.quality !== 'reshoot').map((f) => f.seq)); return slots.find((x) => !used.has(x.seq))?.seq ?? 1 }
+  const zoneSpan = zone && circ ? { start: Math.round(mmOfClock(zone.from, circ)), len: Math.round(((mmOfClock(zone.to, circ) - mmOfClock(zone.from, circ) + circ) % circ) || circ) } : null
+  const [files, setFiles] = useState<File[]>([]), [iqi, setIqi] = useState(''), [density, setDensity] = useState(''), [conv, setConv] = useState(false)
+  const [seq, setSeq] = useState(() => (round === 0 ? nextSeq() : 1)), [shot, setShot] = useState('')
+  const slot = slots.find((x) => x.seq === seq)
+  const [start, setStart] = useState<string>(''), [len, setLen] = useState<string>('')
+  const startMm = start !== '' ? Number(start) : round > 0 && zoneSpan ? zoneSpan.start : slot?.startMm ?? null
+  const lenMm = len !== '' ? Number(len) : round > 0 && zoneSpan ? zoneSpan.len : slot?.lenMm ?? null
   const upload = async (out: Converted[]) => {
     const ok = await st.run(`${fa(out.length)} فیلم تبدیل و بارگذاری شد`, async () => {
+      if (round === 0 && n !== filmCount) { await repo.ensureJoint(weldId); await repo.updateJoint(weldId, { film_count: n }) }
       for (const [k, c] of out.entries()) {
-        const seg = out.length > 1 ? (segment ? `${segment}-${k + 1}` : c.original.name.replace(/\.[^.]+$/, '')) : segment
-        const attempt = films.filter((x) => x.segment === seg).length + 1
+        // several files at once take the following film numbers of the plan
+        const q = round === 0 ? seq + k : seq, sl = round === 0 && k > 0 ? slots.find((x) => x.seq === q) : null
+        const sMm = sl ? sl.startMm : startMm, lMm = sl ? sl.lenMm : lenMm
+        const seg = circ && sMm != null && lMm ? `${fa(clockOfMm(sMm, circ), 1)}–${fa(clockOfMm(sMm + lMm, circ) || 12, 1)}` : `${q}`
+        const attempt = films.filter((x) => x.seq === q).length + 1
         const display = await repo.uploadFile(st.projectId!, weldId, c.display, c.displayName)
         const original = await repo.uploadFile(st.projectId!, weldId, c.original, c.original.name)
-        await repo.addFilm({ project_id: st.projectId!, weld_id: weldId, round, exam_type: round === 0 ? 'RT' : 'RS', attempt, segment: seg, path: original, display_path: display, orig_mime: c.original.type || (c.keepOriginal ? 'image/tiff' : ''), file_name: c.original.name, mime: 'image/webp', width: c.width, height: c.height, iqi, density, uploaded_name: st.me(), metrics: c.metrics })
+        await repo.addFilm({ project_id: st.projectId!, weld_id: weldId, round, exam_type: round === 0 ? 'RT' : 'RS', attempt, segment: seg, seq: q, start_mm: sMm, len_mm: lMm, shot_at: shot || null, path: original, display_path: display, orig_mime: c.original.type || (c.keepOriginal ? 'image/tiff' : ''), file_name: c.original.name, mime: 'image/webp', width: c.width, height: c.height, iqi, density, uploaded_name: st.me(), metrics: c.metrics })
       }
     })
-    setConv(false); if (ok) { setFiles([]); setSegment('') }
+    setConv(false); if (ok) { setFiles([]); setStart(''); setLen(''); if (round === 0) setSeq((x) => Math.min(n, x + out.length)) }
   }
   return (
     <div className="wq-upload">
-      <label className="wq-drop"><Upload size={18} aria-hidden /><span>{files.length ? files.map((f) => f.name).join('، ') : 'فیلم اسکن‌شده یا دیجیتال: TIFF (۸ یا ۱۶ بیتی)، JPG، PNG، WebP'}</span>
+      {round === 0 ? (
+        <div className="wq-plan">
+          <label><span>تعداد فیلم دور لوله</span><input type="number" min={1} max={40} value={n} onChange={(e) => setN(Math.max(1, Math.min(40, Number(e.target.value) || 1)))} /></label>
+          <div className="wq-plan-slots" role="group" aria-label="فیلم‌های دور لوله">{slots.map((x) => { const f = films.filter((y) => y.seq === x.seq), ok = f.some((y) => y.quality === 'accepted'), any = f.some((y) => y.quality === 'pending'); return <button key={x.seq} type="button" aria-pressed={seq === x.seq} className={ok ? 'is-ok' : any ? 'is-wait' : ''} onClick={() => { setSeq(x.seq); setStart(''); setLen('') }}><b>فیلم {fa(x.seq)}</b><small>ساعت {fa(x.clockFrom || 12, 1)} تا {fa(x.clockTo, 1)}</small><small>{ok ? 'تأیید شده' : any ? 'منتظر بررسی' : f.length ? 'تکرار لازم' : 'بارگذاری نشده'}</small></button> })}</div>
+          {!odMm && <p className="ps-hint is-warn">قطر لوله ثبت نشده؛ جای فیلم روی محیط و ساعت عیوب قابل محاسبه نیست.</p>}
+        </div>
+      ) : <p className="ps-meta">{zone ? `پس از تعمیر فقط ناحیهٔ تعمیرشده دوباره رادیوگرافی می‌شود: ساعت ${fa(zone.from, 1)} تا ${fa(zone.to, 1)}${zoneSpan ? ` (${fa(zoneSpan.len)} mm)` : ''}.` : 'ناحیهٔ تعمیر با موقعیت ساعتی ثبت نشده است؛ نقطهٔ شروع و طول فیلم را خودتان وارد کنید.'}</p>}
+      <label className="wq-drop"><Upload size={18} aria-hidden /><span>{files.length ? files.map((f) => f.name).join('، ') : 'فیلم اسکن‌شده یا دیجیتال: TIFF (۸ یا ۱۶ بیتی)، JPG، PNG، WebP — چند فایل هم‌زمان، شماره‌های بعدی را می‌گیرند'}</span>
         <input type="file" accept=".tif,.tiff,image/tiff,image/png,image/jpeg,image/webp" multiple onChange={(e) => setFiles([...(e.target.files ?? [])])} /></label>
       <div className="wq-form is-row">
-        <label><span>قطعه / موقعیت فیلم</span><input value={segment} onChange={(e) => setSegment(e.target.value)} placeholder="مثلاً 0-1 یا ساعت ۱۲ تا ۳" /></label>
+        <label><span>شروع فیلم (mm از ساعت ۱۲)</span><input inputMode="numeric" value={start !== '' ? start : startMm ?? ''} onChange={(e) => setStart(e.target.value)} /></label>
+        <label><span>طول جوش زیر فیلم (mm)</span><input inputMode="numeric" value={len !== '' ? len : lenMm ?? ''} onChange={(e) => setLen(e.target.value)} /></label>
+        <label><span>تاریخ پرتونگاری</span><input type="date" value={shot} onChange={(e) => setShot(e.target.value)} /></label>
         <label><span>IQI</span><input value={iqi} onChange={(e) => setIqi(e.target.value)} placeholder="مثلاً 10 FE EN" /></label>
         <label><span>دانسیته</span><input value={density} onChange={(e) => setDensity(e.target.value)} placeholder="2.0–4.0" /></label>
-        <button type="button" className="ps-btn is-primary" disabled={!files.length} onClick={() => setConv(true)}><Upload size={14} aria-hidden /> تبدیل، بهبود و بارگذاری {round === 0 ? 'RT' : `RS${fa(round)}`}</button>
+        <button type="button" className="ps-btn is-primary" disabled={!files.length} onClick={() => setConv(true)}><Upload size={14} aria-hidden /> تبدیل، بهبود و بارگذاری {round === 0 ? `فیلم ${fa(seq)}` : `RS${fa(round)}`}</button>
       </div>
+      {circ != null && startMm != null && lenMm ? <p className="ps-meta">این فیلم ساعت {fa(clockOfMm(startMm, circ) || 12, 1)} تا {fa(clockOfMm(startMm + lenMm, circ) || 12, 1)} را می‌پوشاند (محیط جوش {fa(circ)} mm؛ هر ساعت {fa(circ / 12)} mm). ساعت هر عیب در میز نور از همین اعداد و فاصله از ابتدای فیلم حساب می‌شود.</p> : null}
       {conv && <FilmConvert files={files} onCancel={() => setConv(false)} onDone={upload} />}
     </div>
   )
@@ -122,7 +152,11 @@ export function EvalCard({ e, defects, round }: { e: repo.Evaluation; defects: r
 
 export function RepairForm({ weld, round }: { weld: repo.QcWeld; round: number }) {
   const st = useWqStore(); const q = useQc()
-  const [r, setR] = useState({ method: '', performedBy: '', approvedBy: '', repairWps: '', note: '' })
+  const rejected = st.defects.filter((d) => d.weldId === weld.id && d.round === round && !d.removed && d.verdict === 'repair')
+  const od = q.byId.get(weld.id)?.odMm ?? null
+  const auto = od ? repairZone(rejected.map((d) => ({ clock: d.clock, lengthMm: d.lengthMm })), circOf(od)) : null
+  const [r, setR] = useState({ method: '', performedBy: '', approvedBy: '', repairWps: '', note: '', from: auto ? String(auto.from) : '', to: auto ? String(auto.to) : '', wpsId: '' })
+  const repWps = st.wps.filter((w) => w.status === 'approved' && w.kind === 'repair')
   if (!st.caps.edit) return <p className="ps-hint">منتظر ثبت تعمیر توسط مهندس ناظر جوش.</p>
   const options = [...new Set([...PASSES.flatMap((p) => weld.stampsBy[p]), ...st.welders.filter((w) => w.status === 'active' && w.kind !== 'coater').map((w) => w.key)])]
   const today = new Date().toISOString().slice(0, 10)
@@ -130,11 +164,14 @@ export function RepairForm({ weld, round }: { weld: repo.QcWeld; round: number }
   const qualified = !!rw && st.quals.some((x) => x.welderId === rw.id && x.status !== 'revoked' && (!x.expiryDate || x.expiryDate >= today))
   const crack = st.defects.some((d) => d.weldId === weld.id && d.round === round && !d.removed && d.verdict === 'repair' && codeOf(d) === 'C')
   return (
-    <form className="wq-form wq-repair" onSubmit={(e) => { e.preventDefault(); void st.run(`تعمیر ثبت شد؛ راند RS${fa(round + 1)} باز شد`, () => repo.addRepair(weld.id, r, st.me())) }}>
+    <form className="wq-form wq-repair" onSubmit={(e) => { e.preventDefault(); void st.run(`تعمیر ثبت شد؛ راند RS${fa(round + 1)} باز شد`, async () => { const w = repWps.find((x) => x.id === r.wpsId); await repo.addRepair(weld.id, { ...r, repairWps: w ? `${w.wpsNo}${w.rev ? ` Rev.${w.rev}` : ''}` : r.repairWps }, st.me()); const f = Number(r.from), t = Number(r.to); await repo.repairZone(weld.id, round, r.from !== '' && f >= 0 && f <= 12 ? f : null, r.to !== '' && t >= 0 && t <= 12 ? t : null, w?.id ?? null) }) }}>
       <b className="is-wide"><Wrench size={15} aria-hidden /> ثبت تعمیر {round === 0 ? 'اول' : 'دوم'}</b>
       <label className="is-wide"><span>روش تعمیر</span><input value={r.method} onChange={(e) => setR({ ...r, method: e.target.value })} placeholder="مثلاً سنگ‌زنی تا فلز سالم و جوش مجدد ریشه" required /></label>
       <label><span>جوشکار تعمیر</span><select value={r.performedBy} onChange={(e) => setR({ ...r, performedBy: e.target.value })} required><option value="">انتخاب از فهرست جوشکاران…</option>{options.map((k) => <option key={k} value={k}>{k}{q.nameOf(k) !== k ? ` — ${q.nameOf(k)}` : ''}</option>)}</select></label>
-      <label><span>Repair WPS</span><input value={r.repairWps} onChange={(e) => setR({ ...r, repairWps: e.target.value })} /></label>
+      <label><span>Repair WPS</span>{repWps.length ? <select value={r.wpsId} onChange={(e) => setR({ ...r, wpsId: e.target.value })}><option value="">انتخاب از WPSهای تعمیر تأییدشده…</option>{repWps.map((w) => <option key={w.id} value={w.id}>{w.wpsNo}{w.rev ? ` Rev.${w.rev}` : ''}{w.process ? ` — ${w.process}` : ''}</option>)}</select> : <input value={r.repairWps} onChange={(e) => setR({ ...r, repairWps: e.target.value })} placeholder="WPS تعمیر تأییدشده‌ای ثبت نشده" />}</label>
+      <label><span>ناحیهٔ تعمیر — از ساعت</span><input inputMode="decimal" value={r.from} onChange={(e) => setR({ ...r, from: e.target.value })} placeholder="۰ تا ۱۲" /></label>
+      <label><span>تا ساعت (در جهت عقربه)</span><input inputMode="decimal" value={r.to} onChange={(e) => setR({ ...r, to: e.target.value })} placeholder="۰ تا ۱۲" /></label>
+      <p className="is-wide ps-meta">{auto ? 'ناحیه از موقعیت نشانه‌های مردود این راند (با ۵۰ میلی‌متر حاشیه از هر طرف) پر شده است؛ ' : ''}پس از تعمیر فقط همین ناحیه دوباره رادیوگرافی می‌شود و پوشش فیلم RS با آن سنجیده می‌شود.</p>
       <label><span>تأییدکننده{crack ? ' (نمایندهٔ کارفرما) *' : ''}</span><input value={r.approvedBy} onChange={(e) => setR({ ...r, approvedBy: e.target.value })} required={crack} /></label>
       {crack && <p className="is-wide ps-hint is-warn">این راند ترک دارد: طبق بند 10 استاندارد API 1104 تعمیر ترک فقط با مجوز کارفرما مجاز است؛ نام تأییدکننده الزامی است.</p>}
       {r.performedBy && !qualified && <p className="is-wide ps-hint is-warn">برای جوشکار «{r.performedBy}» آزمون صلاحیت معتبری در «ارزیابی صلاحیت» ثبت نیست{rw ? '' : ' (در فهرست جوشکاران هم نیست)'}؛ تعمیر باید توسط جوشکار دارای صلاحیت تعمیر انجام شود.</p>}

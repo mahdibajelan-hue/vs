@@ -4,6 +4,7 @@ import { useWqStore } from '../store/useWqStore'
 import * as repo from '../repo'
 import { analyzeFilm, clahe, toGray, DETECTOR_VERSION, type Found } from '../lib/detect'
 import { segmentHours } from '../lib/coverage'
+import { clockOnFilm } from '../lib/filmplan'
 import { learnedCode, pReal, MIN_REAL } from '../lib/learn'
 import { aiSamples, currentModel, iou, recordAi } from '../lib/aiSamples'
 import { DEFECT_COLOR } from '../lib/rules'
@@ -38,6 +39,7 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
   const [view, setView] = useState({ s: 1, tx: 0, ty: 0 })
   const [size, setSize] = useState({ w: 800, h: 500 })
   const [drag, setDrag] = useState<Geo | null>(null)
+  const [hover, setHover] = useState<number | null>(null) // x of the pointer on the film, for the clock read-out
   const [pending, setPending] = useState<{ tool: Tool; g: Geo } | null>(null)
   const [calMm, setCalMm] = useState('')
   const [cands, setCands] = useState<Cand[] | null>(null), [aiBusy, setAiBusy] = useState(false)
@@ -49,6 +51,9 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
   const row = q.byId.get(weld.id)
   /** the clock position of a point of the film when its segment is written as hours («12-3», «3-6») */
   const clockAt = (x: number): string => {
+    // by the film's place on the circumference (start, length) and the diameter; older films: the segment written as hours
+    const byPlace = img && row?.odMm ? clockOnFilm(film, x, img.width, ppm, row.odMm) : null
+    if (byPlace != null) return String(byPlace)
     const hrs = segmentHours(film?.segment ?? '')
     if (!hrs || !img) return ''
     const [a, b] = hrs, span = ((b - a + 12) % 12) || 12
@@ -112,7 +117,9 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
   }
   const move = (e: RPointerEvent<HTMLCanvasElement>) => {
     if (pan.current) { const p = pan.current; setView((v) => ({ ...v, tx: p.tx + e.clientX - p.x, ty: p.ty + e.clientY - p.y })); return }
-    if (drag) { const p = toImg(e); setDrag({ ...drag, x2: p.x, y2: p.y }) }
+    const p = toImg(e)
+    if (drag) setDrag({ ...drag, x2: p.x, y2: p.y })
+    else if (img) setHover(p.x >= 0 && p.x <= img.width ? p.x : null)
   }
   const up = () => {
     if (pan.current) { pan.current = null; return }
@@ -213,7 +220,8 @@ export function FilmViewer({ filmId, weld, readOnly, onClose }: { filmId: string
   return (
     <div className="wq-viewer" role="dialog" aria-modal="true" aria-label={`تفسیر فیلم ${film.fileName}`}>
       <header className="wq-viewer-top">
-        <span className="wq-viewer-title"><ScanSearch size={16} aria-hidden /><b>{film.segment ? `فیلم ${film.segment}` : film.fileName}</b><small>{film.examType}{film.round ? fa(film.round) : ''} · {ppm ? `کالیبره: ${fa(ppm, 2)} px/mm` : 'کالیبره نشده — اندازه‌ها به پیکسل'}</small></span>
+        <span className="wq-viewer-title"><ScanSearch size={16} aria-hidden /><b>{film.segment ? `فیلم ${film.segment}` : film.fileName}</b><small>{film.examType}{film.round ? fa(film.round) : ''}{film.seq ? ` · فیلم ${fa(film.seq)}` : ''} · {ppm ? `کالیبره: ${fa(ppm, 2)} px/mm` : 'کالیبره نشده — اندازه‌ها به پیکسل'}</small></span>
+        {hover != null && clockAt(hover) !== '' && <span className="wq-clock-read" aria-live="off">ساعت <b>{fa(Number(clockAt(hover)), 1)}</b>{film.startMm != null && img ? <small> · {fa(ppm ? hover / ppm : film.lenMm ? (hover / img.width) * film.lenMm : 0)} mm از ابتدای فیلم</small> : null}</span>}
         <button type="button" className="ps-btn is-ghost" onClick={onClose} aria-label="بستن"><X size={16} aria-hidden /> بستن</button>
       </header>
       <div className="wq-viewer-tools" role="toolbar" aria-label="ابزارهای تفسیر">

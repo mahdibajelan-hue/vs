@@ -7,6 +7,8 @@ import { crewGrid, PASSES, QUAD_SHORT, type Quadrant } from '../lib/crew'
 import { PASS_FA, VERDICT_FA, type Pass } from '../lib/rules'
 import { GRADE_COLOR } from '../lib/health'
 import { weldKey } from '../../execution/lib/welds'
+import { crewShort } from '../lib/filmplan'
+import { NUMBER_RULE_DEFAULT, natural, pipeEnds, proposeWelds, type NumberRule } from '../lib/passport'
 
 const Q = [1, 2, 3, 4] as const
 interface LogRow { r: WeldQc; cells: Record<Pass, string[]>; positions: string; time: string; vt: string; rt: string; repairs: number; defects: string; fixed: string; coat: string }
@@ -41,23 +43,43 @@ function build(r: WeldQc, last: Map<string, { overall: string }>, nameOf: (k: st
 export function WqLog({ onOpen }: { onOpen: (id: string) => void }) {
   const st = useWqStore(); const q = useQc()
   const [text, setText] = useState(''), [busy, setBusy] = useState(''), [note, setNote] = useState('')
-  const rows = useMemo(() => q.rows.map((r) => build(r, q.last, q.nameOf)), [q])
-  const shown = rows.filter((x) => !text || `${x.r.weld.sec} ${x.r.weld.weld} ${x.r.weld.pipe} ${PASSES.flatMap((p) => x.cells[p]).join(' ')}`.includes(text))
+  const rows = useMemo(() => q.rows.map((r) => build(r, q.last, q.nameOf)).sort((a, b) => natural(a.r.weld.sec, b.r.weld.sec) || natural(a.r.weld.weld, b.r.weld.weld)), [q])
+  const ends = useMemo(() => pipeEnds(st.welds, st.pipes), [st.welds, st.pipes])
+  const okWps = st.wps.filter((w) => w.status === 'approved' && w.kind !== 'repair')
+  const wpsOf = (id: string | null | undefined) => st.wps.find((w) => w.id === id)
+  const wpsLabel = (w: repo.Wps | undefined) => (w ? `${w.wpsNo}${w.rev ? ` Rev.${w.rev}` : ''}` : '')
+  /** a WPS whose diameter / wall range does not hold this weld */
+  const wpsMisfit = (w: repo.Wps | undefined, x: LogRow) => { if (!w) return ''; const inch = x.r.odMm ? x.r.odMm / 25.4 : null, t = x.r.thk; return inch != null && ((w.diaMinIn != null && inch < w.diaMinIn - 0.01) || (w.diaMaxIn != null && inch > w.diaMaxIn + 0.01)) ? 'قطر این سرجوش بیرون از محدودهٔ WPS است' : t != null && ((w.thkMinMm != null && t < w.thkMinMm - 0.01) || (w.thkMaxMm != null && t > w.thkMaxMm + 0.01)) ? 'ضخامت این سرجوش بیرون از محدودهٔ WPS است' : '' }
+  const shortOf = (x: LogRow) => crewShort(x.r.odMm ? x.r.odMm / 25.4 : null, Object.fromEntries(PASSES.map((p) => [p, x.cells[p].flatMap((c) => c.split('/')).filter(Boolean)])) as Record<Pass, string[]>, st.crewMin)
+  const canEdit = st.caps.edit || st.caps.submit
+  const [bulk, setBulk] = useState('')
+  const [rule, setRule] = useState<NumberRule>(NUMBER_RULE_DEFAULT), [numOpen, setNumOpen] = useState(false)
+  const proposed = useMemo(() => (numOpen ? proposeWelds(st.pipes, rule) : []), [numOpen, st.pipes, rule])
+  const known = useMemo(() => new Set(st.welds.map((w) => weldKey(w.sec, w.weld))), [st.welds])
+  const shown = rows.filter((x) => !text || `${x.r.weld.sec} ${x.r.weld.weld} ${x.r.weld.pipe} ${ends.get(x.r.weld.id)?.a ?? ''} ${wpsLabel(wpsOf(x.r.joint?.wpsId))} ${PASSES.flatMap((p) => x.cells[p]).join(' ')}`.includes(text))
 
   const exportXlsx = async () => {
     setBusy('ساخت فایل اکسل…')
     try {
       const ExcelJS = (await import('exceljs')).default
       const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('دفتر جوش', { views: [{ rightToLeft: true, state: 'frozen', xSplit: 2, ySplit: 2 }] })
-      const head1 = ['مقطع', 'سرجوش', 'لوله', 'قطر (in)', 'ضخامت (mm)', 'طول لوله (m)', 'تاریخ / زمان', 'گزارش جوشکاری', ...PASSES.flatMap((p) => Q.map(() => PASS_FA[p])), 'وضعیت و جهت', 'VT', 'نتیجهٔ اولین RT', 'تعمیر', 'ناپیوستگی‌های ردشده (کد، طول، ساعت، جوشکار)', 'رفع عیب', 'پوشش (پوشش‌کار · نتیجه)', 'شاخص سلامت']
-      const head2 = ['', '', '', '', '', '', '', '', ...PASSES.flatMap(() => Q.map((x) => `ربع ${QUAD_SHORT[x]}`)), '', '', '', '', '', '', '', '']
+      const head1 = ['مقطع', 'سرجوش', 'لولهٔ قبل', 'لولهٔ بعد', 'WPS', 'قطر (in)', 'ضخامت (mm)', 'طول لوله (m)', 'تاریخ / زمان', 'گزارش جوشکاری', ...PASSES.flatMap((p) => Q.map(() => PASS_FA[p])), 'وضعیت و جهت', 'VT', 'نتیجهٔ اولین RT', 'تعمیر', 'ناپیوستگی‌های ردشده (کد، طول، ساعت، جوشکار)', 'رفع عیب', 'پوشش (پوشش‌کار · نتیجه)', 'شاخص سلامت']
+      const head2 = ['', '', '', '', '', '', '', '', '', '', ...PASSES.flatMap(() => Q.map((x) => `ربع ${QUAD_SHORT[x]}`)), '', '', '', '', '', '', '', '']
       ws.addRow(head1); ws.addRow(head2)
-      for (const x of rows) ws.addRow([x.r.weld.sec, x.r.weld.weld, x.r.weld.pipe, x.r.weld.central.size ?? '', x.r.thk ?? '', x.r.weld.lengthM ?? '', x.time, x.r.weld.welding?.reportNo ?? '', ...PASSES.flatMap((p) => x.cells[p]), x.positions, x.vt, x.rt, x.repairs, x.defects, x.fixed, x.coat, x.r.health.score ?? ''])
+      for (const x of rows) ws.addRow([x.r.weld.sec, x.r.weld.weld, ends.get(x.r.weld.id)?.a ?? '', ends.get(x.r.weld.id)?.b ?? x.r.weld.pipe, wpsLabel(wpsOf(x.r.joint?.wpsId)), x.r.weld.central.size ?? '', x.r.thk ?? '', x.r.weld.lengthM ?? '', x.time, x.r.weld.welding?.reportNo ?? '', ...PASSES.flatMap((p) => x.cells[p]), x.positions, x.vt, x.rt, x.repairs, x.defects, x.fixed, x.coat, x.r.health.score ?? ''])
       ws.getRow(1).font = { bold: true }; ws.getRow(2).font = { italic: true }
-      ws.columns.forEach((c, i) => { c.width = i < 8 ? 12 : i < 24 ? 9 : 22 })
+      ws.columns.forEach((c, i) => { c.width = i < 10 ? 12 : i < 26 ? 9 : 22 })
       const buf = await wb.xlsx.writeBuffer()
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })); a.download = 'weld-log.xlsx'; a.click(); URL.revokeObjectURL(a.href)
     } finally { setBusy('') }
+  }
+  const exportProposed = async () => {
+    const ExcelJS = (await import('exceljs')).default
+    const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('welds', { views: [{ rightToLeft: true, state: 'frozen', ySplit: 1 }] })
+    ws.addRow(['مقطع', 'سرجوش', 'لولهٔ قبل', 'لولهٔ بعد', 'طول لولهٔ قبل (m)', 'طول لولهٔ بعد (m)', 'ضخامت (in)', 'جبهه', 'در فهرست مرکزی'])
+    for (const x of proposed) ws.addRow([x.sec, x.weld, x.a, x.b, x.aLen ?? '', x.bLen ?? '', x.thkIn ?? '', x.front, known.has(weldKey(x.sec, x.weld)) ? 'ثبت شده' : ''])
+    ws.getRow(1).font = { bold: true }; ws.columns.forEach((c) => { c.width = 16 })
+    const buf = await wb.xlsx.writeBuffer(), a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf])); a.download = 'weld-numbering.xlsx'; a.click(); URL.revokeObjectURL(a.href)
   }
   const template = async () => {
     const ExcelJS = (await import('exceljs')).default
@@ -98,18 +120,46 @@ export function WqLog({ onOpen }: { onOpen: (id: string) => void }) {
           <button type="button" className="ps-btn" onClick={() => void template()}><FileSpreadsheet size={14} aria-hidden /> قالب ورود جوشکاران</button>
           <label className="ps-btn wq-file-btn"><Upload size={14} aria-hidden /> ورود جوشکاران از اکسل<input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importXlsx(f) }} /></label>
         </>}
+        <button type="button" className="ps-btn" aria-pressed={numOpen} onClick={() => setNumOpen(!numOpen)}>شماره‌گذاری از ریسه</button>
       </div>
+      {canEdit && okWps.length > 0 && (
+        <div className="wq-toolbar"><span className="ps-meta">WPS همهٔ {fa(shown.length)} سرجوش نمایش‌داده‌شده:</span>
+          <select value={bulk} onChange={(e) => setBulk(e.target.value)} aria-label="WPS برای ردیف‌های نمایش‌داده‌شده"><option value="">انتخاب WPS تأییدشده…</option>{okWps.map((w) => <option key={w.id} value={w.id}>{wpsLabel(w)}{w.process ? ` — ${w.process}` : ''}</option>)}</select>
+          <button type="button" className="ps-btn" disabled={!bulk || !shown.length} onClick={() => { if (window.confirm(`WPS برای ${shown.length} سرجوش ثبت شود؟`)) void st.run(`WPS برای ${fa(shown.length)} سرجوش ثبت شد`, async () => { for (const x of shown) await repo.setWps(x.r.weld.id, bulk) }) }}>اعمال</button>
+        </div>
+      )}
+      {numOpen && (
+        <section className="wq-card">
+          <header className="wq-card-head"><h3>پیشنهاد شمارهٔ مقطع و سرجوش از روی ریسه</h3><span className="ps-meta">{fa(st.pipes.length)} لوله در گزارش‌های ریسه</span></header>
+          <p className="ps-meta">لوله‌های هر جبهه به ترتیب ریسه کنار هم گذاشته می‌شوند و بین هر دو لولهٔ مجاور یک سرجوش پیشنهاد می‌شود. شمارهٔ مقطع و سرجوش طبق قاعدهٔ زیر ساخته می‌شود. این فهرست فقط پیشنهاد است؛ سرجوش وقتی به فهرست مرکزی می‌آید که با همین شماره در گزارش فیت‌آپ یا جوشکاری نوشته شود، و از آن پس رادیوگرافی، تعمیر، پوشش و لوله‌گذاری با همان مقطع و شماره به آن وصل می‌شوند.</p>
+          <div className="wq-form is-row">
+            <label><span>شمارهٔ اولین مقطع</span><input type="number" min={1} value={rule.sectionStart} onChange={(e) => setRule({ ...rule, sectionStart: Number(e.target.value) || 1 })} /></label>
+            <label><span>تعداد سرجوش هر مقطع</span><input type="number" min={1} value={rule.perSection} onChange={(e) => setRule({ ...rule, perSection: Number(e.target.value) || 1 })} /></label>
+            <label><span>پیشوند شمارهٔ سرجوش</span><input dir="ltr" value={rule.prefix} onChange={(e) => setRule({ ...rule, prefix: e.target.value })} /></label>
+            <label><span>تعداد رقم</span><input type="number" min={1} max={6} value={rule.digits} onChange={(e) => setRule({ ...rule, digits: Math.min(6, Math.max(1, Number(e.target.value) || 1)) })} /></label>
+            <label><span>شروع شماره از</span><input type="number" min={0} value={rule.weldStart} onChange={(e) => setRule({ ...rule, weldStart: Number(e.target.value) || 0 })} /></label>
+            <label className="wq-check"><input type="checkbox" checked={rule.restart} onChange={(e) => setRule({ ...rule, restart: e.target.checked })} /> شماره در هر مقطع از نو</label>
+            <button type="button" className="ps-btn is-primary" disabled={!proposed.length} onClick={() => void exportProposed()}><Download size={14} aria-hidden /> خروجی اکسل فهرست</button>
+          </div>
+          {proposed.length ? (
+            <div className="wq-tbl-wrap" style={{ maxHeight: 320 }}><table className="wq-tbl"><thead><tr><th>مقطع</th><th>سرجوش</th><th>لولهٔ قبل</th><th>لولهٔ بعد</th><th>طول دو لوله (m)</th><th>ضخامت (in)</th><th>جبهه</th><th>در فهرست مرکزی</th></tr></thead>
+              <tbody>{proposed.slice(0, 400).map((x) => <tr key={`${x.sec}|${x.weld}`}><td>{x.sec}</td><td><b className="ps-code">{x.weld}</b></td><td dir="ltr">{x.a}</td><td dir="ltr">{x.b}</td><td>{x.aLen != null ? fa(x.aLen, 2) : '—'} / {x.bLen != null ? fa(x.bLen, 2) : '—'}</td><td>{x.thkIn ?? '—'}</td><td>{x.front || '—'}</td><td className={known.has(weldKey(x.sec, x.weld)) ? 'is-ok' : ''}>{known.has(weldKey(x.sec, x.weld)) ? 'ثبت شده' : 'هنوز نه'}</td></tr>)}</tbody></table></div>
+          ) : <p className="ps-hint">برای این پروژه گزارش ریسه‌ای با شمارهٔ لوله ثبت نشده است («مدیریت اجرا ← گزارش روزانه ← فرم‌های فنی اجرایی ← گزارش روزانه عملیات ریسه»).</p>}
+        </section>
+      )}
       {(busy || note) && <p className="ps-hint">{busy || note}</p>}
       <div className="wq-tbl-wrap wq-card wq-log-wrap"><table className="wq-tbl wq-log-tbl">
         <thead>
-          <tr><th rowSpan={2} className="is-sticky">سرجوش</th><th rowSpan={2}>لوله / قطر / ضخامت / طول</th>{PASSES.map((p) => <th key={p} colSpan={4} className="wq-log-pass">{PASS_FA[p]}</th>)}<th rowSpan={2}>وضعیت · زمان</th><th rowSpan={2}>VT</th><th rowSpan={2}>RT اول</th><th rowSpan={2}>تعمیر</th><th rowSpan={2}>ناپیوستگی‌های ردشده</th><th rowSpan={2}>رفع</th><th rowSpan={2}>پوشش</th><th rowSpan={2}>سلامت</th></tr>
+          <tr><th rowSpan={2} className="is-sticky">سرجوش</th><th rowSpan={2}>لولهٔ قبل ← لولهٔ بعد</th><th rowSpan={2}>قطر / ضخامت</th><th rowSpan={2}>WPS</th>{PASSES.map((p) => <th key={p} colSpan={4} className="wq-log-pass">{PASS_FA[p]}</th>)}<th rowSpan={2}>وضعیت · زمان</th><th rowSpan={2}>VT</th><th rowSpan={2}>RT اول</th><th rowSpan={2}>تعمیر</th><th rowSpan={2}>ناپیوستگی‌های ردشده</th><th rowSpan={2}>رفع</th><th rowSpan={2}>پوشش</th><th rowSpan={2}>سلامت</th></tr>
           <tr>{PASSES.map((p) => Q.map((x) => <th key={`${p}${x}`} className="wq-log-q">{QUAD_SHORT[x]}</th>))}</tr>
         </thead>
         <tbody>{shown.map((x) => (
           <tr key={x.r.weld.id} onClick={() => onOpen(x.r.weld.id)} className="is-click" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(x.r.weld.id) }}>
             <th scope="row" className="is-sticky">{weldLabel(x.r.weld)}</th>
-            <td><small>{x.r.weld.pipe || '—'} · {x.r.weld.central.size ? `${x.r.weld.central.size}″` : '—'} · {x.r.thk ? `${fa(x.r.thk, 1)}mm` : '—'} · {x.r.weld.lengthM != null ? `${fa(x.r.weld.lengthM, 1)}m` : '—'}</small></td>
-            {PASSES.map((p) => Q.map((k, i) => <td key={`${p}${k}`} className="wq-log-w">{x.cells[p][i] || '·'}</td>))}
+            {(() => { const e = ends.get(x.r.weld.id); return <td><small dir="ltr">{e?.a || '—'} ← {e?.b || x.r.weld.pipe || '—'}</small>{(e?.aLen != null || e?.bLen != null) && <><br /><small className="ps-meta">{e?.aLen != null ? fa(e.aLen, 2) : '—'} / {e?.bLen != null ? fa(e.bLen, 2) : '—'} m{e?.strung ? ` · ریسه ${e.strung}` : ''}</small></>}</td> })()}
+            <td><small>{x.r.weld.central.size ? `${x.r.weld.central.size}″` : x.r.odMm ? `${fa(x.r.odMm / 25.4, 0)}″` : '—'} · {x.r.thk ? `${fa(x.r.thk, 1)}mm` : '—'}</small></td>
+            {(() => { const w = wpsOf(x.r.joint?.wpsId), bad = wpsMisfit(w, x); return <td onClick={(e) => e.stopPropagation()} className={bad ? 'is-bad' : ''} title={bad}>{canEdit && okWps.length ? <select className="wq-log-sel" value={x.r.joint?.wpsId ?? ''} onChange={(e) => void st.run('WPS سرجوش ثبت شد', () => repo.setWps(x.r.weld.id, e.target.value || null))} aria-label={`WPS سرجوش ${weldLabel(x.r.weld)}`}><option value="">—</option>{okWps.map((o) => <option key={o.id} value={o.id}>{wpsLabel(o)}</option>)}{w && !okWps.includes(w) ? <option value={w.id}>{wpsLabel(w)}</option> : null}</select> : <small>{wpsLabel(w) || '—'}</small>}</td> })()}
+            {(() => { const sh = shortOf(x); return PASSES.map((p) => { const lack = sh.find((z) => z.pass === p); return Q.map((k, i) => <td key={`${p}${k}`} className={`wq-log-w ${lack ? 'is-short' : ''}`} title={lack ? `${PASS_FA[p]}: ${lack.have} جوشکار ثبت شده؛ حداقل ${lack.need} نفر برای این قطر` : undefined}>{x.cells[p][i] || '·'}</td>) }) })()}
             <td><small>{x.positions || '—'}<br />{x.time}</small></td>
             <td className={x.vt === 'رد' ? 'is-bad' : ''}>{x.vt}</td>
             <td className={x.rt === VERDICT_FA.accept ? 'is-ok' : x.rt === '—' ? '' : 'is-bad'}>{x.rt}</td>
@@ -121,6 +171,7 @@ export function WqLog({ onOpen }: { onOpen: (id: string) => void }) {
           </tr>
         ))}</tbody>
       </table></div>
+      <p className="ps-meta">لولهٔ بعد همان لوله‌ای است که در گزارش جوشکاری برای سرجوش نوشته شده و لولهٔ قبل، لولهٔ سرجوش پیشین همان مقطع است؛ طول هر لوله از گزارش ریسه خوانده می‌شود. خانه‌های نارنجی یعنی جوشکار ثبت‌شدهٔ آن پاس کمتر از حداقل این قطر است.</p>
       <p className="ps-meta">ربع‌ها: ۱۲–۳، ۳–۶، ۶–۹، ۹–۱۲ ساعت با نگاه در جهت پیشروی خط. خانهٔ «·» یعنی جوشکار آن ربع ثبت نشده. روی هر ردیف بزنید تا شناسنامهٔ سرجوش باز شود.</p>
     </div>
   )

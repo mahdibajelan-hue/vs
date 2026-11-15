@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { useModuleStore } from '../../../../store/useModuleStore'
+import { useProjectContextStore } from '../../../../store/useProjectContextStore'
 import { Download, TriangleAlert } from 'lucide-react'
 import { useMaterialControlStore } from '../../store/useMaterialControlStore'
 import { useMaterialModel } from '../../lib/control/useMaterialModel'
@@ -51,6 +53,10 @@ export function BalancePage({ projectId }: { projectId: string }) {
         <KpiCard i={1} label="ارزش مصرف‌شده" value={bn(totals?.consumedValue ?? 0)} unit="میلیارد ریال" sub={totals?.contractValue ? `${fa(((totals.consumedValue) / totals.contractValue) * 100)}٪ از پیمان` : undefined} />
         <KpiCard i={2} label="کسری (ارزشی)" value={bn(totals?.shortageValue ?? 0)} unit="میلیارد ریال" tone={totals?.shortageValue ? 'warn' : 'good'} />
         <KpiCard i={3} label="اقلام توضیح‌داده‌نشده" value={fa(odd.length)} tone={odd.length ? 'warn' : 'good'} hint="مصرف بیش از پذیرش، تخصیص بیش از موجود، دریافت بیش از سفارش، مصرف بیش از نیاز، یا کالای منتظر بازرسی" />
+      </div>
+      <div className="mt-filters no-print">
+        <p className="im-helper" style={{ margin: 0 }}>مصرف فیلم رادیوگرافی (تعداد و متراژ فیلم، ریتیک، ریشوت و RS به تفکیک ماه، مقطع و قطر) از ثبت فیلم‌ها در «کنترل کیفیت» ساخته می‌شود و با خروجی اکسل آن در بالانس مصرفی‌ها به کار می‌رود.</p>
+        <button className="im-btn im-btn-sm" style={{ marginInlineStart: 'auto' }} onClick={() => { useProjectContextStore.getState().setProject(projectId); useModuleStore.getState().enterModule('weldqc', undefined, 'filmuse') }}>گزارش مصرف فیلم رادیوگرافی</button>
       </div>
       <div className="mt-filters no-print">
         <div className="mt-pills">{BY.map(([k, l]) => <button key={k} className={`mt-pill${by === k ? ' on' : ''}`} onClick={() => setBy(k)}>{l}</button>)}</div>

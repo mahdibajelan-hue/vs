@@ -72,7 +72,7 @@ export function WqCriteria() {
       </div>
       {can ? (
         <div className="wq-form-actions wq-sticky">
-          <button type="button" className="ps-btn is-primary" disabled={!dirty} onClick={() => void st.run('معیارهای پذیرش پروژه ذخیره شد', () => repo.saveCriteria(st.projectId!, { api1104: c }))}><Save size={14} aria-hidden /> ذخیره برای همهٔ کاربران پروژه</button>
+          <button type="button" className="ps-btn is-primary" disabled={!dirty} onClick={() => void st.run('معیارهای پذیرش پروژه ذخیره شد', () => repo.saveCriteria(st.projectId!, { ...((st.criteria as object | null) ?? {}), api1104: c }))}><Save size={14} aria-hidden /> ذخیره برای همهٔ کاربران پروژه</button>
           <button type="button" className="ps-btn is-ghost" onClick={() => setC(API1104_DEFAULT)}><RotateCcw size={14} aria-hidden /> بازگشت به مقادیر API 1104</button>
         </div>
       ) : <p className="ps-hint">تغییر معیارها با سطح دسترسی «مدیریت» در این ماژول است («مدیریت کاربران»).</p>}
