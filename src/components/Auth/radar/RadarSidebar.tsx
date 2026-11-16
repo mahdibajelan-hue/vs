@@ -7,7 +7,7 @@ import { useAuthStore } from '../../../store/useAuthStore'
 import { useAppTheme } from '../../common/useAppTheme'
 import { FarinMark } from '../../common/Logo'
 import { PROJECT_NAV, type ProjectNavItem } from './projectNav'
-import { IcPlant } from './industryIcons'
+import { IcHome } from './industryIcons'
 import { useRadarPeek } from './radarPeek'
 import { menuPeek, type MenuPeek } from './menuPeek'
 import './projectMenu.css'
@@ -200,7 +200,7 @@ export function RadarSidebar({ project, active, canSee, badgeFor, desktop, pinne
                             >
                               {on && <motion.span layoutId="pmenu-on" className="pmenu-pill-on" aria-hidden />}
                               {hover?.id === item.id && !on && <motion.span layoutId="pmenu-hover" className="pmenu-pill-hover" aria-hidden transition={{ type: 'spring', duration: 0.32, bounce: 0.12 }} />}
-                              <span className="pmenu-row-ico"><item.icon size={18} aria-hidden />{n > 0 && <i className="pmenu-dot" aria-hidden>{n > 99 ? '۹۹+' : fa(n)}</i>}</span>
+                              <span className="pmenu-row-ico"><item.icon size={20} aria-hidden />{n > 0 && <i className="pmenu-dot" aria-hidden>{n > 99 ? '۹۹+' : fa(n)}</i>}</span>
                               <span className="pmenu-row-label">{item.label}</span>
                               {pv && <span className="pmenu-row-val" aria-hidden>{pv.row}</span>}
                               {n > 0 && <span className="pmenu-badge" aria-hidden>{n > 99 ? '۹۹+' : fa(n)}</span>}
@@ -228,7 +228,7 @@ export function RadarSidebar({ project, active, canSee, badgeFor, desktop, pinne
             <span className="pmenu-toggle" data-on={dark || undefined} aria-hidden><i /></span>
           </button>
           <button type="button" className="pmenu-row" onClick={onHome} aria-label="صفحهٔ اصلی و ابزارهای سازمانی">
-            <span className="pmenu-row-ico"><IcPlant size={18} aria-hidden /></span>
+            <span className="pmenu-row-ico"><IcHome size={18} aria-hidden /></span>
             <span className="pmenu-row-label">صفحهٔ اصلی و ابزارهای سازمانی</span>
           </button>
           {user && (
