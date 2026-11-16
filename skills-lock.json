@@ -67,6 +67,14 @@
       "skillPath": "skills/find-animation-opportunities/SKILL.md",
       "computedHash": "6912a27a684feba9dd220349940d8a44e0d7b720cab71042f268a7ed93bf4bab"
     },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "ref": "50894c1d98bc45ca1ab127213e59d6525065b5e7",
+      "commit": "50894c1d98bc45ca1ab127213e59d6525065b5e7",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "7bc223e2aafbdbf6e50ea243ba6ef67fe432bb069ab439fea0390795dac0bf7f"
+    },
     "full-output-enforcement": {
       "source": "Leonxlnx/taste-skill",
       "sourceType": "github",
