@@ -1,13 +1,14 @@
 import type { CSSProperties, MouseEvent, ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import type { NavIcon } from '../radar/industryIcons'
 
 export interface ModuleCardProps {
   number?: string
   title: string
   englishTag: string
   description: string
-  icon: LucideIcon
+  icon: LucideIcon | NavIcon
   accent: string
   /** The flagship entry — Project Radar. It owns the big tile of the bento grid and carries the live mini-radar. */
   hero?: boolean
@@ -64,7 +65,7 @@ export function ModuleCard({ title, englishTag, description, icon: Icon, accent,
       <span className="lp-tile-head">
         {visual ?? (
           <span className="lp-tile-chip">
-            <Icon size={18} />
+            <Icon size={20} />
           </span>
         )}
       </span>

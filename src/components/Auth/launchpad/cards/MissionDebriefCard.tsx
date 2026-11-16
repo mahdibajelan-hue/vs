@@ -1,4 +1,4 @@
-import { MapPinned } from 'lucide-react'
+import { IcMission } from '../hubIcons'
 import { ModuleCard } from '../ModuleCard'
 import { MISSIONS_MODULE } from '../../../../modules/missions/integration/manifest'
 
@@ -9,7 +9,7 @@ export function MissionDebriefCard({ onSelect, locked, badge }: { onSelect: () =
       title={MISSIONS_MODULE.labelFa}
       englishTag={MISSIONS_MODULE.labelEn}
       description={MISSIONS_MODULE.descriptionFa}
-      icon={MapPinned}
+      icon={IcMission}
       accent="#0891b2"
       locked={locked}
       badge={badge}

@@ -9,7 +9,7 @@ import type { ComponentType, ReactNode, SVGProps } from 'react'
 export type IconProps = Omit<SVGProps<SVGSVGElement>, 'ref'> & { size?: number | string; strokeWidth?: number | string }
 export type NavIcon = ComponentType<IconProps>
 
-function make(name: string, body: ReactNode): NavIcon {
+export function make(name: string, body: ReactNode): NavIcon {
   const Icon = ({ size = 24, strokeWidth = 1.8, ...rest }: IconProps) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...rest}>{body}</svg>
@@ -19,7 +19,7 @@ function make(name: string, body: ReactNode): NavIcon {
 }
 
 /** the duotone layer: a soft fill in the icon's own colour, no outline */
-const tone = { fill: 'currentColor', fillOpacity: 0.2, stroke: 'none' } as const
+export const tone = { fill: 'currentColor', fillOpacity: 0.2, stroke: 'none' } as const
 
 /** رادار پروژه — a radar scope with its sweep and a contact */
 export const IcRadar = make('IcRadar', <>
@@ -63,30 +63,37 @@ export const IcEngineering = make('IcEngineering', <>
   <path d="M3.5 14.500a9.5 9.5 0 0 0 17 0" opacity=".6" />
 </>)
 
-/** کنترل و تأمین کالا — a packed crate */
+/** کنترل و تأمین کالا — a flanged gate valve: the bulk material of a pipeline job */
 export const IcGoods = make('IcGoods', <>
-  <path d="m3 8 9-5 9 5-9 5z" {...tone} />
-  <path d="M21 8 12 3 3 8v8l9 5 9-5z" /><path d="m3 8 9 5 9-5M12 13v8" /><path d="m7.5 5.5 9 5v3" />
+  <rect x="7" y="3" width="10" height="2.8" rx="1.4" fill="currentColor" fillOpacity=".3" />
+  <circle cx="12" cy="15.5" r="4" {...tone} />
+  <rect x="7" y="3" width="10" height="2.8" rx="1.4" /><path d="M12 5.800v3.700M9.5 9.500h5v2h-5z" />
+  <path d="M9.8 12.200a4 4 0 1 0 4.4 0" /><path d="M7 12v7M17 12v7" />
+  <path d="M7 13.500H2v4h5M17 13.500h5v4h-5" />
 </>)
 
-/** مدیریت اجرا — a site hard hat */
+/** مدیریت اجرا — an excavator at work */
 export const IcConstruction = make('IcConstruction', <>
-  <path d="M4 15v-3a8 8 0 0 1 16 0v3z" {...tone} />
-  <rect x="2" y="15" width="20" height="4" rx="1" /><path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5" />
-  <path d="M4 15v-3a8 8 0 0 1 6-7.700M14 4.300A8 8 0 0 1 20 12v3" />
+  <path d="M4.5 16.500v-5.500h3.300l1.7-3h2.500v8.500z" {...tone} />
+  <rect x="2" y="16.5" width="12" height="4.5" rx="2.250" /><path d="M5.5 18.750h5" opacity=".6" />
+  <path d="M4.5 16.500V11h3.300l1.7-3H12v8.5" /><path d="M7.8 11H12" opacity=".6" />
+  <path d="M12 10.5 16.5 3.500l3.5 6" /><path d="M20 9.5 17.3 13.500h5.200z" fill="currentColor" fillOpacity=".3" />
+  <path d="M16 21h6" opacity=".6" />
 </>)
 
-/** کنترل کیفیت — an inspector's magnifier with a pass mark */
+/** کنترل کیفیت — the «QC passed» stamp */
 export const IcQuality = make('IcQuality', <>
-  <circle cx="10.5" cy="10.5" r="7" {...tone} />
-  <circle cx="10.5" cy="10.5" r="7" /><path d="m21 21-5.5-5.5" /><path d="m7.4 10.7 2.2 2.2 3.9-4.3" />
+  <circle cx="12" cy="12" r="9.5" {...tone} />
+  <circle cx="12" cy="12" r="9.5" /><circle cx="12" cy="12" r="7.3" opacity=".5" strokeWidth="1" strokeDasharray="1.2 1.5" />
+  <text x="12" y="14.9" textAnchor="middle" fontSize="8" fontWeight="900" fontFamily="Arial, Helvetica, sans-serif" fill="currentColor" stroke="none" letterSpacing="-.3">QC</text>
 </>)
 
-/** آزمایش‌ها (هیدروتست) — a pressure gauge and a drop of water */
+/** آزمایش‌ها (هیدروتست) — a pressure gauge on its fitting */
 export const IcHydrotest = make('IcHydrotest', <>
-  <circle cx="10" cy="10" r="7" /><path d="m10 10 3-3" /><circle cx="10" cy="10" r="1" fill="currentColor" stroke="none" />
-  <path d="M5.5 10h1M10 5.500v1M14.5 10h-1" opacity=".6" />
-  <path d="M18.7 14.500c-1.5 1.9-2.2 3.1-2.2 4a2.2 2.2 0 0 0 4.4 0c0-.9-.7-2.1-2.2-4z" fill="currentColor" fillOpacity=".3" />
+  <rect x="9" y="18.8" width="6" height="3.2" rx=".8" fill="currentColor" fillOpacity=".3" />
+  <circle cx="12" cy="9.5" r="7.5" /><path d="M7.7 12.500a5.2 5.2 0 1 1 8.6 0" opacity=".55" strokeDasharray="2.2 1.6" />
+  <path d="m12 9.5-2-4" strokeWidth="2" /><circle cx="12" cy="9.5" r="1.2" fill="currentColor" stroke="none" />
+  <path d="M12 17v1.8" /><rect x="9" y="18.8" width="6" height="3.2" rx=".8" />
 </>)
 
 /** ایستگاه‌ها (پایپینگ و جوشکاری) — a flanged pipe elbow, with a welding spark at the joint */
@@ -108,17 +115,20 @@ export const IcStrategy = make('IcStrategy', <>
   <path d="M12 2.500V21M8.5 21h7" /><path d="M12 4.500h6l2 2.2-2 2.300h-6" /><path d="M12 11.500H6l-2 2.2 2 2.300h6" />
 </>)
 
-/** قراردادها و مالی — a signed contract and a coin */
+/** قراردادها و مالی — a money bag */
 export const IcContract = make('IcContract', <>
-  <circle cx="17" cy="17" r="4.3" fill="currentColor" fillOpacity=".3" />
-  <path d="M11 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6l5 5v2.5" /><path d="M13 3v5h5" /><path d="M8.5 12h3.500M8.5 15.500h2" />
-  <circle cx="17" cy="17" r="4.3" /><path d="M17 15.200v3.6" />
+  <path d="M10.4 7C6.9 9 4.5 12.7 4.5 16c0 3 2.6 4.5 7.5 4.500s7.5-1.5 7.5-4.500c0-3.3-2.4-7-5.9-9z" {...tone} />
+  <path d="M10.4 7C6.9 9 4.5 12.7 4.5 16c0 3 2.6 4.5 7.5 4.500s7.5-1.5 7.5-4.500c0-3.3-2.4-7-5.9-9" />
+  <path d="M8.8 3.200c1 .5 2.1.5 3.2 0 1.1.5 2.2.5 3.2 0L13.6 7h-3.200z" /><path d="M10 7h4" />
+  <path d="M13.9 12.300c-.4-.6-1-.9-1.9-.9-1.2 0-2 .6-2 1.5 0 1.9 4 .9 4 2.9 0 .9-.8 1.5-2 1.5-.9 0-1.6-.3-2.1-1" strokeWidth="1.5" /><path d="M12 10.300v8" strokeWidth="1.5" />
 </>)
 
-/** تولید صورت‌وضعیت — a payment statement: a slip with its lines and a total */
+/** تولید صورت‌وضعیت — an invoice: a sheet with its table of items, checked */
 export const IcStatement = make('IcStatement', <>
-  <path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.400L6 21z" {...tone} />
-  <path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.400L6 21z" /><path d="M9 7.500h6M9 11h6" /><path d="M12 15h3" />
+  <circle cx="17" cy="17" r="4.3" fill="currentColor" fillOpacity=".3" stroke="none" />
+  <path d="M11 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v2.5" /><path d="M14 3v5h5" /><path d="M8 7.500h3" />
+  <path d="M8 11h4.500v6H8zM8 14h4.500M10.5 11v6" strokeWidth="1.4" />
+  <circle cx="17" cy="17" r="4.3" /><path d="m15.1 17.1 1.4 1.4 2.4-2.8" />
 </>)
 
 /** مدیریت تغییرات — two arrows changing places */
@@ -126,11 +136,13 @@ export const IcChange = make('IcChange', <>
   <path d="M4 8h13.5" /><path d="m14 4.5 3.5 3.5-3.5 3.5" /><path d="M20 16H6.5" /><path d="M10 12.5 6.5 16l3.5 3.5" />
 </>)
 
-/** مدیریت ریسک — a warning sign */
+/** مدیریت ریسک — a risk meter: a banded dial with the needle in the high band */
 export const IcRisk = make('IcRisk', <>
-  <path d="M10.3 4 2.6 17.500a2 2 0 0 0 1.7 3h15.400a2 2 0 0 0 1.7-3L13.7 4a2 2 0 0 0-3.4 0z" {...tone} />
-  <path d="M10.3 4 2.6 17.500a2 2 0 0 0 1.7 3h15.400a2 2 0 0 0 1.7-3L13.7 4a2 2 0 0 0-3.4 0z" /><path d="M12 9.500V14" />
-  <circle cx="12" cy="17" r="1.1" fill="currentColor" stroke="none" />
+  <path d="M3 16.500a9 9 0 0 1 3.3-7" strokeWidth="3.2" opacity=".4" strokeLinecap="butt" />
+  <path d="M8 8.400a9 9 0 0 1 8 0" strokeWidth="3.2" opacity=".7" strokeLinecap="butt" />
+  <path d="M17.7 9.500a9 9 0 0 1 3.3 7" strokeWidth="3.2" strokeLinecap="butt" />
+  <path d="m12 16.5 6-3.3" strokeWidth="2.2" /><circle cx="12" cy="16.5" r="1.9" fill="currentColor" stroke="none" />
+  <path d="M8.5 20.500h7" opacity=".6" />
 </>)
 
 /** موانع و اقدامات — a road barrier */

@@ -1,4 +1,4 @@
-import { Briefcase } from 'lucide-react'
+import { IcPortfolio } from '../hubIcons'
 import { ModuleCard } from '../ModuleCard'
 
 export function PortfolioManagementCard({ onSelect, locked, badge }: { onSelect: () => void; locked?: boolean; badge?: number }) {
@@ -8,7 +8,7 @@ export function PortfolioManagementCard({ onSelect, locked, badge }: { onSelect:
       title="مدیریت سبد پروژه‌ها"
       englishTag="Portfolio & Program Control"
       description="دید تجمیعی سلامت، ریسک و مالی کل سبد پروژه‌ها — Portfolio ← Program ← Project."
-      icon={Briefcase}
+      icon={IcPortfolio}
       accent="#4f46e5"
       locked={locked}
       badge={badge}
