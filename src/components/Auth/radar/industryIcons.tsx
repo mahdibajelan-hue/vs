@@ -85,7 +85,7 @@ export const IcConstruction = make('IcConstruction', <>
 export const IcQuality = make('IcQuality', <>
   <circle cx="12" cy="12" r="9.5" {...tone} />
   <circle cx="12" cy="12" r="9.5" /><circle cx="12" cy="12" r="7.3" opacity=".5" strokeWidth="1" strokeDasharray="1.2 1.5" />
-  <text x="12" y="14.9" textAnchor="middle" fontSize="8" fontWeight="900" fontFamily="Arial, Helvetica, sans-serif" fill="currentColor" stroke="none" letterSpacing="-.3">QC</text>
+  <text x="12" y="14.9" textAnchor="middle" fontSize="8" fontWeight="900" fill="currentColor" stroke="none" letterSpacing="-.3">QC</text>
 </>)
 
 /** آزمایش‌ها (هیدروتست) — a pressure gauge on its fitting */
