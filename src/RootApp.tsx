@@ -14,7 +14,6 @@ import { ModuleHub } from './components/Auth/ModuleHub'
 import { Shell, AdminOnlyBlock } from './components/Auth/AuthGate'
 import { SetOwnPassword, mustSetPassword } from './components/Auth/SetOwnPassword'
 import { ProfileForm } from './components/Auth/ProfileForm'
-import { createSupabaseRepo as createLandRepo } from './modules/landacq/repo/supabaseRepo'
 
 // Every module is its own chunk: the hub opens without parsing them all, and each is warmed in the background once the hub is idle.
 const moduleLoaders = {
@@ -32,7 +31,8 @@ const moduleLoaders = {
   EstimatorApp: () => import('./modules/estimator/EstimatorApp').then((m) => ({ default: m.EstimatorApp })),
   LifecycleApp: () => import('./modules/lifecycle/LifecycleApp').then((m) => ({ default: m.LifecycleApp })),
   MissionsApp: () => import('./modules/missions/MissionsApp').then((m) => ({ default: m.MissionsApp })),
-  LandAcqApp: () => import('./modules/landacq/LandAcqApp').then((m) => ({ default: m.LandAcqApp })),
+  // the land module and its repository load together (one repo per page load, so its init effect keeps a stable dependency)
+  LandAcqApp: () => Promise.all([import('./modules/landacq/LandAcqApp'), import('./modules/landacq/repo/supabaseRepo')]).then(([m, r]) => { const repo = r.createSupabaseRepo(); return { default: (p: { onExitToHub: () => void; onBackToRadar: () => void }) => <m.LandAcqApp repo={repo} {...p} /> } }),
   StageGateApp: () => import('./modules/stagegate/StageGateApp').then((m) => ({ default: m.StageGateApp })),
   PssrApp: () => import('./modules/pssr/PssrApp').then((m) => ({ default: m.PssrApp })),
   TestingApp: () => import('./modules/testing/TestingApp').then((m) => ({ default: m.TestingApp })),
@@ -95,9 +95,6 @@ function warmModules() {
   const idle = (window as unknown as { requestIdleCallback?: (f: () => void) => void }).requestIdleCallback
   if (idle) idle(next); else setTimeout(next, 1500)
 }
-
-// One repo per page load, so LandAcqApp's init effect keeps a stable dependency.
-const landRepo = createLandRepo()
 
 // Cesium alone is several MB — lazy-loaded so no other module's bundle pays for it.
 const PipelineDigitalTwinApp = lazy(() =>
@@ -243,7 +240,7 @@ export function RootApp() {
   ) : activeModule === 'missions' ? (
     <MissionsApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'landacq' ? (
-    <LandAcqApp repo={landRepo} onExitToHub={exitToHub} onBackToRadar={backToRadar} />
+    <LandAcqApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'taskissue' ? (
     <IssuesApp onExitToHub={exitToHub} onBackToRadar={backToRadar} />
   ) : activeModule === 'supervision' ? (

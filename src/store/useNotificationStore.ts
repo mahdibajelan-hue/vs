@@ -45,8 +45,16 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
       const items = [...((main.data as AppNotification[] | null) ?? []), ...((fin.data as AppNotification[] | null) ?? []), ...((land.data as AppNotification[] | null) ?? []), ...((chg.data as AppNotification[] | null) ?? []), ...((mat.data as AppNotification[] | null) ?? []), ...((eng.data as AppNotification[] | null) ?? []), ...((exe.data as AppNotification[] | null) ?? []), ...((sv.data as AppNotification[] | null) ?? [])].sort((a, b) => rank[a.severity] - rank[b.severity])
       set({ items, loadedOnce: true })
       // which project each item belongs to — the radar counts only the chosen project's items
-      const pr = await supabase.rpc('notification_projects', { p_ids: items.map((n) => n.id) })
-      if (!pr.error) set({ projectOf: Object.fromEntries(((pr.data ?? []) as { id: string; master_project_id: string }[]).map((r) => [r.id, r.master_project_id])) })
+      // (an item's project never changes, so only items not seen before are asked about)
+      const known = get().projectOf, fresh = items.filter((n) => !(n.id in known)).map((n) => n.id)
+      if (fresh.length) {
+        const pr = await supabase.rpc('notification_projects', { p_ids: fresh })
+        if (!pr.error) {
+          const got = Object.fromEntries(((pr.data ?? []) as { id: string; master_project_id: string }[]).map((r) => [r.id, r.master_project_id]))
+          // items with no project are remembered as such (''), so they are not asked about again
+          set({ projectOf: { ...known, ...Object.fromEntries(fresh.map((id) => [id, got[id] ?? ''])) } })
+        }
+      }
     } catch {
       // the bell must never break a page: keep what we had
       set({ loadedOnce: true })

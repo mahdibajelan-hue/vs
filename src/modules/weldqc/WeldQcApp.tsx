@@ -14,7 +14,7 @@ import { WqJoints } from './pages/WqJoints'
 import { WqGuide } from './pages/WqGuide'
 import { QcHome } from './pages/QcHome'
 import { clearFocusWelder } from './lib/handoff'
-import { useCapaAuto } from './lib/useCapa'
+import { useCapaAuto, useCapaHeadlines } from './lib/useCapa'
 import '../pssr/pssr.css'
 import '../testing/testing.css'
 import '../issues/issues.css'
@@ -87,6 +87,7 @@ export function WeldQcApp({ onExitToHub }: { onExitToHub: () => void; onBackToRa
   const htFlash = useTestingStore((s) => s.flash), htErr = useTestingStore((s) => s.error)
   useEffect(() => { if (!htFlash) return; const t = setTimeout(() => useTestingStore.setState({ flash: null }), 2600); return () => clearTimeout(t) }, [htFlash])
   useCapaAuto()
+  useCapaHeadlines()
   // a headline of the ticker asks for a CAPA case
   useEffect(() => { const h = () => { clearFocusWelder(); setTab('capa'); setOpen(null) }; window.addEventListener('qc:capa', h); return () => window.removeEventListener('qc:capa', h) }, [setTab, setOpen])
   const go = (t: QcTab, f?: string) => { clearFocusWelder(); setTab(t); setOpen(null); if (f) setFilter(f) }

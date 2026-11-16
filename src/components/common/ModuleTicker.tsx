@@ -5,13 +5,10 @@ import { useProjectContextStore } from '../../store/useProjectContextStore'
 import type { ModuleKey } from '../../store/useModuleStore'
 import { useInboxStore } from '../../modules/inbox/store/useInboxStore'
 import { SOURCE_MODULE } from '../../modules/inbox/types'
-import { useWqStore } from '../../modules/weldqc/store/useWqStore'
-import { todayTehran } from '../../lib/today'
-import { useAuthStore } from '../../store/useAuthStore'
+import { useTickerFeed, type Head } from './tickerFeed'
 import './moduleTicker.css'
 
 export const TICKER_H = 34
-interface Head { id: string; text: string; sub: string; tone: 'bad' | 'warn' | 'info'; open: () => void }
 const same = (a: ModuleKey, b: ModuleKey) => a === b || (['issues', 'taskissue'].includes(a) && ['issues', 'taskissue'].includes(b))
 const HIDE_KEY = 'rasta.ticker.hidden'
 
@@ -20,8 +17,7 @@ export function useHeadlines(module: ModuleKey | null): Head[] {
   const notes = useNotificationStore((s) => s.items), projectOf = useNotificationStore((s) => s.projectOf)
   const work = useInboxStore((s) => s.items), setOpen = useInboxStore((s) => s.setOpen)
   const projectId = useProjectContextStore((s) => s.projectId)
-  const capa = useWqStore((s) => s.capa), capaPid = useWqStore((s) => s.projectId), capaAtt = useWqStore((s) => s.capaAttendees), capaAct = useWqStore((s) => s.capaActions)
-  const me = useAuthStore((s) => s.profile?.id ?? '')
+  const feeds = useTickerFeed((s) => s.feeds)
   return useMemo(() => {
     if (!module) return []
     const out: Head[] = []
@@ -33,23 +29,12 @@ export function useHeadlines(module: ModuleKey | null): Head[] {
       if (!same(n.module, module) || (projectId && projectOf[n.id] && projectOf[n.id] !== projectId)) continue
       out.push({ id: `n:${n.id}`, text: n.title, sub: n.body, tone: n.severity === 'warn' ? 'bad' : n.severity === 'action' ? 'warn' : 'info', open: () => setOpen(true, null, 'notes') })
     }
-    // quality control: CAPA cases past their deadline, minutes waiting for this person's signature, their own actions
-    if (module === 'weldqc' && projectId && capaPid === projectId) {
-      const today = todayTehran(), fa = (n: number) => n.toLocaleString('fa-IR')
-      const go = (id: string) => () => window.dispatchEvent(new CustomEvent('qc:capa', { detail: { capa: id } }))
-      for (const c of capa) {
-        if (c.status === 'closed' || c.status === 'void') continue
-        const late = (c.status === 'open' || c.status === 'rca') && c.meetingDue < today
-        if (late) out.push({ id: `capa:${c.id}`, text: `${c.code}: جلسهٔ ریشه‌یابی از مهلت گذشته است`, sub: c.title, tone: 'bad', open: go(c.id) })
-        else if (c.mandatory && (c.status === 'open' || c.status === 'rca')) out.push({ id: `capa:${c.id}`, text: `${c.code}: جلسهٔ ریشه‌یابی الزامی است`, sub: c.title, tone: 'warn', open: go(c.id) })
-        if (c.status === 'rca' && capaAtt.some((a) => a.caseId === c.id && a.round === c.round && a.present && a.userId === me && !a.signedAt)) out.push({ id: `capas:${c.id}`, text: `${c.code}: صورتجلسه منتظر امضای شماست`, sub: c.title, tone: 'bad', open: go(c.id) })
-        const mine = capaAct.filter((a) => a.caseId === c.id && a.status === 'open' && a.ownerId === me)
-        if (mine.length && c.status === 'agreed') out.push({ id: `capaa:${c.id}`, text: `${c.code}: ${fa(mine.length)} اقدام به نام شما باز است`, sub: mine[0].title, tone: mine.some((a) => a.dueDate < today) ? 'bad' : 'warn', open: go(c.id) })
-      }
-    }
+    // what the open module published for its own bar (e.g. quality control's CAPA cases)
+    const feed = feeds[module]
+    if (feed && projectId && feed.projectId === projectId) out.push(...feed.heads)
     const rank = { bad: 0, warn: 1, info: 2 }
     return out.sort((a, b) => rank[a.tone] - rank[b.tone]).slice(0, 30)
-  }, [module, notes, projectOf, work, projectId, setOpen, capa, capaPid, capaAtt, capaAct, me])
+  }, [module, notes, projectOf, work, projectId, setOpen, feeds])
 }
 
 /** whether the bar is shown for this module (it has something to say and was not folded away) */

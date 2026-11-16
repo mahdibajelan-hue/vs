@@ -1,12 +1,6 @@
 import { supabase } from './supabaseClient'
 import { browserAnswers } from './answerStore'
 import { covers, insideProject } from './projectScope'
-import { useExecutionStore } from '../modules/execution/store/useExecutionStore'
-import { forgetTemplates, useEpcStore } from '../modules/execution/store/useEpcStore'
-import { useMaterialStore } from '../modules/material/store/useMaterialStore'
-import { useMaterialControlStore } from '../modules/material/store/useMaterialControlStore'
-import { useFinanceStore } from '../modules/finance/store/useFinanceStore'
-import { useFinanceControlStore } from '../modules/finance/store/useFinanceControlStore'
 import type { Coverage, ScopeRequest } from './projectScope'
 
 /**
@@ -15,10 +9,14 @@ import type { Coverage, ScopeRequest } from './projectScope'
  * costs no extra request). Kept answers are emptied when the person signs out.
  */
 interface Refreshable { getState(): { coverage: Coverage; fetchAll: (o?: { scope?: ScopeRequest }) => Promise<void> } }
-const STORES: Record<string, Refreshable> = {
-  exec: useExecutionStore as unknown as Refreshable, epc: useEpcStore as unknown as Refreshable,
-  mat: useMaterialStore as unknown as Refreshable, matc: useMaterialControlStore as unknown as Refreshable,
-  fin: useFinanceStore as unknown as Refreshable, finc: useFinanceControlStore as unknown as Refreshable,
+/** each store is loaded only when one of its tables changes, so these modules stay out of the first page's code */
+const STORES: Record<string, () => Promise<Refreshable>> = {
+  exec: () => import('../modules/execution/store/useExecutionStore').then((m) => m.useExecutionStore as unknown as Refreshable),
+  epc: () => import('../modules/execution/store/useEpcStore').then((m) => m.useEpcStore as unknown as Refreshable),
+  mat: () => import('../modules/material/store/useMaterialStore').then((m) => m.useMaterialStore as unknown as Refreshable),
+  matc: () => import('../modules/material/store/useMaterialControlStore').then((m) => m.useMaterialControlStore as unknown as Refreshable),
+  fin: () => import('../modules/finance/store/useFinanceStore').then((m) => m.useFinanceStore as unknown as Refreshable),
+  finc: () => import('../modules/finance/store/useFinanceControlStore').then((m) => m.useFinanceControlStore as unknown as Refreshable),
 }
 
 const pending = new Set<string>()
@@ -28,19 +26,18 @@ function flush() {
   timer = null
   const keys = [...pending]; pending.clear()
   const pid = insideProject()
-  for (const k of keys) {
-    const s = STORES[k]?.getState()
-    if (!s) continue
+  for (const k of keys) void STORES[k]?.().then((store) => {
+    const s = store.getState()
     // read again what the store holds now: the open project, or every project when it holds them all
     if (pid && covers(s.coverage, pid)) void s.fetchAll({ scope: pid })
     else if (s.coverage.all) void s.fetchAll({ scope: 'all' })
-  }
+  })
 }
 
 export function installLiveRefresh() {
   window.addEventListener('rasta:revalidated', (e) => {
     const { table, store } = (e as CustomEvent<{ table: string; store: string }>).detail
-    if (table === 'ex_form_templates') forgetTemplates()
+    if (table === 'ex_form_templates') void import('../modules/execution/store/useEpcStore').then((m) => m.forgetTemplates())
     pending.add(store)
     if (!timer) timer = setTimeout(flush, 400)
   })
