@@ -6,8 +6,8 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { usePssrStore } from './store/usePssrStore'
 import type { SystemStatus } from './lib/pssrCore'
 import { AREA_ORDER, CHECK_FA, KIND_FA, OFFICIAL_SOURCE, PRIORITY_COLOR, PRIORITY_FA, PUNCH_STATUS_FA, STARTUP_TYPES, SUMMARY_ITEMS, type CheckStatus, type PssrCheck, type PssrPunch, type PssrSystem, type Priority } from './types'
+import { faRaw as fa } from '../../lib/faNum'
 
-const fa = (n: number) => n.toLocaleString('fa-IR')
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
 const ANSWERS: CheckStatus[] = ['ok', 'fail', 'na']
 const TONE: Record<CheckStatus, string> = { pending: '#64748b', ok: '#10b981', fail: '#ef4444', na: '#0ea5e9' }

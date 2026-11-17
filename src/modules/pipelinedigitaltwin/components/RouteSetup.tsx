@@ -3,8 +3,8 @@ import { FileUp, Loader2, Route as RouteIcon, Sparkles } from 'lucide-react'
 import { usePdtStore } from '../store/usePdtStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { readRouteFile } from '../../landacq/lib/routeImport'
+import { fa } from '../../../lib/faNum'
 
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 
 /**
  * Where the route comes from. A KML/KMZ is read with the land module's own parser (main line, side lines ignored, km posts)

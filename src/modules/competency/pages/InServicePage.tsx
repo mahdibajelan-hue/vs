@@ -9,8 +9,8 @@ import { useAuthStore } from '../../../store/useAuthStore'
 import { formatJalali } from '../../../lib/jalali'
 import '../../finance/finance-dashboard.css'
 import { todayTehran } from '../../../lib/today'
+import { fa } from '../../../lib/faNum'
 
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const KINDS: RaterKind[] = ['employer', 'supervisor', 'peer', 'subordinate']
 
 /** Quarterly evaluation of people working on projects: employer + 360° ratings per competency, a technical assessment and measured project results, combined into one score per quarter. */

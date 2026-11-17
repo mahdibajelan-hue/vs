@@ -4,7 +4,6 @@ import { formatJalali } from '../../../lib/jalali'
 import type { Confidence, Direction, EvidenceReport, Evidence, Materiality } from '../lib/evidenceReport'
 import './evidence.css'
 
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const jd = (d: string | null | undefined) => (d && /^\d{4}-\d{2}-\d{2}/.test(d) ? formatJalali(d.slice(0, 10)) : d ?? '')
 
 const MAT: Record<Materiality, { label: string; c: string }> = {
@@ -223,3 +222,5 @@ export function EvidenceReportView({ report: r, narrative, review }: { report: E
     </div>
   )
 }
+
+import { fa } from '../../../lib/faNum'

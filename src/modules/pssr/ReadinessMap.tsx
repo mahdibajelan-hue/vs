@@ -6,8 +6,8 @@ import { usePssrStore } from './store/usePssrStore'
 import { STAGE_COLOR, STAGE_FA, STAGE_ORDER, type SystemStatus } from './lib/pssrCore'
 import type { PssrSystem } from './types'
 import { todayTehran } from '../../lib/today'
+import { faRaw as fa } from '../../lib/faNum'
 
-const fa = (n: number) => n.toLocaleString('fa-IR')
 const W = 1000, PAD = 40, RAIL_Y = 92
 const STATION_KM = 0.4
 

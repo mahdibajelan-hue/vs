@@ -3,10 +3,10 @@ import { BookOpen, ChevronDown, ChevronLeft } from 'lucide-react'
 import { ISSUE_BANDS } from '../lib/issueKpiCore'
 import { STALE_DAYS } from '../lib/lifecyclePipeline'
 import { CRITERION_FA, DECISION_FA, HEALTH_FA } from '../lib/portfolioCore'
+import { faRaw as fa } from '../../../lib/faNum'
 
 interface Section { tab: string; title: string; question: string; read: string[]; terms?: [string, string][]; who?: string }
 
-const fa = (n: number) => n.toLocaleString('fa-IR')
 
 const SECTIONS: Section[] = [
   {

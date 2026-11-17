@@ -1,5 +1,6 @@
 import { CRITERIA, METHODS, METHOD, PRICING, PROCUREMENT, EXECUTION, RISK_FAMILY_FA, type Bearer, type CriterionKey, type ExecKey, type Method, type MethodKey, type PricingKey, type ProcurementKey, type Profile, type RiskFamily } from './bank'
 import { QUESTIONS, isAnswered, visible, type Answers } from './questions'
+import { faRaw as fa } from '../../../lib/faNum'
 
 /**
  * موتور تصمیم — deterministic multi-criteria analysis of the delivery method, the contracting strategy and the
@@ -523,5 +524,4 @@ function confidence(x: { gaps: Gap[]; cons: Contradiction[]; gap: number; scenar
   const level: Confidence['level'] = s >= 75 && decisive ? 'high' : s >= 55 ? 'medium' : 'low'
   return { score: s, level, decisive, reasons }
 }
-const fa = (n: number) => n.toLocaleString('fa-IR')
 const fmt = (n: number) => n.toLocaleString('fa-IR', { maximumFractionDigits: 1 })

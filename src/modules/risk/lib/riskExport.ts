@@ -4,6 +4,7 @@ import { RISK_LEVEL_LABEL_FA } from './riskScore'
 import { ZONE_LABEL_FA } from './riskPolicy'
 import type { RiskState } from './riskState'
 import { todayTehran } from '../../../lib/today'
+import { openPrintDocument } from '../../../lib/printWindow'
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string)
 
@@ -43,9 +44,6 @@ table{width:100%;border-collapse:collapse;font-size:10.5px;margin-top:8px}th,td{
 <div class="chips">${filters.length ? filters.map((f) => `<span>${esc(f)}</span>`).join('') : '<span>بدون فیلتر</span>'}</div>
 <table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(String(c ?? ''))}</td>`).join('')}</tr>`).join('')}</tbody></table>
 <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script></body></html>`
-  const w = window.open('', '_blank')
-  if (!w) return false
-  w.document.open(); w.document.write(html); w.document.close()
-  return true
+  return openPrintDocument(html)
 }
 export const catLabelFallback = (k: string | null | undefined) => (k ? RM_CATEGORY_LABEL_FA[k] ?? k : '—')

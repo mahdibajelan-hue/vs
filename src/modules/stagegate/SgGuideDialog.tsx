@@ -4,7 +4,6 @@ import { X } from 'lucide-react'
 import { SG_HOW_TO, SG_PHASE_GUIDE, SG_READING, SG_SOURCE_LABEL } from './sgGuide'
 import '../projectMetrics/healthGuide.css'
 
-const fa = (n: number) => n.toLocaleString('fa-IR')
 const TITLES: Record<string, string> = { G1: 'تعریف پروژه', G2: 'شفاف‌سازی پروژه', G3: 'برنامه‌ریزی کلان پروژه', G4: 'خرید خدمات مشاور طراحی پایه', G5: 'طراحی پایه', G6: 'مناقصه انتخاب پیمانکار و ناظر', G7: 'اجرا', G8: 'پیش‌راه‌اندازی و راه‌اندازی', G9: 'دوره نگهداری', G10: 'تسویه حساب' }
 
 /** «راهنمای چرخهٔ عمر» — how to use the module, how to read the orbit, and what to do in each of the ten stages of the company model. */
@@ -51,3 +50,5 @@ export function SgGuideDialog({ phase, onClose }: { phase: string | null; onClos
     document.body,
   )
 }
+
+import { faRaw as fa } from '../../lib/faNum'

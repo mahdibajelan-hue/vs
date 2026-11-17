@@ -1,4 +1,5 @@
 import type { EpcProgress } from './epcProgress'
+import { fa } from '../../lib/faNum'
 
 /**
  * EPC S-curves and their forecasts — pure functions over the one shared progress source (epcProgressOf at any date):
@@ -32,7 +33,6 @@ const ms = (iso: string) => Date.parse(`${iso}T00:00:00Z`)
 const iso = (t: number) => new Date(t).toISOString().slice(0, 10)
 const add = (d: string, n: number) => iso(ms(d) + Math.round(n) * DAY)
 const days = (a: string, b: string) => Math.round((ms(b) - ms(a)) / DAY)
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 
 /** the dates a curve is drawn on: about every two weeks (never more than ~60 points), plus the window ends and today */
 export function curveTicks(from: string, to: string, today: string): string[] {

@@ -6,8 +6,8 @@ import { formatJalali } from '../../../lib/jalali'
 import { formatChainage } from '../lib/chainage'
 import { ASSET_KIND_FA, assetPicture, CONDITION_COLOR, CONDITION_FA, CRIT_FA, dueState, EVENT_FA, OPSTATE_FA, type Asset, type AssetCondition, type AssetEvent, type AssetKind, type OpState } from '../lib/twinCore'
 import { todayTehran } from '../../../lib/today'
+import { fa } from '../../../lib/faNum'
 
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const today = () => todayTehran()
 const jd = (d: string | null) => (d ? formatJalali(d.slice(0, 10)) : '—')
 export const DUE_FA = { overdue: 'بازرسی عقب‌افتاده', soon: 'بازرسی نزدیک', ok: 'به‌موقع', none: 'بدون برنامهٔ بازرسی' } as const

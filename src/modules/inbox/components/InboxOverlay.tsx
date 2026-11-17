@@ -16,7 +16,6 @@ import { ExLinesPanel } from './ExLinesPanel'
 import { NotificationsPane } from './NotificationsPane'
 import '../inbox.css'
 
-const fa = (n: number) => n.toLocaleString('fa-IR')
 const SOURCES = Object.keys(SOURCE_LABEL_FA) as InboxSource[]
 const GROUPS = Object.keys(GROUP_LABEL_FA) as InboxGroup[]
 
@@ -246,3 +245,5 @@ function Detail({ item }: { item: InboxItem }) {
     </article>
   )
 }
+
+import { faRaw as fa } from '../../../lib/faNum'

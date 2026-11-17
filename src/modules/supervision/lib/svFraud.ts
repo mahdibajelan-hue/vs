@@ -1,4 +1,5 @@
 import type { SvDevice, SvPunch } from '../types'
+import { faRaw as fa } from '../../../lib/faNum'
 
 /**
  * ثبت‌های مشکوک — patterns in the phone check-ins that suggest one person checked in for another. Nothing here blocks a
@@ -39,7 +40,6 @@ export const SEVERITY_COLOR: Record<Severity, string> = { high: '#ef4444', mediu
 
 const MIN = 60_000
 const t = (iso: string) => new Date(iso).getTime()
-const fa = (n: number) => n.toLocaleString('fa-IR')
 const sameFix = (a: SvPunch, b: SvPunch) => a.lat != null && b.lat != null && a.lng != null && b.lng != null && a.lat.toFixed(6) === b.lat.toFixed(6) && a.lng.toFixed(6) === b.lng.toFixed(6)
 
 export function detectFraud(punches: SvPunch[], devices: SvDevice[], nameOf: (personId: string) => string = (id) => id): FraudFlag[] {

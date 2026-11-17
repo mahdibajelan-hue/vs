@@ -12,8 +12,8 @@ import { HtMinutes, useSectionIgs } from './HtMinutes'
 import { LOC_UI, PvChart, SectionHydraulic, TimeChart } from './HtCharts'
 import { elevAt } from '../lib/htCore'
 import { PSI_PER_BAR } from '../lib/igs'
+import { fa } from '../../../lib/faNum'
 
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
 const tm = (d: string) => new Date(d).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
 const PHASES: { key: string; label: string }[] = [{ key: 'filling', label: 'آبگیری' }, { key: 'air', label: 'عدم وجود هوا' }, { key: 'strength', label: 'آزمون مقاومت' }, { key: 'stabilization', label: 'دورهٔ یکنواختی' }, { key: 'leak', label: 'آزمون نشتی' }, { key: 'drying', label: 'خشک‌کنی' }]

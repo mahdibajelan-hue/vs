@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from 'react'
+import { faRaw as fa } from '../../../lib/faNum'
 
-const fa = (n: number) => n.toLocaleString('fa-IR')
 
 export interface Seg { key: string; label: string; value: number; color: string }
 

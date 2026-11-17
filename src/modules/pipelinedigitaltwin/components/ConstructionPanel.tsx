@@ -8,8 +8,8 @@ import { jointStageStateAsOf } from '../lib/jointHistory'
 import { kmByStage, physicalProgress, STAGE_FA, STAGE_ORDER } from '../lib/twinCore'
 import { STAGE_COLOR } from './EntryDrawer'
 import type { Official } from '../hooks/useOfficial'
+import { fa } from '../../../lib/faNum'
 
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const WEEK = 7 * 86400000
 
 /**

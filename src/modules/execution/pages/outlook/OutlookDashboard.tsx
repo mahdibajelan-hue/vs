@@ -9,8 +9,8 @@ import { JALALI_MONTHS } from '../../../../lib/jalali'
 import { PB, axisProps, gridProps } from '../../../finance/components/charts'
 import { CountUp, CountdownHero, OlCard, OlHead } from '../../components/outlook/olUi'
 import { GUIDE_STEPS } from './OutlookGuide'
+import { fa } from '../../../../lib/faNum'
 
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const pp = (x: number, d = 2) => `${(x * 100).toLocaleString('fa-IR', { maximumFractionDigits: d })}٪`
 
 export function OutlookDashboard({ ctx, onGo }: { ctx: OutlookCtx; onGo: (sub: string) => void }) {

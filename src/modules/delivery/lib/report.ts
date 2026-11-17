@@ -1,6 +1,7 @@
 import { BEARER_FA, CRITERIA, CRITERION, METHOD, METHODS, type MethodKey } from './bank'
 import { GROUPS, PROJECT_TYPE_FA, QUESTIONS, QUESTION, type Answers, type ProjectType } from './questions'
 import type { Result } from './engine'
+import { openPrintDocument } from '../../../lib/printWindow'
 
 /**
  * گزارش توجیهی — the fourteen sections of the management report, built only from the engine's result and the study's
@@ -199,11 +200,7 @@ footer{margin-top:14px;font-size:8.6px;color:#64748b;text-align:center;border-to
 </style></head><body>${body}</body></html>`
 }
 export function openReport(sections: Section[], meta: ReportMeta, narrative: { sentences: { text: string; refs: string[] }[] } | null): boolean {
-  const win = window.open('', '_blank'); if (!win) return false
-  win.document.write(reportHtml(sections, meta, narrative)); win.document.close()
-  const go = () => { try { win.focus(); win.print() } catch { /* closed */ } }
-  void (win.document.fonts?.ready ?? Promise.resolve()).then(() => setTimeout(go, 500))
-  return true
+  return openPrintDocument(reportHtml(sections, meta, narrative), { print: true, delay: 500 })
 }
 export const GROUP_LABELS = GROUPS
 export const ALL_METHODS = METHODS

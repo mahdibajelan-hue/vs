@@ -26,8 +26,8 @@ import { todayTehran } from '../../lib/today'
 import { useRemembered } from '../../lib/navMemory'
 import { NavScroller } from '../../components/common/NavScroller'
 import { pressable } from '../../lib/pressable'
+import { fa } from '../../lib/faNum'
 
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
 const today = () => todayTehran()
 type Tab = 'dash' | 'line' | 'stations' | 'coating' | 'settings'

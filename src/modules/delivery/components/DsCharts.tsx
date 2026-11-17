@@ -1,7 +1,7 @@
 import { CRITERIA, type CriterionKey } from '../lib/bank'
 import type { OptionResult, RiskRow, SensitivityRow } from '../lib/engine'
+import { fa } from '../../../lib/faNum'
 
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 export const SERIES = ['var(--ds-a)', '#f59e0b', '#a78bfa']
 
 /** confidence as a 240° arc; the needle colour follows the level */

@@ -9,8 +9,8 @@ import { assetPicture, dueState, EVENT_FA, OPSTATE_FA, type OpState } from '../l
 import { DUE_COLOR, DUE_FA } from './AssetPanel'
 import type { Official } from '../hooks/useOfficial'
 import { todayTehran } from '../../../lib/today'
+import { fa } from '../../../lib/faNum'
 
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const today = () => todayTehran()
 export const OP_COLOR: Record<OpState, string> = { open: '#22c55e', closed: '#ef4444', throttled: '#f59e0b', na: '#64748b' }
 

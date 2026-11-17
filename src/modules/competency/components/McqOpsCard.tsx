@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ArrowUpLeft, ListChecks, ShieldAlert } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
+import { faRaw as fa } from '../../../lib/faNum'
 
-const fa = (n: number) => n.toLocaleString('fa-IR')
 interface Q { job_role: string; approval_status: string; active: boolean }
 interface T { score_percent: number | null }
 

@@ -1,6 +1,7 @@
 import type { CapaAction, CapaAttendee, CapaCase } from '../repo'
 import type { ActionKind, CapaStatus, CauseCat, Party, Rule, Severity } from './capa'
 import { faDate } from './useQc'
+import { openPrintDocument } from '../../../lib/printWindow'
 
 export const STATUS_FA: Record<CapaStatus, string> = { open: 'مهار فوری', rca: 'ریشه‌یابی و توافق', agreed: 'اجرای اقدام‌ها', verifying: 'سنجش اثربخشی', closed: 'بسته (اثربخش)', void: 'ابطال‌شده' }
 export const STATUS_COLOR: Record<CapaStatus, string> = { open: '#ef4444', rca: '#f97316', agreed: '#0ea5e9', verifying: '#a855f7', closed: '#22c55e', void: '#64748b' }
@@ -58,9 +59,5 @@ footer{margin-top:10px;font-size:8.5px;color:#64748b;text-align:center}
 </style></head><body>${body}</body></html>`
 }
 export function openMinutes(c: CapaCase, att: CapaAttendee[], act: CapaAction[], projectName: string) {
-  const win = window.open('', '_blank'); if (!win) return false
-  win.document.write(minutesHtml(c, att, act, projectName)); win.document.close()
-  const go = () => { try { win.focus(); win.print() } catch { /* closed */ } }
-  void (win.document.fonts?.ready ?? Promise.resolve()).then(() => setTimeout(go, 400))
-  return true
+  return openPrintDocument(minutesHtml(c, att, act, projectName), { print: true })
 }

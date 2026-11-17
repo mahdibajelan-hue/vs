@@ -7,8 +7,8 @@ import { STAGE_COLOR as PSSR_COLOR } from '../../pssr/lib/pssrCore'
 import { assetPicture, execReading, kmByStage, physicalProgress } from '../lib/twinCore'
 import type { Official } from '../hooks/useOfficial'
 import { todayTehran } from '../../../lib/today'
+import { fa } from '../../../lib/faNum'
 
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const TONE = { good: '#22c55e', warn: '#f59e0b', bad: '#ef4444' } as const
 const BINS = 120
 

@@ -8,7 +8,6 @@ import { selectVisible, useInboxStore } from '../store/useInboxStore'
 import { SOURCE_LABEL_FA } from '../types'
 import '../inbox.css'
 
-const fa = (n: number) => n.toLocaleString('fa-IR')
 
 /** The «کارتابل من» tile of the launchpad: a wide banner like the module tiles, but alive — a mascot that reacts to the load, a donut by module and the due-date bars. */
 export function InboxHubCard({ locked }: { locked?: boolean }) {
@@ -71,3 +70,5 @@ export function InboxHubCard({ locked }: { locked?: boolean }) {
     </div>
   )
 }
+
+import { faRaw as fa } from '../../../lib/faNum'

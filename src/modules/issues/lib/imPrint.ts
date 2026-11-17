@@ -1,6 +1,7 @@
 import { formatJalali } from '../../../lib/jalali'
 import { IM_PRIORITY_LABEL_FA, type ImIssue } from '../types'
 import { IM_STAGE_LABEL_FA, dayDiff, effectiveDue, stageOf } from './imModel'
+import { openPrintDocument } from '../../../lib/printWindow'
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string)
 
@@ -28,8 +29,5 @@ table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:10px}th,td
 }
 
 export function openPrint(html: string): boolean {
-  const w = window.open('', '_blank')
-  if (!w) return false
-  w.document.open(); w.document.write(html); w.document.close()
-  return true
+  return openPrintDocument(html)
 }

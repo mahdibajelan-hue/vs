@@ -16,8 +16,8 @@ import './pssr.css'
 import { todayTehran } from '../../lib/today'
 import { useRemembered } from '../../lib/navMemory'
 import { NavScroller } from '../../components/common/NavScroller'
+import { faRaw as fa } from '../../lib/faNum'
 
-const fa = (n: number) => n.toLocaleString('fa-IR')
 const jd = (d: string | null | undefined) => (d ? formatJalali(d.slice(0, 10)) : '—')
 const today = () => todayTehran()
 const AFTER_RFSU: PssrStage[] = ['rfsu', 'permit', 'gasin', 'live']

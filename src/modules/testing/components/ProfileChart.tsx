@@ -1,8 +1,8 @@
 import { useMemo, type KeyboardEvent } from 'react'
 import type { ProfilePoint } from '../lib/htCore'
+import { fa } from '../../../lib/faNum'
 
 export interface Band { key: string; from: number; to: number; color: string; label: string; dashed?: boolean; hiKm?: number; loKm?: number }
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const W = 1000, H = 280, L = 54, R = 12, T = 30, B = 46
 
 /**

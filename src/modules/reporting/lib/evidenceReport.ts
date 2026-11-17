@@ -19,6 +19,7 @@
  */
 
 import { formatJalali } from '../../../lib/jalali'
+import { fa } from '../../../lib/faNum'
 
 export type Materiality = 'material' | 'watch' | 'ok'
 export type Confidence = 'high' | 'medium' | 'low'
@@ -140,7 +141,6 @@ const DAY = 86400000
 const t = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00Z`).getTime()
 export const daysBetween = (a: string, b: string) => Math.round((t(b) - t(a)) / DAY)
 const r1 = (n: number) => Math.round(n * 10) / 10
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const jd = (d: string) => formatJalali(d.slice(0, 10)) || d
 /** compact money: rial contract values run into the trillions */
 export function money(n: number) {

@@ -16,6 +16,7 @@ import {
 import { Chip, DataTable, KpiCard, fmtBn, fmtD, fmtPct, type Col } from '../../components/fn'
 import { ChartTip, HBars, PB, Ring, Tile, axisProps, gridProps } from '../../components/charts'
 import { FIN_CERTIFICATE_STATUS_LABEL_FA, FIN_CLAIM_TYPE_LABEL_FA } from '../../types'
+import { fa } from '../../../../lib/faNum'
 
 export type ReportId = 'delay' | 'matrix' | 'aging' | 'flow' | 'consumption' | 'growth' | 'advance' | 'guarantees' | 'claims' | 'contractors'
 const FULL_CATALOG: { group: string; items: { id: ReportId; label: string; hint: string }[] }[] = [
@@ -34,7 +35,6 @@ const FULL_CATALOG: { group: string; items: { id: ReportId; label: string; hint:
     { id: 'claims', label: 'ادعاها', hint: 'به‌تفکیک نوع و سن ادعاهای باز' }] },
 ]
 const bn = (v: number) => fmtBn(v)
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const monthName = (idx: number) => { const { jy, jm } = idxToYM(idx); return `${JALALI_MONTHS[jm - 1]} ${String(jy).slice(2).replace(/\d/g, (x) => '۰۱۲۳۴۵۶۷۸۹'[+x])}` }
 const heat = (d: number, max: number) => (d <= 0 || max <= 0 ? undefined : `color-mix(in srgb, #fd625e ${Math.round(15 + 55 * Math.min(1, d / max))}%, transparent)`)
 

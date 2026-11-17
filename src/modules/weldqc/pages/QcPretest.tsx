@@ -7,8 +7,8 @@ import { useTestingStore } from '../../testing/store/useTestingStore'
 import { TestPage } from '../../testing/components/TestPage'
 import { HT_FAILED_COLOR, HT_STAGE_COLOR, HT_STAGE_FA, hoopMpa, smysOf } from '../../testing/lib/htCore'
 import { CROSSINGS, CROSSING_FA } from '../../testing/lib/crossings'
+import { fa } from '../../../lib/faNum'
 
-const fa = (n: number, d = 0) => n.toLocaleString('fa-IR', { maximumFractionDigits: d })
 const jd = (d: string | null) => (d ? formatJalali(d.slice(0, 10)) : '—')
 
 /**

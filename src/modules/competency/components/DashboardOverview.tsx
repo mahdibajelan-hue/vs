@@ -9,7 +9,6 @@ import { McqOpsCard } from './McqOpsCard'
 import type { CompetencyAssessment } from '../types'
 import '../../finance/finance-dashboard.css'
 
-const fa = (n: number) => n.toLocaleString('fa-IR')
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('')
 const BINS: { label: string; test: (x: number) => boolean; color: string }[] = [
   { label: 'زیر ۴۰', test: (x) => x < 40, color: PB.coral }, { label: '۴۰–۴۹', test: (x) => x >= 40 && x < 50, color: PB.orange }, { label: '۵۰–۵۹', test: (x) => x >= 50 && x < 60, color: PB.yellow },
@@ -174,3 +173,5 @@ export function MyTasksView({ tasks }: { tasks: MyTask[] }) {
     </div>
   )
 }
+
+import { faRaw as fa } from '../../../lib/faNum'

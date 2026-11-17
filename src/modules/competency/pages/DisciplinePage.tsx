@@ -7,8 +7,8 @@ import { disciplineState, KIND_LABEL_FA, STATUS_LABEL_FA, type DecisionKind } fr
 import { useAuthStore } from '../../../store/useAuthStore'
 import { formatJalali } from '../../../lib/jalali'
 import { todayTehran } from '../../../lib/today'
+import { faRaw as fa } from '../../../lib/faNum'
 
-const fa = (n: number) => n.toLocaleString('fa-IR')
 const STATUS_COLOR = { proposed: '#fbbf24', approved: '#f87171', rejected: '#94a3b8', revoked: '#38bdf8' } as const
 
 /** Disciplinary decisions for people on projects: a score deduction, a temporary suspension or a work ban. A proposal changes nothing until someone other than its author approves it (a module admin); an approved decision can be revoked with a reason. */

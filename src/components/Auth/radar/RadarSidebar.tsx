@@ -14,7 +14,6 @@ import './projectMenu.css'
 
 const TONE: Record<'neutral' | 'green' | 'amber' | 'red', string> = { neutral: '#94a3b8', green: '#22c55e', amber: '#f59e0b', red: '#ef4444' }
 const GROUPS_KEY = 'farin.menu.groups'
-const fa = (n: number) => n.toLocaleString('fa-IR')
 const ease = [0.32, 0.72, 0, 1] as const
 const RAIL = 64, PANEL = 296
 
@@ -287,3 +286,5 @@ function PeekCard({ item, peek }: { item: ProjectNavItem; peek: MenuPeek }) {
     </>
   )
 }
+
+import { faRaw as fa } from '../../../lib/faNum'

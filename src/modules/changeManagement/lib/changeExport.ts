@@ -1,6 +1,7 @@
 import { formatJalali } from '../../../lib/jalali'
 import { STATUS_FA, STEP_KIND_FA, STEP_STATUS_FA, TYPE_FA, type ChangeHistory, type ChangeRequest, type ChangeStep } from '../types'
 import { ACTION_FA } from './changeFlow'
+import { openPrintDocument } from '../../../lib/printWindow'
 export { downloadXlsx, printTable } from '../../risk/lib/riskExport'
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string)
@@ -24,8 +25,5 @@ table{width:100%;border-collapse:collapse;margin-top:4px}th,td{border:1px solid 
 <div><span>هزینهٔ واقعی:</span> ${n(r.actualCost)}</div><div><span>تأخیر واقعی:</span> ${n(r.actualDelayDays)} روز</div><div><span>بسته‌شدن:</span> ${d(r.closedAt)}</div></div>
 <h2>تاریخچه</h2><table><thead><tr><th>تاریخ</th><th>رویداد</th><th>کاربر</th><th>توضیح</th></tr></thead><tbody>${history.map((h) => `<tr><td>${d(h.createdAt)}</td><td>${esc(ACTION_FA[h.action] ?? h.action)}</td><td>${esc(ctx.userName(h.userId))} ${esc(h.roleLabel)}</td><td>${esc(h.comment)}</td></tr>`).join('')}</tbody></table>
 <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script></body></html>`
-  const w = window.open('', '_blank')
-  if (!w) return false
-  w.document.open(); w.document.write(html); w.document.close()
-  return true
+  return openPrintDocument(html)
 }
