@@ -120,7 +120,7 @@ export const useFinanceControlStore = create<State>()((set, get) => ({
       land: new Map([...(sc ? [...prev.land].filter(([k]) => k !== sc) : []), ...landEntries.filter((e): e is readonly [string, LandSummary] => !!e)]),
     }, sc))
     const coverage = addCoverage(get().coverage, sc)
-    set({ coverage, loaded: covers(coverage, sc), loading: false })
+    set({ coverage, loaded: covers(coverage, resolveScope(undefined)), loading: false })
   },
 
   loadLandLedger: async (projectId) => {

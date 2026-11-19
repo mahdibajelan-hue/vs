@@ -200,7 +200,7 @@ export const useMaterialControlStore = create<State>((set, get) => ({
       linkTargets: new Map([...(sc ? get().linkTargets : []), ...targets]),
     }, sc, CHILDREN))
     const coverage = addCoverage(get().coverage, sc)
-    set({ coverage, loaded: covers(coverage, sc), loading: false })
+    set({ coverage, loaded: covers(coverage, resolveScope(undefined)), loading: false })
   },
 
   myRoles: (projectId) => {

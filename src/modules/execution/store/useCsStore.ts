@@ -1,0 +1,77 @@
+import { create } from 'zustand'
+import { supabase } from '../../../lib/supabaseClient'
+import { useSystemStore } from '../../../store/useSystemStore'
+import { explainExecutionError } from '../lib/errors'
+import type { CsEquipment, CsLine, CsSpool, CsTestPack, CsWeld, SpoolStage } from '../lib/csCore'
+
+type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+const nn = (x: unknown): number | null => (x == null || x === '' ? null : Number(x))
+const fail = (action: string, error: { message: string } | null) => { if (!error) return false; useSystemStore.getState().setStorageError(`خطا در ${action}: ${explainExecutionError(error)}`); return true }
+
+const lineRow = (r: Row): CsLine => ({ id: r.id, projectId: r.project_id, lineNo: r.line_no, service: r.service ?? '', sizeIn: Number(r.size_in), specClass: r.spec_class ?? '', material: r.material ?? '', area: r.area ?? '', isoNo: r.iso_no ?? '', designPressBar: nn(r.design_press_bar), ndtPct: Number(r.ndt_pct ?? 100), testPackId: r.test_pack_id, note: r.note ?? '', archived: !!r.archived })
+const spoolRow = (r: Row): CsSpool => ({ id: r.id, projectId: r.project_id, lineId: r.line_id, spoolNo: r.spool_no, isoNo: r.iso_no ?? '', sizeIn: nn(r.size_in), weightKg: nn(r.weight_kg), area: r.area ?? '', stage: r.stage, stageDates: r.stage_dates ?? {}, note: r.note ?? '', archived: !!r.archived })
+const weldRow = (r: Row): CsWeld => ({ id: r.id, projectId: r.project_id, lineId: r.line_id, spoolId: r.spool_id, weldNo: r.weld_no, location: r.location, jointType: r.joint_type, sizeIn: Number(r.size_in), thkMm: nn(r.thk_mm), material: r.material ?? '', wps: r.wps ?? '', welder: r.welder ?? '', fitupDate: r.fitup_date, weldDate: r.weld_date, ndtMethod: r.ndt_method ?? '', ndtResult: r.ndt_result, ndtDate: r.ndt_date, ndtReport: r.ndt_report ?? '', repairCount: r.repair_count ?? 0, note: r.note ?? '', archived: !!r.archived })
+const eqRow = (r: Row): CsEquipment => ({ id: r.id, projectId: r.project_id, tag: r.tag, title: r.title ?? '', kind: r.kind ?? 'other', area: r.area ?? '', weightT: nn(r.weight_t), steps: r.steps ?? {}, note: r.note ?? '', archived: !!r.archived })
+const packRow = (r: Row): CsTestPack => ({ id: r.id, projectId: r.project_id, packNo: r.pack_no, system: r.system ?? '', medium: r.medium, testPressBar: nn(r.test_press_bar), status: r.status, punchA: r.punch_a ?? 0, punchB: r.punch_b ?? 0, testDate: r.test_date, reinstatedDate: r.reinstated_date, note: r.note ?? '', archived: !!r.archived })
+
+/** camelCase patch → the table's columns (only the keys given) */
+const COLS: Record<string, string> = {
+  lineNo: 'line_no', service: 'service', sizeIn: 'size_in', specClass: 'spec_class', material: 'material', area: 'area', isoNo: 'iso_no', designPressBar: 'design_press_bar', ndtPct: 'ndt_pct', testPackId: 'test_pack_id', note: 'note', archived: 'archived',
+  lineId: 'line_id', spoolNo: 'spool_no', weightKg: 'weight_kg', stage: 'stage', stageDates: 'stage_dates',
+  spoolId: 'spool_id', weldNo: 'weld_no', location: 'location', jointType: 'joint_type', thkMm: 'thk_mm', wps: 'wps', welder: 'welder', fitupDate: 'fitup_date', weldDate: 'weld_date', ndtMethod: 'ndt_method', ndtResult: 'ndt_result', ndtDate: 'ndt_date', ndtReport: 'ndt_report', repairCount: 'repair_count',
+  tag: 'tag', title: 'title', kind: 'kind', weightT: 'weight_t', steps: 'steps',
+  packNo: 'pack_no', system: 'system', medium: 'medium', testPressBar: 'test_press_bar', status: 'status', punchA: 'punch_a', punchB: 'punch_b', testDate: 'test_date', reinstatedDate: 'reinstated_date',
+}
+const toRow = (p: Record<string, unknown>) => { const o: Row = {}; for (const [k, v] of Object.entries(p)) if (COLS[k] && v !== undefined) o[COLS[k]] = v === '' && /Date$|Id$/.test(k) ? null : v; return o }
+
+export type CsEntity = 'lines' | 'spools' | 'welds' | 'equipment' | 'packs'
+const TABLE: Record<CsEntity, string> = { lines: 'cs_lines', spools: 'cs_spools', welds: 'cs_welds', equipment: 'cs_equipment', packs: 'cs_test_packs' }
+const MAP = { lines: lineRow, spools: spoolRow, welds: weldRow, equipment: eqRow, packs: packRow }
+const FA: Record<CsEntity, string> = { lines: 'لاین', spools: 'اسپول', welds: 'سرجوش', equipment: 'تجهیز', packs: 'تست‌پک' }
+
+interface State {
+  projectId: string | null; loading: boolean
+  lines: CsLine[]; spools: CsSpool[]; welds: CsWeld[]; equipment: CsEquipment[]; packs: CsTestPack[]
+  load: (projectId: string, force?: boolean) => Promise<void>
+  save: (e: CsEntity, projectId: string, patch: Record<string, unknown> & { id?: string }) => Promise<string | null>
+  /** many rows at once (Excel import); returns how many were written */
+  importRows: (e: CsEntity, projectId: string, rows: Record<string, unknown>[]) => Promise<number>
+  setSpoolStage: (s: CsSpool, stage: SpoolStage, date: string) => Promise<boolean>
+}
+
+/** The compressor-station registers of one project (migration 050). Archived rows are kept and hidden by the screens. */
+export const useCsStore = create<State>((set, get) => ({
+  projectId: null, loading: false, lines: [], spools: [], welds: [], equipment: [], packs: [],
+  load: async (projectId, force) => {
+    if (!force && get().projectId === projectId) return
+    set({ loading: true, projectId })
+    const q = (t: string) => supabase.from(t).select('*').eq('project_id', projectId).limit(20000)
+    const [l, s, w, e, p] = await Promise.all([q('cs_lines').order('line_no'), q('cs_spools').order('spool_no'), q('cs_welds').order('weld_no'), q('cs_equipment').order('tag'), q('cs_test_packs').order('pack_no')])
+    const err = l.error || s.error || w.error || e.error || p.error
+    if (fail('خواندن ثبت‌های ایستگاه', err)) { set({ loading: false }); return }
+    if (get().projectId !== projectId) return // the user moved on
+    set({ loading: false, lines: (l.data ?? []).map(lineRow), spools: (s.data ?? []).map(spoolRow), welds: (w.data ?? []).map(weldRow), equipment: (e.data ?? []).map(eqRow), packs: (p.data ?? []).map(packRow) })
+  },
+  save: async (e, projectId, patch) => {
+    const { id, ...rest } = patch
+    const row = toRow(rest)
+    const res = id ? await supabase.from(TABLE[e]).update(row).eq('id', id).select('*').single() : await supabase.from(TABLE[e]).insert({ ...row, project_id: projectId }).select('*').single()
+    if (fail(`ذخیرهٔ ${FA[e]}`, res.error)) return null
+    if (!res.data) { fail(`ذخیرهٔ ${FA[e]}`, { message: 'not_found' }); return null }
+    const v = (MAP[e] as (r: Row) => unknown)(res.data as Row) as { id: string }
+    set((s) => ({ [e]: id ? (s[e] as { id: string }[]).map((x) => (x.id === id ? v : x)) : [...(s[e] as { id: string }[]), v] }) as Partial<State>)
+    return v.id
+  },
+  importRows: async (e, projectId, rows) => {
+    let done = 0
+    for (let i = 0; i < rows.length; i += 300) {
+      const chunk = rows.slice(i, i + 300).map((r) => ({ ...toRow(r), project_id: projectId }))
+      const { error } = await supabase.from(TABLE[e]).insert(chunk)
+      if (fail(`ورود ${FA[e]} از اکسل (ردیف ${i + 1} به بعد)`, error)) break
+      done += chunk.length
+    }
+    await get().load(projectId, true)
+    return done
+  },
+  setSpoolStage: async (s, stage, date) => !!(await get().save('spools', s.projectId, { id: s.id, stage, stageDates: { ...s.stageDates, [stage]: date } })),
+}))

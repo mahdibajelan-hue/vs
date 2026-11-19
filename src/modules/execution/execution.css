@@ -281,3 +281,31 @@
 .ex-split-bar em { position: absolute; inset-block: -2px; width: 2px; background: var(--im-text); opacity: .55; }
 .ex-split-val { display: grid; justify-items: end; font-weight: 800; font-variant-numeric: tabular-nums; }
 @media (max-width: 560px) { .ex-split-row { grid-template-columns: 1fr auto; } .ex-split-bar { grid-column: 1 / -1; grid-row: 2; } }
+/* ── compressor-station registers ── */
+.cs-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cs-search { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; min-height: 36px; border-radius: 10px; border: 1px solid var(--im-line); background: var(--im-panel-2); color: var(--im-muted-2); flex: 1 1 220px; max-width: 340px; }
+.cs-search input { background: transparent; border: 0; outline: 0; color: var(--im-text); width: 100%; font: inherit; font-size: 13px; }
+.cs-search:focus-within { border-color: var(--im-accent); }
+.cs-msg { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; font-size: 13px; }
+.cs-msg ul { margin: 4px 0 0; padding-inline-start: 18px; flex: 1; }
+.cs-msg.bad { border-color: color-mix(in srgb, #ef4444 45%, transparent); }
+.cs-msg.ok { border-color: color-mix(in srgb, #10b981 45%, transparent); }
+.cs-stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; }
+.cs-stage { display: grid; justify-items: center; gap: 2px; padding: 10px 6px; border-radius: 10px; background: var(--im-panel-2); text-align: center; }
+.cs-stage b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.cs-stage span { font-size: 12px; font-weight: 700; }
+.cs-stage small { font-size: 11.5px; color: var(--im-muted-2); }
+.cs-acts { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.cs-steps { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.cs-steps button { font-size: 11.5px; font-weight: 700; padding: 5px 9px; border-radius: 99px; border: 1px solid var(--im-line); color: var(--im-muted-2); min-height: 30px; transition: background-color .15s, color .15s, transform 160ms var(--im-ease); }
+.cs-steps button.on { background: color-mix(in srgb, #10b981 18%, transparent); border-color: color-mix(in srgb, #10b981 55%, transparent); color: var(--im-text); }
+.cs-steps button:not(:disabled):active { transform: scale(0.97); }
+.cs-steps button:disabled { cursor: default; }
+.cs-packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.cs-pack { padding: 14px 16px; display: grid; gap: 8px; align-content: start; }
+.cs-pack header, .cs-pack footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.cs-pack header b { font-size: 15px; }
+.cs-pack .sub { margin: 0; font-size: 12px; color: var(--im-muted-2); }
+.cs-pack-nums { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--im-muted-2); }
+.cs-pack-nums b { color: var(--im-text); font-variant-numeric: tabular-nums; }
+.cs-reasons { margin: 0; padding-inline-start: 18px; font-size: 12px; color: #f59e0b; display: grid; gap: 2px; }

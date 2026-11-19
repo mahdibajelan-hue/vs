@@ -192,7 +192,7 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
       profiles: ((profileRows ?? []) as { id: string; full_name: string }[]).map((p) => ({ id: p.id, fullName: p.full_name })),
     }, sc, CHILDREN))
     const coverage = addCoverage(get().coverage, sc)
-    set({ coverage, loading: false, loaded: covers(coverage, sc) })
+    set({ coverage, loading: false, loaded: covers(coverage, resolveScope(undefined)) })
   },
 
   upsertBudget: async (masterProjectId, data) => {

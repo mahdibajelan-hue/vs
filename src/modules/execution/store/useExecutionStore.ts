@@ -164,7 +164,9 @@ export const useExecutionStore = create<State>((set, get) => ({
         }
       })()),
       coverage,
-      loaded: covers(coverage.full, sc), coreLoaded: true, loading: false,
+      // the flags describe what the open screen needs (the project the person is inside), not the scope this read asked
+      // for: a background read of another project (radar peek, portfolio card) must not put the open module back to loading
+      loaded: covers(coverage.full, resolveScope(undefined)), coreLoaded: covers(coverage.core, resolveScope(undefined)), loading: false,
     })
   },
 

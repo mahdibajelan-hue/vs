@@ -1,6 +1,6 @@
 import { NavScroller } from './components/NavScroller'
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Bot, Camera, Flame, CalendarRange, ClipboardList, FileBarChart2, Gauge, HardHat, Hourglass, Inbox, Loader2, Settings2, TrendingUp } from 'lucide-react'
+import { AlertTriangle, Bot, Factory, Camera, Flame, CalendarRange, ClipboardList, FileBarChart2, Gauge, HardHat, Hourglass, Inbox, Loader2, Settings2, TrendingUp } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
@@ -21,11 +21,12 @@ import { scopeViews, SCOPE_VIEW_FA, PROJECT_KIND_FA, type ScopeView } from '../.
 import { useProjectScope, useScopeStore } from './store/useScopeStore'
 
 export const EXECUTION_ACCENT = '#f97316'
-export type ExTab = 'dashboard' | 'daily' | 'review' | 'welds' | 'progress' | 'outlook' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'photos' | 'settings'
+export type ExTab = 'station' | 'dashboard' | 'daily' | 'review' | 'welds' | 'progress' | 'outlook' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'photos' | 'settings'
 type Sub = { id: string; label: string }
 /** `only`: the tab exists in that scope alone (the pipeline weld file is kilometre-based; a station's welds live in its spool register) */
 const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[]; only?: 'pipeline' | 'station' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
+  { id: 'station', label: 'ایستگاه: پایپینگ، تجهیزات، تست‌پک', icon: Factory, color: '#6366f1', only: 'station', subs: [{ id: 'dash', label: 'خلاصهٔ ایستگاه' }, { id: 'lines', label: 'لاین‌ها و اسپول‌ها' }, { id: 'welds', label: 'سرجوش‌ها (اینچ‌قطر)' }, { id: 'equipment', label: 'نصب تجهیزات' }, { id: 'packs', label: 'تست‌پک‌ها' }] },
   { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'کارکرد روزانه' }, { id: 'forms', label: 'فرم‌های فنی اجرایی (ریسه، خمکاری، خاکی، …)' }, { id: 'designed', label: 'فرم‌های طراحی‌شده' }, { id: 'today', label: 'امروز در کارگاه' }] },
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
   { id: 'welds', label: 'سرجوش‌ها (پروندهٔ جوش)', icon: Flame, color: '#f43f5e', only: 'pipeline' },
@@ -55,6 +56,7 @@ const Photos = L(() => import('./photos/PhotosPage'), 'PhotosPage')
 const Welds = L(() => import('./pages/WeldsPage'), 'WeldsPage')
 const Gaps = L(() => import('./pages/GapsPage'), 'GapsPage')
 const Settings = L(() => import('./pages/SettingsPage'), 'SettingsPage')
+const Station = L(() => import('./pages/StationPage'), 'StationPage')
 
 /** «مدیریت اجرا» — daily work reports on the price-list rows, row-by-row approval by the supervision, technical QC forms, weighted physical progress and automatic period reports. */
 export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
@@ -107,6 +109,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const body = (pid: string) => {
     const p: P = { projectId: pid, sub, onGo: go }
     switch (tab) {
+      case 'station': return <Station {...p} />
       case 'dashboard': return <Dashboard {...p} />
       case 'daily': return sub === 'designed' ? <Designed {...p} /> : sub === 'today' ? <Today {...p} /> : <Daily {...p} />
       case 'review': return <Review {...p} />

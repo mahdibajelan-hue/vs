@@ -226,7 +226,7 @@ export const useMaterialStore = create<MaterialState>()((set, get) => ({
       allocations: (allocations ?? []).map(allocationFromRow),
     }, sc, CHILDREN))
     const coverage = addCoverage(get().coverage, sc)
-    set({ coverage, loading: false, loaded: covers(coverage, sc) })
+    set({ coverage, loading: false, loaded: covers(coverage, resolveScope(undefined)) })
   },
 
   createMtoRevision: async (masterProjectId, data) => {

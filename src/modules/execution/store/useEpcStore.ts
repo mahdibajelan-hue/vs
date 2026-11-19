@@ -286,7 +286,7 @@ export const useEpcStore = create<State>((set, get) => ({
       imports: ok<Row>(imps).map((r): ScheduleImportRow => ({ id: r.id, projectId: r.project_id, fileName: r.file_name ?? '', summary: r.summary ?? {}, importedAt: r.imported_at })),
     })
     const coverage = addCoverage(get().coverage, sc)
-    set({ coverage, loaded: covers(coverage, sc) })
+    set({ coverage, loaded: covers(coverage, resolveScope(undefined)) })
   },
   loadLegal: async (projectId) => {
     const { data, error } = await supabase.rpc('ex_legal_current', { p_project: projectId })
