@@ -104,11 +104,13 @@ for i in $(seq 1 60); do
 done
 docker compose ps --format 'table {{.Service}}\t{{.State}}\t{{.Health}}'
 # stored links to files (profile photos) follow the site to its new address
-if [ -n "$OLD_SITE_URL" ] && [ "$OLD_SITE_URL" != "$SITE_URL" ]; then
+# (also from the bare address, in case an earlier run stopped after changing the settings but before this step)
+for old in "$OLD_SITE_URL" "http://$PUBLIC_IP"; do
+  [ -n "$old" ] && [ "$old" != "$SITE_URL" ] || continue
   docker exec supabase-db psql -h localhost -U supabase_admin -d postgres -X -q -c \
-    "do \$\$ begin if to_regclass('public.profiles') is not null then update public.profiles set avatar_url = replace(avatar_url, '$OLD_SITE_URL', '$SITE_URL') where avatar_url like '$OLD_SITE_URL%'; end if; end \$\$;" \
-    && ok "stored file links moved from $OLD_SITE_URL to $SITE_URL"
-fi
+    "do \$\$ begin if to_regclass('public.profiles') is not null then update public.profiles set avatar_url = replace(avatar_url, '$old', '$SITE_URL') where avatar_url like '$old/%'; end if; end \$\$;" \
+    && ok "stored file links: $old -> $SITE_URL"
+done
 
 say "5/8 Fetching the Farin code"
 if [ -d "$SRC_DIR/.git" ]; then git -C "$SRC_DIR" fetch -q --depth 1 origin "$BRANCH" && git -C "$SRC_DIR" reset -q --hard FETCH_HEAD
