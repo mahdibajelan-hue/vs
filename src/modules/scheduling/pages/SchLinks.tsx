@@ -86,7 +86,8 @@ export function SchLinks({ projectId, m }: { projectId: string; m: LiveModel }) 
                   <table className="ex-lines"><tbody>
                     {mine.map((l) => (
                       <tr key={l.id}><td><Chip tone="neutral">{LINK_LABEL_FA[l.targetType]}</Chip></td><td style={{ whiteSpace: 'normal' }}>{label(l)}</td>
-                        <td>{l.needDate ? `نیاز: ${d(l.needDate)}` : ''}</td>
+                        <td>{l.needDate ? `نیاز: ${d(l.needDate)}` : ''}{l.targetType === 'exec_activity' && <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', marginInlineStart: 6 }} title="سهم این فعالیت اجرایی در پیشرفت فعالیت برنامه (خالی = سهم برابر)">سهم
+                          {st.canEdit ? <input type="number" min={0} step="any" defaultValue={l.share ?? ''} style={{ width: 64 }} aria-label="سهم در پیشرفت" onBlur={(e) => { const v = e.target.value.trim() === '' ? null : Number(e.target.value); if (v !== (l.share ?? null) && (v == null || v > 0)) void st.saveLink({ ...l, share: v }) }} /> : <b>{l.share ?? '—'}</b>}</span>}</td>
                         <td>{st.canEdit && <button className="im-btn im-btn-sm im-btn-danger" aria-label="حذف اتصال" onClick={() => void st.removeLink(l.id)}><Trash2 size={12} /></button>}</td></tr>
                     ))}
                   </tbody></table>

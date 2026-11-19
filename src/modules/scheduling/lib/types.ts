@@ -28,7 +28,7 @@ export interface SchVersion {
 
 export type LinkTarget = 'exec_activity' | 'eng_doc' | 'mtl_package' | 'risk' | 'issue' | 'land_parcel' | 'change_request'
 export const LINK_LABEL_FA: Record<LinkTarget, string> = { exec_activity: 'فعالیت اجرایی', eng_doc: 'مدرک مهندسی', mtl_package: 'بستهٔ تأمین کالا', risk: 'ریسک', issue: 'مسئله', land_parcel: 'قطعهٔ زمین (تحصیل اراضی)', change_request: 'درخواست تغییر' }
-export interface SchLink { id: string; projectId: string; activityUid: string; targetType: LinkTarget; targetId: string; needKind: 'start' | 'continue' | 'finish'; needDate: string | null; note: string }
+export interface SchLink { id: string; projectId: string; activityUid: string; targetType: LinkTarget; targetId: string; needKind: 'start' | 'continue' | 'finish'; needDate: string | null; note: string; /** execution links: weight of this execution activity inside the schedule activity (null = equal) */ share?: number | null }
 
 export interface ImportIssue { level: 'error' | 'warning' | 'info'; row?: number; code?: string; message: string }
 

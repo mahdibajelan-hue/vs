@@ -48,3 +48,12 @@ assert.equal(sg.length, 1); assert.equal(sg[0].claimedDays, 15); assert.equal(sg
 const sm = summarize({ sched: { activities: cur, relations: [rel('A', 'B')], calendar: CAL, mode: 'forecast', dataDate: '2026-01-10' }, activities: cur, baselineFinish: '2026-01-10', contract: { ...DEFAULT_CONTRACT, contractFinish: '2026-01-12' }, events: [], today: '2026-01-10' })
 assert.equal(sm.activities, 2); assert.ok(sm.baselineSlip > 0); assert.ok(sm.contractorDelay > 0)
 console.log('resources/cost/links/summary: all assertions passed')
+
+// execution links: progress is the share-weighted average (equal weights when no share is set)
+const sx = emptySources()
+sx.exec.set('e1', { id: 'e1', title: 'جوشکاری', approvedPct: 80, reportedPct: 90, rejectedQty: 0 })
+sx.exec.set('e2', { id: 'e2', title: 'رادیوگرافی', approvedPct: 20, reportedPct: 30, rejectedQty: 0 })
+const eq = integrateActivity('uA', [L('exec_activity', 'e1'), L('exec_activity', 'e2')], sx, { today: '2026-01-20', forecastStart: null })
+assert.equal(eq.execApproved, 50)
+const wt = integrateActivity('uA', [L('exec_activity', 'e1', { share: 3 }), L('exec_activity', 'e2', { share: 1 })], sx, { today: '2026-01-20', forecastStart: null })
+assert.equal(wt.execApproved, 65); assert.equal(wt.execReported, 75)

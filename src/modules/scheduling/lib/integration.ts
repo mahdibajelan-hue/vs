@@ -58,11 +58,13 @@ export function integrateActivity(uid: string, links: SchLink[], src: LinkSource
   const horizon = o.horizonDays ?? 21
   const res: ActivityIntegration = { uid, execApproved: null, execReported: null, execRejectedQty: 0, docsTotal: 0, docsReady: 0, supplyTotal: 0, supplyDelivered: 0, openRisks: 0, openIssues: 0, blockers: [], readiness: 'unknown', startNoEarlier: null }
   if (!mine.length) return res
-  const ex = mine.filter((l) => l.targetType === 'exec_activity').map((l) => src.exec.get(l.targetId)).filter((x): x is ExecInfo => !!x)
+  const exl = mine.filter((l) => l.targetType === 'exec_activity').map((l) => ({ e: src.exec.get(l.targetId), w: l.share != null && l.share > 0 ? l.share : 1 })).filter((x): x is { e: ExecInfo; w: number } => !!x.e)
+  const ex = exl.map((x) => x.e)
   if (ex.length) {
-    const ap = ex.map((e) => e.approvedPct).filter((x): x is number => x != null), rp = ex.map((e) => e.reportedPct).filter((x): x is number => x != null)
-    res.execApproved = ap.length ? ap.reduce((a, b) => a + b, 0) / ap.length : null
-    res.execReported = rp.length ? rp.reduce((a, b) => a + b, 0) / rp.length : null
+    // share-weighted (equal weights when no share is set)
+    const wavg = (k: 'approvedPct' | 'reportedPct') => { const xs = exl.filter((x) => x.e[k] != null); const w = xs.reduce((a, x) => a + x.w, 0); return w > 0 ? xs.reduce((a, x) => a + x.w * (x.e[k] as number), 0) / w : null }
+    res.execApproved = wavg('approvedPct')
+    res.execReported = wavg('reportedPct')
     res.execRejectedQty = ex.reduce((a, e) => a + e.rejectedQty, 0)
   }
   const okSet = o.allowRestricted ? DOC_OK_RESTRICTED : DOC_OK
