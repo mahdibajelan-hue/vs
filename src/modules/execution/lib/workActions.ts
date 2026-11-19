@@ -49,7 +49,7 @@ export function resolveLines(lines: ReportLine[], rules: ActionRule[], actions: 
     const bad = mults(r).find((f) => !(Number(l.detail[f]) > 0))
     if (bad) { note(l, key, `فیلد «${bad}» پر نشده`); out.push(l); continue }
     for (const f of mults(r)) k *= Number(l.detail[f])
-    out.push({ ...l, activityId: r.activityId, qty: l.qty * k, approvedQty: l.approvedQty == null ? null : l.approvedQty * k })
+    out.push({ ...l, activityId: r.activityId, qty: l.qty * k, approvedQty: l.approvedQty == null ? null : l.approvedQty * k, employerQty: l.employerQty == null ? null : l.employerQty * k })
   }
   return { lines: out, unmapped: [...miss.values()] }
 }

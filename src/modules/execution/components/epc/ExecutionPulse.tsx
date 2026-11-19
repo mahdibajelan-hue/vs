@@ -31,7 +31,7 @@ export function ExecutionPulse({ m, kind }: { m: ExecutionModel; kind: 'pipeline
   const date = cur?.date ?? m.today
   const atDate = useMemo(() => physicalProgress({ activities: m.activities, baselines: m.baselines, blines: m.blines, reports: m.reports, lines: m.lines, asOf: date, mode: 'approved', groupWeights: m.settings.groupWeights, employer: m.employer }), [m, date])
   const metrics = useMemo(() => {
-    const cum = cumulative(m.reports, m.lines, { until: date, mode: 'approved' })
+    const cum = cumulative(m.reports, m.lines, { until: date, mode: 'approved', employer: m.employer })
     const all = metricTotals(m.activities.filter((a) => a.active && a.approval === 'approved').map((a) => ({ id: a.id, metric: a.metric, baseQty: m.baseOf(a, date), unit: a.unit })), cum)
     const pipeline = new Set(['weld_joint', 'rt_joint', 'coat_joint', 'pipe_m', 'excavation_m', 'lowering_m', 'backfill_m', 'reinstate_m', 'bend_count', 'hydrotest_m'])
     return all.filter((x) => (kind === 'all' ? true : kind === 'pipeline' ? pipeline.has(x.key) : !pipeline.has(x.key)))

@@ -16,6 +16,8 @@ const U = { contractor: 'c0000000-0000-4000-8000-000000000001', site_head: 'c000
 
 const psql = (sql) => execFileSync('docker', ['exec', '-i', 'farin-test', 'psql', '-h', 'localhost', '-U', 'supabase_admin', '-d', 'postgres', '-X', '-q', '-tA', '-v', 'ON_ERROR_STOP=1'], { input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
 const json = (q) => JSON.parse(psql(`select coalesce(json_agg(t), '[]') from (${q}) t;`) || '[]')
+/** the same, read as a signed-in person (functions that check the caller) */
+const jsonAs = (who, q) => JSON.parse(psql(`begin; set local role authenticated; select set_config('request.jwt.claims', '${JSON.stringify({ sub: U[who], role: 'authenticated' })}', true) \\g /dev/null\nselect coalesce(json_agg(t), '[]') from (${q}) t; commit;`).replace(/^[^[]*/, '') || '[]')
 /** run SQL as a signed-in person; returns { ok, error } */
 const as = (who, sql) => {
   try { psql(`begin; set local role authenticated; select set_config('request.jwt.claims', '${JSON.stringify({ sub: U[who], role: 'authenticated' })}', true) \\g /dev/null\n${sql}\ncommit;`); return { ok: true, error: '' } }
@@ -26,7 +28,7 @@ const n = (v) => (v == null ? 0 : Number(v)); const nn = (v) => (v == null ? nul
 function load() {
   const activities = json(`select * from ex_activities where project_id = '${P}' order by sort`).map((r) => ({ id: r.id, projectId: r.project_id, itemNo: r.item_no, title: r.title, unit: r.unit, chapter: r.chapter, kind: r.kind, baseQty: n(r.base_qty), unitPrice: n(r.unit_price), weight: n(r.weight), weightGroup: r.weight_group, plannedStart: r.planned_start, plannedEnd: r.planned_end, active: r.active, approval: r.approval, sort: r.sort, rowNo: r.row_no ?? '', chapterNo: r.chapter_no ?? '', parentActivityId: r.parent_activity_id ?? null, surchargePct: nn(r.surcharge_pct), bookId: r.book_id ?? null, priceItemId: r.price_item_id }))
   const reports = json(`select * from ex_reports where project_id = '${P}'`).map((r) => ({ id: r.id, projectId: r.project_id, formKey: r.form_key, reportNo: r.report_no, reportDate: r.report_date, front: r.front, station: r.station ?? '', status: r.status, contractorOrgId: r.contractor_org_id }))
-  const lines = json(`select l.* from ex_report_lines l join ex_reports r on r.id = l.report_id where r.project_id = '${P}'`).map((r) => ({ id: r.id, reportId: r.report_id, lineNo: r.line_no, activityId: r.activity_id, qty: n(r.qty), kmFrom: nn(r.km_from), kmTo: nn(r.km_to), location: r.location, status: r.status, approvedQty: nn(r.approved_qty), employerStatus: r.employer_status, employerQty: nn(r.employer_qty), sourceReportId: r.source_report_id }))
+  const lines = json(`select l.* from ex_report_lines l join ex_reports r on r.id = l.report_id where r.project_id = '${P}'`).map((r) => ({ id: r.id, reportId: r.report_id, lineNo: r.line_no, activityId: r.activity_id, qty: n(r.qty), kmFrom: nn(r.km_from), kmTo: nn(r.km_to), location: r.location, status: r.status, approvedQty: nn(r.approved_qty), detail: r.detail ?? {}, employerStatus: r.employer_status, employerQty: nn(r.employer_qty), sourceReportId: r.source_report_id }))
   const resources = json(`select x.* from ex_report_resources x join ex_reports r on r.id = x.report_id where r.project_id = '${P}'`).map((r) => ({ reportId: r.report_id, kind: r.kind, name: r.name, activeQty: n(r.active_qty), idleQty: n(r.idle_qty), leaveQty: n(r.leave_qty), stoppedQty: n(r.stopped_qty), repairQty: n(r.repair_qty), hours: n(r.hours) }))
   const stoppages = json(`select x.* from ex_report_stoppages x join ex_reports r on r.id = x.report_id where r.project_id = '${P}'`).map((r) => ({ reportId: r.report_id, category: r.category, hours: n(r.hours) }))
   return { activities, reports, lines, resources, stoppages, baselines: [], blines: [] }
@@ -147,9 +149,10 @@ const forged = d.activities.map((a) => ({ activity_id: a.id, sys: (cumMehr.get(a
 const st2 = as('contractor', `select ex_statement_create('${P}', '${mehr.from}', '${mehr.to}', '${JSON.stringify(forged)}'::jsonb);`)
 const forgedRows = json(`select a.item_no, s.sys_cum, s.unit_price from ex_statement_rows s join ex_activities a on a.id = s.activity_id where s.project_id = '${P}' order by a.sort limit 3`)
 const book = buildStatement(d, { from: mehr.from, to: mehr.to }, (a) => a.baseQty, () => 'اجرا')
-rec('S10', 'صورت‌وضعیت آزمایشی ماه مهر از مقادیر تأییدشده', `${mehr.label}، ${rows.length} ردیف`, 'مقدار سیستمی هر ردیف = تأییدشدهٔ واقعی؛ مقدار جعلی رد شود',
-  { created: st, rowsSample: rows.slice(0, 4), sysEqualsApproved: sysOk, forgedAccepted: st2.ok, forgedRows, workDoneStatementTotal: Math.round(book.grand.cumAmt) }, st.ok && sysOk && !st2.ok,
-  st2.ok ? 'اشکال: سرور مقدار «سیستمی» و فی را از مرورگر می‌پذیرد و با تأییدشده‌ها مقایسه نمی‌کند' : '')
+const forgedStored = forgedRows.some((r) => { const a = d.activities.find((x) => x.itemNo === r.item_no); return !close(n(r.sys_cum), truthMehr[a.id] ?? 0) || !close(n(r.unit_price), a.unitPrice) })
+rec('S10', 'صورت‌وضعیت آزمایشی ماه مهر از مقادیر تأییدشده', `${mehr.label}، ${rows.length} ردیف`, 'مقدار سیستمی هر ردیف = تأییدشدهٔ واقعی؛ مقدار و فی جعلی ذخیره نشود',
+  { created: st, rowsSample: rows.slice(0, 4), sysEqualsApproved: sysOk, forgedCallAccepted: st2.ok, forgedValuesStored: forgedStored, forgedRows, workDoneStatementTotal: Math.round(book.grand.cumAmt) }, st.ok && sysOk && !forgedStored,
+  forgedStored ? 'اشکال: سرور مقدار «سیستمی» و فی را از مرورگر می‌پذیرد و با تأییدشده‌ها مقایسه نمی‌کند' : '')
 psql(`set session_replication_role = replica; delete from ex_statement_rows where project_id = '${P}'; delete from ex_statements where project_id = '${P}';`)
 
 // S11 — binding employer step: does the statement follow the employer-confirmed quantity?
@@ -158,10 +161,13 @@ const empAware = cumulative(d.reports, d.lines, { until: mehr.to, mode: 'approve
 const pageWay = cumulative(d.reports, d.lines, { until: mehr.to, mode: 'approved' })
 const progBinding = physicalProgress({ ...d, asOf: mehr.to, mode: 'approved', employer: 'binding' }).overall
 const progOff = physicalProgress({ ...d, asOf: mehr.to, mode: 'approved' }).overall
+const stB = as('contractor', `select ex_statement_create('${P}', '${mehr.from}', '${mehr.to}', '${JSON.stringify(payload)}'::jsonb);`)
+const weldStmt = n(json(`select s.sys_cum from ex_statement_rows s where s.project_id = '${P}' and s.activity_id = '${wld.id}'`)[0]?.sys_cum)
+psql(`set session_replication_role = replica; delete from ex_statement_rows where project_id = '${P}'; delete from ex_statements where project_id = '${P}';`)
 psql(`update ex_settings set values_json = values_json || '{"employerStep":"advisory"}' where project_id = '${P}';`)
 rec('S11', 'گام الزامی کارفرما در صورت‌وضعیت', 'employerStep = binding', 'صورت‌وضعیت فقط مقدار تأییدشدهٔ کارفرما را بگیرد',
-  { weldingStatementAsPageBuildsIt: pageWay.get(wld.id), weldingEmployerConfirmed: empAware.get(wld.id), progressBinding: +(progBinding * 100).toFixed(2), progressOff: +(progOff * 100).toFixed(2) },
-  close(pageWay.get(wld.id) ?? 0, empAware.get(wld.id) ?? 0), 'صفحهٔ صورت‌وضعیت قرارداد، گزینهٔ employer را به cumulative() نمی‌دهد')
+  { statementCreated: stB, weldingInStatement: weldStmt, weldingEmployerConfirmed: empAware.get(wld.id), weldingSupervisionApproved: pageWay.get(wld.id), progressBinding: +(progBinding * 100).toFixed(2), progressOff: +(progOff * 100).toFixed(2) },
+  stB.ok && close(weldStmt, empAware.get(wld.id) ?? 0), close(weldStmt, empAware.get(wld.id) ?? 0) ? '' : 'صورت‌وضعیت مقدار تأییدشدهٔ ناظر را به‌جای تأیید کارفرما گرفت')
 
 // S12 — traceability: every monthly figure back to its daily reports
 const trace = json(`select r.report_no, r.report_date, r.front, l.qty reported, l.approved_qty approved, l.status from ex_report_lines l join ex_reports r on r.id = l.report_id
@@ -169,5 +175,30 @@ const trace = json(`select r.report_no, r.report_date, r.front, l.qty reported, 
 const traced = trace.filter((t) => t.status === 'approved').reduce((s, t) => s + n(t.approved), 0)
 const fig = activityRows(load(), mehr, base).find((r) => r.activity.id === wld.id).approvedCounted
 rec('S12', 'ردیابی عدد ماهانه تا گزارش روزانه', `جوشکاری ${mehr.label} = ${fig}`, 'جمع ردیف‌های منبع = عدد گزارش', { figure: fig, tracedSum: traced, sources: trace.length, first: trace.slice(0, 3) }, close(fig, traced))
+
+// S13 — lines entered by ACTION (no contract row): the server's conversion must equal the app's resolveLines()
+const exc = d.activities.find((a) => a.itemNo === 'C-02'), bkf = d.activities.find((a) => a.itemNo === 'C-08')
+psql(`insert into ex_work_actions (project_id, key, title, unit, fields, sort, active, billable) values
+  ('${P}', 'trench', 'حفاری کانال', 'm', '[]', 1, true, true), ('${P}', 'bending', 'خمکاری', 'عدد', '[]', 2, true, false) on conflict do nothing;
+  insert into ex_action_map (project_id, action_key, activity_id, factor, when_field, when_value, mult_fields) values
+  ('${P}', 'trench', '${exc.id}', 1, '', '', ''), ('${P}', 'trench', '${bkf.id}', 0.5, 'soil', 'سنگی', 'depthM') on conflict do nothing;`)
+const actRep = '1e000000-0000-4000-8000-0000000000ac'
+const mk = as('site_head', `insert into ex_reports (id, project_id, form_key, report_date, front, status) values ('${actRep}', '${P}', 'work', '2026-10-21', 'جبهه ۲ (KP 10–20)', 'draft');
+  insert into ex_report_lines (report_id, line_no, activity_id, qty, location, detail) values
+   ('${actRep}', 1, null, 100, 'L1', '{"actionKey":"trench","soil":"خاکی"}'),
+   ('${actRep}', 2, null, 40, 'L2', '{"actionKey":"trench","soil":"سنگی","depthM":"2.5"}'),
+   ('${actRep}', 3, null, 30, 'L3', '{"actionKey":"trench","soil":"سنگی","depthM":""}'),
+   ('${actRep}', 4, null, 9, 'L4', '{"actionKey":"bending"}');
+  select ex_report_submit('${actRep}');`)
+as('supervision', `select ex_report_decide_whole('${actRep}', 'approved', '');`)
+d = load()
+const rules = json(`select id, action_key "actionKey", activity_id "activityId", factor::float8 factor, when_field "whenField", when_value "whenValue", mult_fields "multFields" from ex_action_map where project_id = '${P}' order by created_at, id`)
+const acts = json(`select key, billable from ex_work_actions where project_id = '${P}'`)
+const { resolveLines } = await import('../../../src/modules/execution/lib/workActions.ts')
+const appCum = cumulative(d.reports, resolveLines(d.lines.map((l) => ({ ...l, detail: l.detail ?? {} })), rules, acts).lines, { until: '2026-10-22', mode: 'approved' })
+const srv = Object.fromEntries(jsonAs('consultant', `select activity_id, sys_qty from ex_payable_basis('${P}', '2026-10-22')`).map((x) => [x.activity_id, n(x.sys_qty)]))
+const par = d.activities.map((a) => ({ item: a.itemNo, app: appCum.get(a.id) ?? 0, server: srv[a.id] ?? 0 }))
+rec('S13', 'تبدیل «اقدام» به ردیف پیمان: سرور = برنامه', '۴ ردیف اقدامی: پیش‌فرض، شرط+ضریب، فیلد خالی، غیرقابل‌پرداخت', 'مقدار هر ردیف پیمان در سرور و برنامه برابر', { created: mk, parity: par }, mk.ok && par.every((x) => close(x.app, x.server)))
+psql(`set session_replication_role = replica; delete from ex_report_lines where report_id = '${actRep}'; delete from ex_report_versions where report_id = '${actRep}'; delete from ex_report_history where report_id = '${actRep}'; delete from ex_reports where id = '${actRep}'; delete from ex_action_map where project_id = '${P}'; delete from ex_work_actions where project_id = '${P}';`)
 
 console.log(JSON.stringify({ when: new Date().toISOString(), project: P, pass: results.filter((r) => r.pass).length, fail: results.filter((r) => !r.pass).length, results }, null, 1))

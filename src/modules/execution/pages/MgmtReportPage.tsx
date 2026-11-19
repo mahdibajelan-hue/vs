@@ -32,7 +32,7 @@ function Inner({ projectId, sub }: { projectId: string; sub: string }) {
   const per: Period = periodOf(sub === 'mgmt-month' ? 'month' : 'week', anchor, e.settings.weekStart)
   const inPer = e.reports.filter((r) => r.formKey === 'work' && r.reportDate >= per.from && r.reportDate <= per.to)
   const repIds = new Set(inPer.map((r) => r.id))
-  const before = cumulative(e.reports, e.lines, { before: per.from, mode: 'approved' }), upto = cumulative(e.reports, e.lines, { until: per.to, mode: 'approved' })
+  const before = cumulative(e.reports, e.lines, { before: per.from, mode: 'approved', employer: e.employer }), upto = cumulative(e.reports, e.lines, { until: per.to, mode: 'approved', employer: e.employer })
   const rows = e.activities.filter((a) => (upto.get(a.id) ?? 0) > (before.get(a.id) ?? 0)).map((a) => ({ a, inP: (upto.get(a.id) ?? 0) - (before.get(a.id) ?? 0), cum: upto.get(a.id) ?? 0, base: e.baseOf(a, per.to) }))
   const res = e.resources.filter((r) => repIds.has(r.reportId)), man = res.filter((r) => r.kind === 'man'), eq = res.filter((r) => r.kind === 'equip')
   const stops = e.stoppages.filter((s) => repIds.has(s.reportId)), byCat = new Map<string, number>(); for (const s of stops) byCat.set(s.category, (byCat.get(s.category) ?? 0) + s.hours)

@@ -37,7 +37,7 @@ function LinkRows({ projectId }: { projectId: string }) {
   const actions = epc.workActions.filter((a) => a.projectId === projectId)
   const rules = epc.actionRules.filter((r) => r.projectId === projectId)
   const rows = m.ex.activities.filter((a) => a.active && a.approval === 'approved')
-  const cum = useMemo(() => cumulative(m.ex.reports, m.ex.lines, { mode: 'approved' }), [m.ex.reports, m.ex.lines])
+  const cum = useMemo(() => cumulative(m.ex.reports, m.ex.lines, { mode: 'approved', employer: m.ex.employer }), [m.ex.reports, m.ex.lines, m.ex.employer])
   const month = periodOf('month', m.ex.today, m.ex.settings.weekStart)
   const dateOf = useMemo(() => { const d = new Map(m.ex.reports.map((r) => [r.id, r.reportDate])); return (id: string) => d.get(id) ?? '' }, [m.ex.reports])
   const raw = useMemo(() => [...m.ex.linesByReport.values()].flat(), [m.ex.linesByReport])
@@ -100,8 +100,9 @@ function Monthly({ projectId }: { projectId: string }) {
   const draft = sts.find((s) => s.status === 'draft')
   const acts = m.ex.activities.filter((a) => a.active && a.approval === 'approved').sort((a, b) => a.sort - b.sort)
   const bookTitle = (id: string | null) => ex.books.find((b) => b.id === id)?.title ?? 'بدون فهرست‌بها'
-  // system values: supervision-approved quantities up to the period end, with the action links already applied
-  const payload = () => { const cum = cumulative(m.ex.reports, m.ex.lines, { until: period.to, mode: 'approved' }); return acts.map((a) => ({ activity_id: a.id, sys: cum.get(a.id) ?? 0, unit_price: a.unitPrice, base_qty: m.ex.baseOf(a, period.to) })) }
+  // the rows of the statement; the database fills their quantity, rate and contract quantity itself (ex_payable_basis, 046) — the values sent here are
+  // what the page shows until then (approved, with the binding employer step only what the employer confirmed)
+  const payload = () => { const cum = cumulative(m.ex.reports, m.ex.lines, { until: period.to, mode: 'approved', employer: m.ex.employer }); return acts.map((a) => ({ activity_id: a.id, sys: cum.get(a.id) ?? 0, unit_price: a.unitPrice, base_qty: m.ex.baseOf(a, period.to) })) }
   const lines = useMemo(() => (st ? epc.statementLines.filter((l) => l.statementId === st.id) : []), [epc.statementLines, st])
   const byAct = new Map(lines.map((l) => [l.activityId, l]))
   const rowsAll: { a: (typeof acts)[number]; l: (typeof lines)[number]; r: StRow }[] = acts.flatMap((a) => { const l = byAct.get(a.id); return l ? [{ a, l, r: { activityId: a.id, unitPrice: l.unitPrice, baseQty: l.baseQty, sys: l.sys, req: l.req, con: l.con, prevSys: l.prevSys, prevReq: l.prevReq, prevCon: l.prevCon } }] : [] })
