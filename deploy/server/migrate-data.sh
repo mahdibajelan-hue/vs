@@ -103,7 +103,7 @@ count_rows() { # one line per table: "name rows"
 if [ "$FRESH" != files ]; then
   if [ "$FRESH" = yes ]; then
     say "3/9 Copying the table structure (tables, functions, access rules)"
-    src_dump --schema-only --schema=public > "$WORK/schema.sql"
+    src_dump --schema-only --schema=public > "$WORK/schema.sql" 2>"$WORK/dump.log" || { tail -5 "$WORK/dump.log"; die "Could not read the table structure from the cloud - try again."; }
     sed -i -E 's/^CREATE SCHEMA ("?public"?);/CREATE SCHEMA IF NOT EXISTS public;/' "$WORK/schema.sql"
     # roles the cloud has and this server does not (only those the structure mentions) are created without login
     for r in $(comm -23 <(src -tAc "select rolname from pg_roles where rolname !~ '^pg_' order by 1") <(dst -tAc "select rolname from pg_roles order by 1")); do
@@ -124,7 +124,8 @@ if [ "$FRESH" != files ]; then
   copy_common auth.identities
 
   say "5/9 Copying the rows of all tables"
-  src_dump --data-only --schema=public > "$WORK/data.sql"
+  # pg_dump warns about tables that refer to each other; harmless here (rows go in with checks paused), so kept in a log
+  src_dump --data-only --schema=public > "$WORK/data.sql" 2>"$WORK/dump.log" || { tail -5 "$WORK/dump.log"; die "Could not read the rows from the cloud - try again."; }
   ok "downloaded $(du -h "$WORK/data.sql" | cut -f1)"
   { echo "set session_replication_role = replica;"; cat "$WORK/data.sql"; } | dst_in --single-transaction -f - >/dev/null
   # the one stored address that points at the cloud (a profile photo) now points at this server
@@ -137,7 +138,7 @@ fi
 app_storage_triggers() { # $1=enable|disable
   dst -c "do \$\$ declare r record; begin for r in select t.tgname from pg_trigger t join pg_proc p on p.oid = t.tgfoid join pg_namespace pn on pn.oid = p.pronamespace where t.tgrelid = 'storage.objects'::regclass and pn.nspname = 'public' and not t.tgisinternal loop execute format('alter table storage.objects $1 trigger %I', r.tgname); end loop; end \$\$;"
 }
-trap 'app_storage_triggers enable >/dev/null 2>&1 || true' EXIT
+trap 'app_storage_triggers enable >/dev/null 2>&1 || true; rm -f "$WORK/data.sql"' EXIT   # data.sql holds every row and password hash
 app_storage_triggers disable
 
 say "6/9 Copying the uploaded files (about 250 MB - this takes a while)"
@@ -175,7 +176,7 @@ if diff -q "$WORK/count-cloud.txt" "$WORK/count-server.txt" >/dev/null; then
   same=yes
 else
   warn "differences (cloud | server) - a few are normal if someone was using the system during the copy:"
-  diff "$WORK/count-cloud.txt" "$WORK/count-server.txt" | grep '^[<>]' | head -20 | sed 's/^/      /'
+  diff "$WORK/count-cloud.txt" "$WORK/count-server.txt" | grep '^[<>]' | head -20 | sed 's/^/      /' || true   # diff exits 1 when they differ
   same=no
 fi
 
