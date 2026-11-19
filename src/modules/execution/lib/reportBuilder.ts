@@ -8,11 +8,13 @@ import type { Activity, Baseline, BaselineLine, Report, ReportLine, ReportResour
 import { activityRows, byDimension, dailyMatrix, resourceSummary, statusSummary, stoppageSummary } from './periodReport'
 import { deviationDrivers, physicalProgress, plannedOverall, type EmployerMode } from './progress'
 import { jalaliText, type Period } from './periods'
+import { drDisciplines, drLocations, drNarrative, drRegisters, drResources, type CsData, type DrTable } from './stationDr'
 
-export type SectionKey = 'summary' | 'volumes' | 'daily' | 'fronts' | 'resources' | 'stoppages' | 'deviation' | 'status' | 'payable'
+export type SectionKey = 'summary' | 'volumes' | 'daily' | 'fronts' | 'resources' | 'stoppages' | 'deviation' | 'status' | 'payable' | 'disciplines' | 'locations' | 'registers' | 'narrative' | 'crew' | 'fleet'
 export const SECTION_LABEL: Record<SectionKey, string> = {
   summary: 'خلاصهٔ مدیریتی', volumes: 'احجام اجرایی به تفکیک فعالیت', daily: 'کارکرد روزانه', fronts: 'عملکرد جبهه‌های کاری', resources: 'نیروی انسانی و ماشین‌آلات',
   stoppages: 'توقفات و علل', deviation: 'انحراف از برنامه (عوامل اصلی)', status: 'وضعیت گزارش‌ها و تأییدها', payable: 'مبنای صورت‌وضعیت (تأییدشده × فی)',
+  disciplines: 'روکش احجام به تفکیک دیسیپلین', locations: 'احجام به تفکیک محل اجرا', registers: 'ثبت‌های ایستگاه (پایپینگ، مکانیکال)', narrative: 'اهم فعالیت‌ها و موانع', crew: 'نیروی انسانی به تفکیک بخش', fleet: 'ماشین‌آلات به تفکیک گروه',
 }
 export type PeriodMode = 'day' | 'week' | 'month' | 'range'
 export interface ReportType { key: string; label: string; period: PeriodMode; sections: SectionKey[] }
@@ -29,6 +31,7 @@ export const REPORT_TYPES: ReportType[] = [
   { key: 'stoppages', label: 'گزارش مشکلات و موانع', period: 'range', sections: ['stoppages', 'status'] },
   { key: 'contractor', label: 'گزارش عملکرد پیمانکار', period: 'range', sections: ['summary', 'fronts', 'stoppages', 'status'] },
   { key: 'payable', label: 'گزارش اطلاعات صورت‌وضعیت', period: 'range', sections: ['payable', 'volumes'] },
+  { key: 'station_daily', label: 'گزارش روزانهٔ ایستگاه (قالب DR)', period: 'day', sections: ['summary', 'disciplines', 'locations', 'registers', 'narrative', 'crew', 'fleet'] },
 ]
 export const typeOf = (k: string) => REPORT_TYPES.find((t) => t.key === k) ?? REPORT_TYPES[2]
 
@@ -40,6 +43,8 @@ export interface BuiltReport { title: string; period: { from: string; to: string
 export interface BuildCtx {
   activities: Activity[]; reports: Report[]; lines: ReportLine[]; resources: ReportResource[]; stoppages: Stoppage[]
   baselines: Baseline[]; blines: BaselineLine[]; baseOf: (a: Activity, asOf: string) => number; employer: EmployerMode; groupWeights?: Record<string, number>
+  /** the compressor-station registers, for the DR's piping / mechanical rows */
+  cs?: CsData
 }
 export interface PayRow { activityId: string; qty: number; unitPrice: number }
 
@@ -94,6 +99,12 @@ export function buildReport(src: BuildCtx, p: Period, type: ReportType, sections
     if (s === 'deviation') tables.push({ key: s, title: SECTION_LABEL[s], head: ['ردیف', 'فعالیت', 'برنامه‌ای', 'واقعی', 'سهم از انحراف کل (واحد درصد)'],
       rows: deviationDrivers({ ...c, asOf: p.to, groupWeights: c.groupWeights, employer: c.employer }).slice(0, 12).map((d) => [{ v: d.activity.itemNo }, { v: d.activity.title }, { v: pctS(d.planned), n: true }, { v: pctS(d.actual), n: true }, { v: r2(d.points * 100), n: true }]) })
     if (s === 'status') { const st = statusSummary(ctx, p); tables.push({ key: s, title: SECTION_LABEL[s], head: ['موضوع', 'وضعیت', 'تعداد'], rows: [...Object.entries(st.reports).map(([k, v]) => [{ v: 'گزارش' }, { v: STATUS_FA[k] ?? k }, { v, n: true }]), ...Object.entries(st.lines).map(([k, v]) => [{ v: 'ردیف کارکرد' }, { v: STATUS_FA[k] ?? k }, { v, n: true }])] as Cell[][] }) }
+    if (s === 'disciplines' || s === 'locations' || s === 'registers' || s === 'narrative' || s === 'crew' || s === 'fleet') {
+      const dc = { ...c, baseOf: c.baseOf }
+      const t: DrTable | null = s === 'disciplines' ? drDisciplines(dc, p) : s === 'locations' ? drLocations(dc, p) : s === 'registers' ? (c.cs ? drRegisters(c.cs, p) : null) : s === 'narrative' ? drNarrative(dc, p) : drResources(dc, p, s === 'crew' ? 'man' : 'equip')
+      if (t) tables.push({ key: s, title: t.title, head: t.head, rows: t.rows, note: t.note })
+      continue
+    }
     if (s === 'payable') {
       const acts = new Map(c.activities.map((a) => [a.id, a]))
       const rows = (pay ?? []).filter((x) => x.qty > 0 && acts.has(x.activityId))

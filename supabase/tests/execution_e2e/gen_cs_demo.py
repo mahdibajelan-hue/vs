@@ -9,9 +9,10 @@ U = lambda: str(uuid.UUID(int=rnd.getrandbits(128), version=4))
 q = lambda s: "'" + str(s).replace("'", "''") + "'"
 d0 = date(2026, 6, 1)
 day = lambda n: (d0 + timedelta(days=n)).isoformat()
-out = [f"delete from cs_history where project_id='{P}'; delete from cs_welds where project_id='{P}'; delete from cs_spools where project_id='{P}'; delete from cs_lines where project_id='{P}'; delete from cs_equipment where project_id='{P}'; delete from cs_test_packs where project_id='{P}';"]
-systems = [('TP-01', 'مکش کمپرسور (Suction)', 'hydro', 135), ('TP-02', 'دهش کمپرسور (Discharge)', 'hydro', 165), ('TP-03', 'کولرهای گاز', 'hydro', 165), ('TP-04', 'گاز سوخت', 'hydro', 90),
-           ('TP-05', 'هوای ابزار', 'pneumatic', 11), ('TP-06', 'آب آتش‌نشانی', 'hydro', 21), ('TP-07', 'درین بسته', 'hydro', 15), ('TP-08', 'گاز بلودان / فلر', 'pneumatic', 8)]
+out = [f"delete from cs_inspections where project_id='{P}'; delete from cs_qc_settings where project_id='{P}'; delete from cs_history where project_id='{P}'; delete from cs_welds where project_id='{P}'; delete from cs_spools where project_id='{P}'; delete from cs_lines where project_id='{P}'; delete from cs_equipment where project_id='{P}'; delete from cs_test_packs where project_id='{P}';"]
+systems = [('TP-01', 'مکش کمپرسور (Suction)', 'hydro', 180), ('TP-02', 'دهش کمپرسور (Discharge)', 'hydro', 180), ('TP-03', 'کولرهای گاز', 'hydro', 165), ('TP-04', 'گاز سوخت', 'hydro', 115),
+           ('TP-05', 'هوای ابزار', 'pneumatic', 15), ('TP-06', 'آب آتش‌نشانی', 'hydro', 24), ('TP-07', 'درین بسته', 'hydro', 15), ('TP-08', 'گاز بلودان / فلر', 'pneumatic', 12)]
+design = {'PG': [100, 120], 'FG': [75], 'IA': [10], 'FW': [16], 'CD': [10]}
 packs = []
 for no, sysn, med, pr in systems:
     pid = U(); packs.append(pid)
@@ -28,7 +29,7 @@ for i in range(46):
     s = rnd.choice(sizes); lid = U(); no = f'{s}"-{code}-{1000 + i * 7}'
     ndt = 100 if code in ('PG', 'FG') else rnd.choice([10, 20, 100])
     pack = packs[rnd.choice(pack_of[code])]
-    out.append(f"insert into cs_lines (id, project_id, line_no, service, size_in, spec_class, material, area, iso_no, design_press_bar, ndt_pct, test_pack_id) values ({q(lid)}, {q(P)}, {q(no)}, {q(srv)}, {size(s)}, {q(rnd.choice(['CS600', 'CS900', 'CS150']))}, {q('API 5L X60' if size(s) >= 8 else 'ASTM A106 B')}, {q(rnd.choice(areas))}, {q(f'ISO-{1000 + i * 7}-0{rnd.randint(1,3)}')}, {rnd.choice([75, 100, 120])}, {ndt}, {q(pack)});")
+    out.append(f"insert into cs_lines (id, project_id, line_no, service, size_in, spec_class, material, area, iso_no, design_press_bar, ndt_pct, test_pack_id) values ({q(lid)}, {q(P)}, {q(no)}, {q(srv)}, {size(s)}, {q(rnd.choice(['CS600', 'CS900', 'CS150']))}, {q('API 5L X60' if size(s) >= 8 else 'ASTM A106 B')}, {q(rnd.choice(areas))}, {q(f'ISO-{1000 + i * 7}-0{rnd.randint(1,3)}')}, {rnd.choice(design[code])}, {ndt}, {q(pack)});")
     lines.append((lid, no, size(s), ndt))
     progress = rnd.random()  # how far this line is
     sp_ids = []
@@ -73,4 +74,26 @@ out.append(f"update cs_welds w set fitup_date=coalesce(fitup_date, '2026-08-01')
 out.append(f"update cs_test_packs set punch_a=0, status='tested', test_date='2026-09-01' where id={q(packs[5])};")
 out.append(f"update cs_welds w set fitup_date=coalesce(fitup_date, '2026-08-01'), weld_date=coalesce(weld_date, greatest(coalesce(fitup_date, '2026-08-01'::date) + 2, '2026-08-10'::date)), welder=case when welder='' then 'WD-03' else welder end, ndt_result=case when ndt_result='reject' then 'accept' else ndt_result end from cs_lines l where l.id=w.line_id and l.test_pack_id={q(packs[4])};")
 out.append(f"update cs_test_packs set punch_a=0 where id={q(packs[4])};")
+# NDT selection on the partial-extent lines: the examined welds count as picked (random); one progressive pick
+out.append(f"update cs_welds w set ndt_selected = true, ndt_reason = 'random' from cs_lines l where l.id = w.line_id and l.ndt_pct < 100 and (w.ndt_result <> 'pending' or w.repair_count > 0);")
+# QC rules and ITP inspections of the other disciplines
+out.append(f"insert into cs_qc_settings (project_id, rules) values ({q(P)}, '{{\"locationClass\":\"station\",\"testFactor\":1.5,\"welderRejectLimit\":0.05}}') on conflict (project_id) do update set rules = excluded.rules;")
+insp = [
+  ('civil', 'civ_pour', 'area', 'فونداسیون K-101', '{"slump":100,"temp":29,"cubes":6,"rebarOk":true}', 'accept'),
+  ('civil', 'civ_pour', 'area', 'فونداسیون صاعقه‌گیر', '{"slump":140,"temp":34,"cubes":3,"rebarOk":true}', 'reject'),
+  ('civil', 'civ_strength', 'area', 'فونداسیون K-101', '{"age":28,"results":"32.5 31.8 33.1"}', 'accept'),
+  ('civil', 'civ_strength', 'area', 'اسلیپر هدر اصلی', '{"age":7,"results":"18.2 19.5 17.9"}', 'pending'),
+  ('civil', 'civ_compaction', 'area', 'محوطه — بستر جاده', '{"results":"96 97 94.5 98"}', 'pending'),
+  ('painting', 'pnt_surface', 'other', 'اسپول‌های واحد ۱', '{"grade":"Sa 2.5","profile":"55 62 70","rh":72,"dewOk":true}', 'accept'),
+  ('painting', 'pnt_dft', 'other', 'اسپول‌های واحد ۱ — پرایمر', '{"coat":"پرایمر","readings":"82 95 78 88 91"}', 'accept'),
+  ('painting', 'pnt_dft', 'other', 'اسپول‌های کولر — لایه میانی', '{"coat":"میانی","readings":"58 70 66"}', 'pending'),
+  ('painting', 'pnt_adhesion', 'other', 'اسپول‌های واحد ۱', '{"results":"6.2 7.1 5.8"}', 'accept'),
+  ('electrical', 'ele_ir', 'other', 'کابل MV-101', '{"cable":"MV-101","voltage":5000,"results":"2500 1800 2100"}', 'accept'),
+  ('electrical', 'ele_earth', 'area', 'شبکهٔ زمین واحد کمپرسور', '{"result":0.8}', 'accept'),
+  ('instrument', 'ins_cal', 'other', 'PT-1101', '{"tag":"PT-1101","errors":"0.1 -0.2 0.3 0.1"}', 'pending'),
+  ('mechanical', 'mec_level', 'equipment', 'K-101', '{"results":"0.02 0.03 0.04"}', 'accept'),
+  ('mechanical', 'mec_align', 'equipment', 'K-101', '{"offset":0.04,"angular":0.07}', 'reject'),
+]
+for i, (d, k, st, lbl, vals, res) in enumerate(insp):
+    out.append(f"insert into cs_inspections (project_id, discipline, itp_key, subject_type, subject_label, insp_date, hold_point, values, result, report_no, inspector) values ({q(P)}, {q(d)}, {q(k)}, {q(st)}, {q(lbl)}, {q(day(150 + i))}, 'W', {q(vals)}, {q(res)}, {q(f'QC-{d[:3].upper()}-{i + 1:03d}')}, 'بازرس QC');")
 print('\n'.join(x for x in out if x))

@@ -309,3 +309,12 @@
 .cs-pack-nums { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--im-muted-2); }
 .cs-pack-nums b { color: var(--im-text); font-variant-numeric: tabular-nums; }
 .cs-reasons { margin: 0; padding-inline-start: 18px; font-size: 12px; color: #f59e0b; display: grid; gap: 2px; }
+.cs-pick { padding: 14px 16px; display: grid; gap: 10px; }
+.cs-pick header { display: flex; justify-content: space-between; align-items: center; }
+.cs-pick-group { display: grid; gap: 6px; }
+.cs-pick-group > span { font-size: 12px; font-weight: 800; color: var(--im-muted-2); }
+.cs-pick-group > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.cs-rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.cs-rules label { display: grid; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--im-muted-2); }
+.cs-rules select, .cs-rules input:not([type=checkbox]) { min-height: 38px; border-radius: 10px; border: 1px solid var(--im-line); background: var(--im-panel-2); color: var(--im-text); padding: 0 10px; font: inherit; }
+.cs-rules label > span { display: inline-flex; align-items: center; gap: 8px; color: var(--im-text); min-height: 38px; }

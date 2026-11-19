@@ -26,7 +26,7 @@ type Sub = { id: string; label: string }
 /** `only`: the tab exists in that scope alone (the pipeline weld file is kilometre-based; a station's welds live in its spool register) */
 const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[]; only?: 'pipeline' | 'station' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
-  { id: 'station', label: 'ایستگاه: پایپینگ، تجهیزات، تست‌پک', icon: Factory, color: '#6366f1', only: 'station', subs: [{ id: 'dash', label: 'خلاصهٔ ایستگاه' }, { id: 'lines', label: 'لاین‌ها و اسپول‌ها' }, { id: 'welds', label: 'سرجوش‌ها (اینچ‌قطر)' }, { id: 'equipment', label: 'نصب تجهیزات' }, { id: 'packs', label: 'تست‌پک‌ها' }] },
+  { id: 'station', label: 'ایستگاه: پایپینگ، تجهیزات، تست‌پک', icon: Factory, color: '#6366f1', only: 'station', subs: [{ id: 'dash', label: 'خلاصهٔ ایستگاه' }, { id: 'lines', label: 'لاین‌ها و اسپول‌ها' }, { id: 'welds', label: 'سرجوش‌ها (اینچ‌قطر)' }, { id: 'equipment', label: 'نصب تجهیزات' }, { id: 'packs', label: 'تست‌پک‌ها' }, { id: 'qc', label: 'کنترل کیفیت (B31.8 / IGS)' }] },
   { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'کارکرد روزانه' }, { id: 'forms', label: 'فرم‌های فنی اجرایی (ریسه، خمکاری، خاکی، …)' }, { id: 'designed', label: 'فرم‌های طراحی‌شده' }, { id: 'today', label: 'امروز در کارگاه' }] },
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
   { id: 'welds', label: 'سرجوش‌ها (پروندهٔ جوش)', icon: Flame, color: '#f43f5e', only: 'pipeline' },

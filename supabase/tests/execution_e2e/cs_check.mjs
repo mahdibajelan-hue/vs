@@ -13,7 +13,7 @@ const res = []
 const check = (id, title, pass, note = '') => res.push({ id, title, pass: !!pass, note })
 
 // clean slate for this script's own rows (test DB only)
-psql(`delete from cs_history where project_id='${P}'; delete from cs_welds where project_id='${P}'; delete from cs_spools where project_id='${P}'; delete from cs_lines where project_id='${P}'; delete from cs_equipment where project_id='${P}'; delete from cs_test_packs where project_id='${P}';`)
+psql(`delete from cs_inspections where project_id='${P}'; delete from cs_qc_settings where project_id='${P}'; delete from cs_history where project_id='${P}'; delete from cs_welds where project_id='${P}'; delete from cs_spools where project_id='${P}'; delete from cs_lines where project_id='${P}'; delete from cs_equipment where project_id='${P}'; delete from cs_test_packs where project_id='${P}';`)
 
 // C01 — the contractor records lines, a pack, spools and welds
 let r = as('contractor', `
@@ -90,5 +90,26 @@ check('C12', 'تاریخچهٔ تغییرات و قفل پروژه', h.length >=
 r = as('supervision', `delete from cs_welds where id='a0000000-0000-4000-8000-0000000000d3' returning id`)
 const still = json(`select id from cs_welds where id='a0000000-0000-4000-8000-0000000000d3'`).length
 check('C13', 'حذف ممکن نیست؛ فقط بایگانی', still === 1, r.error || r.out)
+
+// ── 051: quality control ──
+r = as('contractor', `update cs_welds set ndt_selected=true, ndt_reason='random' where id='a0000000-0000-4000-8000-0000000000d3'`)
+const r2 = as('supervision', `update cs_welds set ndt_selected=true, ndt_reason='random' where id='a0000000-0000-4000-8000-0000000000d3'`)
+check('Q01', 'انتخاب جوش برای NDT فقط با کنترل کیفیت', !r.ok && r.error.includes('ndt_reviewer_only') && r2.ok, `${r.error} | ${r2.error}`)
+r = as('contractor', `insert into cs_qc_settings (project_id, rules) values ('${P}', '{"testFactor":1.1}')`)
+const s2 = as('supervision', `insert into cs_qc_settings (project_id, rules) values ('${P}', '{"testFactor":1.5}')`)
+check('Q02', 'قواعد کیفیت را پیمانکار تغییر نمی‌دهد', !r.ok && s2.ok, `${r.error} | ${s2.error}`)
+r = as('contractor', `insert into cs_inspections (id, project_id, discipline, itp_key, insp_date, values) values ('a0000000-0000-4000-8000-0000000000e1', '${P}', 'painting', 'pnt_dft', '2026-10-08', '{"readings":"80 90 100"}')`)
+const acc = as('contractor', `update cs_inspections set result='accept' where id='a0000000-0000-4000-8000-0000000000e1'`)
+const sup = as('supervision', `update cs_inspections set result='accept' where id='a0000000-0000-4000-8000-0000000000e1'`)
+const locked = as('contractor', `update cs_inspections set values='{"readings":"20"}' where id='a0000000-0000-4000-8000-0000000000e1'`)
+check('Q03', 'بازرسی ITP: پیمانکار ثبت می‌کند، نظارت تصمیم می‌گیرد، پس از تصمیم مقادیر قفل است', r.ok && !acc.ok && acc.error.includes('itp_reviewer_only') && sup.ok && !locked.ok && locked.error.includes('itp_decided'), `${r.error} | ${acc.error} | ${sup.error} | ${locked.error}`)
+// a second pack whose test pressure is under 1.5 × design pressure is refused
+psql(`insert into cs_test_packs (id, project_id, pack_no, test_press_bar) values ('a0000000-0000-4000-8000-0000000000a2', '${P}', 'TP-002', 100);
+insert into cs_lines (id, project_id, line_no, size_in, ndt_pct, design_press_bar, test_pack_id) values ('a0000000-0000-4000-8000-0000000000b3', '${P}', '4"-FG-3001', 4, 100, 75, 'a0000000-0000-4000-8000-0000000000a2');`)
+const low = as('supervision', `update cs_test_packs set status='tested', test_date='2026-10-12' where id='a0000000-0000-4000-8000-0000000000a2'`)
+const ok2 = as('supervision', `update cs_test_packs set test_press_bar=112.5 where id='a0000000-0000-4000-8000-0000000000a2'; update cs_test_packs set status='tested', test_date='2026-10-12' where id='a0000000-0000-4000-8000-0000000000a2'`)
+check('Q04', 'فشار هیدروتست کمتر از ۱٫۵ برابر فشار طراحی پذیرفته نمی‌شود', !low.ok && low.error.includes('pack_pressure_low') && ok2.ok, `${low.error} | ${ok2.error}`)
+const hist = json(`select count(*)::int n from cs_history where project_id='${P}' and entity in ('cs_inspections','cs_qc_settings')`)[0].n
+check('Q05', 'تاریخچهٔ بازرسی‌ها و قواعد ثبت می‌شود', hist >= 3, String(hist))
 
 console.log(JSON.stringify({ passed: res.filter((x) => x.pass).length, total: res.length, results: res }, null, 1))

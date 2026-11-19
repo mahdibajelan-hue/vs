@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { rowScope, SCOPE_FA } from '../../../lib/projectProfile'
 import { CS_METRICS } from '../lib/csCore'
+import { missingDrRows } from '../lib/stationDr'
 import { ScheduleBacklink } from '../../scheduling/components/ScheduleBacklink'
 import { Check, Copy, Download, FilePlus2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react'
 import { useExecutionStore } from '../store/useExecutionStore'
@@ -83,6 +84,12 @@ function ActivitiesView({ projectId }: { projectId: string }) {
     if (!rowsIn.length) { window.alert('ردیفی با ستون‌های «شماره ردیف» و «شرح» پیدا نشد.'); return }
     if (window.confirm(`${fa(rowsIn.length)} فعالیت به پروژه افزوده شود؟`)) await ex.importActivities(projectId, rowsIn)
   }
+  const addDrRows = async () => {
+    const add = missingDrRows(m.activities)
+    if (!add.length) { window.alert('همهٔ ردیف‌های ساختار ایستگاه در این پروژه هست.'); return }
+    if (!window.confirm(`${fa(add.length)} ردیف (دیسیپلین، محل اجرا و بسته کاری گزارش روزانهٔ ایستگاه) بدون مقدار و بها افزوده شود؟ مقدار پیمان و وزن را بعداً وارد کنید.`)) return
+    await ex.importActivities(projectId, add.map((r, i) => ({ itemNo: `DR-${String(i + 1).padStart(3, '0')}`, title: r.title, unit: r.unit, chapter: r.chapter, area: r.area, baseQty: 0, unitPrice: 0, weight: 0, weightGroup: '', kind: 'standard' as ActivityKind, sort: m.activities.length + i + 1 })))
+  }
   const cols: Col<Activity>[] = [
     { key: 'rn', label: 'ردیف', render: (a) => (a.rowNo ? <span className="fn-code">{a.rowNo}</span> : '—') },
     { key: 'i', label: 'کد فهرست', render: (a) => <span className="strong fn-code">{a.itemNo}</span>, sort: (a) => a.itemNo },
@@ -119,6 +126,7 @@ function ActivitiesView({ projectId }: { projectId: string }) {
           <button className="im-btn im-btn-sm" onClick={() => void writeXlsx(m.activities.map((a) => ({ 'شماره ردیف': a.itemNo, 'شرح': a.title, 'واحد': a.unit, 'فصل': a.chapter, 'نوع': ACTIVITY_KIND_LABEL_FA[a.kind], 'مقدار مبنا': a.baseQty, 'بهای واحد': a.unitPrice, 'وزن': a.weight, 'مبنای وزن': a.weightGroup, 'بخش': a.area, 'جبهه': a.front, 'ایستگاه': a.station })), 'فعالیت‌های-پروژه.xlsx', 'فعالیت‌ها')}><Download size={13} /> اکسل</button>
           {canEdit && <><input ref={fileRef} type="file" accept=".xlsx,.xls" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = '' }} /><button className="im-btn im-btn-sm" onClick={() => fileRef.current?.click()}><Upload size={13} /> ورود از اکسل</button>
             <button className="im-btn im-btn-sm" onClick={() => setImp(true)}><Upload size={13} /> ورود فهرست‌بها و مقادیر پیمان</button>
+            {m.kind !== 'pipeline' && <button className="im-btn im-btn-sm" title="ردیف‌های گزارش روزانهٔ ایستگاه (دیسیپلین، محل اجرا، بسته کاری) بدون مقدار؛ مقدار پیمان را بعداً وارد کنید" onClick={() => void addDrRows()}><FilePlus2 size={13} /> ساختار گزارش روزانهٔ ایستگاه (DR)</button>}
             <button className="im-btn im-btn-sm" onClick={() => setPicker(true)}><FilePlus2 size={13} /> افزودن از فهرست‌بها</button>
             <button className="im-btn im-btn-primary im-btn-sm" onClick={() => setForm({})}><Plus size={14} /> ردیف خاص / دستی</button></>}
         </span>

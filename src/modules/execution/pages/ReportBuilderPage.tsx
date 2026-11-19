@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCsStore } from '../store/useCsStore'
 import { CheckCircle2, Download, FileCheck2, Printer, Save, ShieldCheck, Trash2 } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 import { openPrintDocument } from '../../../lib/printWindow'
@@ -66,8 +67,14 @@ export function ReportBuilderPage({ projectId }: { projectId: string }) {
     return () => { live = false }
   }, [sections, projectId, period.to])
 
-  const report = useMemo(() => buildReport({ activities: m.activities, reports: m.reports, lines: m.lines, resources: m.resources, stoppages: m.stoppages, baselines: m.baselines, blines: m.blines, baseOf: m.baseOf, employer: m.employer, groupWeights: m.settings.groupWeights },
-    period, type, sections, filters, pay), [m.activities, m.reports, m.lines, m.resources, m.stoppages, m.baselines, m.blines, m.employer, period, type, sections, filters, pay]) // eslint-disable-line react-hooks/exhaustive-deps
+  // the station registers (compressor-station projects) feed the DR's piping and mechanical rows
+  const hasCs = sections.includes('registers')
+  const csLoad = useCsStore((x) => x.load)
+  useEffect(() => { if (hasCs) void csLoad(projectId) }, [hasCs, projectId, csLoad])
+  const csLines = useCsStore((x) => x.lines), csSpools = useCsStore((x) => x.spools), csWelds = useCsStore((x) => x.welds), csEq = useCsStore((x) => x.equipment), csPacks = useCsStore((x) => x.packs), csRules = useCsStore((x) => x.rules)
+  const cs = useMemo(() => ({ lines: csLines, spools: csSpools, welds: csWelds, equipment: csEq, packs: csPacks, rules: csRules }), [csLines, csSpools, csWelds, csEq, csPacks, csRules])
+  const report = useMemo(() => buildReport({ activities: m.activities, reports: m.reports, lines: m.lines, resources: m.resources, stoppages: m.stoppages, baselines: m.baselines, blines: m.blines, baseOf: m.baseOf, employer: m.employer, groupWeights: m.settings.groupWeights, cs: hasCs ? cs : undefined },
+    period, type, sections, filters, pay), [m.activities, m.reports, m.lines, m.resources, m.stoppages, m.baselines, m.blines, m.employer, period, type, sections, filters, pay, cs, hasCs]) // eslint-disable-line react-hooks/exhaustive-deps
   const name = (id: string | null) => (id ? ex.people.get(id) ?? '—' : '')
   const metaFor = (d: Doc | null, t: Tpl | null): DocMeta => {
     const hist = d ? docs.filter((x) => x.docKey === d.docKey).sort((a, b) => a.revision - b.revision).map((x) => ({ revision: x.revision, date: dt(x.preparedAt), reason: x.reason, status: x.status })) : []
@@ -119,7 +126,7 @@ export function ReportBuilderPage({ projectId }: { projectId: string }) {
     <div style={{ display: 'grid', gap: 12 }}>
       <div className="im-card" style={{ padding: 12, display: 'grid', gap: 10 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <label>نوع گزارش <select value={typeKey} onChange={(e) => { setTypeKey(e.target.value); setTplId('') }}>{REPORT_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select></label>
+          <label>نوع گزارش <select value={typeKey} onChange={(e) => { setTypeKey(e.target.value); setTplId('') }}>{REPORT_TYPES.filter((t) => t.key !== 'station_daily' || m.kind !== 'pipeline').map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select></label>
           {type.period === 'range' ? <><label>از <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label><label>تا <input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label></>
             : <label>{type.period === 'day' ? 'روز' : type.period === 'week' ? 'هفتهٔ شامل' : 'ماه شامل'} <input type="date" value={anchor} onChange={(e) => setAnchor(e.target.value)} /> <small className="sub">{period.label}</small></label>}
           <label>جبهه <select value={front} onChange={(e) => setFront(e.target.value)}><option value="">همه</option>{fronts.map((f) => <option key={f} value={f}>{f}</option>)}</select></label>

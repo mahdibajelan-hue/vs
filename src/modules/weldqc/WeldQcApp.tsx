@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react'
-import { BookOpenCheck, CheckCircle2, ClipboardList, FileWarning, Flame, Gauge, LayoutDashboard, Loader2, PaintRoller, Radar, ScanSearch, ShieldCheck, XCircle, type LucideIcon } from 'lucide-react'
+import { hasScope, projectKind } from '../../lib/projectProfile'
+import { StationQcTabs } from '../execution/pages/StationQc'
+import { BookOpenCheck, CheckCircle2, ClipboardList, Factory, FileWarning, Flame, Gauge, LayoutDashboard, Loader2, PaintRoller, Radar, ScanSearch, ShieldCheck, XCircle, type LucideIcon } from 'lucide-react'
 import { useProjectContextStore } from '../../store/useProjectContextStore'
 import { useModuleStore } from '../../store/useModuleStore'
 import { useMasterDataStore } from '../masterdata/store/useMasterDataStore'
@@ -43,7 +45,7 @@ const CoatingRecords = lazy(() => import('../testing/TestingApp').then((m) => ({
 const NcrPage = lazy(() => import('../execution/pages/QcPage').then((m) => ({ default: m.QcPage })))
 const FormsPage = lazy(() => import('../execution/pages/DailyPage').then((m) => ({ default: m.DailyPage })))
 
-export type QcTab = 'home' | 'dash' | 'joints' | 'log' | 'welders' | 'repairs' | 'criteria' | 'assistant' | 'wps' | 'search' | 'filmuse' | 'coating' | 'jointqc' | 'linecoat' | 'electrical' | 'coatcrit' | 'pretest' | 'ncr' | 'capa' | 'kpi' | 'forms' | 'guide'
+export type QcTab = 'home' | 'dash' | 'joints' | 'log' | 'welders' | 'repairs' | 'criteria' | 'assistant' | 'wps' | 'search' | 'filmuse' | 'coating' | 'jointqc' | 'linecoat' | 'electrical' | 'coatcrit' | 'pretest' | 'ncr' | 'capa' | 'kpi' | 'forms' | 'guide' | 'csqc'
 /** kept for the weld pages, which navigate inside their own area */
 export type WqTab = QcTab
 type Area = { k: string; label: string; icon: LucideIcon; color: string; tabs: [QcTab, string][] }
@@ -55,12 +57,13 @@ const AREAS: Area[] = [
   { k: 'pretest', label: 'پیش‌تست قطعات', icon: Gauge, color: '#14b8a6', tabs: [['pretest', 'پیش‌تست قطعات عبوری']] },
   { k: 'ncr', label: 'NCR و عدم انطباق', icon: FileWarning, color: '#ef4444', tabs: [['ncr', 'NCR و مغایرت‌ها']] },
   { k: 'capa', label: 'بهبود کیفیت (CAPA)', icon: Radar, color: '#f97316', tabs: [['capa', 'اقدام اصلاحی و پیشگیرانه (CAPA / RCA)'], ['kpi', 'شاخص‌های کیفیت و تحلیل عیوب']] },
+  { k: 'station', label: 'ایستگاه تقویت فشار (B31.8 / IGS)', icon: Factory, color: '#6366f1', tabs: [['csqc', 'NDT، جوشکاران، ITP و قواعد']] },
   { k: 'forms', label: 'فرم‌ها و گزارش‌های کیفی', icon: ClipboardList, color: '#eab308', tabs: [['forms', 'صدور فرم‌ها']] },
   { k: 'guide', label: 'راهنما', icon: BookOpenCheck, color: '#64748b', tabs: [['guide', 'راهنما']] },
 ]
 const ALL_TABS = AREAS.flatMap((a) => a.tabs.map((t) => t[0]))
 const areaOf = (t: QcTab) => AREAS.find((a) => a.tabs.some((x) => x[0] === t)) ?? AREAS[0]
-const EX_TABS = new Set<QcTab>(['home', 'ncr', 'forms'])
+const EX_TABS = new Set<QcTab>(['home', 'ncr', 'forms', 'csqc'])
 const HT_TABS = new Set<QcTab>(['home', 'linecoat', 'electrical', 'coatcrit', 'jointqc', 'pretest'])
 
 /**
@@ -93,7 +96,11 @@ export function WeldQcApp({ onExitToHub }: { onExitToHub: () => void; onBackToRa
   const go = (t: QcTab, f?: string) => { clearFocusWelder(); setTab(t); setOpen(null); if (f) setFilter(f) }
   const weld = open ? st.welds.find((w) => w.id === open) ?? null : null
   const missing = !!st.error && /wq_|does not exist|relation/.test(st.error)
+  // the project's profile: a compressor station has no line-coating / crossing-pipe areas; station QC shows where there is a station
+  const kind = projectKind(project?.projectType)
+  const areas = AREAS.filter((a) => (a.k === 'station' ? hasScope(kind, 'station') : ['jcoat', 'lcoat', 'pretest'].includes(a.k) ? hasScope(kind, 'pipeline') : true))
   const area = areaOf(tab)
+  useEffect(() => { if (project && !areas.some((a) => a.k === area.k)) setTab('home') }, [project, areas, area, setTab])
   const isWeld = area.k === 'weld'
 
   const body = () => {
@@ -120,6 +127,7 @@ export function WeldQcApp({ onExitToHub }: { onExitToHub: () => void; onBackToRa
       case 'capa': return <QcCapa onOpenWeld={setOpen} />
       case 'kpi': return <QcKpi />
       case 'forms': return <div className="im-root fn-root mt-root ex-root qc-embed">{exLoaded ? <FormsPage projectId={projectId} sub="forms" scope="qc" /> : <div className="wq-skel"><span /></div>}</div>
+      case 'csqc': return <div className="im-root fn-root mt-root ex-root qc-embed">{exLoaded ? <StationQcTabs projectId={projectId} /> : <div className="wq-skel"><span /></div>}</div>
       case 'guide': return <WqGuide onGo={go} />
     }
   }
@@ -134,7 +142,7 @@ export function WeldQcApp({ onExitToHub }: { onExitToHub: () => void; onBackToRa
         <div className="ps-top-end"><ModuleHeaderActions onExitToHub={onExitToHub} hideModuleHome onGuide={() => go('guide')} guideActive={tab === 'guide'} /></div>
       </header>
       <NavScroller label="بخش‌های کنترل کیفیت"><nav className="ps-tabs wq-tabs" role="tablist" aria-label="بخش‌های کنترل کیفیت">
-        {AREAS.map((a) => (
+        {areas.map((a) => (
           <button key={a.k} type="button" role="tab" aria-selected={area.k === a.k && !weld} className={`ps-tab ${area.k === a.k && !weld ? 'is-on' : ''}`} style={{ '--qc': a.color } as CSSProperties} onClick={() => go(a.tabs[0][0])}><a.icon size={15} aria-hidden />{a.label}</button>
         ))}
       </nav></NavScroller>

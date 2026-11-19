@@ -14,8 +14,16 @@ export interface CsWeld {
   id: string; projectId: string; lineId: string; spoolId: string | null; weldNo: string; location: 'shop' | 'field'; jointType: 'BW' | 'SW' | 'FW' | 'BR'
   sizeIn: number; thkMm: number | null; material: string; wps: string; welder: string; fitupDate: string | null; weldDate: string | null
   ndtMethod: string; ndtResult: NdtResult; ndtDate: string | null; ndtReport: string; repairCount: number; note: string; archived: boolean
+  /** picked for NDT on a line with partial extent (migration 051); set by QC only */
+  ndtSelected?: boolean; ndtReason?: '' | 'random' | 'progressive' | 'client' | 'extent'
 }
 export interface CsEquipment { id: string; projectId: string; tag: string; title: string; kind: string; area: string; weightT: number | null; steps: Record<string, string>; note: string; archived: boolean }
+export interface CsInspection {
+  id: string; projectId: string; discipline: 'civil' | 'painting' | 'electrical' | 'instrument' | 'mechanical' | 'piping'; itpKey: string
+  subjectType: 'area' | 'line' | 'spool' | 'equipment' | 'weld' | 'pack' | 'other'; subjectId: string | null; subjectLabel: string
+  inspDate: string; holdPoint: '' | 'H' | 'W' | 'R' | 'S'; values: Record<string, unknown>; result: 'pending' | 'accept' | 'reject'
+  reportNo: string; inspector: string; note: string; archived: boolean
+}
 export interface CsTestPack { id: string; projectId: string; packNo: string; system: string; medium: 'hydro' | 'pneumatic' | 'service'; testPressBar: number | null; status: PackStatus; punchA: number; punchB: number; testDate: string | null; reinstatedDate: string | null; note: string; archived: boolean }
 
 // ── spools ──────────────────────────────────────────────────────────────
