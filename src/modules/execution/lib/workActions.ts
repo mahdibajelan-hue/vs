@@ -79,3 +79,8 @@ export function resolveLines(lines: ReportLine[], rules: ActionRule[], actions: 
   }
   return { lines: out, unmapped: [...miss.values()] }
 }
+
+const PIPELINE_KEYS = new Set(DEFAULT_ACTIONS.map((a) => a.key)), STATION_KEYS = new Set(STATION_ACTIONS.map((a) => a.key))
+/** The actions offered in a scope: the other scope's default set is hidden; a project's own actions show in both. */
+export const actionInScope = (key: string, scope: 'pipeline' | 'station' | 'all') =>
+  scope === 'all' || (scope === 'station' ? !PIPELINE_KEYS.has(key) : !STATION_KEYS.has(key))

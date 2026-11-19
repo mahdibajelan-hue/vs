@@ -57,7 +57,7 @@ export const FACILITY_FA: Record<Facility, string> = {
   petrochem: 'پتروشیمی', storage: 'مخازن و ذخیره‌سازی', control: 'سامانهٔ پایش و کنترل', other: 'سایر',
 }
 const FACILITY_WORDS: [Facility, RegExp][] = [
-  ['compressor', /تقویت فشار|کمپرسور|تراکم/],
+  ['compressor', /تقویت فشار|کمپرسور|تراکم|compressor/i],
   ['refinery', /پالایشگاه|پالایش نفت/],
   ['petrochem', /پتروشیمی|متانول|اوره|آمونیاک/],
   ['gas_plant', /شیرین[‌ ]?سازی|فرآورش|بازیافت گوگرد|NGL|پالایش گاز|نم[‌ ]?زدایی/i],

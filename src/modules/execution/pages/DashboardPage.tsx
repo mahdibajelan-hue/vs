@@ -16,6 +16,7 @@ import { useEpcModel } from '../lib/useEpcModel'
 import { RoleDesk } from '../components/RoleDesk'
 import { DriversTable } from '../components/DriversTable'
 import { pressable } from '../../../lib/pressable'
+import { ScopeSplit } from '../components/ScopeSplit'
 
 export function DashboardPage({ projectId, onGo }: { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }) {
   const m = useExecutionModel(projectId)
@@ -38,6 +39,7 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; sub: str
     <div style={{ display: 'grid', gap: 12 }}>
       <PhotoRotator projectId={projectId} height={240} onOpenGallery={() => onGo('photos')} />
       <RoleDesk m={m} onGo={onGo} />
+      {m.kind === 'hybrid' && m.scopeView === 'all' && <ScopeSplit projectId={projectId} kind={m.kind} total={m.approved.overall} />}
       <div className="fn-kpis">
         <KpiCard i={0} label="پیشرفت فیزیکی (تأییدشده)" value={pct(m.approved.overall)} tone="good" sub={m.planned.overall != null ? `برنامه ${pct(m.planned.overall)}` : undefined} />
         <KpiCard i={1} label="انحراف از برنامه" value={dev == null ? '—' : `${dev > 0 ? '+' : ''}${(dev * 100).toLocaleString('fa-IR', { maximumFractionDigits: 1 })}٪`} tone={dev == null ? 'neutral' : dev < -0.05 ? 'bad' : dev < 0 ? 'warn' : 'good'} onClick={() => onGo('progress')} />

@@ -17,6 +17,8 @@ export interface Activity {
   active: boolean; approval: ActivityApproval; approvalNote: string; sort: number; note: string
   /** the row's own number in the estimate (ردیف), the size range, the estimate's remark, the chapter number, the price book it came from and — for a surcharge — the row it is added to */
   rowNo: string; spec: string; remark: string; chapterNo: string; bookId: string | null; parentActivityId: string | null; surchargePct: number | null
+  /** pipeline | station in a hybrid project; null = the project's main scope */
+  scope?: 'pipeline' | 'station' | null
 }
 export interface Baseline { id: string; projectId: string; version: number; status: 'draft' | 'approved'; reason: string; effectiveDate: string; createdAt: string; approvedAt: string | null }
 export interface BaselineLine { id: string; baselineId: string; activityId: string; itemNo: string; title: string; unit: string; baseQty: number; weight: number; unitPrice: number; weightGroup: string; active: boolean }
@@ -27,6 +29,8 @@ export interface Report {
   id: string; projectId: string; formKey: string; reportNo: string; reportDate: string; contractorOrgId: string | null; front: string; station: string; shift: string
   status: ReportStatus; data: Record<string, unknown>; notes: string; missing: string[]; completionOf: string | null; dueDate: string | null
   createdBy: string | null; createdAt: string; submittedBy: string | null; submittedAt: string | null; reviewedBy: string | null; reviewedAt: string | null; reviewNote: string
+  /** pipeline | station in a hybrid project; null = the project's main scope */
+  scope?: 'pipeline' | 'station' | null
   /** names and logos of the parties frozen at first submission (historical letterhead) */
   letterhead?: Record<string, { name: string; logo: string }> | null
 }

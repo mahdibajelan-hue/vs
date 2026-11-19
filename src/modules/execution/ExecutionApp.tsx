@@ -17,15 +17,18 @@ import { PortfolioStrip } from './components/epc/PortfolioStrip'
 import { ExecutionGuide } from './components/ExecutionGuide'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 import { useRemembered } from '../../lib/navMemory'
+import { scopeViews, SCOPE_VIEW_FA, PROJECT_KIND_FA, type ScopeView } from '../../lib/projectProfile'
+import { useProjectScope, useScopeStore } from './store/useScopeStore'
 
 export const EXECUTION_ACCENT = '#f97316'
 export type ExTab = 'dashboard' | 'daily' | 'review' | 'welds' | 'progress' | 'outlook' | 'plan' | 'assistant' | 'reports' | 'gaps' | 'qc' | 'photos' | 'settings'
 type Sub = { id: string; label: string }
-const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[] }[] = [
+/** `only`: the tab exists in that scope alone (the pipeline weld file is kilometre-based; a station's welds live in its spool register) */
+const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[]; only?: 'pipeline' | 'station' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
   { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'کارکرد روزانه' }, { id: 'forms', label: 'فرم‌های فنی اجرایی (ریسه، خمکاری، خاکی، …)' }, { id: 'designed', label: 'فرم‌های طراحی‌شده' }, { id: 'today', label: 'امروز در کارگاه' }] },
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
-  { id: 'welds', label: 'سرجوش‌ها (پروندهٔ جوش)', icon: Flame, color: '#f43f5e' },
+  { id: 'welds', label: 'سرجوش‌ها (پروندهٔ جوش)', icon: Flame, color: '#f43f5e', only: 'pipeline' },
   { id: 'progress', label: 'پیشرفت فیزیکی', icon: TrendingUp, color: '#14b8a6' },
   { id: 'outlook', label: 'پیش‌بینی اتمام پروژه', icon: Hourglass, color: '#a855f7', subs: [{ id: 'dash', label: 'داشبورد اتمام' }, { id: 'acts', label: 'فعالیت‌ها و کارکرد آتی' }, { id: 'crew', label: 'بهره‌وری اکیپ‌ها' }, { id: 'civil', label: 'ماشین‌آلات سیویل' }, { id: 'setup', label: 'تعاریف و تنظیمات' }, { id: 'guide', label: 'راهنما' }] },
   { id: 'plan', label: 'برنامهٔ کوتاه‌مدت و آمادگی', icon: CalendarRange, color: '#0ea5e9', subs: [{ id: 'lookahead', label: 'برنامهٔ سه‌هفته‌ای' }, { id: 'readiness', label: 'آمادگی فعالیت‌ها' }, { id: 'import', label: 'ورود برنامه از اکسل' }] },
@@ -82,6 +85,10 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   }, [projects, projectId, contextProjectId])
   useEffect(() => { resetModuleScroll(); revealTab('.im-nav-tab[aria-selected="true"]') }, [tab, subs])
 
+  const { kind, view } = useProjectScope(projectId)
+  const setView = useScopeStore((s) => s.setView)
+  const nav = useMemo(() => NAV.filter((n) => !n.only || view === 'all' || n.only === view), [view])
+  useEffect(() => { if (!nav.some((n) => n.id === tab)) setTab('dashboard') }, [nav, tab, setTab])
   const todayOn = useExecutionStore((s) => !!(s.settingsByProject.get(projectId ?? '') as unknown as { flags?: { today?: boolean } } | undefined)?.flags?.today)
   const cur0 = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
   const cur = useMemo(() => (cur0.subs ? { ...cur0, subs: cur0.subs.filter((x) => x.id !== 'today' || todayOn) } : cur0), [cur0, todayOn]) // experimental views stay hidden until their flag is on
@@ -130,11 +137,14 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
             {projects.length > 0 && (locked
               ? <span className="im-select-pill" style={{ pointerEvents: 'none' }} title={projects.find((p) => p.id === projectId)?.officialName}>{projects.find((p) => p.id === projectId)?.officialName}</span>
               : <select className="im-select-pill" value={projectId ?? ''} onChange={(e) => setProjectId(e.target.value || null)} aria-label="پروژه">{projects.map((p) => <option key={p.id} value={p.id}>{p.officialName}</option>)}</select>)}
+            {projectId && kind === 'hybrid'
+              ? <div className="im-seg ex-scope" role="radiogroup" aria-label="محدودهٔ اجرا">{scopeViews(kind).map((v: ScopeView) => <button key={v} role="radio" aria-checked={view === v} className={view === v ? 'on' : ''} onClick={() => setView(projectId, v)}>{SCOPE_VIEW_FA[v]}</button>)}</div>
+              : projectId && kind === 'compressor_station' && <span className="im-select-pill ex-scope-pill" title="نوع پروژه در شناسنامهٔ پروژه">{PROJECT_KIND_FA[kind]}</span>}
             <ModuleHeaderActions onExitToHub={onExitToHub} onBackToRadar={onBackToRadar} onGuide={() => setGuide((g) => !g)} guideActive={guide} />
           </div>
         </div>
         <NavScroller label="بخش‌های مدیریت اجرا"><nav className="im-nav" role="tablist" aria-label="بخش‌های مدیریت اجرا">
-          {NAV.map((n) => { const b = projectId ? badge(n.id) : 0; return (
+          {nav.map((n) => { const b = projectId ? badge(n.id) : 0; return (
             <button key={n.id} role="tab" aria-selected={tab === n.id} className="im-nav-tab" style={{ ['--c' as string]: n.color }} onClick={() => setTab(n.id)}>
               <n.icon size={15} aria-hidden />{n.label}{b > 0 && <span className="im-nav-count" aria-label={`${b} مورد`}>{b.toLocaleString('fa-IR')}</span>}
             </button>

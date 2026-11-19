@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ProjectKindSelect } from '../components/ProjectKindSelect'
 import { AlignLeft, ArrowRight, Banknote, IdCard } from 'lucide-react'
 import { PALETTE } from '../lib/colors'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
@@ -75,7 +76,7 @@ function IdentityTab({ project }: { project: MasterProject }) {
           <Field label="نام کوتاه"><input className="md-input" value={d.shortName} onChange={(e) => set('shortName', e.target.value)} /></Field>
           <Field label="کد پروژه" hint={`شناسهٔ سامانه: ${project.projectIdCode}`}><input className="md-input md-num" dir="ltr" value={d.projectCode} onChange={(e) => set('projectCode', e.target.value)} /></Field>
           <Field label="وضعیت"><select className="md-input" value={d.status} onChange={(e) => set('status', e.target.value as ProjectLifecycleStatus)}>{PROJECT_LIFECYCLE_STATUSES.map((s) => <option key={s} value={s}>{PROJECT_STATUS_LABEL_FA[s]}</option>)}</select></Field>
-          <div className="grid grid-cols-2 gap-3"><Field label="نوع پروژه"><input className="md-input" value={d.projectType} onChange={(e) => set('projectType', e.target.value)} placeholder="مثلاً خط لوله" /></Field><Field label="دسته"><input className="md-input" value={d.projectCategory} onChange={(e) => set('projectCategory', e.target.value)} /></Field></div>
+          <div className="grid grid-cols-2 gap-3"><Field label="نوع پروژه" hint="ماژول اجرا، کنترل کیفیت و دوقلوی دیجیتال بر همین اساس باز می‌شوند."><ProjectKindSelect value={d.projectType} onChange={(v) => set('projectType', v)} /></Field><Field label="دسته"><input className="md-input" value={d.projectCategory} onChange={(e) => set('projectCategory', e.target.value)} /></Field></div>
           <Field label="پورتفولیو"><select className="md-input" value={d.portfolioId} onChange={(e) => set('portfolioId', e.target.value)}><option value="">بدون انتخاب</option>{portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
           <Field label="طرح"><select className="md-input" value={d.programId} onChange={(e) => set('programId', e.target.value)}><option value="">بدون انتخاب</option>{progs.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></Field>
         </div>

@@ -4,6 +4,7 @@ import {
 } from './industryIcons'
 import { PROJECT_SCOPED_MODULES, type ModuleKey } from '../../../store/useModuleStore'
 import type { MasterProject } from '../../../modules/masterdata/types'
+import { projectKind, type ProjectKind } from '../../../lib/projectProfile'
 
 /**
  * اتاق فرمان پروژه — what lives inside the radar (project-scoped modules), grouped the way a project team thinks.
@@ -19,6 +20,8 @@ export interface ProjectNavItem {
   accent: string
   /** shown as a sub-item of another entry (e.g. quality control, tests and stations under execution) */
   parent?: string
+  /** the project profiles the entry belongs to (default: every profile) */
+  kinds?: ProjectKind[]
 }
 export interface ProjectNavGroup { id: string; label: string; items: ProjectNavItem[] }
 
@@ -37,7 +40,7 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
     { id: 'execution', module: 'execution', label: 'مدیریت اجرا', icon: IcConstruction, accent: '#fb923c' },
     { id: 'weldqc', module: 'weldqc', label: 'کنترل کیفیت', icon: IcQuality, accent: '#0891b2', parent: 'execution' },
     { id: 'testing', module: 'testing', label: 'آزمایش‌ها (هیدروتست)', icon: IcHydrotest, accent: '#0ea5e9', parent: 'execution' },
-    { id: 'stationpiping', module: 'stationpiping', label: 'ایستگاه‌ها (پایپینگ و جوشکاری)', icon: IcPiping, accent: '#6366f1', parent: 'execution' },
+    { id: 'stationpiping', module: 'stationpiping', label: 'ایستگاه‌های مسیر (شیر، لانچر، رسیور)', icon: IcPiping, accent: '#6366f1', parent: 'execution', kinds: ['pipeline', 'hybrid'] },
     { id: 'pssr', module: 'pssr', label: 'آمادگی راه‌اندازی (PSSR)', icon: IcStartup, accent: '#f97316' },
   ] },
   { id: 'money', label: 'قرارداد و هزینه', items: [
@@ -53,10 +56,16 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
   ] },
   { id: 'assets', label: 'زمین و دارایی', items: [
     { id: 'landacq', module: 'landacq', label: 'تملک و آزادسازی اراضی', icon: IcLand, accent: '#84cc16' },
-    { id: 'pipepulse', module: 'pipepulse', label: 'PipePulse', icon: IcPipePulse, accent: '#0ea5e9' },
-    { id: 'twin', module: 'pipelinedigitaltwin', label: 'دوقلوی دیجیتال', icon: IcTwin, accent: '#38bdf8' },
+    { id: 'pipepulse', module: 'pipepulse', label: 'PipePulse', icon: IcPipePulse, accent: '#0ea5e9', kinds: ['pipeline', 'hybrid'] },
+    { id: 'twin', module: 'pipelinedigitaltwin', label: 'دوقلوی دیجیتال', icon: IcTwin, accent: '#38bdf8', kinds: ['pipeline', 'hybrid'] },
   ] },
 ]
+
+/** The menu of one project: entries that do not belong to its profile (pipeline, compressor station, hybrid) are left out. */
+export function navFor(p: Pick<MasterProject, 'projectType'> | null | undefined): ProjectNavGroup[] {
+  const k = projectKind(p?.projectType)
+  return PROJECT_NAV.map((g) => ({ ...g, items: g.items.filter((i) => !i.kinds || i.kinds.includes(k)) })).filter((g) => g.items.length)
+}
 
 /** Modules reached only through the radar (they are no longer tiles on the home page). */
 export const PROJECT_MODULES = PROJECT_SCOPED_MODULES

@@ -9,6 +9,7 @@ import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { fmtD } from '../../finance/components/fn'
 import { useExecutionStore, type LineInput } from '../store/useExecutionStore'
 import type { ExecutionModel } from '../lib/useExecutionModel'
+import { primaryScope, rowScope, scopeTerms, writeScope } from '../../../lib/projectProfile'
 import { FORM_BY_KEY, STOPPAGE_CATEGORY_FA, type FieldDef } from '../lib/formCatalog'
 import { mergeCatalog, resUsed, toRow, type ResRow } from '../lib/resourceCatalog'
 import { computeMetrics, cumulativeMetrics, inconsistenciesForReport, missingForReport } from '../lib/forms'
@@ -22,7 +23,7 @@ import { ActivityPicker } from './ActivityPicker'
 import { ActionLines } from './ActionLines'
 import { SignaturesCard } from './SignaturesCard'
 import { ReportPhotos } from '../photos/PhotoParts'
-import { actionOf } from '../lib/workActions'
+import { actionInScope, actionOf } from '../lib/workActions'
 import { ResourcePanel } from './ResourcePanel'
 import { CrewLogsPanel, type CrewDraft } from './epc/CrewLogsPanel'
 import { useEpcStore } from '../store/useEpcStore'
@@ -57,6 +58,9 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const mm = useMaterialModel(m.projectId)
   const shortMats = useMemo(() => mm.materials.filter((x) => (mm.positions.get(x.id)?.siteGap ?? 0) > 0).sort((a, b) => (mm.positions.get(b.id)?.uncoveredGap ?? 0) - (mm.positions.get(a.id)?.uncoveredGap ?? 0)).slice(0, 80), [mm.materials, mm.positions])
   const frontOpts = useLookupOptions(m.projectId, 'front', r?.front)
+  // the report's scope (pipeline or compressor station) decides the location words and whether kilometres are asked
+  const repScope = r ? rowScope(r.scope, m.kind) : (writeScope(m.kind, m.scopeView) ?? primaryScope(m.kind))
+  const terms = scopeTerms(repScope)
   const stationOpts = useLookupOptions(m.projectId, 'facility', r?.station)
 
   const [head, setHead] = useState(() => ({ reportDate: r?.reportDate ?? m.today, front: r?.front ?? '', station: r?.station ?? '', shift: r?.shift ?? 'day', contractorOrgId: r?.contractorOrgId ?? projectParties(project, orgs).contractor?.id ?? '', notes: r?.notes ?? '' }))
@@ -241,7 +245,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   }, [welds, lineWelds, m.reports, m.lines, m.projectId])
   const actionOn = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { actionEntry?: boolean } } | undefined)?.flags?.actionEntry
   const allActions = useEpcStore((x) => x.workActions)
-  const actions = useMemo(() => allActions.filter((a) => a.projectId === m.projectId && a.active).sort((a, b) => a.sort - b.sort), [allActions, m.projectId])
+  const actions = useMemo(() => allActions.filter((a) => a.projectId === m.projectId && a.active && (m.kind !== 'hybrid' || actionInScope(a.key, repScope))).sort((a, b) => a.sort - b.sort), [allActions, m.projectId, m.kind, repScope])
   const [pickAction, setPickAction] = useState('')
   const allRules = useEpcStore((x) => x.actionRules)
   const actionRules = useMemo(() => allRules.filter((x) => x.projectId === m.projectId), [allRules, m.projectId])
@@ -343,7 +347,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
           {parties.contractor && head.contractorOrgId === parties.contractor.id
             ? <label>پیمانکار<input readOnly value={parties.contractor.name} title="از اطلاعات پایهٔ پروژه" dir="auto" /></label>
             : <label>پیمانکار *<select disabled={!editable} value={head.contractorOrgId} onChange={(e) => setH('contractorOrgId', e.target.value)}><option value="">—</option>{orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>{!parties.contractor && <small className="im-helper">پیمانکار پروژه در «اطلاعات پایه» تعریف نشده است.</small>}</label>}
-          <label>جبهه کاری *<select disabled={!editable} value={head.front} onChange={(e) => setH('front', e.target.value)}><option value="">—</option>{frontOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
+          <label>{terms.front} *<select disabled={!editable} value={head.front} onChange={(e) => setH('front', e.target.value)}><option value="">—</option>{frontOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
           <label>ایستگاه / محدوده<select disabled={!editable} value={head.station} onChange={(e) => setH('station', e.target.value)}><option value="">—</option>{stationOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
           <label>شیفت<select disabled={!editable} value={head.shift} onChange={(e) => setH('shift', e.target.value)}><option value="day">روز</option><option value="night">شب</option></select></label>
           {form && <label>وضعیت آب‌وهوا *<select disabled={!editable} value={String(data.weather ?? '')} onChange={(e) => setD('weather', e.target.value)}><option value="">—</option>{WEATHER.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>}
@@ -385,16 +389,16 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
         </div>
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}>
           {!form && actionOn ? (
-            <ActionLines rows={rows} actions={actions} locked={lockedLine} editable={editable} cum={actionCum} onPatch={patchRow} onDetail={patchDetail} onCopy={copyRow} onDelete={delRow} />
+            <ActionLines rows={rows} actions={actions} locked={lockedLine} editable={editable} cum={actionCum} onPatch={patchRow} onDetail={patchDetail} onCopy={copyRow} onDelete={delRow} km={terms.km} placeLabel={terms.place} />
           ) : !form ? (
             <table className="ex-lines">
-              <thead><tr><th>#</th><th>فعالیت (ردیف فهرست‌بها)</th><th>محل / کیلومتر</th><th className="num">کارکرد امروز *</th><th>تجمعی</th><th>توضیحات</th><th>وضعیت</th><th /></tr></thead>
+              <thead><tr><th>#</th><th>فعالیت (ردیف فهرست‌بها)</th><th>{terms.place}</th><th className="num">کارکرد امروز *</th><th>تجمعی</th><th>توضیحات</th><th>وضعیت</th><th /></tr></thead>
               <tbody>{rows.length === 0 ? <tr><td colSpan={8} className="fn-empty">هنوز ردیفی نیست. فعالیت را از بالا انتخاب کنید.</td></tr> : rows.map((l, i) => { const a = l.activityId ? m.actById.get(l.activityId) : undefined; const prev = l.activityId ? before.get(l.activityId) ?? 0 : 0; const others = l.activityId ? (upToday.get(l.activityId) ?? 0) - prev : 0; const base = a ? m.baseOf(a, head.reportDate) : 0; const total = prev + others + l.qty
                 return (
                   <tr key={l.key} className={lockedLine(l) ? 'locked' : undefined}>
                     <td>{fa(i + 1)}</td>
                     <td style={{ minWidth: 220 }}>{a ? <><b>{a.title}</b><span className="sub fn-code">{a.rowNo ? `ردیف ${a.rowNo} · ` : ''}{a.itemNo} · {a.unit}{a.kind !== 'standard' ? ' · ★' : ''}{a.parentActivityId ? ' · اضافه‌بها' : ''}</span></> : <span className="ex-bad">فعالیت انتخاب نشده</span>}{l.id && a && epcAvailable && <LineForms lineId={l.id} activityId={a.id} projectId={m.projectId} reportId={reportId} head={head} model={m} editable={editable} />}</td>
-                    <td style={{ minWidth: 190 }}><div style={{ display: 'grid', gap: 3 }}><input disabled={lockedLine(l)} placeholder="محل دقیق" value={l.location} onChange={(e) => patchRow(l.key, { location: e.target.value })} dir="auto" aria-label="محل" /><span style={{ display: 'flex', gap: 3 }}><DecInput className="" value={l.kmFrom ?? 0} onValue={(n) => !lockedLine(l) && patchRow(l.key, { kmFrom: n || null })} label="کیلومتر از" placeholder="km از" /><DecInput className="" value={l.kmTo ?? 0} onValue={(n) => !lockedLine(l) && patchRow(l.key, { kmTo: n || null })} label="کیلومتر تا" placeholder="km تا" /></span></div></td>
+                    <td style={{ minWidth: 190 }}><div style={{ display: 'grid', gap: 3 }}><input disabled={lockedLine(l)} placeholder="محل دقیق" value={l.location} onChange={(e) => patchRow(l.key, { location: e.target.value })} dir="auto" aria-label="محل" />{terms.km && <span style={{ display: 'flex', gap: 3 }}><DecInput className="" value={l.kmFrom ?? 0} onValue={(n) => !lockedLine(l) && patchRow(l.key, { kmFrom: n || null })} label="کیلومتر از" placeholder="km از" /><DecInput className="" value={l.kmTo ?? 0} onValue={(n) => !lockedLine(l) && patchRow(l.key, { kmTo: n || null })} label="کیلومتر تا" placeholder="km تا" /></span>}</div></td>
                     <td className="num" style={{ minWidth: 100 }}>{lockedLine(l) ? <b>{fa(l.qty, 3)}</b> : <DecInput value={l.qty} onValue={(n) => patchRow(l.key, { qty: n })} label="کارکرد امروز" />}{l.status === 'approved' && l.approvedQty != null && l.approvedQty !== l.qty && <small className="ex-warn" style={{ display: 'block' }}>تأییدشده: {fa(l.approvedQty, 3)}</small>}</td>
                     <td style={{ minWidth: 150 }}><div className="ex-cum"><span>تا روز قبل: <b>{fa(prev, 2)}</b></span><span>تجمعی جدید: <b>{fa(total, 2)}</b></span><span>باقی‌مانده: <b className={overRows.has(l.key) ? 'ex-bad' : undefined}>{base ? fa(base - total, 2) : '—'}</b> {a?.unit}</span>{overRows.has(l.key) && <span className="ex-bad">بیش از مقدار مبنا ({fa(base, 2)})</span>}</div></td>
                     <td style={{ minWidth: 140 }}><input disabled={lockedLine(l)} value={l.note} onChange={(e) => patchRow(l.key, { note: e.target.value })} dir="auto" aria-label="توضیح" />{l.sourceReportId && <small className="sub">پیش‌پر از فرم فنی</small>}</td>

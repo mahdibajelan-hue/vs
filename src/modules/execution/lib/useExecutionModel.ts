@@ -5,13 +5,15 @@ import { executionCore } from './executionCore'
 import { detectGaps } from './completeness'
 import { progressCurve, effectiveBase } from './progress'
 import type { Activity } from '../types'
+import { useProjectScope } from '../store/useScopeStore'
 
 /** One project's execution data with every derived figure — progress, planned progress, curve, detected gaps — computed once from the stored daily reports. */
 export function useExecutionModel(projectId: string | null) {
   const st = useExecutionStore()
+  const { kind, view } = useProjectScope(projectId)
   const epcWelds = useEpcStore((x) => x.welds), epcLineWelds = useEpcStore((x) => x.lineWelds), epcRules = useEpcStore((x) => x.actionRules), epcActions = useEpcStore((x) => x.workActions)
   return useMemo(() => {
-    const core = executionCore(st, { welds: epcWelds, lineWelds: epcLineWelds, actionRules: epcRules, workActions: epcActions }, projectId ?? '')
+    const core = executionCore(st, { welds: epcWelds, lineWelds: epcLineWelds, actionRules: epcRules, workActions: epcActions }, projectId ?? '', undefined, { kind, view })
     const { pid, settings, today, activities, baselines, blines, reports, repIds, base, approved, registered, planned, employer } = core
     let lines = core.enteredLines
     const resources = st.resources.filter((r) => repIds.has(r.reportId))
@@ -28,7 +30,7 @@ export function useExecutionModel(projectId: string | null) {
     const maps = st.maps.filter((m) => m.projectId === pid)
     const detected = detectGaps({ today, settings, reports, lines, resources, activities, baselines, blines, maps })
     const baseOf = (a: Activity, asOf = today) => effectiveBase(a, baselines, blines, asOf).baseQty
-    return { employer, projectId: pid, settings, today, activities, baselines, blines, reports, lines, resources, stoppages, history, gaps, maps, actById, linesByReport, unmappedActions: core.unmappedActions, approved, registered, planned, curve, detected, baseOf, people: st.people }
-  }, [st.settingsByProject, st.activities, st.baselines, st.blines, st.reports, st.lines, st.resources, st.stoppages, st.history, st.gaps, st.maps, st.people, epcWelds, epcLineWelds, epcRules, epcActions, projectId])
+    return { kind, scopeView: view, employer, projectId: pid, settings, today, activities, baselines, blines, reports, lines, resources, stoppages, history, gaps, maps, actById, linesByReport, unmappedActions: core.unmappedActions, approved, registered, planned, curve, detected, baseOf, people: st.people }
+  }, [st.settingsByProject, st.activities, st.baselines, st.blines, st.reports, st.lines, st.resources, st.stoppages, st.history, st.gaps, st.maps, st.people, epcWelds, epcLineWelds, epcRules, epcActions, projectId, kind, view])
 }
 export type ExecutionModel = ReturnType<typeof useExecutionModel>

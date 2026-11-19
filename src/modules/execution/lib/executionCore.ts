@@ -5,6 +5,7 @@ import { resolveLines } from './workActions'
 import { physicalProgress, plannedOverall } from './progress'
 import { DEFAULT_EX_SETTINGS } from '../types'
 import { todayTehran } from '../../../lib/today'
+import { inView, type ProjectKind, type ScopeView } from '../../../lib/projectProfile'
 
 type ExState = Pick<ReturnType<typeof useExecutionStore.getState>, 'settingsByProject' | 'activities' | 'baselines' | 'blines' | 'reports' | 'lines'>
 type EpcState = Pick<ReturnType<typeof useEpcStore.getState>, 'welds' | 'lineWelds' | 'actionRules' | 'workActions'>
@@ -13,14 +14,16 @@ type EpcState = Pick<ReturnType<typeof useEpcStore.getState>, 'welds' | 'lineWel
  * One project's execution data and its physical progress — the single computation behind the execution module's own
  * figures (useExecutionModel), the radar and the project list, so they can never disagree. Pure: stores in, numbers out.
  */
-export function executionCore(st: ExState, epc: EpcState, projectId: string, today = todayTehran()) {
+export function executionCore(st: ExState, epc: EpcState, projectId: string, today = todayTehran(), scope: { kind: ProjectKind; view: ScopeView } = { kind: 'pipeline', view: 'all' }) {
+  // a hybrid project shows one scope (pipeline or compressor station) or both; the rows of the other scope are left out of every figure
+  const keep = (x: { scope?: string | null }) => inView(x.scope, scope.kind, scope.view)
   const pid = projectId
   const settings = st.settingsByProject.get(pid) ?? DEFAULT_EX_SETTINGS
-  const activities = st.activities.filter((a) => a.projectId === pid)
+  const activities = st.activities.filter((a) => a.projectId === pid && keep(a))
   const baselines = st.baselines.filter((b) => b.projectId === pid)
   const baselineIds = new Set(baselines.map((b) => b.id))
   const blines = st.blines.filter((l) => baselineIds.has(l.baselineId))
-  const reports = st.reports.filter((r) => r.projectId === pid)
+  const reports = st.reports.filter((r) => r.projectId === pid && keep(r))
   const repIds = new Set(reports.map((r) => r.id))
   let lines = st.lines.filter((l) => repIds.has(l.reportId))
   // project flag «central weld table»: shared weld facts are read from the weld's central record, so every consumer (forms, papers, counters, rules) sees one value

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { rowScope, SCOPE_FA } from '../../../lib/projectProfile'
 import { ScheduleBacklink } from '../../scheduling/components/ScheduleBacklink'
 import { Check, Copy, Download, FilePlus2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react'
 import { useExecutionStore } from '../store/useExecutionStore'
@@ -14,6 +15,7 @@ import { ACTIVITY_APPROVAL_LABEL_FA, ACTIVITY_KIND_LABEL_FA, type Activity, type
 
 export const METRIC_OPTIONS = [{ value: '', label: '—' }, { value: 'weld_joint', label: 'سرجوش جوشکاری‌شده' }, { value: 'rt_joint', label: 'سرجوش رادیوگرافی‌شده' }, { value: 'coat_joint', label: 'سرجوش عایق‌شده' }, { value: 'pipe_m', label: 'طول لوله (متر)' }]
 const KIND_OPTS = (Object.keys(ACTIVITY_KIND_LABEL_FA) as ActivityKind[]).map((k) => ({ value: k, label: ACTIVITY_KIND_LABEL_FA[k] }))
+const SCOPE_OPTS = [{ value: 'pipeline', label: 'خط لوله' }, { value: 'station', label: 'ایستگاه تقویت فشار' }]
 const norm = (s: unknown) => String(s ?? '').trim().replace(/\s+/g, ' ')
 const pickKey = (row: Record<string, unknown>, names: string[]) => { for (const k of Object.keys(row)) if (names.includes(norm(k).toLowerCase())) return row[k]; return '' }
 
@@ -23,8 +25,9 @@ export function ActivitiesPage({ projectId, sub }: { projectId: string; sub: str
   return <ActivitiesView projectId={projectId} />
 }
 
-function actFields(): FieldDef[] {
+function actFields(hybrid = false): FieldDef[] {
   return [
+    ...(hybrid ? [{ key: 'scope', label: 'محدوده (خط لوله یا ایستگاه تقویت فشار)', kind: 'select', required: true, options: SCOPE_OPTS, span: 2 } as FieldDef] : []),
     { key: 'itemNo', label: 'شمارهٔ ردیف فهرست‌بها / پیمان', kind: 'text', required: true }, { key: 'kind', label: 'نوع ردیف', kind: 'select', required: true, options: KIND_OPTS },
     { key: 'title', label: 'شرح فعالیت', kind: 'text', required: true, span: 2 }, { key: 'unit', label: 'واحد اندازه‌گیری', kind: 'text', required: true }, { key: 'chapter', label: 'فصل / رشته', kind: 'text' },
     { key: 'baseQty', label: 'مقدار مبنا (پیمان)', kind: 'num', required: true }, { key: 'unitPrice', label: 'بهای واحد قراردادی (ریال)', kind: 'money' },
@@ -83,6 +86,7 @@ function ActivitiesView({ projectId }: { projectId: string }) {
     { key: 'rn', label: 'ردیف', render: (a) => (a.rowNo ? <span className="fn-code">{a.rowNo}</span> : '—') },
     { key: 'i', label: 'کد فهرست', render: (a) => <span className="strong fn-code">{a.itemNo}</span>, sort: (a) => a.itemNo },
     { key: 't', label: 'شرح فعالیت', render: (a) => <><span className="strong">{a.title}</span><span className="sub">{[a.area, a.front, a.station, a.kmFrom != null ? `km ${a.kmFrom}–${a.kmTo ?? ''}` : '', a.remark].filter(Boolean).join(' · ')}</span>{a.parentActivityId && <Chip tone="warn">اضافه‌بها{a.surchargePct ? ` ${fa(a.surchargePct, 1)}٪` : ''} — به ردیف {m.actById.get(a.parentActivityId)?.rowNo || m.actById.get(a.parentActivityId)?.itemNo}</Chip>}</> },
+    ...(m.kind === 'hybrid' && m.scopeView === 'all' ? [{ key: 'sc', label: 'محدوده', render: (a: Activity) => <Chip tone={rowScope(a.scope, m.kind) === 'station' ? 'warn' : 'neutral'}>{SCOPE_FA[rowScope(a.scope, m.kind)]}</Chip> } as Col<Activity>] : []),
     { key: 'u', label: 'واحد', render: (a) => a.unit },
     { key: 'sch', label: 'برنامه', render: (a) => <ScheduleBacklink projectId={projectId} kind="exec_activity" id={a.id} /> },
     { key: 'k', label: 'نوع', render: (a) => (a.kind === 'standard' ? <Chip>ردیف</Chip> : <Chip tone="warn">{a.kind === 'starred' ? 'ستاره‌دار' : 'خاص'}</Chip>) },
@@ -127,8 +131,8 @@ function ActivitiesView({ projectId }: { projectId: string }) {
             </div>) })}
         </Section>))}
       {sums.length > 0 && <Section title="مجموع وزن‌ها" hint="در هر مبنای وزن‌دهی مجموع باید ۱۰۰ باشد؛ نسخهٔ مبنا بدون آن تصویب نمی‌شود." flush><DataTable cols={[{ key: 'g', label: 'مبنای وزن‌دهی', render: (s: (typeof sums)[number]) => s.group || 'کل پروژه' }, { key: 's', label: 'مجموع وزن', num: true, render: (s) => fa(s.sum, 2) }, { key: 'o', label: 'وضعیت', render: (s) => <Chip tone={s.ok ? 'good' : 'bad'}>{s.ok ? '۱۰۰٪' : s.sum > 100 ? 'بیش از ۱۰۰' : 'کمتر از ۱۰۰'}</Chip> }]} rows={sums} rowKey={(s) => s.group} /></Section>}
-      {form && <FormModal title={form.a ? `ویرایش ${form.a.itemNo}` : form.seed ? 'فعالیت از فهرست‌بها' : 'ردیف خاص / دستی'} subtitle={!form.a ? 'ردیف ستاره‌دار و خاص پس از ثبت، منتظر تأیید کارفرما یا مشاور می‌ماند.' : undefined} submitLabel="ذخیره" fields={actFields()} initial={toVals(form.a ?? form.seed ?? { kind: 'special' })} onClose={() => setForm(null)}
-        onSubmit={async (v) => { await ex.saveActivity({ id: form.a?.id, projectId, priceItemId: form.a?.priceItemId ?? (form.seed?.priceItemId ?? null), itemNo: String(v.itemNo), kind: v.kind as ActivityKind, title: String(v.title), unit: String(v.unit), chapter: String(v.chapter ?? ''), baseQty: Number(v.baseQty) || 0, unitPrice: Number(v.unitPrice) || 0, weight: Number(v.weight) || 0, weightGroup: String(v.weightGroup ?? ''), area: String(v.area ?? ''), front: String(v.front ?? ''), station: String(v.station ?? ''), kmFrom: v.kmFrom == null || v.kmFrom === '' ? null : Number(v.kmFrom), kmTo: v.kmTo == null || v.kmTo === '' ? null : Number(v.kmTo), plannedStart: (v.plannedStart as string) || null, plannedEnd: (v.plannedEnd as string) || null, metric: String(v.metric ?? ''), note: String(v.note ?? ''), active: form.a?.active ?? true, sort: form.a?.sort ?? m.activities.length + 1 }) }} />}
+      {form && <FormModal title={form.a ? `ویرایش ${form.a.itemNo}` : form.seed ? 'فعالیت از فهرست‌بها' : 'ردیف خاص / دستی'} subtitle={!form.a ? 'ردیف ستاره‌دار و خاص پس از ثبت، منتظر تأیید کارفرما یا مشاور می‌ماند.' : undefined} submitLabel="ذخیره" fields={actFields(m.kind === 'hybrid')} initial={{ ...toVals(form.a ?? form.seed ?? { kind: 'special' }), scope: rowScope(form.a?.scope, m.kind) === 'station' || (!form.a && m.scopeView === 'station') ? 'station' : 'pipeline' }} onClose={() => setForm(null)}
+        onSubmit={async (v) => { await ex.saveActivity({ id: form.a?.id, projectId, priceItemId: form.a?.priceItemId ?? (form.seed?.priceItemId ?? null), itemNo: String(v.itemNo), kind: v.kind as ActivityKind, title: String(v.title), unit: String(v.unit), chapter: String(v.chapter ?? ''), baseQty: Number(v.baseQty) || 0, unitPrice: Number(v.unitPrice) || 0, weight: Number(v.weight) || 0, weightGroup: String(v.weightGroup ?? ''), area: String(v.area ?? ''), front: String(v.front ?? ''), station: String(v.station ?? ''), kmFrom: v.kmFrom == null || v.kmFrom === '' ? null : Number(v.kmFrom), kmTo: v.kmTo == null || v.kmTo === '' ? null : Number(v.kmTo), plannedStart: (v.plannedStart as string) || null, plannedEnd: (v.plannedEnd as string) || null, metric: String(v.metric ?? ''), note: String(v.note ?? ''), active: form.a?.active ?? true, sort: form.a?.sort ?? m.activities.length + 1, ...(m.kind === 'hybrid' ? { scope: v.scope === 'station' ? 'station' : 'pipeline' } : {}) }) }} />}
       {imp && <ContractImport projectId={projectId} onClose={() => setImp(false)} />}
       {picker && <ItemPicker projectId={projectId} onClose={() => setPicker(false)} onPick={(it, book) => { setPicker(false); setForm({ seed: { priceItemId: it.id, itemNo: it.itemNo, title: it.description, unit: it.unit, chapter: it.chapter || book.discipline, unitPrice: it.unitPrice, kind: it.starred ? 'starred' : 'standard' } }) }} />}
     </div>

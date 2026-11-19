@@ -7,7 +7,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { MasterProject } from '../../../modules/masterdata/types'
 import { PROJECT_STATUS_LABEL_FA } from '../../../modules/masterdata/types'
 import type { ModuleKey } from '../../../store/useModuleStore'
-import { PROJECT_NAV, type ProjectNavItem } from './projectNav'
+import { PROJECT_NAV, navFor, type ProjectNavItem } from './projectNav'
 import { STATUS_COLOR, STATUS_LABEL_FA, type RadarData } from './radarTypes'
 import { radarBrief } from './radarBrief'
 import { todayTehran } from '../../../lib/today'
@@ -41,7 +41,7 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
   const code = project.projectIdCode || project.projectCode
   const items = PROJECT_NAV.flatMap((g) => g.items)
   const open = (module: ModuleKey) => { const it = items.find((i) => i.module === module); if (it && canSee(module)) onItem(it) }
-  const groups = PROJECT_NAV.map((g) => ({ ...g, items: g.items.filter((i) => i.id !== 'overview' && (!i.module || canSee(i.module))) })).filter((g) => g.items.length)
+  const groups = navFor(project).map((g) => ({ ...g, items: g.items.filter((i) => i.id !== 'overview' && (!i.module || canSee(i.module))) })).filter((g) => g.items.length)
 
   return (
     <div dir="rtl" className="mr-shell">

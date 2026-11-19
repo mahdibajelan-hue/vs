@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { ProjectKindSelect } from '../components/ProjectKindSelect'
+import { projectKindLabel } from '../../../lib/projectProfile'
 import {
   ArrowRight,
   Building2,
@@ -301,7 +303,7 @@ export function ProjectIdentityPage({ projectId, onBack }: { projectId: string; 
             <SectionCard icon={FileText} title="نمای کلی">
               <p className="text-sm leading-7 text-secondary">{project.description || 'توضیحی ثبت نشده است.'}</p>
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <Field label="نوع پروژه" value={project.projectType || '—'} />
+                <Field label="نوع پروژه" value={projectKindLabel(project.projectType)} />
                 <Field label="دسته‌بندی" value={project.projectCategory || '—'} />
                 <Field label="پورتفولیو" value={portfolioName(project.portfolioId)} />
                 <Field label="طرح" value={programName(project.programId)} />
@@ -719,7 +721,7 @@ function EditForm({
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">نوع پروژه</span>
-            <input value={form.projectType} onChange={(e) => set('projectType', e.target.value)} className="input" placeholder="مثلاً خط لوله، ایستگاه تقویت فشار" />
+            <ProjectKindSelect className="input" value={form.projectType} onChange={(v) => set('projectType', v)} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">دسته‌بندی</span>

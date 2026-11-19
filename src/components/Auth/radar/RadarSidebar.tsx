@@ -6,7 +6,7 @@ import type { ModuleKey } from '../../../store/useModuleStore'
 import { useAuthStore } from '../../../store/useAuthStore'
 import { useAppTheme } from '../../common/useAppTheme'
 import { FarinMark } from '../../common/Logo'
-import { PROJECT_NAV, type ProjectNavItem } from './projectNav'
+import { PROJECT_NAV, navFor, type ProjectNavItem } from './projectNav'
 import { IcHome } from './industryIcons'
 import { useRadarPeek } from './radarPeek'
 import { menuPeek, type MenuPeek } from './menuPeek'
@@ -59,8 +59,8 @@ export function RadarSidebar({ project, active, canSee, badgeFor, desktop, pinne
 
   const groups = useMemo(() => {
     const needle = q.trim()
-    return PROJECT_NAV.map((g) => ({ ...g, items: g.items.filter((i) => (!i.module || canSee(i.module)) && (!needle || i.label.includes(needle))) })).filter((g) => g.items.length)
-  }, [q, canSee])
+    return navFor(project).map((g) => ({ ...g, items: g.items.filter((i) => (!i.module || canSee(i.module)) && (!needle || i.label.includes(needle))) })).filter((g) => g.items.length)
+  }, [q, canSee, project.projectType])
 
   // hover: the soft pill follows the pointer; the card (and the strip's label) follow the hovered row
   const [hover, setHover] = useState<{ id: string; top: number } | null>(null)

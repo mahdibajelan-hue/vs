@@ -80,7 +80,7 @@ export function GapsPage({ projectId, onGo }: { projectId: string; sub: string; 
       if (src) {
         if (src.status === 'draft' || src.status === 'returned' || src.status === 'incomplete') { id = src.id }
         else {
-          id = await ex.createReport({ projectId, formKey: src.formKey, reportDate: src.reportDate, front: src.front, station: src.station, shift: src.shift, contractorOrgId: src.contractorOrgId, data: src.data, notes: `گزارش تکمیلی ${src.reportNo}`, status: 'incomplete', completionOf: src.id, missing: g.missing, dueDate: g.dueDate })
+          id = await ex.createReport({ projectId, formKey: src.formKey, reportDate: src.reportDate, front: src.front, station: src.station, shift: src.shift, contractorOrgId: src.contractorOrgId, data: src.data, notes: `گزارش تکمیلی ${src.reportNo}`, status: 'incomplete', completionOf: src.id, missing: g.missing, dueDate: g.dueDate, scope: src.scope ?? null })
           if (id) await ex.saveBody(id, { lines: (m.linesByReport.get(src.id) ?? []).map((l) => ({ activityId: l.activityId, qty: l.qty, kmFrom: l.kmFrom, kmTo: l.kmTo, location: l.location, note: l.note, detail: l.detail })) })
         }
       }
