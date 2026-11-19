@@ -22,6 +22,8 @@ export interface ProjectNavItem {
   parent?: string
   /** the project profiles the entry belongs to (default: every profile) */
   kinds?: ProjectKind[]
+  /** the tab the module opens on (e.g. «station:twin») */
+  entry?: string
 }
 export interface ProjectNavGroup { id: string; label: string; items: ProjectNavItem[] }
 
@@ -58,6 +60,7 @@ export const PROJECT_NAV: ProjectNavGroup[] = [
     { id: 'landacq', module: 'landacq', label: 'تملک و آزادسازی اراضی', icon: IcLand, accent: '#84cc16' },
     { id: 'pipepulse', module: 'pipepulse', label: 'PipePulse', icon: IcPipePulse, accent: '#0ea5e9', kinds: ['pipeline', 'hybrid'] },
     { id: 'twin', module: 'pipelinedigitaltwin', label: 'دوقلوی دیجیتال', icon: IcTwin, accent: '#38bdf8', kinds: ['pipeline', 'hybrid'] },
+    { id: 'cstwin', module: 'execution', entry: 'station:twin', label: 'دوقلوی دیجیتال ایستگاه', icon: IcTwin, accent: '#6366f1', kinds: ['compressor_station', 'hybrid'] },
   ] },
 ]
 

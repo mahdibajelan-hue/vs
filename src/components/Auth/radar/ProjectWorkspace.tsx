@@ -40,12 +40,12 @@ export function ProjectWorkspace({ children }: { children: ReactNode }) {
 
   if (!project) return <>{children}</>
 
-  const activeId = PROJECT_NAV.flatMap((g) => g.items).find((i) => active && i.module === navModule(active))?.id ?? ''
+  const activeId = PROJECT_NAV.flatMap((g) => g.items).find((i) => active && !i.entry && i.module === navModule(active))?.id ?? ''
   const onItem = (item: ProjectNavItem) => {
     if (!desktop) setDrawer(false)
     const store = useModuleStore.getState()
     if (item.id === 'overview') store.backToRadar()
-    else if (item.module && item.module !== (active && navModule(active))) store.enterModule(item.module, 'project')
+    else if (item.module && (item.entry || item.module !== (active && navModule(active)))) store.enterModule(item.module, 'project', item.entry)
   }
 
   return (

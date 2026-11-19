@@ -93,7 +93,7 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
   const handleNavClick = (item: ProjectNavItem) => {
     if (!isDesktop) setDrawer(false)
     if (!item.module) { window.scrollTo({ top: 0, behavior: 'smooth' }); return }
-    useModuleStore.getState().enterModule(item.module, 'project')
+    useModuleStore.getState().enterModule(item.module, 'project', item.entry)
   }
 
   if (!contextProjectId || (mdLoaded && !selectedProject)) {

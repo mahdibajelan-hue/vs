@@ -15,6 +15,7 @@ import { todayTehran } from '../../../lib/today'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useExecutionModel } from '../lib/useExecutionModel'
 import { StationQcTabs } from './StationQc'
+import { StationTwin } from './StationTwin'
 import { CS_METRICS, csDayWork, csReportedKeys, type CsMetric } from '../lib/csCore'
 import type { ExTab } from '../ExecutionApp'
 
@@ -35,6 +36,7 @@ export function StationPage({ projectId, sub, onGo }: P) {
     case 'welds': return <WeldsView projectId={projectId} />
     case 'equipment': return <EquipmentView projectId={projectId} />
     case 'packs': return <PacksView projectId={projectId} />
+    case 'twin': return <StationTwin projectId={projectId} />
     case 'qc': case 'qc-ndt': case 'qc-welders': case 'qc-itp': case 'qc-rules': return <StationQcTabs projectId={projectId} sub={sub} />
     default: return <StationDash projectId={projectId} onGo={onGo} />
   }

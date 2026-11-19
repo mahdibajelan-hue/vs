@@ -13,7 +13,7 @@ const res = []
 const check = (id, title, pass, note = '') => res.push({ id, title, pass: !!pass, note })
 
 // clean slate for this script's own rows (test DB only)
-psql(`delete from cs_inspections where project_id='${P}'; delete from cs_qc_settings where project_id='${P}'; delete from cs_history where project_id='${P}'; delete from cs_welds where project_id='${P}'; delete from cs_spools where project_id='${P}'; delete from cs_lines where project_id='${P}'; delete from cs_equipment where project_id='${P}'; delete from cs_test_packs where project_id='${P}';`)
+psql(`delete from cs_plot_shapes where project_id='${P}'; delete from cs_inspections where project_id='${P}'; delete from cs_qc_settings where project_id='${P}'; delete from cs_history where project_id='${P}'; delete from cs_welds where project_id='${P}'; delete from cs_spools where project_id='${P}'; delete from cs_lines where project_id='${P}'; delete from cs_equipment where project_id='${P}'; delete from cs_test_packs where project_id='${P}';`)
 
 // C01 — the contractor records lines, a pack, spools and welds
 let r = as('contractor', `
@@ -111,5 +111,15 @@ const ok2 = as('supervision', `update cs_test_packs set test_press_bar=112.5 whe
 check('Q04', 'فشار هیدروتست کمتر از ۱٫۵ برابر فشار طراحی پذیرفته نمی‌شود', !low.ok && low.error.includes('pack_pressure_low') && ok2.ok, `${low.error} | ${ok2.error}`)
 const hist = json(`select count(*)::int n from cs_history where project_id='${P}' and entity in ('cs_inspections','cs_qc_settings')`)[0].n
 check('Q05', 'تاریخچهٔ بازرسی‌ها و قواعد ثبت می‌شود', hist >= 3, String(hist))
+
+// ── 052: the plot plan ──
+r = as('contractor', `insert into cs_plot_shapes (project_id, kind, ref_id, label, x, y, w, h) values ('${P}', 'equipment', (select id from cs_equipment where project_id='${P}' limit 1), 'K-101', 10, 10, 12, 10)`)
+const vw = as('viewer', `insert into cs_plot_shapes (project_id, kind, area_name, x, y, w, h) values ('${P}', 'area', 'X', 0, 0, 10, 10)`)
+const foreign = as('contractor', `insert into cs_plot_shapes (project_id, kind, ref_id, x, y, w, h) values ('${P}', 'line', gen_random_uuid(), 0, 0, 0, 0)`)
+check('P01', 'نقشهٔ جانمایی: پیمانکار می‌کشد، بیننده نه؛ شکلِ ردیف پروژهٔ دیگر یا ناموجود پذیرفته نمی‌شود', r.ok && !vw.ok && !foreign.ok && foreign.error.includes('cross_project'), `${r.error} | ${vw.error} | ${foreign.error}`)
+const dup = as('contractor', `insert into cs_plot_shapes (project_id, kind, ref_id, label, x, y, w, h) values ('${P}', 'equipment', (select id from cs_equipment where project_id='${P}' limit 1), 'dup', 0, 0, 5, 5)`)
+const mv = as('contractor', `update cs_plot_shapes set x = 30 where project_id='${P}' and kind='equipment'`)
+const ph = json(`select count(*)::int n from cs_history where project_id='${P}' and entity='cs_plot_shapes' and action='update'`)[0].n
+check('P02', 'هر تجهیز یک شکل؛ جابه‌جایی در تاریخچه ثبت می‌شود', !dup.ok && mv.ok && ph >= 1, `${dup.error} | ${mv.error} | ${ph}`)
 
 console.log(JSON.stringify({ passed: res.filter((x) => x.pass).length, total: res.length, results: res }, null, 1))
