@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { rowScope, SCOPE_FA } from '../../../lib/projectProfile'
+import { CS_METRICS } from '../lib/csCore'
 import { ScheduleBacklink } from '../../scheduling/components/ScheduleBacklink'
 import { Check, Copy, Download, FilePlus2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react'
 import { useExecutionStore } from '../store/useExecutionStore'
@@ -13,7 +14,7 @@ import { ContractImport } from '../components/ContractImport'
 import { Bar, Empty, fa } from '../components/common'
 import { ACTIVITY_APPROVAL_LABEL_FA, ACTIVITY_KIND_LABEL_FA, type Activity, type ActivityKind, type PriceBook, type PriceItem } from '../types'
 
-export const METRIC_OPTIONS = [{ value: '', label: '—' }, { value: 'weld_joint', label: 'سرجوش جوشکاری‌شده' }, { value: 'rt_joint', label: 'سرجوش رادیوگرافی‌شده' }, { value: 'coat_joint', label: 'سرجوش عایق‌شده' }, { value: 'pipe_m', label: 'طول لوله (متر)' }]
+export const METRIC_OPTIONS = [{ value: '', label: '—' }, { value: 'weld_joint', label: 'سرجوش جوشکاری‌شده' }, { value: 'rt_joint', label: 'سرجوش رادیوگرافی‌شده' }, { value: 'coat_joint', label: 'سرجوش عایق‌شده' }, { value: 'pipe_m', label: 'طول لوله (متر)' }, ...Object.entries(CS_METRICS).map(([value, m]) => ({ value, label: m.fa }))]
 const KIND_OPTS = (Object.keys(ACTIVITY_KIND_LABEL_FA) as ActivityKind[]).map((k) => ({ value: k, label: ACTIVITY_KIND_LABEL_FA[k] }))
 const SCOPE_OPTS = [{ value: 'pipeline', label: 'خط لوله' }, { value: 'station', label: 'ایستگاه تقویت فشار' }]
 const norm = (s: unknown) => String(s ?? '').trim().replace(/\s+/g, ' ')

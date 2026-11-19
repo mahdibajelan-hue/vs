@@ -12,6 +12,9 @@ import { Chip, DataTable, KpiCard, Section, fmtD, type Col } from '../../finance
 import { FormModal, type FieldDef, type Vals } from '../../finance/components/FormModal'
 import { Bar, Empty, fa, pct } from '../components/common'
 import { todayTehran } from '../../../lib/today'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
+import { useExecutionModel } from '../lib/useExecutionModel'
+import { CS_METRICS, csDayWork, csReportedKeys, type CsMetric } from '../lib/csCore'
 import type { ExTab } from '../ExecutionApp'
 
 type P = { projectId: string; sub: string; onGo: (t: ExTab, s?: string) => void }
@@ -46,7 +49,7 @@ function useRights(projectId: string) {
 }
 
 // ── dashboard ──────────────────────────────────────────────────────────
-function StationDash({ onGo }: { projectId: string; onGo: P['onGo'] }) {
+function StationDash({ projectId, onGo }: { projectId: string; onGo: P['onGo'] }) {
   const d = useCs()
   const s = useMemo(() => csSummary(d), [d])
   if (!d.lines.length && !d.equipment.length) return (
@@ -70,6 +73,7 @@ function StationDash({ onGo }: { projectId: string; onGo: P['onGo'] }) {
         <KpiCard i={4} label="نصب تجهیزات" value={pct(s.equipment.earned)} sub={`${fa(s.equipment.done)} از ${fa(s.equipment.total)} تجهیز کامل`} onClick={() => onGo('station', 'equipment')} />
         <KpiCard i={5} label="تست‌پک‌ها" value={`${fa(s.packs.tested + s.packs.reinstated)} / ${fa(s.packs.total)}`} tone={s.packs.ready ? 'good' : 'neutral'} sub={`${fa(s.packs.ready)} آمادهٔ آزمون`} onClick={() => onGo('station', 'packs')} />
       </div>
+      <DayWork projectId={projectId} onGo={onGo} />
       <Section title="ساخت اسپول (کارگاه) تا نصب" hint="تعداد اسپول در هر مرحله؛ پیشرفت وزنی مراحل در پرانتز">
         <div className="cs-stages">
           {SPOOL_STAGES.map((st) => (
@@ -95,6 +99,52 @@ function StationDash({ onGo }: { projectId: string; onGo: P['onGo'] }) {
         </Section>
       </div>
     </div>
+  )
+}
+
+// ── daily work from the registers → a draft work report (one approval chain) ──
+function DayWork({ projectId, onGo }: { projectId: string; onGo: P['onGo'] }) {
+  const d = useCs(), m = useExecutionModel(projectId)
+  const ex = useExecutionStore()
+  const r = useRights(projectId)
+  const done = useMemo(() => csReportedKeys(m.lines), [m.lines])
+  // opens on the latest day (up to today) whose register work is not in a report yet
+  const [day, setDay] = useState(() => {
+    const today = todayTehran()
+    const days = new Set<string>()
+    for (const w of d.welds) { if (w.weldDate) days.add(w.weldDate); if (w.ndtDate) days.add(w.ndtDate) }
+    for (const s of d.spools) if (s.stageDates.erected) days.add(s.stageDates.erected)
+    for (const e of d.equipment) if (e.steps.set) days.add(e.steps.set)
+    return [...days].filter((x) => x <= today).sort().reverse().find((x) => csDayWork(d, x, done).length) ?? today
+  })
+  const [busy, setBusy] = useState(false), [made, setMade] = useState<string | null>(null)
+  const items = useMemo(() => csDayWork(d, day, done), [d, day, done])
+  const actOf = (metric: CsMetric) => m.activities.filter((a) => a.active && a.metric === metric)
+  const rows = items.map((it) => ({ ...it, acts: actOf(it.metric) }))
+  const ready = rows.filter((x) => x.acts.length === 1)
+  const make = async () => {
+    setBusy(true)
+    try {
+      const id = await ex.createReport({ projectId, formKey: 'work', reportDate: day, front: 'ایستگاه', notes: 'ساخته‌شده از ثبت‌های ایستگاه (لاین، سرجوش، اسپول، تجهیز)' })
+      if (!id) return
+      const ok = await ex.saveBody(id, { lines: ready.map((x) => ({ activityId: x.acts[0].id, qty: x.qty, location: 'ایستگاه', note: x.note, detail: { source: 'cs', csKeys: x.keys, csMetric: x.metric } })) })
+      if (ok) setMade(id)
+    } finally { setBusy(false) }
+  }
+  return (
+    <Section title="کارکرد روز از ثبت‌های ایستگاه" hint="مقدارهای ثبت‌شده در این روز به ردیف‌های فهرست‌بها تبدیل و به‌صورت پیش‌نویس گزارش کارکرد ساخته می‌شوند؛ پرداخت فقط پس از ارسال پیمانکار و تأیید نظارت است و هیچ مقداری دو بار شمرده نمی‌شود."
+      action={<div style={{ width: 170 }}><JalaliDateInput value={day} onChange={(v) => { setDay(v); setMade(null) }} /></div>} flush>
+      <DataTable rows={rows} rowKey={(x) => x.metric} empty="در این روز کار تازه‌ای در ثبت‌های ایستگاه نیست (یا قبلاً در گزارش آمده است)." cols={[
+        { key: 'm', label: 'شمارنده', render: (x) => <><span className="strong">{CS_METRICS[x.metric].fa}</span><span className="sub">{x.note}</span></> },
+        { key: 'q', label: 'مقدار', num: true, render: (x) => `${fa(x.qty, 2)} ${CS_METRICS[x.metric].unit}` },
+        { key: 'a', label: 'ردیف فهرست‌بها', render: (x) => x.acts.length === 1 ? <span>{x.acts[0].itemNo} — {x.acts[0].title}</span> : x.acts.length ? <Chip tone="warn">{fa(x.acts.length)} ردیف با این شمارنده؛ فقط یکی بماند</Chip> : <Chip tone="warn">به ردیفی وصل نیست</Chip> },
+      ]} />
+      <div className="cs-toolbar" style={{ padding: '10px 14px' }}>
+        {made ? <><Chip tone="good">پیش‌نویس گزارش کارکرد ساخته شد</Chip><button className="im-btn im-btn-sm" onClick={() => onGo('daily', 'work')}>رفتن به گزارش روزانه برای ارسال</button></>
+          : r.write && <button className="im-btn im-btn-primary im-btn-sm" disabled={!ready.length || busy} onClick={() => void make()}>{busy ? 'در حال ساخت…' : `ساخت پیش‌نویس گزارش کارکرد (${fa(ready.length)} ردیف)`}</button>}
+        {rows.some((x) => x.acts.length !== 1) && <span className="im-helper" style={{ margin: 0 }}>برای وصل کردن، در «تنظیمات ← مقادیر پیمان» شمارندهٔ ردیف مربوط را روی همین مورد بگذارید.</span>}
+      </div>
+    </Section>
   )
 }
 

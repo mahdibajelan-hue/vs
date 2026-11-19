@@ -37,3 +37,17 @@ const ln = mapImport('lines', [{ 'Line No': '6-PG-3', Size: '6', 'NDT': '10' }, 
 assert.equal(ln.errors.length, 1) // 8-1 already registered
 assert.equal(mapImport('equipment', [{ 'تگ': 'K-101', 'نوع': 'کمپرسور' }], ctx).rows[0].kind, 'compressor')
 console.log('csCore: ok')
+
+// daily work from the registers: one approval chain, nothing counted twice
+import { csDayWork, csReportedKeys } from './csCore.ts'
+const day = '2026-10-04'
+const dw = { welds: [W({ id: 'a', weldDate: day, fitupDate: '2026-10-01' }), W({ id: 'b', location: 'field', sizeIn: 6, weldDate: day, ndtResult: 'accept', ndtDate: day, fitupDate: day }), W({ id: 'c', weldDate: '2026-10-05' })],
+  spools: [{ id: 's1', spoolNo: 'SP1', weightKg: 450, stageDates: { erected: day }, archived: false }], equipment: [{ id: 'e1', tag: 'K-101', weightT: 62, steps: { set: day }, archived: false }] }
+const items = csDayWork(dw, day, new Set())
+const q = (m) => items.find((x) => x.metric === m)?.qty
+assert.equal(q('cs_shop_id'), 8); assert.equal(q('cs_field_id'), 6); assert.equal(q('cs_ndt_joint'), 1); assert.equal(q('cs_spool_kg'), 450); assert.equal(q('cs_eq_set_t'), 62)
+const done = csReportedKeys([{ status: 'approved', detail: { source: 'cs', csKeys: ['cs:weld:a'] } }, { status: 'rejected', detail: { source: 'cs', csKeys: ['cs:weld:b'] } }])
+const again = csDayWork(dw, day, done)
+assert.equal(again.find((x) => x.metric === 'cs_shop_id'), undefined) // already reported
+assert.equal(again.find((x) => x.metric === 'cs_field_id').qty, 6) // its report line was rejected: it may be reported again
+console.log('csCore day work: ok')

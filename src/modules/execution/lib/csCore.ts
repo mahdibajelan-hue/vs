@@ -234,3 +234,45 @@ export function mapImport(e: ImportEntity, sheet: Record<string, unknown>[], ctx
   })
   return { rows: errors.length ? [] : rows, errors }
 }
+
+// ── daily work from the registers ───────────────────────────────────────
+/**
+ * What the station registers say was done on a day, as quantities a price-list row can be paid by. The registers do not
+ * pay anything themselves: these quantities become a DRAFT daily work report that the contractor submits and the
+ * supervision approves like any other, so the statement keeps one approval chain. A price-list row takes one of these
+ * through its «شمارنده» (activity.metric).
+ */
+export const CS_METRICS = {
+  cs_shop_id: { fa: 'اینچ‌قطر جوش کارگاهی (ایستگاه)', unit: 'اینچ‌قطر' },
+  cs_field_id: { fa: 'اینچ‌قطر جوش میدانی (ایستگاه)', unit: 'اینچ‌قطر' },
+  cs_ndt_joint: { fa: 'سرجوش با NDT قبول‌شده (ایستگاه)', unit: 'سرجوش' },
+  cs_spool_kg: { fa: 'وزن اسپول نصب‌شده (ایستگاه)', unit: 'کیلوگرم' },
+  cs_eq_set_t: { fa: 'وزن تجهیز مستقرشده روی فونداسیون (ایستگاه)', unit: 'تن' },
+} as const
+export type CsMetric = keyof typeof CS_METRICS
+export interface CsDayItem { metric: CsMetric; qty: number; keys: string[]; note: string }
+/** `done`: register keys already in a daily report that was not rejected — never counted twice */
+export function csDayWork(d: { welds: CsWeld[]; spools: CsSpool[]; equipment: CsEquipment[] }, day: string, done: Set<string>): CsDayItem[] {
+  const out: CsDayItem[] = []
+  const add = (metric: CsMetric, key: string, qty: number, label: string) => {
+    if (done.has(key) || !(qty > 0)) return
+    let it = out.find((x) => x.metric === metric)
+    if (!it) { it = { metric, qty: 0, keys: [], note: '' }; out.push(it) }
+    it.qty += qty; it.keys.push(key); if (label) it.note = it.note ? `${it.note}، ${label}` : label
+  }
+  for (const w of d.welds) {
+    if (w.archived) continue
+    if (w.weldDate === day) add(w.location === 'shop' ? 'cs_shop_id' : 'cs_field_id', `cs:weld:${w.id}`, inchDia(w), w.weldNo)
+    if (w.ndtResult === 'accept' && w.ndtDate === day) add('cs_ndt_joint', `cs:ndt:${w.id}`, 1, w.weldNo)
+  }
+  for (const s of d.spools) if (!s.archived && s.stageDates.erected === day) add('cs_spool_kg', `cs:spool:${s.id}`, s.weightKg ?? 0, s.spoolNo)
+  for (const e of d.equipment) if (!e.archived && e.steps.set === day) add('cs_eq_set_t', `cs:eq:${e.id}`, e.weightT ?? 0, e.tag)
+  for (const it of out) { it.qty = Math.round(it.qty * 1000) / 1000; if (it.note.length > 180) it.note = `${it.note.slice(0, 177)}…` }
+  return out
+}
+/** register keys already carried by daily-report lines that were not rejected */
+export function csReportedKeys(lines: { status: string; detail: Record<string, unknown> }[]): Set<string> {
+  const s = new Set<string>()
+  for (const l of lines) if (l.status !== 'rejected' && l.detail?.source === 'cs' && Array.isArray(l.detail.csKeys)) for (const k of l.detail.csKeys) s.add(String(k))
+  return s
+}
