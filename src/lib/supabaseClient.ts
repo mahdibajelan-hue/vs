@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 import { createRestFetch } from './restFetchCore'
 import { browserAnswers } from './answerStore'
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from './runtimeConfig'
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+const url = SUPABASE_URL
+const anonKey = SUPABASE_ANON_KEY
 
 /** True once real Supabase credentials are configured — lets the app fall back to local-only mode until then. */
 export const isSupabaseConfigured = Boolean(url && anonKey)

@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../../../lib/supabaseClient'
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from '../../../lib/runtimeConfig'
 
 const BUCKET = 'comp-docs'
 
@@ -80,8 +81,8 @@ let anonClient: SupabaseClient | null = null
  * happens to live in this browser. */
 export function compAnonClient(): SupabaseClient {
   if (!anonClient) {
-    const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? 'https://placeholder.supabase.co'
-    const key = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? 'placeholder-anon-key'
+    const url = SUPABASE_URL ?? 'https://placeholder.supabase.co'
+    const key = SUPABASE_ANON_KEY ?? 'placeholder-anon-key'
     anonClient = createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'comp-self-service-anon' },
     })

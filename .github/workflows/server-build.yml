@@ -1,0 +1,37 @@
+name: Build for own server
+
+# The app built once, for any server: it reads its database address from config.js, which the server writes when it
+# installs the files (deploy/server/install.sh). The build runs here because the server's virtual CPU cannot run the
+# build tools; the server only downloads the finished files from the server-build branch.
+on:
+  push:
+    branches: [claude/piping-isometric-tracker-x8y5i1]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: server-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vite build
+        env:
+          HOST_BUILD: 'true'
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: server-build
+          force_orphan: true
+          enable_jekyll: true

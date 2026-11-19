@@ -34,11 +34,10 @@ export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
 say "1/8 Installing prerequisites from Ubuntu (Docker, Caddy, Node.js, ...)"
 apt-get update -qq
 compose_pkg=docker-compose-v2; apt-cache show docker-compose-v2 >/dev/null 2>&1 || compose_pkg=docker-compose-plugin
-apt-get install -y -qq docker.io "$compose_pkg" caddy git jq openssl ca-certificates curl ufw nodejs npm >/dev/null
+apt-get install -y -qq docker.io "$compose_pkg" caddy git jq openssl ca-certificates curl ufw nodejs >/dev/null
 docker compose version >/dev/null 2>&1 || die "docker compose was not installed."
-# the override below needs compose ≥ 2.24.4 («!override»); the app's build tool (Vite 8) needs Node ≥ 20.19
+# the override below needs compose ≥ 2.24.4 («!override»); Node runs Supabase's key generator
 printf '%s\n%s\n' 2.24.4 "$(docker compose version --short | tr -d v)" | sort -V -C || die "docker compose is older than 2.24.4."
-[ "$(node -p 'process.versions.node.split(".").map(Number).reduce((a, b, i) => a + b * [1e6, 1e3, 1][i], 0)')" -ge 20019000 ] || die "Node.js $(node -v) is too old (20.19 or newer is needed)."
 ok "Docker $(docker --version | awk '{print $3}' | tr -d ,) · Compose $(docker compose version --short) · Node $(node -v)"
 
 say "2/8 Using the ArvanCloud Docker mirror (Docker Hub is blocked from Iran)"
@@ -97,13 +96,17 @@ if [ -d "$SRC_DIR/.git" ]; then git -C "$SRC_DIR" fetch -q --depth 1 origin "$BR
 else git clone -q --depth 1 -b "$BRANCH" "$REPO" "$SRC_DIR"; fi
 ok "version: $(git -C "$SRC_DIR" log -1 --format='%h %s' | cut -c1-70)"
 
-say "6/8 Building the Farin app for this server"
+say "6/8 Installing the Farin app (built by GitHub; the server only downloads it)"
+# the build tools need CPU instructions this virtual server lacks («Illegal instruction»), so GitHub builds the app
+# (.github/workflows/server-build.yml → branch server-build) and this step copies it and writes its config.js
 ANON=$(grep '^ANON_KEY=' "$SUPA_DIR/.env" | cut -d= -f2-)
-cd "$SRC_DIR"
-npm ci --no-audit --no-fund --loglevel=error
-VITE_SUPABASE_URL="$SITE_URL" VITE_SUPABASE_ANON_KEY="$ANON" HOST_BUILD=true npx vite build --logLevel error
-mkdir -p "$WEB_DIR" && rm -rf "${WEB_DIR:?}"/* && cp -r dist/. "$WEB_DIR"/
-ok "app installed in $WEB_DIR"
+WEB_SRC=/opt/farin-web
+if [ -d "$WEB_SRC/.git" ]; then git -C "$WEB_SRC" fetch -q --depth 1 origin server-build && git -C "$WEB_SRC" reset -q --hard FETCH_HEAD
+else git clone -q --depth 1 -b server-build "$REPO" "$WEB_SRC"; fi
+mkdir -p "$WEB_DIR" && find "$WEB_DIR" -mindepth 1 -delete
+(cd "$WEB_SRC" && tar cf - --exclude=.git .) | tar xf - -C "$WEB_DIR"
+printf 'window.__FARIN_CONFIG__ = { supabaseUrl: "%s", supabaseAnonKey: "%s" };\n' "$SITE_URL" "$ANON" > "$WEB_DIR/config.js"
+ok "app installed in $WEB_DIR ($(git -C "$WEB_SRC" log -1 --format=%cd --date=short))"
 
 say "7/8 Configuring Caddy (Farin pages + Supabase paths)"
 cat > /etc/caddy/Caddyfile <<CADDY
