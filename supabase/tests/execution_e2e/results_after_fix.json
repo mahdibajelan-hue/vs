@@ -1,7 +1,7 @@
 {
- "when": "2026-11-19T17:03:44.132Z",
+ "when": "2026-11-19T17:38:11.247Z",
  "project": "7e570000-0000-4000-8000-0000000000e2",
- "pass": 15,
+ "pass": 16,
  "fail": 0,
  "results": [
   {
@@ -13,8 +13,8 @@
     "reports": 32,
     "byStatus": {
      "approved": 29,
-     "submitted": 2,
-     "draft": 1
+     "draft": 1,
+     "submitted": 2
     },
     "lines": 201,
     "resources": 288,
@@ -211,14 +211,14 @@
     ],
     "stoppages": [
      {
-      "category": "weather",
-      "hours": 8,
-      "count": 1
-     },
-     {
       "category": "manpower",
       "hours": 8,
       "count": 2
+     },
+     {
+      "category": "weather",
+      "hours": 8,
+      "count": 1
      },
      {
       "category": "material",
@@ -727,6 +727,88 @@
      "ok": true,
      "error": ""
     }
+   },
+   "pass": true,
+   "note": ""
+  },
+  {
+   "id": "S16",
+   "title": "صدور گزارش با کنترل مدرک (ISO)",
+   "input": "صدور، بازنگری، بررسی و تأیید",
+   "expected": "شمارهٔ ثابت، بازنگری بعدی، قبلی منسوخ؛ بررسی‌کننده ≠ تهیه‌کننده؛ تأییدکننده ≠ بررسی‌کننده؛ بدون ویرایش مستقیم",
+   "actual": {
+    "issue0": {
+     "ok": true,
+     "error": ""
+    },
+    "revisionWithoutReason": {
+     "ok": false,
+     "error": "ERROR:  reason_required"
+    },
+    "issue1": {
+     "ok": true,
+     "error": ""
+    },
+    "docs": [
+     {
+      "doc_no": "TEST-EX-MON-0001",
+      "revision": 0,
+      "status": "superseded"
+     },
+     {
+      "doc_no": "TEST-EX-MON-0001",
+      "revision": 1,
+      "status": "issued"
+     }
+    ],
+    "ownCheck": {
+     "ok": false,
+     "error": "ERROR:  own_document"
+    },
+    "viewerIssue": {
+     "ok": false,
+     "error": "ERROR:  not_allowed"
+    },
+    "approveBeforeCheck": {
+     "ok": false,
+     "error": "ERROR:  bad_state"
+    },
+    "check": {
+     "ok": true,
+     "error": ""
+    },
+    "sameApprover": {
+     "ok": false,
+     "error": "ERROR:  same_checker"
+    },
+    "approve": {
+     "ok": true,
+     "error": ""
+    },
+    "signSuperseded": {
+     "ok": false,
+     "error": "ERROR:  superseded"
+    },
+    "directEdit": {
+     "ok": true,
+     "error": ""
+    },
+    "final": [
+     {
+      "doc_no": "TEST-EX-MON-0001",
+      "revision": 0,
+      "status": "superseded",
+      "checked": false,
+      "approved": false
+     },
+     {
+      "doc_no": "TEST-EX-MON-0001",
+      "revision": 1,
+      "status": "approved",
+      "checked": true,
+      "approved": true
+     }
+    ]
    },
    "pass": true,
    "note": ""

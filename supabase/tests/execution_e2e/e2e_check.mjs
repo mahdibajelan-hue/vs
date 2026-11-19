@@ -234,4 +234,27 @@ rec('S15', 'صورت‌وضعیت ماژول مالی با مبنای سرور �
   { savedForged: saveF, lineCheck: flag, submitForged: subF, savedCorrect: saveOk, submitCorrect: subOk }, saveF.ok && flag[0] && flag[0].srv_ok === false && !subF.ok && /source_mismatch/.test(subF.error) && saveOk.ok && subOk.ok)
 psql(`set session_replication_role = replica; delete from pst_lines where statement_id in (select id from pst_statements where master_project_id = '${P}'); delete from pst_statements where master_project_id = '${P}'; delete from fin_contracts where id = 'fc000000-0000-4000-8000-000000000001';`)
 
+// S16 — issuing a report under document control (048): number, revision, superseded, check / approve rules
+const content = (x) => JSON.stringify({ html: '<p>آزمون</p>', rows: x })
+const iss0 = as('site_head', `select ex_doc_issue('${P}', null, 'monthly', 'گزارش ماهانهٔ اجرا — مهر ۱۴۰۵', '${mehr.from}', '${mehr.to}', '{}'::jsonb, '${content(1)}'::jsonb, '', 'کارفرما؛ مشاور');`)
+const issNoReason = as('site_head', `select ex_doc_issue('${P}', null, 'monthly', 'گزارش ماهانهٔ اجرا — مهر ۱۴۰۵', '${mehr.from}', '${mehr.to}', '{}'::jsonb, '${content(2)}'::jsonb, '', '');`)
+const iss1 = as('site_head', `select ex_doc_issue('${P}', null, 'monthly', 'گزارش ماهانهٔ اجرا — مهر ۱۴۰۵', '${mehr.from}', '${mehr.to}', '{}'::jsonb, '${content(2)}'::jsonb, 'اصلاح مقدار جوشکاری ۱۴۰۵/۰۷/۲۲', '');`)
+const docs = json(`select doc_no, revision, status from ex_issued_docs where project_id = '${P}' order by revision`)
+const cur = json(`select id from ex_issued_docs where project_id = '${P}' and status <> 'superseded'`)[0]?.id
+const old = json(`select id from ex_issued_docs where project_id = '${P}' and status = 'superseded'`)[0]?.id
+const ownCheck = as('site_head', `select ex_doc_sign('${cur}', 'checked');`)
+const viewerIssue = as('viewer', `select ex_doc_issue('${P}', null, 'weekly', 'x', '${mehr.from}', '${mehr.to}', '{}'::jsonb, '{}'::jsonb, '', '');`)
+const approveFirst = as('employer', `select ex_doc_sign('${cur}', 'approved');`)
+const check = as('supervision', `select ex_doc_sign('${cur}', 'checked');`)
+const sameApprove = as('supervision', `select ex_doc_sign('${cur}', 'approved');`)
+const approve = as('employer', `select ex_doc_sign('${cur}', 'approved');`)
+const signOld = as('supervision', `select ex_doc_sign('${old}', 'checked');`)
+const directEdit = as('site_head', `update ex_issued_docs set status = 'approved' where id = '${cur}';`)
+const final = json(`select doc_no, revision, status, checked_by is not null checked, approved_by is not null approved from ex_issued_docs where project_id = '${P}' order by revision`)
+rec('S16', 'صدور گزارش با کنترل مدرک (ISO)', 'صدور، بازنگری، بررسی و تأیید', 'شمارهٔ ثابت، بازنگری بعدی، قبلی منسوخ؛ بررسی‌کننده ≠ تهیه‌کننده؛ تأییدکننده ≠ بررسی‌کننده؛ بدون ویرایش مستقیم',
+  { issue0: iss0, revisionWithoutReason: issNoReason, issue1: iss1, docs, ownCheck, viewerIssue, approveBeforeCheck: approveFirst, check, sameApprover: sameApprove, approve, signSuperseded: signOld, directEdit, final },
+  iss0.ok && !issNoReason.ok && iss1.ok && docs.length === 2 && docs[0].doc_no === docs[1].doc_no && docs[0].status === 'superseded' && !ownCheck.ok && !viewerIssue.ok && !approveFirst.ok && check.ok && !sameApprove.ok && approve.ok && !signOld.ok
+    && final[1].status === 'approved')
+psql(`delete from ex_issued_docs where project_id = '${P}';`)
+
 console.log(JSON.stringify({ when: new Date().toISOString(), project: P, pass: results.filter((r) => r.pass).length, fail: results.filter((r) => !r.pass).length, results }, null, 1))
