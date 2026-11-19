@@ -70,7 +70,7 @@ const gemini: Provider = {
     const key = Deno.env.get('GEMINI_API_KEY')!
     const model = Deno.env.get('MISSION_AI_MODEL') || Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash'
     return withRetry(async () => {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      const res = await fetch(`${(Deno.env.get('GEMINI_BASE_URL') || 'https://generativelanguage.googleapis.com').replace(/\/$/, '')}/v1beta/models/${model}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({
@@ -104,7 +104,7 @@ const geminiTranscribe: Provider['transcribe'] = async (audio, mime, lang) => {
   for (const model of AUDIO_MODELS()) {
     try {
       return await withRetry(async () => {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        const res = await fetch(`${(Deno.env.get('GEMINI_BASE_URL') || 'https://generativelanguage.googleapis.com').replace(/\/$/, '')}/v1beta/models/${model}:generateContent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
           body: JSON.stringify({

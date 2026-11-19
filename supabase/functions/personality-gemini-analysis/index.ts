@@ -340,7 +340,7 @@ Deno.serve(async (req: Request) => {
     const model = Deno.env.get('GEMINI_MODEL') || 'gemini-3.6-flash'
     let response
     try {
-      const ai = new GoogleGenAI({ apiKey: geminiKey })
+      const ai = new GoogleGenAI({ apiKey: geminiKey, ...(Deno.env.get('GEMINI_BASE_URL') ? { httpOptions: { baseUrl: Deno.env.get('GEMINI_BASE_URL') } } : {}) })
       response = await withGeminiRetry(() =>
         ai.models.generateContent({
           model,

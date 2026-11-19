@@ -23,7 +23,7 @@ async function withRetry<T>(fn: () => Promise<T>, n = 3): Promise<T> {
 const gemini = (system: string, user: string) => withRetry(() => geminiOnce(system, user))
 async function geminiOnce(system: string, user: string): Promise<Json> {
   const model = env('RP_AI_MODEL', 'IM_AI_MODEL', 'MISSION_AI_MODEL', 'GEMINI_MODEL') || 'gemini-3.6-flash'
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+  const res = await fetch(`${(Deno.env.get('GEMINI_BASE_URL') || 'https://generativelanguage.googleapis.com').replace(/\/$/, '')}/v1beta/models/${model}:generateContent`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env('GEMINI_API_KEY') },
     body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: user }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } }),
   })

@@ -17,6 +17,9 @@ const JWT_SECRET = Deno.env.get('JWT_SECRET')
 const SUPABASE_JWKS = parseJwks(Deno.env.get('SUPABASE_JWKS'))
 const LOCAL_JWKS = SUPABASE_JWKS ? jose.createLocalJWKSet(SUPABASE_JWKS) : null
 const VERIFY_JWT = Deno.env.get('VERIFY_JWT') === 'true'
+// Farin: functions that check their caller themselves and must also accept calls without a user session
+// (comma list, e.g. im-notify, which a scheduler calls with its own secret) — the cloud's per-function «verify_jwt: false»
+const NO_VERIFY_JWT = new Set((Deno.env.get('FUNCTIONS_NO_VERIFY_JWT') ?? '').split(',').map((s) => s.trim()).filter(Boolean))
 
 type AuthFailure = {
   code: RequestErrors
@@ -309,7 +312,7 @@ async function isValidHybridJWT(jwt: string): Promise<AuthFailure | null> {
 }
 
 Deno.serve({ onError }, async (req: Request) => {
-  if (req.method !== 'OPTIONS' && VERIFY_JWT) {
+  if (req.method !== 'OPTIONS' && VERIFY_JWT && !NO_VERIFY_JWT.has(new URL(req.url).pathname.split('/')[1])) {
     const token = getAuthToken(req)
     if (typeof token !== 'string') {
       return getAuthErrorResponse(token)

@@ -81,6 +81,12 @@ setenv() { if grep -q "^$1=" .env; then sed -i "s|^$1=.*|$1=$2|" .env; else echo
 setenv SUPABASE_PUBLIC_URL "$SITE_URL"
 setenv API_EXTERNAL_URL "$SITE_URL/auth/v1"
 setenv SITE_URL "$SITE_URL"
+# functions check the caller's sign-in, as on the cloud (im-notify is exempt in the override below and checks itself)
+setenv FUNCTIONS_VERIFY_JWT true
+# the passkey function (supervision check-in) accepts phones only from this site's own host
+setenv SV_PASSKEY_HOSTS "${DOMAIN:-$PUBLIC_IP}"
+# secret keys for the functions (AI services, notification gateways) — set with deploy/server/function-secret.sh
+touch functions.env && chmod 600 functions.env
 # the database, the pooler and the gateway listen on this machine only; Caddy is the one door in
 cat > docker-compose.farin.yml <<'YAML'
 services:
@@ -91,6 +97,13 @@ services:
     ports: !override
       - "127.0.0.1:${POSTGRES_PORT}:5432"
       - "127.0.0.1:${POOLER_PROXY_PORT_TRANSACTION}:6543"
+  functions:
+    env_file:
+      - path: ./functions.env
+        required: false
+    environment:
+      SV_PASSKEY_HOSTS: ${SV_PASSKEY_HOSTS:-}
+      FUNCTIONS_NO_VERIFY_JWT: im-notify
 YAML
 case "$(grep '^COMPOSE_FILE=' .env | cut -d= -f2-)" in *docker-compose.farin.yml*) ;; *) sed -i 's|^COMPOSE_FILE=\(.*\)|COMPOSE_FILE=\1:docker-compose.farin.yml|' .env ;; esac
 ok "public address: $SITE_URL"
@@ -116,6 +129,16 @@ say "5/8 Fetching the Farin code"
 if [ -d "$SRC_DIR/.git" ]; then git -C "$SRC_DIR" fetch -q --depth 1 origin "$BRANCH" && git -C "$SRC_DIR" reset -q --hard FETCH_HEAD
 else git clone -q --depth 1 -b "$BRANCH" "$REPO" "$SRC_DIR"; fi
 ok "version: $(git -C "$SRC_DIR" log -1 --format='%h %s' | cut -c1-70)"
+# the app's server-side functions (supabase/functions) and the router that serves them
+fn_names=""
+for d in "$SRC_DIR"/supabase/functions/*/; do
+  n=$(basename "$d")
+  rm -rf "$SUPA_DIR/volumes/functions/$n" && cp -r "$d" "$SUPA_DIR/volumes/functions/$n"
+  fn_names="$fn_names $n"
+done
+cp "$SRC_DIR/deploy/server/supabase-docker/volumes/functions/main/index.ts" "$SUPA_DIR/volumes/functions/main/index.ts"
+(cd "$SUPA_DIR" && docker compose restart functions >/dev/null 2>&1)
+ok "functions:$fn_names"
 
 say "6/8 Installing the Farin app (built by GitHub; the server only downloads it)"
 # the build tools need CPU instructions this virtual server lacks («Illegal instruction»), so GitHub builds the app
