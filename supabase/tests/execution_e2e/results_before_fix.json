@@ -1,0 +1,601 @@
+{
+ "when": "2026-11-19T16:35:43.010Z",
+ "project": "7e570000-0000-4000-8000-0000000000e2",
+ "pass": 10,
+ "fail": 2,
+ "results": [
+  {
+   "id": "S01",
+   "title": "گزارش‌های روزانه در پایگاه داده",
+   "input": "۳۷ روز، جمعه‌ها بدون گزارش",
+   "expected": "≥ ۳۰ گزارش با ردیف، منابع و توقف",
+   "actual": {
+    "reports": 32,
+    "byStatus": {
+     "approved": 29,
+     "submitted": 2,
+     "draft": 1
+    },
+    "lines": 201,
+    "resources": 288,
+    "stoppages": 5
+   },
+   "pass": true,
+   "note": ""
+  },
+  {
+   "id": "S02",
+   "title": "گزارش هفتگی (تجمیع خودکار)",
+   "input": "6 هفته",
+   "expected": "جمع هفته‌ها = جمع تأییدشده؛ تجمعی هر هفته = قبلی + این هفته",
+   "actual": {
+    "weekTable": [
+     {
+      "week": "هفته ۱۴۰۵/۰۶/۲۸ تا ۱۴۰۵/۰۷/۰۳",
+      "from": "2026-09-19",
+      "to": "2026-09-25",
+      "welding": 0
+     },
+     {
+      "week": "هفته ۱۴۰۵/۰۷/۰۴ تا ۱۴۰۵/۰۷/۱۰",
+      "from": "2026-09-26",
+      "to": "2026-10-02",
+      "welding": 366
+     },
+     {
+      "week": "هفته ۱۴۰۵/۰۷/۱۱ تا ۱۴۰۵/۰۷/۱۷",
+      "from": "2026-10-03",
+      "to": "2026-10-09",
+      "welding": 309
+     },
+     {
+      "week": "هفته ۱۴۰۵/۰۷/۱۸ تا ۱۴۰۵/۰۷/۲۴",
+      "from": "2026-10-10",
+      "to": "2026-10-16",
+      "welding": 394
+     },
+     {
+      "week": "هفته ۱۴۰۵/۰۷/۲۵ تا ۱۴۰۵/۰۸/۰۱",
+      "from": "2026-10-17",
+      "to": "2026-10-23",
+      "welding": 386
+     },
+     {
+      "week": "هفته ۱۴۰۵/۰۸/۰۲ تا ۱۴۰۵/۰۸/۰۸",
+      "from": "2026-10-24",
+      "to": "2026-10-30",
+      "welding": 60
+     }
+    ],
+    "weekVsTruth": [
+     {
+      "item": "C-01",
+      "weeks": 30000,
+      "sql": 30000
+     },
+     {
+      "item": "C-02",
+      "weeks": 23051,
+      "sql": 23051
+     },
+     {
+      "item": "C-03",
+      "weeks": 25082,
+      "sql": 25082
+     },
+     {
+      "item": "C-04",
+      "weeks": 1515,
+      "sql": 1515
+     },
+     {
+      "item": "C-05",
+      "weeks": 1247,
+      "sql": 1247
+     },
+     {
+      "item": "C-06",
+      "weeks": 1122,
+      "sql": 1122
+     },
+     {
+      "item": "C-07",
+      "weeks": 10973,
+      "sql": 10973
+     },
+     {
+      "item": "C-08",
+      "weeks": 7913,
+      "sql": 7913
+     }
+    ]
+   },
+   "pass": true,
+   "note": ""
+  },
+  {
+   "id": "S03",
+   "title": "گزارش ماهانه با مرز ماه شمسی",
+   "input": "شهریور ۱۴۰۵، مهر ۱۴۰۵، آبان ۱۴۰۵",
+   "expected": "هر ماه = SQL مستقل؛ جمع ماه‌ها = کل؛ بدون جمع‌زدن مقادیر تجمعی",
+   "actual": [
+    {
+     "month": "شهریور ۱۴۰۵",
+     "from": "2026-08-23",
+     "to": "2026-09-22",
+     "ok": true,
+     "welding": 0,
+     "weldingSql": 0
+    },
+    {
+     "month": "مهر ۱۴۰۵",
+     "from": "2026-09-23",
+     "to": "2026-10-22",
+     "ok": true,
+     "welding": 1455,
+     "weldingSql": 1455
+    },
+    {
+     "month": "آبان ۱۴۰۵",
+     "from": "2026-10-23",
+     "to": "2026-11-21",
+     "ok": true,
+     "welding": 60,
+     "weldingSql": 60
+    }
+   ],
+   "pass": true,
+   "note": ""
+  },
+  {
+   "id": "S04",
+   "title": "خلاصهٔ منابع و توقفات ماه",
+   "input": "مهر ۱۴۰۵",
+   "expected": "میانگین نفرات/تجهیزات و ساعات توقف به تفکیک علت",
+   "actual": {
+    "resources": [
+     {
+      "name": "جوشکار",
+      "avgActive": 13.7,
+      "avgIdle": 0,
+      "days": 26
+     },
+     {
+      "name": "کمک جوشکار",
+      "avgActive": 14,
+      "avgIdle": 0,
+      "days": 26
+     },
+     {
+      "name": "اپراتور",
+      "avgActive": 9,
+      "avgIdle": 0,
+      "days": 26
+     },
+     {
+      "name": "کارگر ساده",
+      "avgActive": 26,
+      "avgIdle": 0,
+      "days": 26
+     },
+     {
+      "name": "تکنسین پوشش",
+      "avgActive": 6,
+      "avgIdle": 0,
+      "days": 26
+     },
+     {
+      "name": "بیل مکانیکی",
+      "avgActive": 4,
+      "avgIdle": 0.04,
+      "days": 26
+     },
+     {
+      "name": "سایدبوم",
+      "avgActive": 3,
+      "avgIdle": 0.04,
+      "days": 26
+     },
+     {
+      "name": "دستگاه جوش",
+      "avgActive": 8,
+      "avgIdle": 0,
+      "days": 26
+     },
+     {
+      "name": "لودر",
+      "avgActive": 2,
+      "avgIdle": 0,
+      "days": 26
+     }
+    ],
+    "stoppages": [
+     {
+      "category": "weather",
+      "hours": 8,
+      "count": 1
+     },
+     {
+      "category": "manpower",
+      "hours": 8,
+      "count": 2
+     },
+     {
+      "category": "material",
+      "hours": 6,
+      "count": 1
+     },
+     {
+      "category": "equipment",
+      "hours": 5,
+      "count": 1
+     }
+    ]
+   },
+   "pass": true,
+   "note": ""
+  },
+  {
+   "id": "S05",
+   "title": "تفکیک سطوح: گزارش‌شده / تأیید ناظر / تأیید کارفرما",
+   "input": "همهٔ ردیف‌ها",
+   "expected": "سه ستون مستقل؛ تأییدشده ≤ گزارش‌شده",
+   "actual": [
+    {
+     "item_no": "C-01",
+     "reported": 30000,
+     "pending": null,
+     "approved": 30000,
+     "employer": null
+    },
+    {
+     "item_no": "C-02",
+     "reported": 26040,
+     "pending": 2989,
+     "approved": 23051,
+     "employer": null
+    },
+    {
+     "item_no": "C-03",
+     "reported": 28632,
+     "pending": 3550,
+     "approved": 25082,
+     "employer": null
+    },
+    {
+     "item_no": "C-04",
+     "reported": 1735,
+     "pending": 214,
+     "approved": 1515,
+     "employer": 374
+    },
+    {
+     "item_no": "C-05",
+     "reported": 1438,
+     "pending": 191,
+     "approved": 1247,
+     "employer": null
+    },
+    {
+     "item_no": "C-06",
+     "reported": 1286,
+     "pending": 164,
+     "approved": 1122,
+     "employer": null
+    },
+    {
+     "item_no": "C-07",
+     "reported": 12937,
+     "pending": 1964,
+     "approved": 10973,
+     "employer": null
+    },
+    {
+     "item_no": "C-08",
+     "reported": 9779,
+     "pending": 1866,
+     "approved": 7913,
+     "employer": null
+    }
+   ],
+   "pass": true,
+   "note": ""
+  },
+  {
+   "id": "S06",
+   "title": "رد، کسر مقدار، برگشت و اصلاح با سابقه",
+   "input": "گزارش‌های ۱۴۰۵/۰۷/۰۷ و ۱۴۰۵/۰۷/۱۴",
+   "expected": "ردیف ردشده=۰؛ ردیف کسرشده با یادداشت؛ تاریخچه و نسخه‌ها کامل",
+   "actual": {
+    "cut": [
+     {
+      "item_no": "C-04",
+      "qty": 72,
+      "approved_qty": 66,
+      "status": "approved",
+      "review_note": "۶ سرجوش فاقد گزارش بازرسی چشمی"
+     },
+     {
+      "item_no": "C-05",
+      "qty": 61,
+      "approved_qty": 0,
+      "status": "rejected",
+      "review_note": "فیلم‌ها تحویل نشده"
+     }
+    ],
+    "hist": [
+     {
+      "action": "submit",
+      "note": ""
+     },
+     {
+      "action": "review:returned",
+      "note": "جبهه کاری اشتباه درج شده — اصلاح شود"
+     },
+     {
+      "action": "submit",
+      "note": ""
+     },
+     {
+      "action": "review:approved",
+      "note": ""
+     }
+    ],
+    "vers": [
+     {
+      "version": 1,
+      "status": "submitted"
+     },
+     {
+      "version": 2,
+      "status": "returned"
+     },
+     {
+      "version": 3,
+      "status": "submitted"
+     },
+     {
+      "version": 4,
+      "status": "approved"
+     }
+    ]
+   },
+   "pass": true,
+   "note": ""
+  },
+  {
+   "id": "S07",
+   "title": "کنترل‌ها و دسترسی",
+   "input": "مقدار بیش از پیمان، ردیف تکراری، بیننده، تأیید توسط پیمانکار، ویرایش گزارش تأییدشده",
+   "expected": "همه رد شوند",
+   "actual": {
+    "overBase": {
+     "ok": false,
+     "error": "ERROR:  exceeds_base:C-01 تسطیح و آماده‌سازی حریم (ROW)"
+    },
+    "duplicate": {
+     "ok": false,
+     "error": "ERROR:  duplicate_line:WRK-026"
+    },
+    "viewerInsert": {
+     "ok": false,
+     "error": "ERROR:  new row violates row-level security policy for table \"ex_reports\""
+    },
+    "contractorApprove": {
+     "ok": false,
+     "error": "ERROR:  not_allowed"
+    },
+    "editApprovedLine": {
+     "ok": false,
+     "error": "ERROR:  report_locked"
+    },
+    "supervisionDirectEdit": {
+     "ok": false,
+     "error": "",
+     "changed": false
+    },
+    "employerReviewAdvisoryEmpty": {
+     "ok": true,
+     "error": ""
+    }
+   },
+   "pass": true,
+   "note": ""
+  },
+  {
+   "id": "S08",
+   "title": "اصلاح گزارش تأییدشده با گردش مجاز",
+   "input": "گزارش ۱۴۰۵/۰۷/۲۲، جوشکاری 67 → 63",
+   "expected": "بازگشایی توسط ناظر ← اصلاح ← تأیید؛ ماهانه −۴؛ نسخهٔ قبلی محفوظ",
+   "actual": {
+    "reopen": {
+     "ok": true,
+     "error": ""
+    },
+    "fix": {
+     "ok": true,
+     "error": ""
+    },
+    "reapprove": {
+     "ok": true,
+     "error": ""
+    },
+    "monthBefore": 1455,
+    "monthWhileOpen": 1388,
+    "monthAfter": 1451,
+    "versions": [
+     {
+      "version": 1,
+      "status": "submitted",
+      "qty": 67
+     },
+     {
+      "version": 2,
+      "status": "approved",
+      "qty": 67
+     },
+     {
+      "version": 3,
+      "status": "returned",
+      "qty": 67
+     },
+     {
+      "version": 4,
+      "status": "submitted",
+      "qty": 63
+     },
+     {
+      "version": 5,
+      "status": "approved",
+      "qty": 63
+     }
+    ]
+   },
+   "pass": true,
+   "note": ""
+  },
+  {
+   "id": "S09",
+   "title": "سطح سوم: اندازه‌گیری ← قابل‌پرداخت ← پرداخت‌شده",
+   "input": "جوشکاری، تأییدشده تا پایان مهر = 1451",
+   "expected": "اندازه‌گیری ≤ تأییدشده، قابل‌پرداخت ≤ اندازه‌گیری؛ پیمانکار مجاز به ثبت اندازه‌گیری نیست",
+   "actual": {
+    "valid": {
+     "ok": true,
+     "error": ""
+    },
+    "measuredOverApproved": {
+     "ok": false,
+     "error": "ERROR:  measured_exceeds_approved"
+    },
+    "billedOverMeasured": {
+     "ok": false,
+     "error": "ERROR:  billed_exceeds_measured"
+    },
+    "contractorMeasures": {
+     "ok": false,
+     "error": "ERROR:  new row violates row-level security policy for table \"ex_measurements\""
+    }
+   },
+   "pass": true,
+   "note": ""
+  },
+  {
+   "id": "S10",
+   "title": "صورت‌وضعیت آزمایشی ماه مهر از مقادیر تأییدشده",
+   "input": "مهر ۱۴۰۵، 8 ردیف",
+   "expected": "مقدار سیستمی هر ردیف = تأییدشدهٔ واقعی؛ مقدار جعلی رد شود",
+   "actual": {
+    "created": {
+     "ok": true,
+     "error": ""
+    },
+    "rowsSample": [
+     {
+      "item_no": "C-01",
+      "sys_cum": 30000,
+      "req_cum": 30000,
+      "con_cum": null,
+      "unit_price": 180000
+     },
+     {
+      "item_no": "C-02",
+      "sys_cum": 22056,
+      "req_cum": 22056,
+      "con_cum": null,
+      "unit_price": 420000
+     },
+     {
+      "item_no": "C-03",
+      "sys_cum": 23845,
+      "req_cum": 23845,
+      "con_cum": null,
+      "unit_price": 150000
+     },
+     {
+      "item_no": "C-04",
+      "sys_cum": 1451,
+      "req_cum": 1451,
+      "con_cum": null,
+      "unit_price": 9500000
+     }
+    ],
+    "sysEqualsApproved": true,
+    "forgedAccepted": true,
+    "forgedRows": [
+     {
+      "item_no": "C-01",
+      "sys_cum": 90000,
+      "unit_price": 360000
+     },
+     {
+      "item_no": "C-02",
+      "sys_cum": 66168,
+      "unit_price": 840000
+     },
+     {
+      "item_no": "C-03",
+      "sys_cum": 71535,
+      "unit_price": 300000
+     }
+    ],
+    "workDoneStatementTotal": 42262910000
+   },
+   "pass": false,
+   "note": "اشکال: سرور مقدار «سیستمی» و فی را از مرورگر می‌پذیرد و با تأییدشده‌ها مقایسه نمی‌کند"
+  },
+  {
+   "id": "S11",
+   "title": "گام الزامی کارفرما در صورت‌وضعیت",
+   "input": "employerStep = binding",
+   "expected": "صورت‌وضعیت فقط مقدار تأییدشدهٔ کارفرما را بگیرد",
+   "actual": {
+    "weldingStatementAsPageBuildsIt": 1451,
+    "weldingEmployerConfirmed": 374,
+    "progressBinding": 4.49,
+    "progressOff": 56.62
+   },
+   "pass": false,
+   "note": "صفحهٔ صورت‌وضعیت قرارداد، گزینهٔ employer را به cumulative() نمی‌دهد"
+  },
+  {
+   "id": "S12",
+   "title": "ردیابی عدد ماهانه تا گزارش روزانه",
+   "input": "جوشکاری مهر ۱۴۰۵ = 1451",
+   "expected": "جمع ردیف‌های منبع = عدد گزارش",
+   "actual": {
+    "figure": 1451,
+    "tracedSum": 1451,
+    "sources": 24,
+    "first": [
+     {
+      "report_no": "WRK-005",
+      "report_date": "2026-09-26",
+      "front": "جبهه ۱ (KP 0–10)",
+      "reported": 46,
+      "approved": 46,
+      "status": "approved"
+     },
+     {
+      "report_no": "WRK-006",
+      "report_date": "2026-09-27",
+      "front": "جبهه ۱ (KP 0–10)",
+      "reported": 59,
+      "approved": 59,
+      "status": "approved"
+     },
+     {
+      "report_no": "WRK-007",
+      "report_date": "2026-09-28",
+      "front": "جبهه ۱ (KP 0–10)",
+      "reported": 59,
+      "approved": 59,
+      "status": "approved"
+     }
+    ]
+   },
+   "pass": true,
+   "note": ""
+  }
+ ]
+}
