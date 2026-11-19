@@ -12,6 +12,8 @@
 #
 # Messages are in English: the Windows console that runs ssh cannot show Persian text.
 # Run as root:   bash /opt/farin-src/deploy/server/install.sh
+# With a domain (HTTPS certificate is fetched and renewed automatically by Caddy; the domain is remembered for later runs):
+#                DOMAIN=farin.example.ir bash /opt/farin-src/deploy/server/install.sh
 # Safe to run again: it keeps an existing Supabase .env (secrets) and only rebuilds what changed.
 set -euo pipefail
 
@@ -22,7 +24,10 @@ REPO=https://github.com/mahdibajelan-hue/vs
 BRANCH=claude/piping-isometric-tracker-x8y5i1
 MIRROR=https://docker.arvancloud.ir
 PUBLIC_IP=$(curl -s -m 10 https://api.ipify.org || hostname -I | awk '{print $1}')
-SITE_URL=${SITE_URL:-http://$PUBLIC_IP}
+DOMAIN_FILE=/etc/farin-domain
+DOMAIN=${DOMAIN:-$(cat "$DOMAIN_FILE" 2>/dev/null || true)}
+DOMAIN=$(printf '%s' "$DOMAIN" | tr 'A-Z' 'a-z' | sed -E 's#^https?://##; s#/.*$##')
+if [ -n "$DOMAIN" ]; then SITE_URL=${SITE_URL:-https://$DOMAIN}; else SITE_URL=${SITE_URL:-http://$PUBLIC_IP}; fi
 
 say()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 ok()   { printf '\033[1;32m    ✔ %s\033[0m\n' "$*"; }
@@ -64,6 +69,14 @@ else
   ok "kept the existing settings ($SUPA_DIR/.env)"
 fi
 cd "$SUPA_DIR"
+if [ -n "$DOMAIN" ]; then
+  # Caddy can only get a certificate when the domain already points at this server
+  dns_ip=$(getent ahostsv4 "$DOMAIN" | awk 'NR==1{print $1}')
+  [ "$dns_ip" = "$PUBLIC_IP" ] || die "The domain $DOMAIN points to '${dns_ip:-nothing}', not to this server ($PUBLIC_IP). Fix its DNS A record, wait a few minutes, run again."
+  echo "$DOMAIN" > "$DOMAIN_FILE"
+  ok "domain $DOMAIN points to this server"
+fi
+OLD_SITE_URL=$(grep '^SITE_URL=' .env | cut -d= -f2- || true)
 setenv() { if grep -q "^$1=" .env; then sed -i "s|^$1=.*|$1=$2|" .env; else echo "$1=$2" >> .env; fi; }
 setenv SUPABASE_PUBLIC_URL "$SITE_URL"
 setenv API_EXTERNAL_URL "$SITE_URL/auth/v1"
@@ -90,6 +103,12 @@ for i in $(seq 1 60); do
   sleep 5
 done
 docker compose ps --format 'table {{.Service}}\t{{.State}}\t{{.Health}}'
+# stored links to files (profile photos) follow the site to its new address
+if [ -n "$OLD_SITE_URL" ] && [ "$OLD_SITE_URL" != "$SITE_URL" ]; then
+  docker exec supabase-db psql -h localhost -U supabase_admin -d postgres -X -q -c \
+    "do \$\$ begin if to_regclass('public.profiles') is not null then update public.profiles set avatar_url = replace(avatar_url, '$OLD_SITE_URL', '$SITE_URL') where avatar_url like '$OLD_SITE_URL%'; end if; end \$\$;" \
+    && ok "stored file links moved from $OLD_SITE_URL to $SITE_URL"
+fi
 
 say "5/8 Fetching the Farin code"
 if [ -d "$SRC_DIR/.git" ]; then git -C "$SRC_DIR" fetch -q --depth 1 origin "$BRANCH" && git -C "$SRC_DIR" reset -q --hard FETCH_HEAD
@@ -109,9 +128,19 @@ printf 'window.__FARIN_CONFIG__ = { supabaseUrl: "%s", supabaseAnonKey: "%s" };\
 ok "app installed in $WEB_DIR ($(git -C "$WEB_SRC" log -1 --format=%cd --date=short))"
 
 say "7/8 Configuring Caddy (Farin pages + Supabase paths)"
+if [ -n "$DOMAIN" ]; then
+  SITE_BLOCK=$DOMAIN
+  # the bare address still works: it sends the visitor to the secure domain
+  REDIRECT_BLOCK="http://$PUBLIC_IP {
+	redir https://$DOMAIN{uri} permanent
+}"
+else
+  SITE_BLOCK=:80
+  REDIRECT_BLOCK=""
+fi
 cat > /etc/caddy/Caddyfile <<CADDY
 # Farin PMIS — written by deploy/server/install.sh
-${CADDY_SITE:-:80} {
+$SITE_BLOCK {
 	encode zstd gzip
 	@supabase path /rest/v1/* /auth/v1/* /storage/v1/* /functions/v1/* /realtime/v1/* /graphql/v1/*
 	handle @supabase {
@@ -125,20 +154,38 @@ ${CADDY_SITE:-:80} {
 		file_server
 	}
 }
+$REDIRECT_BLOCK
 CADDY
+caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || die "The Caddy settings are not valid: caddy validate --config /etc/caddy/Caddyfile"
 systemctl enable -q caddy && systemctl restart caddy
-ok "Caddy listening on port 80"
+ok "Caddy restarted"
 
 say "8/8 Firewall: only ports 22, 80 and 443"
 ufw allow 22/tcp >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
 ok "$(ufw status | head -1)"
 
+if [ -n "$DOMAIN" ]; then
+  say "Waiting for the HTTPS certificate of $DOMAIN (up to 2 minutes)"
+  code=000
+  for i in $(seq 1 24); do
+    code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' "https://$DOMAIN/" || true)
+    [ "$code" = 200 ] && break
+    sleep 5
+  done
+  if [ "$code" = 200 ]; then
+    ok "https://$DOMAIN works"
+  else
+    printf '\033[1;33m    ! no certificate yet. Last messages from Caddy:\033[0m\n'
+    journalctl -u caddy --since "-5 min" --no-pager -o cat | grep -iE 'error|challenge|certificate' | tail -6 | cut -c1-220 | sed 's/^/      /'
+    printf '\033[1;33m    ! Check that port 443 and 80 are open in the ArvanCloud panel (Security group / firewall) and run again.\033[0m\n'
+  fi
+fi
+
 cat <<DONE
 
 $(printf '\033[1;32m')DONE - installation finished.$(printf '\033[0m')
   Farin:   $SITE_URL
-  (no data yet - moving the data over is the next step)
 
   Supabase Studio (admin panel) only from your own computer, through an SSH tunnel:
     ssh -L 8000:127.0.0.1:8000 root@$PUBLIC_IP
