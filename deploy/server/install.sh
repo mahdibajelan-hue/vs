@@ -10,6 +10,7 @@
 # Only ports 22, 80 and 443 are open to the internet. The database, the API gateway and Supabase Studio listen on
 # 127.0.0.1 only; Studio is reached through an SSH tunnel (see the end of this script).
 #
+# Messages are in English: the Windows console that runs ssh cannot show Persian text.
 # Run as root:   bash /opt/farin-src/deploy/server/install.sh
 # Safe to run again: it keeps an existing Supabase .env (secrets) and only rebuilds what changed.
 set -euo pipefail
@@ -26,29 +27,29 @@ SITE_URL=${SITE_URL:-http://$PUBLIC_IP}
 say()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 ok()   { printf '\033[1;32m    ✔ %s\033[0m\n' "$*"; }
 die()  { printf '\n\033[1;31m✘ %s\033[0m\n' "$*"; exit 1; }
-[ "$(id -u)" = 0 ] || die "این اسکریپت باید با کاربر root اجرا شود."
+[ "$(id -u)" = 0 ] || die "Run this script as root."
 
 export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
 
-say "۱/۸ نصب پیش‌نیازها از مخزن Ubuntu (Docker، Caddy، Node.js، …)"
+say "1/8 Installing prerequisites from Ubuntu (Docker, Caddy, Node.js, ...)"
 apt-get update -qq
 compose_pkg=docker-compose-v2; apt-cache show docker-compose-v2 >/dev/null 2>&1 || compose_pkg=docker-compose-plugin
 apt-get install -y -qq docker.io "$compose_pkg" caddy git jq openssl ca-certificates curl ufw nodejs npm >/dev/null
-docker compose version >/dev/null 2>&1 || die "docker compose نصب نشد."
+docker compose version >/dev/null 2>&1 || die "docker compose was not installed."
 # the override below needs compose ≥ 2.24.4 («!override»); the app's build tool (Vite 8) needs Node ≥ 20.19
-printf '%s\n%s\n' 2.24.4 "$(docker compose version --short | tr -d v)" | sort -V -C || die "نسخهٔ docker compose قدیمی است (کمتر از 2.24.4)."
-[ "$(node -p 'process.versions.node.split(".").map(Number).reduce((a, b, i) => a + b * [1e6, 1e3, 1][i], 0)')" -ge 20019000 ] || die "نسخهٔ Node.js قدیمی است ($(node -v)؛ دست‌کم 20.19 لازم است)."
+printf '%s\n%s\n' 2.24.4 "$(docker compose version --short | tr -d v)" | sort -V -C || die "docker compose is older than 2.24.4."
+[ "$(node -p 'process.versions.node.split(".").map(Number).reduce((a, b, i) => a + b * [1e6, 1e3, 1][i], 0)')" -ge 20019000 ] || die "Node.js $(node -v) is too old (20.19 or newer is needed)."
 ok "Docker $(docker --version | awk '{print $3}' | tr -d ,) · Compose $(docker compose version --short) · Node $(node -v)"
 
-say "۲/۸ تنظیم آینهٔ Docker ابرآروان (Docker Hub از ایران مسدود است)"
+say "2/8 Using the ArvanCloud Docker mirror (Docker Hub is blocked from Iran)"
 mkdir -p /etc/docker
 cat > /etc/docker/daemon.json <<JSON
 { "registry-mirrors": ["$MIRROR"], "log-driver": "json-file", "log-opts": { "max-size": "20m", "max-file": "3" } }
 JSON
 systemctl restart docker
-ok "آینه: $MIRROR"
+ok "mirror: $MIRROR"
 
-say "۳/۸ دریافت تنظیمات رسمی Supabase و ساخت رمزها و کلیدها"
+say "3/8 Fetching the official Supabase setup and generating passwords and keys"
 if [ ! -f "$SUPA_DIR/.env" ]; then
   cd /opt
   curl -fsSL https://raw.githubusercontent.com/supabase/supabase/master/docker/setup.sh -o /tmp/supabase-setup.sh \
@@ -59,9 +60,9 @@ if [ ! -f "$SUPA_DIR/.env" ]; then
     (cd /tmp/sb-src && git sparse-checkout set docker && cp -r docker "$SUPA_DIR" && cd "$SUPA_DIR" && cp .env.example .env \
       && sh utils/generate-keys.sh --update-env && sh utils/add-new-auth-keys.sh --update-env)
   fi
-  ok "رمزها و کلیدها ساخته شد ($SUPA_DIR/.env)"
+  ok "passwords and keys created ($SUPA_DIR/.env)"
 else
-  ok "تنظیمات قبلی نگه داشته شد ($SUPA_DIR/.env)"
+  ok "kept the existing settings ($SUPA_DIR/.env)"
 fi
 cd "$SUPA_DIR"
 setenv() { if grep -q "^$1=" .env; then sed -i "s|^$1=.*|$1=$2|" .env; else echo "$1=$2" >> .env; fi; }
@@ -80,9 +81,9 @@ services:
       - "127.0.0.1:${POOLER_PROXY_PORT_TRANSACTION}:6543"
 YAML
 case "$(grep '^COMPOSE_FILE=' .env | cut -d= -f2-)" in *docker-compose.farin.yml*) ;; *) sed -i 's|^COMPOSE_FILE=\(.*\)|COMPOSE_FILE=\1:docker-compose.farin.yml|' .env ;; esac
-ok "آدرس عمومی: $SITE_URL"
+ok "public address: $SITE_URL"
 
-say "۴/۸ دریافت و اجرای Supabase (بار اول ۵ تا ۱۵ دقیقه)"
+say "4/8 Downloading and starting Supabase (5-15 minutes the first time)"
 docker compose pull -q
 docker compose up -d
 for i in $(seq 1 60); do
@@ -91,20 +92,20 @@ for i in $(seq 1 60); do
 done
 docker compose ps --format 'table {{.Service}}\t{{.State}}\t{{.Health}}'
 
-say "۵/۸ دریافت کد فرین"
+say "5/8 Fetching the Farin code"
 if [ -d "$SRC_DIR/.git" ]; then git -C "$SRC_DIR" fetch -q --depth 1 origin "$BRANCH" && git -C "$SRC_DIR" reset -q --hard FETCH_HEAD
 else git clone -q --depth 1 -b "$BRANCH" "$REPO" "$SRC_DIR"; fi
-ok "نسخه: $(git -C "$SRC_DIR" log -1 --format='%h %s' | cut -c1-70)"
+ok "version: $(git -C "$SRC_DIR" log -1 --format='%h %s' | cut -c1-70)"
 
-say "۶/۸ ساخت برنامهٔ فرین برای این سرور"
+say "6/8 Building the Farin app for this server"
 ANON=$(grep '^ANON_KEY=' "$SUPA_DIR/.env" | cut -d= -f2-)
 cd "$SRC_DIR"
 npm ci --no-audit --no-fund --loglevel=error
 VITE_SUPABASE_URL="$SITE_URL" VITE_SUPABASE_ANON_KEY="$ANON" HOST_BUILD=true npx vite build --logLevel error
 mkdir -p "$WEB_DIR" && rm -rf "${WEB_DIR:?}"/* && cp -r dist/. "$WEB_DIR"/
-ok "برنامه در $WEB_DIR"
+ok "app installed in $WEB_DIR"
 
-say "۷/۸ تنظیم Caddy (صفحات فرین + مسیرهای Supabase)"
+say "7/8 Configuring Caddy (Farin pages + Supabase paths)"
 cat > /etc/caddy/Caddyfile <<CADDY
 # Farin PMIS — written by deploy/server/install.sh
 ${CADDY_SITE:-:80} {
@@ -123,23 +124,23 @@ ${CADDY_SITE:-:80} {
 }
 CADDY
 systemctl enable -q caddy && systemctl restart caddy
-ok "Caddy روی درگاه ۸۰"
+ok "Caddy listening on port 80"
 
-say "۸/۸ دیوار آتش: فقط درگاه‌های ۲۲، ۸۰ و ۴۴۳"
+say "8/8 Firewall: only ports 22, 80 and 443"
 ufw allow 22/tcp >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
 ok "$(ufw status | head -1)"
 
 cat <<DONE
 
-$(printf '\033[1;32m')✔ نصب تمام شد.$(printf '\033[0m')
-  سامانه:  $SITE_URL
-  (هنوز داده‌ای ندارد — انتقال داده‌ها قدم بعدی است.)
+$(printf '\033[1;32m')DONE - installation finished.$(printf '\033[0m')
+  Farin:   $SITE_URL
+  (no data yet - moving the data over is the next step)
 
-  پنل مدیریت Supabase (Studio) فقط از کامپیوتر خودتان، با تونل SSH:
+  Supabase Studio (admin panel) only from your own computer, through an SSH tunnel:
     ssh -L 8000:127.0.0.1:8000 root@$PUBLIC_IP
-    سپس در مرورگر: http://localhost:8000
-    نام کاربری و رمز:  cd $SUPA_DIR && sh run.sh secrets   (DASHBOARD_USERNAME / DASHBOARD_PASSWORD)
+    then open in the browser: http://localhost:8000
+    username and password:  cd $SUPA_DIR && sh run.sh secrets   (DASHBOARD_USERNAME / DASHBOARD_PASSWORD)
 
-  رمزها و کلیدها در $SUPA_DIR/.env هستند — از این فایل نسخهٔ پشتیبان بگیرید و به کسی ندهید.
+  Passwords and keys are in $SUPA_DIR/.env - keep a backup of this file and never share it.
 DONE
