@@ -1,5 +1,5 @@
 {
- "when": "2026-11-19T17:38:11.247Z",
+ "when": "2026-11-19T18:40:55.390Z",
  "project": "7e570000-0000-4000-8000-0000000000e2",
  "pass": 16,
  "fail": 0,
@@ -13,8 +13,8 @@
     "reports": 32,
     "byStatus": {
      "approved": 29,
-     "draft": 1,
-     "submitted": 2
+     "submitted": 2,
+     "draft": 1
     },
     "lines": 201,
     "resources": 288,
@@ -211,14 +211,14 @@
     ],
     "stoppages": [
      {
-      "category": "manpower",
-      "hours": 8,
-      "count": 2
-     },
-     {
       "category": "weather",
       "hours": 8,
       "count": 1
+     },
+     {
+      "category": "manpower",
+      "hours": 8,
+      "count": 2
      },
      {
       "category": "material",
@@ -309,18 +309,18 @@
    "actual": {
     "cut": [
      {
-      "item_no": "C-04",
-      "qty": 72,
-      "approved_qty": 66,
-      "status": "approved",
-      "review_note": "۶ سرجوش فاقد گزارش بازرسی چشمی"
-     },
-     {
       "item_no": "C-05",
       "qty": 61,
       "approved_qty": 0,
       "status": "rejected",
       "review_note": "فیلم‌ها تحویل نشده"
+     },
+     {
+      "item_no": "C-04",
+      "qty": 72,
+      "approved_qty": 66,
+      "status": "approved",
+      "review_note": "۶ سرجوش فاقد گزارش بازرسی چشمی"
      }
     ],
     "hist": [

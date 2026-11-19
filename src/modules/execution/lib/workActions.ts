@@ -23,6 +23,32 @@ export const DEFAULT_ACTIONS: Omit<WorkAction, 'id'>[] = [
   { key: 'hydro', title: 'تست هیدرواستاتیک', unit: 'm', group: 'تست و راه‌اندازی', fields: [num('pressure', 'فشار (bar)')], sort: 110, active: true },
 ]
 
+/** A starting list for a station / plant project (CGS, compressor, pressure-reducing station) — civil, mechanical, piping, electrical,
+ *  instrumentation, pre-commissioning and commissioning. Each action asks only the fields of its own work; editable per project. */
+export const STATION_ACTIONS: Omit<WorkAction, 'id'>[] = [
+  { key: 'st_excavation', title: 'خاکبرداری و پی‌کنی', unit: 'm3', group: 'سیویل', fields: [txt('area', 'محدوده / سازه'), sel('soil', 'نوع زمین', ['خاکی', 'سنگی', 'آبرفتی'])], sort: 210, active: true },
+  { key: 'st_concrete', title: 'بتن‌ریزی', unit: 'm3', group: 'سیویل', fields: [txt('structure', 'سازه (فونداسیون، اسکید، دیوار)'), sel('grade', 'رده بتن', ['C20', 'C25', 'C30', 'C35']), txt('pourNo', 'شمارهٔ بتن‌ریزی')], sort: 220, active: true },
+  { key: 'st_rebar', title: 'آرماتوربندی', unit: 'kg', group: 'سیویل', fields: [txt('structure', 'سازه')], sort: 230, active: true },
+  { key: 'st_building', title: 'ساختمان و ابنیه', unit: 'm2', group: 'سیویل', fields: [txt('building', 'ساختمان'), txt('item', 'بخش کار')], sort: 240, active: true },
+  { key: 'st_steel', title: 'نصب اسکلت فلزی و سازه', unit: 'kg', group: 'مکانیکال', fields: [txt('structure', 'سازه / پایپ‌رک')], sort: 310, active: true },
+  { key: 'st_equipment', title: 'نصب تجهیزات (اسکید، فیلتر، هیتر، رگولاتور)', unit: 'عدد', group: 'مکانیکال', fields: [txt('tag', 'شمارهٔ تجهیز (Tag)'), sel('stage', 'مرحله', ['استقرار', 'تراز و گروت', 'اتصال نهایی'])], sort: 320, active: true },
+  { key: 'st_spool', title: 'ساخت اسپول', unit: 'inch-dia', group: 'پایپینگ', fields: [txt('line', 'شمارهٔ خط'), txt('spool', 'شمارهٔ اسپول'), num('size', 'قطر (in)')], sort: 410, active: true },
+  { key: 'st_pipe_erect', title: 'نصب لوله و اسپول', unit: 'inch-dia', group: 'پایپینگ', fields: [txt('line', 'شمارهٔ خط'), num('size', 'قطر (in)')], sort: 420, active: true },
+  { key: 'st_weld', title: 'جوشکاری پایپینگ', unit: 'inch-dia', group: 'پایپینگ', fields: [txt('line', 'شمارهٔ خط'), txt('weldNos', 'شمارهٔ سرجوش‌ها'), num('size', 'قطر (in)')], sort: 430, active: true },
+  { key: 'st_support', title: 'نصب ساپورت', unit: 'عدد', group: 'پایپینگ', fields: [txt('line', 'شمارهٔ خط')], sort: 440, active: true },
+  { key: 'st_cable_tray', title: 'نصب سینی کابل و کاندوئیت', unit: 'm', group: 'برق', fields: [txt('route', 'مسیر')], sort: 510, active: true },
+  { key: 'st_cable', title: 'کابل‌کشی برق', unit: 'm', group: 'برق', fields: [txt('cableNo', 'شمارهٔ کابل'), txt('size', 'سطح مقطع')], sort: 520, active: true },
+  { key: 'st_termination', title: 'سرسیم‌بندی و اتصالات', unit: 'عدد', group: 'برق', fields: [txt('panel', 'تابلو / تجهیز')], sort: 530, active: true },
+  { key: 'st_earthing', title: 'سیستم زمین و حفاظت کاتدی ایستگاه', unit: 'm', group: 'برق', fields: [txt('area', 'محدوده')], sort: 540, active: true },
+  { key: 'st_instrument', title: 'نصب ابزار دقیق', unit: 'عدد', group: 'ابزار دقیق', fields: [txt('tag', 'شمارهٔ ابزار (Tag)'), sel('type', 'نوع', ['فشار', 'دما', 'جریان', 'سطح', 'شیر کنترلی', 'آشکارساز گاز'])], sort: 610, active: true },
+  { key: 'st_tubing', title: 'تیوبینگ ابزار دقیق', unit: 'm', group: 'ابزار دقیق', fields: [txt('tag', 'ابزار مربوط')], sort: 620, active: true },
+  { key: 'st_loop', title: 'آزمون حلقه (Loop Check)', unit: 'حلقه', group: 'ابزار دقیق', fields: [txt('loop', 'شمارهٔ حلقه'), sel('result', 'نتیجه', ['قبول', 'رد'])], sort: 630, active: true },
+  { key: 'st_hydro', title: 'تست فشار پایپینگ ایستگاه', unit: 'test package', group: 'پیش‌راه‌اندازی', fields: [txt('pack', 'شمارهٔ بستهٔ تست'), num('pressure', 'فشار (bar)'), sel('result', 'نتیجه', ['قبول', 'رد'])], sort: 710, active: true },
+  { key: 'st_flush', title: 'شست‌وشو و خشک‌کردن (Flushing / Drying)', unit: 'test package', group: 'پیش‌راه‌اندازی', fields: [txt('pack', 'شمارهٔ بسته')], sort: 720, active: true },
+  { key: 'st_punch', title: 'رفع پانچ', unit: 'مورد', group: 'پیش‌راه‌اندازی', fields: [sel('cat', 'دسته', ['A', 'B', 'C']), txt('system', 'سیستم')], sort: 730, active: true, billable: false },
+  { key: 'st_commission', title: 'راه‌اندازی و گازدار کردن', unit: 'سیستم', group: 'راه‌اندازی', fields: [txt('system', 'سیستم'), sel('step', 'مرحله', ['آماده‌سازی', 'گازدار کردن', 'آزمون عملکرد'])], sort: 810, active: true },
+]
+
 export const actionOf = (l: Pick<ReportLine, 'detail'>): string => String(l.detail.actionKey ?? '')
 
 /** The best rule for one entered line: a rule whose condition matches the line's field value beats the default rule (no condition). */

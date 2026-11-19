@@ -7,7 +7,7 @@ import { useSystemStore } from '../../../store/useSystemStore'
 import { explainExecutionError } from '../lib/errors'
 import { FORM_BY_KEY } from '../lib/formCatalog'
 import { desiredSlots, diffSlots, type SignRole } from '../lib/signRoles'
-import { DEFAULT_ACTIONS, type ActionField, type ActionRule, type WorkAction } from '../lib/workActions'
+import { DEFAULT_ACTIONS, STATION_ACTIONS, type ActionField, type ActionRule, type WorkAction } from '../lib/workActions'
 import { mapPipe } from '../lib/registers'
 import type { Welder, WelderQual, Pipe } from '../lib/registers'
 import { WELDER_COLS, QUAL_COLS, mapWelder, mapQual } from '../../competency/lib/personnel'
@@ -70,7 +70,7 @@ interface State {
   weldHistory: WeldHistoryRow[]; archive: ArchiveRow[]
   workActions: (WorkAction & { projectId: string })[]; actionRules: (ActionRule & { projectId: string })[]
   saveAction: (projectId: string, a: { key: string; title: string; unit: string; group: string; fields: ActionField[]; sort?: number; active?: boolean; billable?: boolean }) => Promise<boolean>
-  seedActions: (projectId: string) => Promise<boolean>
+  seedActions: (projectId: string, set?: 'pipeline' | 'station') => Promise<boolean>
   statements: StatementRow0[]; statementLines: StatementLine[]
   signSlots: SignSlot[]; signatures: ReportSignature[]
   saveSlot: (s: { projectId: string; formKey: string; slotKey: string; label: string; party: SignParty; userId: string | null; sort: number; required: boolean; active?: boolean }) => Promise<boolean>
@@ -369,9 +369,9 @@ export const useEpcStore = create<State>((set, get) => ({
     if (fail('ذخیرهٔ اقدام کارگاهی', error)) return false
     await get().fetchAll(); return true
   },
-  seedActions: async (projectId) => {
+  seedActions: async (projectId, which = 'pipeline') => {
     const have = new Set(get().workActions.filter((x) => x.projectId === projectId).map((x) => x.key))
-    const rows = DEFAULT_ACTIONS.filter((a) => !have.has(a.key)).map((a) => ({ project_id: projectId, key: a.key, title: a.title, unit: a.unit, group_label: a.group, fields: a.fields, sort: a.sort, active: true, billable: a.billable !== false }))
+    const rows = (which === 'station' ? STATION_ACTIONS : DEFAULT_ACTIONS).filter((a) => !have.has(a.key)).map((a) => ({ project_id: projectId, key: a.key, title: a.title, unit: a.unit, group_label: a.group, fields: a.fields, sort: a.sort, active: true, billable: a.billable !== false }))
     if (!rows.length) return true
     const { error } = await supabase.from('ex_work_actions').insert(rows)
     if (fail('افزودن اقدام‌های پیش‌فرض', error)) return false

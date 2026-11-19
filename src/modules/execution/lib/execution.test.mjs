@@ -93,3 +93,13 @@ assert.equal(rows[0].prevApproved, 30); assert.equal(rows[0].pending, 20); asser
 const dv = deviationDrivers({ activities: [act('a', { weight: 60 }), act('b', { weight: 40 })], baselines: [], blines: [], reports: [rep('r1', '2026-01-02')], lines: [line('l1', 'r1', 'a', 50), line('l2', 'r1', 'b', 10)], asOf: '2026-01-11' })
 assert.equal(dv[0].activity.id, 'b'); assert.ok(Math.abs(dv[0].points - 0.4 * 0.9) < 1e-9); assert.ok(Math.abs(dv[1].points - 0.6 * 0.5) < 1e-9)
 console.log('execution libs ok')
+
+// station starting list: own keys, no clash with the pipeline list, every action has a unit and a group
+{
+  const { DEFAULT_ACTIONS, STATION_ACTIONS } = await import('./workActions.ts')
+  const keys = STATION_ACTIONS.map((a) => a.key)
+  if (new Set(keys).size !== keys.length) throw new Error('duplicate station action key')
+  if (keys.some((k) => DEFAULT_ACTIONS.some((a) => a.key === k))) throw new Error('station key clashes with pipeline')
+  if (STATION_ACTIONS.some((a) => !a.unit || !a.group)) throw new Error('station action without unit/group')
+  if (new Set(STATION_ACTIONS.map((a) => a.group)).size < 7) throw new Error('station disciplines missing')
+}
