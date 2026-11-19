@@ -51,15 +51,15 @@ ok "mirror: $MIRROR"
 
 say "3/8 Fetching the official Supabase setup and generating passwords and keys"
 if [ ! -f "$SUPA_DIR/.env" ]; then
-  cd /opt
-  curl -fsSL https://raw.githubusercontent.com/supabase/supabase/master/docker/setup.sh -o /tmp/supabase-setup.sh \
-    || git clone -q --depth 1 --filter=blob:none --sparse https://github.com/supabase/supabase /tmp/sb-src
-  if [ -f /tmp/supabase-setup.sh ]; then
-    sh /tmp/supabase-setup.sh --skip-deps -y --project-dir supabase
-  else
-    (cd /tmp/sb-src && git sparse-checkout set docker && cp -r docker "$SUPA_DIR" && cd "$SUPA_DIR" && cp .env.example .env \
-      && sh utils/generate-keys.sh --update-env && sh utils/add-new-auth-keys.sh --update-env)
-  fi
+  # Supabase's own setup.sh does a partial git clone of its repository, which fails from Iran; the same official files
+  # ship with this repository (deploy/server/supabase-docker, release self-hosted/v0.8.4) and are set up the same way.
+  mkdir -p "$SUPA_DIR"
+  cp -r "$SRC_DIR/deploy/server/supabase-docker/." "$SUPA_DIR/"
+  cd "$SUPA_DIR"
+  cp .env.example .env
+  sh utils/generate-keys.sh --update-env >/dev/null
+  sh utils/add-new-auth-keys.sh --update-env >/dev/null
+  printf '# Supabase self-hosted version stamp. Managed by setup.sh / update.sh.\nref=self-hosted/v0.8.4\n' > .supabase-version
   ok "passwords and keys created ($SUPA_DIR/.env)"
 else
   ok "kept the existing settings ($SUPA_DIR/.env)"
