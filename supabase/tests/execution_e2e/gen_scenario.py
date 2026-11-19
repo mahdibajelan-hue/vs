@@ -25,9 +25,10 @@ U = {  # test accounts
     'consultant': 'c0000000-0000-4000-8000-000000000004',
     'employer': 'c0000000-0000-4000-8000-000000000005',
     'viewer': 'c0000000-0000-4000-8000-000000000006',
+    'admin': 'c0000000-0000-4000-8000-000000000007',
 }
 NAMES = {'contractor': 'پیمانکار آزمون', 'site_head': 'سرپرست کارگاه آزمون', 'supervision': 'ناظر مقیم آزمون',
-         'consultant': 'مشاور آزمون', 'employer': 'کارفرما آزمون', 'viewer': 'بیننده آزمون'}
+         'consultant': 'مشاور آزمون', 'employer': 'کارفرما آزمون', 'viewer': 'بیننده آزمون', 'admin': 'مدیر سامانهٔ آزمون'}
 
 # activity: key, item_no, title, unit, base_qty, unit_price (rial), weight (% of group C), planned start/end, daily rate
 ACTS = [
@@ -59,6 +60,7 @@ for r, uid in U.items():
       f"('00000000-0000-0000-0000-000000000000', '{uid}', 'authenticated', 'authenticated', '{r}@test.farin', '', '{{}}', now()) on conflict do nothing;")
     w(f"insert into profiles (id, email, full_name, account_status) values ('{uid}', '{r}@test.farin', {q(NAMES[r])}, 'active') "
       f"on conflict (id) do update set full_name = excluded.full_name, account_status = 'active';")
+w(f"update profiles set is_admin = true where id = '{U['admin']}';")
 w(f"insert into master_projects (id, project_id_code, project_code, official_name, short_name, project_type, status) values "
   f"('{P}', 'TEST-EPC-48', 'TEST', 'TEST — خط انتقال گاز ۴۸ اینچ (بخش ۳۰ کیلومتری) — فقط آزمون', 'TEST خط ۴۸\"', 'pipeline', 'executing') on conflict do nothing;")
 for r in ['contractor', 'site_head', 'supervision', 'consultant', 'employer', 'viewer']:

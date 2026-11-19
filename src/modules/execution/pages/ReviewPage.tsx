@@ -137,6 +137,14 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
     setBusy(false)
     if (ok) onClose()
   }
+  const canAmend = ex.can(m.projectId, 'reopen') && !form && (r.status === 'approved' || r.status === 'partially_approved')
+  const amend = async (lineId: string, cur: number, max: number) => {
+    const v = window.prompt(`مقدار تأییدشدهٔ جدید (۰ تا ${fa(max, 3)}):`, String(cur)); if (v == null) return
+    const q = Number(v.replace(/[۰-۹]/g, (c) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).replace(/[٬,]/g, ''))
+    if (!Number.isFinite(q) || q < 0 || q > max) { window.alert('مقدار نامعتبر است.'); return }
+    const why = window.prompt('علت اصلاح (الزامی؛ در سابقهٔ گزارش ثبت می‌شود):'); if (!why?.trim()) return
+    await ex.amendLine(r.id, lineId, q, why.trim())
+  }
   const reopen = async () => { const why = window.prompt('علت بازگشایی گزارش تأییدشده (الزامی):'); if (why?.trim() && (await ex.reopenReport(reportId, why.trim()))) onClose() }
   const orgName = orgs.find((o) => o.id === r.contractorOrgId)?.name ?? '—'
   const hist = m.history.filter((h) => h.reportId === reportId)
@@ -170,7 +178,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
                   <td style={{ minWidth: 220 }}>{a ? <><b>{a.title}</b><span className="sub fn-code">{a.itemNo}{l.location ? ` · ${l.location}` : ''}{l.kmFrom != null ? ` · km ${l.kmFrom}${l.kmTo != null ? `–${l.kmTo}` : ''}` : ''}</span></> : l.detail.actionKey ? <><b>{String(l.detail.actionTitle ?? l.detail.actionKey)}</b><span className="sub">اقدام کارگاهی{l.location ? ` · ${l.location}` : ''}{l.kmFrom != null ? ` · km ${l.kmFrom}${l.kmTo != null ? `–${l.kmTo}` : ''}` : ''}{Object.entries(l.detail).filter(([k, v]) => !k.startsWith('action') && String(v ?? '').trim()).map(([k, v]) => ` · ${fieldLabel(String(l.detail.actionKey), k)}: ${v}`).join('')}</span></> : <span>{detailText(l) || '—'}</span>}{l.note && <small className="sub">{l.note}</small>}</td>
                   <td className="num">{form ? '' : <b>{fa(l.qty, 3)} {a?.unit ?? String(l.detail.actionUnit ?? '')}</b>}</td>
                   {!form && <td><div className="ex-cum"><span>{fa(prev, 2)} {a?.unit}</span>{base > 0 && <span>مبنا: {fa(base, 2)} · باقی: {fa(Math.max(0, base - prev), 2)}</span>}</div></td>}
-                  <td><LineStatusChip status={l.status} />{l.status === 'approved' && l.approvedQty != null && l.approvedQty !== l.qty && <small className="ex-warn" style={{ display: 'block' }}>تأییدشده: {fa(l.approvedQty, 3)}</small>}{l.reviewNote && <small className="sub">{l.reviewNote}</small>}</td>
+                  <td><LineStatusChip status={l.status} />{l.status === 'approved' && l.approvedQty != null && l.approvedQty !== l.qty && <small className="ex-warn" style={{ display: 'block' }}>تأییدشده: {fa(l.approvedQty, 3)}</small>}{canAmend && l.status === 'approved' && <button className="im-btn im-btn-sm" style={{ marginInlineStart: 4 }} title="اصلاح مقدار تأییدشدهٔ همین ردیف، بدون بازگشایی کل گزارش" onClick={() => void amend(l.id, l.approvedQty ?? l.qty, l.qty)}>اصلاح ردیف</button>}{l.reviewNote && <small className="sub">{l.reviewNote}</small>}</td>
                   <td className="num">{l.status === 'approved' ? fa(l.approvedQty ?? l.qty, 3) : '—'}</td>
                   {empOn && <td className="num">{l.employerStatus ? fa(l.employerQty ?? 0, 3) : '—'}</td>}
                   {canReview && <td style={{ minWidth: 300 }}>{l.status === 'pending' ? (

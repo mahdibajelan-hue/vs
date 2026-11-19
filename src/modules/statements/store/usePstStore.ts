@@ -21,7 +21,7 @@ export interface Statement {
   cumSys: number; cumAmount: number; prevAmount: number; thisAmount: number; cap: number | null; deductions: Totals['deductions']; payable: number
   note: string; rejectReason: string; finCertificateId: string | null; createdAt: string; submittedAt: string | null; approvedAt: string | null; postedAt: string | null
 }
-export interface Line extends GenLine { id: string; statementId: string }
+export interface Line extends GenLine { id: string; statementId: string; /** construction lines: does the system quantity match the server's approved basis (047)? */ srvOk: boolean; srvQty: number | null }
 export interface Preview { contract: Contract; part: Part; period: Period; built: Built; lines: GenLine[]; totals: Totals; prev: Statement | null; rates: Rates; advanceLeft: number }
 export interface Lookups { groups: { id: string; title: string }[]; materials: { id: string; code: string; title: string; groupId: string | null }[]; packages: { id: string; code: string; title: string }[]; books: { id: string; title: string }[]; docContracts: string[] }
 
@@ -36,11 +36,13 @@ const lineRow = (r: Row): Line => ({
   id: r.id, statementId: r.statement_id, sourceKind: r.source_kind, sourceId: r.source_id, code: r.code, title: r.title, unit: r.unit, groupLabel: r.group_label,
   unitPrice: n(r.unit_price), baseQty: n(r.base_qty), baseAmount: n(r.base_amount), sysCumQty: n(r.sys_cum_qty), sysCumAmount: n(r.sys_cum_amount),
   cumAmount: n(r.cum_amount), prevAmount: n(r.prev_amount), edited: !!r.edited, note: r.note ?? '', detail: r.detail ?? {},
+  srvOk: r.srv_ok !== false, srvQty: nn(r.srv_qty),
 })
 const toDb = (l: GenLine) => ({ source_kind: l.sourceKind, source_id: l.sourceId, code: l.code, title: l.title, unit: l.unit, group_label: l.groupLabel, unit_price: l.unitPrice, base_qty: l.baseQty, base_amount: l.baseAmount,
   sys_cum_qty: l.sysCumQty, sys_cum_amount: l.sysCumAmount, cum_amount: l.cumAmount, prev_amount: l.prevAmount, edited: l.edited, note: l.note, detail: l.detail })
 
 const ERR: [RegExp, string][] = [
+  [/source_mismatch/, 'مقدار سیستمی بعضی ردیف‌های اجرا با مقدار تأییدشدهٔ فعلی در سرور یکی نیست (ردیف‌های علامت‌خورده). صورت‌وضعیت را دوباره بسازید تا از گزارش‌های فعلی پر شود.'],
   [/not_allowed|42501|permission/i, 'دسترسی این کار را ندارید.'], [/open_exists/, 'برای این قرارداد و بخش یک صورت‌وضعیت باز (پیش‌نویس، در بررسی یا برگشتی) هست؛ ابتدا آن را تأیید یا باطل کنید.'],
   [/not_after_last/, 'دورهٔ انتخاب‌شده باید بعد از آخرین صورت‌وضعیت این بخش باشد.'], [/exists/, 'برای این ماه قبلاً صورت‌وضعیت ساخته شده است.'], [/locked/, 'این صورت‌وضعیت قفل است و تغییر نمی‌کند.'],
 [/reason_required/, 'برای برگشت، علت را بنویسید.'], [/not_last/, 'فقط آخرین صورت‌وضعیت هر بخش را می‌توان باطل کرد.'],

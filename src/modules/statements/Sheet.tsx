@@ -87,7 +87,7 @@ function LineRow({ l, part, editable, onEdit }: { l: L; part: Part; editable?: b
     <tr className={`l ${l.edited ? 'is-edited' : ''}`}>
       <td className="n" dir="ltr" style={{ textAlign: 'right' }}>{l.code || '—'}</td>
       <td style={{ minWidth: '16rem' }}>
-        <div>{l.title} {l.edited && <span className="pst-tag">اصلاح‌شده</span>} {d.over && <span className="pst-tag is-warn">بیش از مقدار پیمان</span>}</div>
+        <div>{l.title} {l.edited && <span className="pst-tag">اصلاح‌شده</span>} {d.over && <span className="pst-tag is-warn">بیش از مقدار پیمان</span>}{(l as { srvOk?: boolean }).srvOk === false && <span className="pst-tag is-warn" title="مقدار سیستمی این ردیف با تأییدشده‌های فعلی سرور فرق دارد؛ صورت‌وضعیت را دوباره بسازید">مغایر با سرور ({fa((l as { srvQty?: number | null }).srvQty ?? 0, 2)})</span>}</div>
         {d.stages && <div className="pst-detail">{d.stages.map((s) => <span key={s.label} className={s.reached ? 'is-yes' : ''}>{s.reached ? '✓' : '○'} {s.label} {fa(s.pct)}٪</span>)}</div>}
         {d.steps && <div className="pst-detail">{d.steps.map((s) => <span key={s.label} className={s.qty > 0 ? 'is-yes' : ''}>{s.label} {fa(s.pct)}٪ · {fa(s.qty, 2)} {l.unit}</span>)}</div>}
         {!!d.pending && <div className="pst-detail"><span>در انتظار تأیید نظارت: {fa(d.pending, 2)} {l.unit}</span></div>}

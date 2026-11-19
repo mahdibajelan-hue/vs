@@ -76,6 +76,8 @@ interface State {
   reviewReport: (id: string, decisions: ReviewDecision[], note: string) => Promise<boolean>
   decideWhole: (id: string, decision: 'approved' | 'rejected' | 'returned', note: string) => Promise<boolean>
   reopenReport: (id: string, reason: string) => Promise<boolean>
+  /** supervision changes the approved quantity of ONE approved line (047) — the rest of the report stays approved */
+  amendLine: (reportId: string, lineId: string, qty: number, reason: string) => Promise<boolean>
   syncGaps: (projectId: string, items: DetectedGap[]) => Promise<boolean>
   /** sets the responsible person of many follow-ups at once (one request per person) */
   assignGaps: (groups: { responsible: string; ids: string[] }[]) => Promise<boolean>
@@ -403,6 +405,13 @@ export const useExecutionStore = create<State>((set, get) => ({
     await get().reloadReports([id])
     void archiveIfDone(get().reports.find((r) => r.id === id)) // approved technical forms are filed in the archive automatically
     return true
+  },
+  amendLine: async (reportId, lineId, qty, reason) => {
+    const { error } = await supabase.rpc('ex_line_amend', { p_line: lineId, p_qty: qty, p_reason: reason })
+    if (error && /below_measured/.test(error.message)) { window.alert('این مقدار از مقدار اندازه‌گیری‌شدهٔ همین ردیف پیمان کمتر می‌شود؛ ابتدا دفتر اندازه‌گیری را اصلاح کنید.'); return false }
+    if (error && /bad_qty/.test(error.message)) { window.alert('مقدار باید بین صفر و مقدار گزارش‌شده باشد.'); return false }
+    if (report('اصلاح ردیف', error)) return false
+    await get().reloadReports([reportId]); return true
   },
   reopenReport: async (id, reason) => {
     const { error } = await supabase.rpc('ex_report_reopen', { p_id: id, p_reason: reason })

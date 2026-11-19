@@ -12,7 +12,7 @@ import { buildStatement } from '../../../src/modules/execution/lib/statement.ts'
 
 const P = '7e570000-0000-4000-8000-0000000000e2'
 const U = { contractor: 'c0000000-0000-4000-8000-000000000001', site_head: 'c0000000-0000-4000-8000-000000000002', supervision: 'c0000000-0000-4000-8000-000000000003',
-  consultant: 'c0000000-0000-4000-8000-000000000004', employer: 'c0000000-0000-4000-8000-000000000005', viewer: 'c0000000-0000-4000-8000-000000000006' }
+  consultant: 'c0000000-0000-4000-8000-000000000004', employer: 'c0000000-0000-4000-8000-000000000005', viewer: 'c0000000-0000-4000-8000-000000000006', admin: 'c0000000-0000-4000-8000-000000000007' }
 
 const psql = (sql) => execFileSync('docker', ['exec', '-i', 'farin-test', 'psql', '-h', 'localhost', '-U', 'supabase_admin', '-d', 'postgres', '-X', '-q', '-tA', '-v', 'ON_ERROR_STOP=1'], { input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
 const json = (q) => JSON.parse(psql(`select coalesce(json_agg(t), '[]') from (${q}) t;`) || '[]')
@@ -200,5 +200,38 @@ const srv = Object.fromEntries(jsonAs('consultant', `select activity_id, sys_qty
 const par = d.activities.map((a) => ({ item: a.itemNo, app: appCum.get(a.id) ?? 0, server: srv[a.id] ?? 0 }))
 rec('S13', 'تبدیل «اقدام» به ردیف پیمان: سرور = برنامه', '۴ ردیف اقدامی: پیش‌فرض، شرط+ضریب، فیلد خالی، غیرقابل‌پرداخت', 'مقدار هر ردیف پیمان در سرور و برنامه برابر', { created: mk, parity: par }, mk.ok && par.every((x) => close(x.app, x.server)))
 psql(`set session_replication_role = replica; delete from ex_report_lines where report_id = '${actRep}'; delete from ex_report_versions where report_id = '${actRep}'; delete from ex_report_history where report_id = '${actRep}'; delete from ex_reports where id = '${actRep}'; delete from ex_action_map where project_id = '${P}'; delete from ex_work_actions where project_id = '${P}';`)
+
+// S14 — supervision corrects ONE approved line; the rest of the report stays approved (047)
+const am = json(`select r.id rid, l.id lid, l.qty, l.approved_qty from ex_reports r join ex_report_lines l on l.report_id = r.id join ex_activities a on a.id = l.activity_id where r.project_id = '${P}' and r.report_date = '2026-10-15' and a.item_no = 'C-04'`)[0]
+const others = () => json(`select count(*) c from ex_report_lines where report_id = '${am.rid}' and status = 'approved'`)[0].c
+const before14 = activityRows(load(), mehr, base).find((r) => r.activity.id === wld.id).approvedCounted, othersBefore = others()
+const amNoReason = as('supervision', `select ex_line_amend('${am.lid}', ${n(am.qty) - 3}, '');`)
+const amContractor = as('site_head', `select ex_line_amend('${am.lid}', ${n(am.qty) - 3}, 'x');`)
+const amOk = as('supervision', `select ex_line_amend('${am.lid}', ${n(am.qty) - 3}, '۳ سرجوش طبق لاگ جوش تکراری بود');`)
+const after14 = activityRows(load(), mehr, base).find((r) => r.activity.id === wld.id).approvedCounted
+const st14 = json(`select status from ex_reports where id = '${am.rid}'`)[0].status
+const h14 = json(`select action, note from ex_report_history where report_id = '${am.rid}' and action = 'amend_line'`)
+// measure everything still unmeasured, so ANY reduction would go below the measured quantity
+const left = n(jsonAs('consultant', `select (select sum(coalesce(l.approved_qty, l.qty)) from ex_report_lines l join ex_reports r on r.id = l.report_id where r.project_id = '${P}' and r.form_key = 'work' and l.activity_id = '${wld.id}' and l.status = 'approved') - (select coalesce(sum(measured_qty), 0) from ex_measurements where project_id = '${P}' and activity_id = '${wld.id}') q`)[0].q)
+as('consultant', `insert into ex_measurements (project_id, activity_id, period_key, measured_qty) values ('${P}', '${wld.id}', 'M1405-08', ${left});`)
+const amBelow = as('supervision', `select ex_line_amend('${am.lid}', ${n(am.qty) - 4}, 'آزمون کمتر از اندازه‌گیری');`)
+rec('S14', 'اصلاح یک ردیف تأییدشده بدون بازگشایی کل گزارش', `جوشکاری ۱۴۰۵/۰۷/۲۳: ${am.qty} → ${n(am.qty) - 3}`, 'فقط همان ردیف تغییر کند؛ دلیل الزامی؛ پیمانکار مجاز نیست؛ کمتر از اندازه‌گیری رد شود',
+  { noReason: amNoReason, contractor: amContractor, ok: amOk, monthBefore: before14, monthAfter: after14, reportStatus: st14, otherApprovedLines: [othersBefore, others()], history: h14, belowMeasured: amBelow },
+  !amNoReason.ok && !amContractor.ok && amOk.ok && close(after14, before14 - 3) && st14 === 'approved' && others() === othersBefore && h14.length === 1 && !amBelow.ok && /below_measured/.test(amBelow.error))
+
+// S15 — the statements module (to finance) is checked against the same server basis (047)
+psql(`insert into fin_contracts (id, master_project_id, contract_number, title, contract_value, status) values ('fc000000-0000-4000-8000-000000000001', '${P}', 'TEST-C-01', 'قرارداد آزمون اجرا', 900000000000, 'active') on conflict do nothing;`)
+const basisAban = Object.fromEntries(jsonAs('consultant', `select activity_id, sys_qty, unit_price from ex_payable_basis('${P}', '2026-11-21')`).map((x) => [x.activity_id, x]))
+const lineOf = (k) => ({ source_kind: 'activity', source_id: wld.id, code: 'C-04', title: wld.title, unit: wld.unit, group_label: 'اجرا', unit_price: n(basisAban[wld.id].unit_price), base_qty: wld.baseQty, base_amount: 0, sys_cum_qty: n(basisAban[wld.id].sys_qty) * k, sys_cum_amount: 0, cum_amount: 0, prev_amount: 0, edited: false, note: '', detail: {} })
+const head = { contract_id: 'fc000000-0000-4000-8000-000000000001', part: 'C', period_key: 'M1405-08', period_from: '2026-10-23', period_to: '2026-11-21' }
+const saveF = as('admin', `select pst_save('${JSON.stringify(head)}'::jsonb, '${JSON.stringify([lineOf(2)])}'::jsonb);`)
+const sid = json(`select id from pst_statements where contract_id = 'fc000000-0000-4000-8000-000000000001' and voided_at is null`)[0]?.id
+const flag = json(`select sys_cum_qty, srv_qty, srv_ok from pst_lines where statement_id = '${sid}'`)
+const subF = as('admin', `select pst_set_status('${sid}', 'submitted', '');`)
+const saveOk = as('admin', `select pst_save('${JSON.stringify({ ...head, id: sid })}'::jsonb, '${JSON.stringify([lineOf(1)])}'::jsonb);`)
+const subOk = as('admin', `select pst_set_status('${sid}', 'submitted', '');`)
+rec('S15', 'صورت‌وضعیت ماژول مالی با مبنای سرور سنجیده شود', 'خط جوشکاری با ۲ برابر مقدار، سپس مقدار درست', 'نسخهٔ جعلی قابل ارسال نباشد؛ نسخهٔ درست ارسال شود',
+  { savedForged: saveF, lineCheck: flag, submitForged: subF, savedCorrect: saveOk, submitCorrect: subOk }, saveF.ok && flag[0] && flag[0].srv_ok === false && !subF.ok && /source_mismatch/.test(subF.error) && saveOk.ok && subOk.ok)
+psql(`set session_replication_role = replica; delete from pst_lines where statement_id in (select id from pst_statements where master_project_id = '${P}'); delete from pst_statements where master_project_id = '${P}'; delete from fin_contracts where id = 'fc000000-0000-4000-8000-000000000001';`)
 
 console.log(JSON.stringify({ when: new Date().toISOString(), project: P, pass: results.filter((r) => r.pass).length, fail: results.filter((r) => !r.pass).length, results }, null, 1))

@@ -1,7 +1,7 @@
 {
- "when": "2026-11-19T16:49:39.156Z",
+ "when": "2026-11-19T17:03:44.132Z",
  "project": "7e570000-0000-4000-8000-0000000000e2",
- "pass": 13,
+ "pass": 15,
  "fail": 0,
  "results": [
   {
@@ -655,6 +655,78 @@
       "server": 7339
      }
     ]
+   },
+   "pass": true,
+   "note": ""
+  },
+  {
+   "id": "S14",
+   "title": "اصلاح یک ردیف تأییدشده بدون بازگشایی کل گزارش",
+   "input": "جوشکاری ۱۴۰۵/۰۷/۲۳: 79 → 76",
+   "expected": "فقط همان ردیف تغییر کند؛ دلیل الزامی؛ پیمانکار مجاز نیست؛ کمتر از اندازه‌گیری رد شود",
+   "actual": {
+    "noReason": {
+     "ok": false,
+     "error": "ERROR:  note_required"
+    },
+    "contractor": {
+     "ok": false,
+     "error": "ERROR:  not_allowed"
+    },
+    "ok": {
+     "ok": true,
+     "error": ""
+    },
+    "monthBefore": 1451,
+    "monthAfter": 1448,
+    "reportStatus": "approved",
+    "otherApprovedLines": [
+     8,
+     8
+    ],
+    "history": [
+     {
+      "action": "amend_line",
+      "note": "C-04: 79 → 76 — ۳ سرجوش طبق لاگ جوش تکراری بود"
+     }
+    ],
+    "belowMeasured": {
+     "ok": false,
+     "error": "ERROR:  below_measured"
+    }
+   },
+   "pass": true,
+   "note": ""
+  },
+  {
+   "id": "S15",
+   "title": "صورت‌وضعیت ماژول مالی با مبنای سرور سنجیده شود",
+   "input": "خط جوشکاری با ۲ برابر مقدار، سپس مقدار درست",
+   "expected": "نسخهٔ جعلی قابل ارسال نباشد؛ نسخهٔ درست ارسال شود",
+   "actual": {
+    "savedForged": {
+     "ok": true,
+     "error": ""
+    },
+    "lineCheck": [
+     {
+      "sys_cum_qty": 3016,
+      "srv_qty": 1508,
+      "srv_ok": false
+     }
+    ],
+    "submitForged": {
+     "ok": false,
+     "error": "ERROR:  source_mismatch:C-04"
+    },
+    "savedCorrect": {
+     "ok": true,
+     "error": ""
+    },
+    "submitCorrect": {
+     "ok": true,
+     "error": ""
+    }
    },
    "pass": true,
    "note": ""
