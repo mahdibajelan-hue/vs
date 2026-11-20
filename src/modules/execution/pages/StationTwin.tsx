@@ -142,92 +142,92 @@ export function StationTwin({ projectId }: { projectId: string }) {
   const selShape = shapes.find((s) => s.id === sel)
   const fsArea = Math.max(1.4, Math.min(3.2, vb.w / 60)), fsSmall = fsArea * 0.62
   return (
-    <div className="tw">
-      <div className="tw-bar no-print">
+    <div className="cst">
+      <div className="cst-bar no-print">
         <div className="im-seg" role="radiogroup" aria-label="رنگ‌آمیزی">{MODES.map((m) => <button key={m.id} role="radio" aria-checked={mode === m.id} className={mode === m.id ? 'on' : ''} onClick={() => setMode(m.id)}>{m.label}</button>)}</div>
-        <div className="tw-time">
+        <div className="cst-time">
           <button className="im-btn im-btn-sm" onClick={() => { if (!playing && dayIdx == null) setDayIdx(0); setPlaying((p) => !p) }} aria-label={playing ? 'توقف' : 'بازپخش پیشرفت'}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
           <input type="range" min={0} max={span} value={dayIdx ?? span} onChange={(e) => { setPlaying(false); const v = Number(e.target.value); setDayIdx(v >= span ? null : v) }} aria-label="تاریخ" />
-          <b className="tw-date">{jalaliText(day)}{day === today ? ' (امروز)' : ''}</b>
+          <b className="cst-date">{jalaliText(day)}{day === today ? ' (امروز)' : ''}</b>
         </div>
-        {write && <div className="tw-edit">
+        {write && <div className="cst-edit">
           {missing.length > 0 && <button className="im-btn im-btn-sm" onClick={() => void runAuto()}><Sparkles size={13} /> چیدمان خودکار ({fa(missing.length)})</button>}
           <button className={`im-btn im-btn-sm ${edit ? 'im-btn-primary' : ''}`} aria-pressed={edit} onClick={() => { setEdit((x) => !x); setRoute(null) }}><Pencil size={13} /> {edit ? 'پایان ویرایش نقشه' : 'ویرایش نقشه'}</button>
           {edit && <button className="im-btn im-btn-sm" onClick={() => void addArea()}><SquarePlus size={13} /> ناحیه</button>}
           {edit && <><button className="im-btn im-btn-sm" onClick={() => fileRef.current?.click()}><ImageUp size={13} /> {site?.imagePath ? 'تعویض تصویر پلات‌پلن' : 'تصویر پلات‌پلن'}</button>
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void uploadPlan(f) }} /></>}
-          {edit && site?.imagePath && <label className="tw-opacity">شفافیت تصویر<input type="range" min={10} max={100} value={Math.round((site.imageOpacity ?? 0.55) * 100)} onChange={(e) => { const v = Number(e.target.value) / 100; setLive((m) => ({ ...m, [site.id]: { ...(m[site.id] ?? {}), imageOpacity: v } })) }} onPointerUp={(e) => void st.save('plot', projectId, { id: site.id, imageOpacity: Number((e.target as HTMLInputElement).value) / 100 })} /></label>}
+          {edit && site?.imagePath && <label className="cst-opacity">شفافیت تصویر<input type="range" min={10} max={100} value={Math.round((site.imageOpacity ?? 0.55) * 100)} onChange={(e) => { const v = Number(e.target.value) / 100; setLive((m) => ({ ...m, [site.id]: { ...(m[site.id] ?? {}), imageOpacity: v } })) }} onPointerUp={(e) => void st.save('plot', projectId, { id: site.id, imageOpacity: Number((e.target as HTMLInputElement).value) / 100 })} /></label>}
           {edit && site?.imagePath && <button className="im-btn im-btn-sm" onClick={() => { if (window.confirm('تصویر پلات‌پلن از زیر نقشه برداشته شود؟ (فایل در بایگانی می‌ماند)')) void st.save('plot', projectId, { id: site.id, imagePath: null }) }}>برداشتن تصویر</button>}
-          {upErr && <span className="tw-err" role="alert">{upErr}</span>}
+          {upErr && <span className="cst-err" role="alert">{upErr}</span>}
         </div>}
       </div>
 
-      <div className="tw-body">
-        <div className={`tw-canvas ${edit ? 'is-edit' : ''} ${route ? 'is-route' : ''}`}>
+      <div className="cst-body">
+        <div className={`cst-canvas ${edit ? 'is-edit' : ''} ${route ? 'is-route' : ''}`}>
           {!shapes.length ? (
-            <div className="tw-empty"><b>هنوز نقشه‌ای کشیده نشده است.</b><span>با «چیدمان خودکار» یک نقشهٔ اولیه از ناحیه‌ها، تجهیزات و لاین‌های ثبت‌شده ساخته می‌شود؛ سپس در «ویرایش نقشه» تصویر پلات‌پلن واقعی را زیر نقشه بگذارید و هر شکل را روی جای واقعی‌اش بکشید.</span></div>
+            <div className="cst-empty"><b>هنوز نقشه‌ای کشیده نشده است.</b><span>با «چیدمان خودکار» یک نقشهٔ اولیه از ناحیه‌ها، تجهیزات و لاین‌های ثبت‌شده ساخته می‌شود؛ سپس در «ویرایش نقشه» تصویر پلات‌پلن واقعی را زیر نقشه بگذارید و هر شکل را روی جای واقعی‌اش بکشید.</span></div>
           ) : (
             <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="نقشهٔ جانمایی ایستگاه"
               onPointerDown={(e) => down(e, 'pan')} onPointerMove={move} onPointerUp={() => void up()} onClick={clickCanvas} onDoubleClick={() => void finishRoute()}>
-              <defs><pattern id="tw-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M5 0H0V5" fill="none" stroke="currentColor" strokeWidth="0.05" opacity="0.25" /></pattern></defs>
-              <rect x={vb.x - vb.w} y={vb.y - vb.h} width={vb.w * 3} height={vb.h * 3} fill="url(#tw-grid)" className="tw-gridbg" />
+              <defs><pattern id="cst-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M5 0H0V5" fill="none" stroke="currentColor" strokeWidth="0.05" opacity="0.25" /></pattern></defs>
+              <rect x={vb.x - vb.w} y={vb.y - vb.h} width={vb.w * 3} height={vb.h * 3} fill="url(#cst-grid)" className="cst-gridbg" />
               {shapes.map((s0) => {
                 const s = shapeOf(s0), on = s.id === sel
                 if (s.kind === 'site') return (
                   <g key={s.id}>
-                    {imgUrl && <image href={imgUrl} x={s.x} y={s.y} width={s.w} height={s.h} preserveAspectRatio="none" opacity={s.imageOpacity ?? 0.55} className="tw-plan" />}
-                    <rect x={s.x} y={s.y} width={s.w} height={s.h} className="tw-site" onPointerDown={edit ? (e) => down(e, 'move', s) : undefined} />
-                    {edit && <rect x={s.x + s.w - 2.4} y={s.y + s.h - 2.4} width={2.4} height={2.4} className="tw-handle" onPointerDown={(e) => down(e, 'size', s)} />}
+                    {imgUrl && <image href={imgUrl} x={s.x} y={s.y} width={s.w} height={s.h} preserveAspectRatio="none" opacity={s.imageOpacity ?? 0.55} className="cst-plan" />}
+                    <rect x={s.x} y={s.y} width={s.w} height={s.h} className="cst-site" onPointerDown={edit ? (e) => down(e, 'move', s) : undefined} />
+                    {edit && <rect x={s.x + s.w - 2.4} y={s.y + s.h - 2.4} width={2.4} height={2.4} className="cst-handle" onPointerDown={(e) => down(e, 'size', s)} />}
                   </g>
                 )
                 if (s.kind === 'area') {
                   const a = state.areas.get(s.areaName), c = mode === 'progress' ? progressColor(a?.pct ?? 0) : a?.issues && mode === 'quality' ? '#ef4444' : '#64748b'
                   return (
-                    <g key={s.id} className={`tw-area ${on ? 'on' : ''}`} onPointerDown={(e) => (edit ? down(e, 'move', s) : (e.stopPropagation(), setSel(s.id)))}>
+                    <g key={s.id} className={`cst-area ${on ? 'on' : ''}`} onPointerDown={(e) => (edit ? down(e, 'move', s) : (e.stopPropagation(), setSel(s.id)))}>
                       <rect x={s.x} y={s.y} width={s.w} height={s.h} rx={1.2} style={{ fill: c, stroke: c }} />
-                      <text x={s.x + s.w - 1.5} y={s.y + fsArea + 1} fontSize={fsArea} textAnchor="end" className="tw-label">{s.label || s.areaName}</text>
-                      {a && <text x={s.x + 1.5} y={s.y + fsArea + 1} fontSize={fsArea} className="tw-pct">{pct(a.pct, 0)}</text>}
-                      {edit && <rect x={s.x + s.w - 1.6} y={s.y + s.h - 1.6} width={1.6} height={1.6} className="tw-handle" onPointerDown={(e) => down(e, 'size', s)} />}
+                      <text x={s.x + s.w - 1.5} y={s.y + fsArea + 1} fontSize={fsArea} textAnchor="end" className="cst-label">{s.label || s.areaName}</text>
+                      {a && <text x={s.x + 1.5} y={s.y + fsArea + 1} fontSize={fsArea} className="cst-pct">{pct(a.pct, 0)}</text>}
+                      {edit && <rect x={s.x + s.w - 1.6} y={s.y + s.h - 1.6} width={1.6} height={1.6} className="cst-handle" onPointerDown={(e) => down(e, 'size', s)} />}
                     </g>
                   )
                 }
                 if (s.kind === 'line') {
                   const ls = state.lines.get(s.refId ?? ''), c = lineColor(ls, mode), pts = (route?.id === s.id ? route.pts : s.points).map((p) => p.join(',')).join(' ')
                   return (
-                    <g key={s.id} className={`tw-line ${on ? 'on' : ''}`} onPointerDown={(e) => (edit ? down(e, 'move', s) : (e.stopPropagation(), setSel(s.id)))}>
-                      <polyline points={pts} className="tw-line-hit" />
-                      <polyline points={pts} style={{ stroke: c }} className="tw-line-run" />
+                    <g key={s.id} className={`cst-line ${on ? 'on' : ''}`} onPointerDown={(e) => (edit ? down(e, 'move', s) : (e.stopPropagation(), setSel(s.id)))}>
+                      <polyline points={pts} className="cst-line-hit" />
+                      <polyline points={pts} style={{ stroke: c }} className="cst-line-run" />
                     </g>
                   )
                 }
                 if (s.kind === 'equipment') {
                   const es = state.equipment.get(s.refId ?? ''), c = eqColor(es, mode)
                   return (
-                    <g key={s.id} className={`tw-eq ${on ? 'on' : ''}`} onPointerDown={(e) => (edit ? down(e, 'move', s) : (e.stopPropagation(), setSel(s.id)))}>
+                    <g key={s.id} className={`cst-eq ${on ? 'on' : ''}`} onPointerDown={(e) => (edit ? down(e, 'move', s) : (e.stopPropagation(), setSel(s.id)))}>
                       <rect x={s.x} y={s.y} width={s.w} height={s.h} rx={0.6} style={{ fill: c }} />
-                      {es && es.pct > 0 && es.pct < 1 && <rect x={s.x} y={s.y + s.h - 0.7} width={s.w * es.pct} height={0.7} className="tw-eq-bar" />}
-                      <text x={s.x + s.w / 2} y={s.y + s.h / 2 + fsSmall / 3} fontSize={fsSmall} textAnchor="middle" className="tw-eq-tag">{s.label}</text>
-                      {es?.issues ? <circle cx={s.x + s.w} cy={s.y} r={0.9} className="tw-issue" /> : null}
-                      {edit && <rect x={s.x + s.w - 1.2} y={s.y + s.h - 1.2} width={1.2} height={1.2} className="tw-handle" onPointerDown={(e) => down(e, 'size', s)} />}
+                      {es && es.pct > 0 && es.pct < 1 && <rect x={s.x} y={s.y + s.h - 0.7} width={s.w * es.pct} height={0.7} className="cst-eq-bar" />}
+                      <text x={s.x + s.w / 2} y={s.y + s.h / 2 + fsSmall / 3} fontSize={fsSmall} textAnchor="middle" className="cst-eq-tag">{s.label}</text>
+                      {es?.issues ? <circle cx={s.x + s.w} cy={s.y} r={0.9} className="cst-issue" /> : null}
+                      {edit && <rect x={s.x + s.w - 1.2} y={s.y + s.h - 1.2} width={1.2} height={1.2} className="cst-handle" onPointerDown={(e) => down(e, 'size', s)} />}
                     </g>
                   )
                 }
-                return <text key={s.id} x={s.x} y={s.y} fontSize={fsSmall} className="tw-label">{s.label}</text>
+                return <text key={s.id} x={s.x} y={s.y} fontSize={fsSmall} className="cst-label">{s.label}</text>
               })}
             </svg>
           )}
-          {shapes.length > 0 && <div className="tw-zoom no-print">
+          {shapes.length > 0 && <div className="cst-zoom no-print">
             <button className="im-btn im-btn-sm" onClick={() => zoom(1 / 1.3)} aria-label="بزرگ‌نمایی"><Plus size={14} /></button>
             <button className="im-btn im-btn-sm" onClick={() => zoom(1.3)} aria-label="کوچک‌نمایی"><Minus size={14} /></button>
             <button className="im-btn im-btn-sm" onClick={() => setVb(ext)} aria-label="نمای کامل"><Crosshair size={14} /></button>
           </div>}
-          {route && <div className="tw-hint"><Route size={14} /> نقاط مسیر را روی نقشه بزنید؛ با دوبار کلیک یا «پایان مسیر» ذخیره می‌شود. <button className="im-btn im-btn-sm im-btn-primary" onClick={() => void finishRoute()}>پایان مسیر</button><button className="im-btn im-btn-sm" onClick={() => setRoute(null)}>انصراف</button></div>}
-          {edit && !route && <div className="tw-hint"><Move size={14} /> شکل‌ها را بکشید؛ گوشهٔ ناحیه و تجهیز اندازه را تغییر می‌دهد. هر جابه‌جایی همان لحظه ذخیره می‌شود.</div>}
+          {route && <div className="cst-hint"><Route size={14} /> نقاط مسیر را روی نقشه بزنید؛ با دوبار کلیک یا «پایان مسیر» ذخیره می‌شود. <button className="im-btn im-btn-sm im-btn-primary" onClick={() => void finishRoute()}>پایان مسیر</button><button className="im-btn im-btn-sm" onClick={() => setRoute(null)}>انصراف</button></div>}
+          {edit && !route && <div className="cst-hint"><Move size={14} /> شکل‌ها را بکشید؛ گوشهٔ ناحیه و تجهیز اندازه را تغییر می‌دهد. هر جابه‌جایی همان لحظه ذخیره می‌شود.</div>}
           <Legend mode={mode} />
         </div>
 
-        <aside className="tw-side im-card" aria-live="polite">
-          <div className="tw-overall"><span>پیشرفت ناحیه‌ها در {jalaliText(day)}</span><b>{pct(state.overall)}</b></div>
+        <aside className="cst-side im-card" aria-live="polite">
+          <div className="cst-overall"><span>پیشرفت ناحیه‌ها در {jalaliText(day)}</span><b>{pct(state.overall)}</b></div>
           {!selShape ? <AreaList state={state} onPick={(name) => setSel(shapes.find((s) => s.kind === 'area' && s.areaName === name)?.id ?? null)} />
             : selShape.kind === 'area' ? <AreaCard name={selShape.areaName} state={state} lines={st.lines} equipment={st.equipment} onClose={() => setSel(null)} />
             : selShape.kind === 'line' ? <LineCard line={lineById.get(selShape.refId ?? '')} s={state.lines.get(selShape.refId ?? '')} welds={st.welds} spools={st.spools} edit={edit} onRoute={() => setRoute({ id: selShape.id, pts: [] })} onClose={() => setSel(null)} />
@@ -243,45 +243,45 @@ function Legend({ mode }: { mode: ColorMode }) {
     : mode === 'welding' ? [['#94a3b8', 'فیت‌آپ'], ['#f59e0b', 'جوش یا NDT ناتمام'], ['#10b981', 'جوش و NDT کامل'], ['#ef4444', 'جوش ردشده']]
     : mode === 'testing' ? [[PACK_COLOR.none, 'بدون تست‌پک'], [PACK_COLOR.open, 'در حال تکمیل'], [PACK_COLOR.ready, 'آمادهٔ آزمون'], [PACK_COLOR.tested, 'آزمون‌شده'], [PACK_COLOR.reinstated, 'بازگردانی‌شده']]
     : [['#10b981', 'بدون مورد باز'], ['#f59e0b', 'منتظر NDT'], ['#ef4444', 'رد یا بازرسی ردشده']]
-  return <div className="tw-legend">{items.map(([c, l]) => <span key={l}><i style={{ background: c }} />{l}</span>)}</div>
+  return <div className="cst-legend">{items.map(([c, l]) => <span key={l}><i style={{ background: c }} />{l}</span>)}</div>
 }
 function AreaList({ state, onPick }: { state: ReturnType<typeof twinState>; onPick: (name: string) => void }) {
   const list = [...state.areas.entries()].sort((a, b) => a[1].pct - b[1].pct)
   return (
-    <div className="tw-list">
+    <div className="cst-list">
       <p className="sub">روی ناحیه، تجهیز یا لاین بزنید تا جزئیاتش دیده شود. کمترین پیشرفت بالاتر:</p>
-      {list.map(([name, a]) => <button key={name} type="button" className="tw-row" onClick={() => onPick(name)}><span>{name}{a.issues ? <Chip tone="bad">{fa(a.issues)}</Chip> : null}</span><span className="tw-bar-mini"><i style={{ width: `${a.pct * 100}%`, background: progressColor(a.pct) }} /></span><b>{pct(a.pct, 0)}</b></button>)}
+      {list.map(([name, a]) => <button key={name} type="button" className="cst-row" onClick={() => onPick(name)}><span>{name}{a.issues ? <Chip tone="bad">{fa(a.issues)}</Chip> : null}</span><span className="cst-bar-mini"><i style={{ width: `${a.pct * 100}%`, background: progressColor(a.pct) }} /></span><b>{pct(a.pct, 0)}</b></button>)}
     </div>
   )
 }
 const CardHead = ({ title, sub, onClose }: { title: string; sub?: string; onClose: () => void }) => (
-  <header className="tw-card-head"><div><b dir="auto">{title}</b>{sub && <span className="sub">{sub}</span>}</div><button className="im-btn im-btn-sm" onClick={onClose} aria-label="بستن"><X size={13} /></button></header>
+  <header className="cst-card-head"><div><b dir="auto">{title}</b>{sub && <span className="sub">{sub}</span>}</div><button className="im-btn im-btn-sm" onClick={onClose} aria-label="بستن"><X size={13} /></button></header>
 )
 function AreaCard({ name, state, lines, equipment, onClose }: { name: string; state: ReturnType<typeof twinState>; lines: { id: string; area: string; lineNo: string; archived: boolean }[]; equipment: { id: string; area: string; tag: string; archived: boolean }[]; onClose: () => void }) {
   const a = state.areas.get(name)
   const ls = lines.filter((l) => !l.archived && l.area === name), es = equipment.filter((e) => !e.archived && e.area === name)
   return (
-    <div className="tw-card">
+    <div className="cst-card">
       <CardHead title={name} sub={a ? `${fa(a.lines)} لاین · ${fa(a.equipment)} تجهیز · ${fa(a.inchDia, 0)} اینچ‌قطر` : 'ثبتی به این ناحیه وصل نیست'} onClose={onClose} />
-      {a && <div className="tw-big"><b>{pct(a.pct)}</b><span>پیشرفت ناحیه (پایپینگ به اینچ‌قطر و میانگین تجهیزات)</span></div>}
-      {es.map((e) => { const s = state.equipment.get(e.id); return <div key={e.id} className="tw-row static"><span className="fn-code" dir="ltr">{e.tag}</span><span className="tw-bar-mini"><i style={{ width: `${(s?.pct ?? 0) * 100}%`, background: progressColor(s?.pct ?? 0) }} /></span><b>{pct(s?.pct ?? 0, 0)}</b></div> })}
-      {ls.slice(0, 30).map((l) => { const s = state.lines.get(l.id); return <div key={l.id} className="tw-row static"><span className="fn-code" dir="ltr">{l.lineNo}</span><span className="tw-bar-mini"><i style={{ width: `${(s?.pct ?? 0) * 100}%`, background: progressColor(s?.pct ?? 0) }} /></span><b>{pct(s?.pct ?? 0, 0)}</b></div> })}
+      {a && <div className="cst-big"><b>{pct(a.pct)}</b><span>پیشرفت ناحیه (پایپینگ به اینچ‌قطر و میانگین تجهیزات)</span></div>}
+      {es.map((e) => { const s = state.equipment.get(e.id); return <div key={e.id} className="cst-row static"><span className="fn-code" dir="ltr">{e.tag}</span><span className="cst-bar-mini"><i style={{ width: `${(s?.pct ?? 0) * 100}%`, background: progressColor(s?.pct ?? 0) }} /></span><b>{pct(s?.pct ?? 0, 0)}</b></div> })}
+      {ls.slice(0, 30).map((l) => { const s = state.lines.get(l.id); return <div key={l.id} className="cst-row static"><span className="fn-code" dir="ltr">{l.lineNo}</span><span className="cst-bar-mini"><i style={{ width: `${(s?.pct ?? 0) * 100}%`, background: progressColor(s?.pct ?? 0) }} /></span><b>{pct(s?.pct ?? 0, 0)}</b></div> })}
     </div>
   )
 }
 function LineCard({ line, s, welds, spools, edit, onRoute, onClose }: { line?: { id: string; lineNo: string; service: string; sizeIn: number; ndtPct: number }; s?: ReturnType<typeof twinState>['lines'] extends Map<string, infer V> ? V : never; welds: { lineId: string; sizeIn: number; archived: boolean }[]; spools: { lineId: string; stage: keyof typeof SPOOL_STAGE_FA; archived: boolean }[]; edit: boolean; onRoute: () => void; onClose: () => void }) {
-  if (!line || !s) return <div className="tw-card"><CardHead title="لاین پیدا نشد" onClose={onClose} /></div>
+  if (!line || !s) return <div className="cst-card"><CardHead title="لاین پیدا نشد" onClose={onClose} /></div>
   const id = welds.filter((w) => w.lineId === line.id && !w.archived).reduce((n, w) => n + inchDia(w as never), 0)
   const stages = spools.filter((x) => x.lineId === line.id && !x.archived).reduce<Record<string, number>>((m, x) => ({ ...m, [x.stage]: (m[x.stage] ?? 0) + 1 }), {})
   return (
-    <div className="tw-card">
+    <div className="cst-card">
       <CardHead title={line.lineNo} sub={`${line.service || 'لاین'} · ${fa(line.sizeIn, 2)}″ · NDT ${pct(line.ndtPct / 100, 0)}`} onClose={onClose} />
-      <div className="tw-big"><b>{pct(s.pct)}</b><span>پیشرفت جوش ({fa(id, 1)} اینچ‌قطر)</span></div>
-      <dl className="tw-dl">
+      <div className="cst-big"><b>{pct(s.pct)}</b><span>پیشرفت جوش ({fa(id, 1)} اینچ‌قطر)</span></div>
+      <dl className="cst-dl">
         <dt>سرجوش</dt><dd>{fa(s.welded)} از {fa(s.welds)} جوش‌شده</dd>
         <dt>NDT</dt><dd>{fa(s.accepted)} قبول{s.rejected ? ` · ${fa(s.rejected)} رد` : ''}{s.waitingNdt ? ` · ${fa(s.waitingNdt)} منتظر` : ''}</dd>
         <dt>اسپول</dt><dd>{s.spools ? Object.entries(stages).map(([k, n]) => `${SPOOL_STAGE_FA[k as keyof typeof SPOOL_STAGE_FA]} ${fa(n)}`).join('، ') : '—'}</dd>
-        <dt>تست‌پک</dt><dd>{s.pack ? <><span className="fn-code" dir="ltr">{s.pack.packNo}</span> <i className="tw-dot" style={{ background: PACK_COLOR[s.packState] }} /> {({ none: '—', open: 'در حال تکمیل', ready: 'آمادهٔ آزمون', tested: 'آزمون‌شده', reinstated: 'بازگردانی‌شده' })[s.packState]}</> : 'بدون تست‌پک'}</dd>
+        <dt>تست‌پک</dt><dd>{s.pack ? <><span className="fn-code" dir="ltr">{s.pack.packNo}</span> <i className="cst-dot" style={{ background: PACK_COLOR[s.packState] }} /> {({ none: '—', open: 'در حال تکمیل', ready: 'آمادهٔ آزمون', tested: 'آزمون‌شده', reinstated: 'بازگردانی‌شده' })[s.packState]}</> : 'بدون تست‌پک'}</dd>
         {s.issues > 0 && <><dt>موارد باز کیفی</dt><dd><Chip tone="bad">{fa(s.issues)}</Chip></dd></>}
       </dl>
       {edit && <button className="im-btn im-btn-sm" onClick={onRoute}><Route size={13} /> کشیدن مسیر لاین روی نقشه</button>}
@@ -289,13 +289,13 @@ function LineCard({ line, s, welds, spools, edit, onRoute, onClose }: { line?: {
   )
 }
 function EqCard({ eq, s, day, inspections, onClose }: { eq?: { id: string; tag: string; title: string; kind: string; weightT: number | null; steps: Record<string, string> }; s?: { pct: number; next: string | null; issues: number }; day: string; inspections: { subjectId: string | null; itpKey: string; result: string; inspDate: string; archived: boolean }[]; onClose: () => void }) {
-  if (!eq || !s) return <div className="tw-card"><CardHead title="تجهیز پیدا نشد" onClose={onClose} /></div>
+  if (!eq || !s) return <div className="cst-card"><CardHead title="تجهیز پیدا نشد" onClose={onClose} /></div>
   const ins = inspections.filter((i) => i.subjectId === eq.id && !i.archived && i.inspDate <= day)
   return (
-    <div className="tw-card">
+    <div className="cst-card">
       <CardHead title={eq.tag} sub={[eq.title, EQ_KINDS[eq.kind], eq.weightT ? `${fa(eq.weightT)} تن` : ''].filter(Boolean).join(' · ')} onClose={onClose} />
-      <div className="tw-big"><b>{pct(s.pct)}</b><span>نصب</span></div>
-      <ol className="tw-steps">{EQ_STEPS.map((x) => { const d = eq.steps[x.key]; const done = !!d && d <= day; return <li key={x.key} className={done ? 'done' : ''}><i />{x.fa}<span>{done ? jalaliText(d) : '—'}</span></li> })}</ol>
+      <div className="cst-big"><b>{pct(s.pct)}</b><span>نصب</span></div>
+      <ol className="cst-steps">{EQ_STEPS.map((x) => { const d = eq.steps[x.key]; const done = !!d && d <= day; return <li key={x.key} className={done ? 'done' : ''}><i />{x.fa}<span>{done ? jalaliText(d) : '—'}</span></li> })}</ol>
       {ins.length > 0 && <p className="sub">بازرسی‌ها: {ins.map((i) => (i.result === 'accept' ? 'قبول' : i.result === 'reject' ? 'رد' : 'در انتظار')).join('، ')}</p>}
     </div>
   )
