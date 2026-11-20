@@ -335,3 +335,9 @@ flowchart LR
 - قواعد تبدیل وابسته به مشخصات «جدول مرکزی جوش»؛ در پروژه‌های فعلی استفاده نشده است.
 - سنجش زمان ثبت با کاربر واقعی کارگاه.
 - **سرور ابرآروان:** اگر داده‌ها قبل از اعمال این تغییرات منتقل شده باشند، باید با `deploy/server/apply-sql.sh` روی سرور هم اعمال شوند.
+  فهرست کامل تغییرات پایگاه داده پس از ممیزی (به همین ترتیب؛ همه تکرارپذیرند):
+  ```
+  git -C /opt/farin-src fetch -q --depth 1 origin claude/piping-isometric-tracker-x8y5i1 && git -C /opt/farin-src reset -q --hard FETCH_HEAD
+  bash /opt/farin-src/deploy/server/apply-sql.sh supabase/execution/046_statement_server_quantities.sql supabase/execution/047_payment_chain_and_line_amend.sql supabase/execution/048_report_builder_iso.sql supabase/scheduling/005_link_share.sql supabase/execution/049_scope.sql supabase/execution/050_cs_registers.sql supabase/execution/051_cs_qc.sql supabase/execution/052_cs_plot.sql
+  bash /opt/farin-src/deploy/server/install.sh
+  ```

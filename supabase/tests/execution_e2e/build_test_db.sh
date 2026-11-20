@@ -16,6 +16,7 @@ files=$( { echo "$ROOT/schema.sql"; for d in $(ls -d $ROOT/*/ | grep -vE '/(seed
 for pass in 1 2 3; do for f in $files; do db < "$f" >/dev/null 2>&1 || true; done; done
 db supabase_admin < live_overrides.sql
 # migrations written after the audit (046 onward) replace functions that older files of other folders also define: run them last
-for f in $(ls $ROOT/execution/0[4-9][6-9]_*.sql $ROOT/execution/[1-9][0-9][0-9]_*.sql 2>/dev/null | sort -V); do docker exec -i farin-test psql -h localhost -U supabase_admin -d postgres -q -v ON_ERROR_STOP=1 < "$f" >/dev/null; done
+# every execution migration from 046 on (the post-audit ones), in number order
+for f in $(ls $ROOT/execution/[0-9][0-9][0-9]_*.sql 2>/dev/null | sort -V | awk -F/ '{ n = substr($NF, 1, 3) + 0; if (n >= 46) print }'); do docker exec -i farin-test psql -h localhost -U supabase_admin -d postgres -q -v ON_ERROR_STOP=1 < "$f" >/dev/null; done
 python3 gen_scenario.py | docker exec -i farin-test psql -h localhost -U supabase_admin -d postgres -q -v ON_ERROR_STOP=1 >/dev/null
 echo "test database ready: $(docker exec farin-test psql -h localhost -U postgres -d postgres -tAc "select count(*) from pg_tables where schemaname='public'") tables"
