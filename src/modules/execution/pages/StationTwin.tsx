@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
-import { Crosshair, Minus, Move, Pause, Pencil, Play, Plus, Route, Sparkles, SquarePlus, X } from 'lucide-react'
+import { Crosshair, ImageUp, Minus, Move, Pause, Pencil, Play, Plus, Route, Sparkles, SquarePlus, X } from 'lucide-react'
+import { supabase } from '../../../lib/supabaseClient'
 import { useCsStore } from '../store/useCsStore'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { EQ_KINDS, EQ_STEPS, SPOOL_STAGE_FA, inchDia } from '../lib/csCore'
@@ -83,7 +84,9 @@ export function StationTwin({ projectId }: { projectId: string }) {
     const [px, py] = toSvg(e.clientX, e.clientY), dx = px - d.start[0], dy = py - d.start[1]
     if (Math.abs(dx) + Math.abs(dy) > 0.3) d.moved = true
     const snap = (v: number) => Math.round(v * 2) / 2
-    setLive((m) => ({ ...m, [d.id!]: d.kind === 'size' ? { w: Math.max(2, snap(d.orig.w + dx)), h: Math.max(2, snap(d.orig.h + dy)) } : d.orig.points.length ? { points: d.orig.points.map(([x, y]) => [snap(x + dx), snap(y + dy)] as [number, number]) } : { x: snap(d.orig.x + dx), y: snap(d.orig.y + dy) } }))
+    const keepRatio = d.kind === 'size' && !!shapes.find((x) => x.id === d.id)?.imagePath // the plan image keeps its proportions
+    const nw = Math.max(2, snap(d.orig.w + dx))
+    setLive((m) => ({ ...m, [d.id!]: d.kind === 'size' ? { w: nw, h: keepRatio && d.orig.w ? Math.round((nw * d.orig.h) / d.orig.w * 10) / 10 : Math.max(2, snap(d.orig.h + dy)) } : d.orig.points.length ? { points: d.orig.points.map(([x, y]) => [snap(x + dx), snap(y + dy)] as [number, number]) } : { x: snap(d.orig.x + dx), y: snap(d.orig.y + dy) } }))
   }
   const up = async () => {
     const d = drag.current; drag.current = null
@@ -95,6 +98,32 @@ export function StationTwin({ projectId }: { projectId: string }) {
   const clickCanvas = (e: React.MouseEvent) => { if (!route) return; const [x, y] = toSvg(e.clientX, e.clientY); setRoute((r) => (r ? { ...r, pts: [...r.pts, [Math.round(x * 2) / 2, Math.round(y * 2) / 2]] } : r)) }
   const finishRoute = async () => { if (route && route.pts.length >= 2) await st.save('plot', projectId, { id: route.id, points: route.pts }); setRoute(null) }
 
+  // the real plot plan under the shapes: a private image, shown through a short-lived signed link
+  const site = shapes.find((s) => s.kind === 'site')
+  const [imgUrl, setImgUrl] = useState<string | null>(null)
+  useEffect(() => {
+    let on = true
+    if (!site?.imagePath) { setImgUrl(null); return }
+    void supabase.storage.from('cs-plot').createSignedUrl(site.imagePath, 3600).then(({ data }) => { if (on) setImgUrl(data?.signedUrl ?? null) })
+    return () => { on = false }
+  }, [site?.imagePath])
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [upErr, setUpErr] = useState<string | null>(null)
+  const uploadPlan = async (f: File) => {
+    setUpErr(null)
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { setUpErr('فقط تصویر PNG، JPG یا WebP؛ PDF را ابتدا به تصویر تبدیل کنید.'); return }
+    if (f.size > 15 * 1024 * 1024) { setUpErr('حجم تصویر بیش از ۱۵ مگابایت است.'); return }
+    const dims = await new Promise<{ w: number; h: number }>((res) => { const im = new Image(); im.onload = () => res({ w: im.naturalWidth, h: im.naturalHeight }); im.onerror = () => res({ w: 4, h: 3 }); im.src = URL.createObjectURL(f) })
+    const path = `${projectId}/plot-${Date.now()}.${f.type === 'image/png' ? 'png' : f.type === 'image/webp' ? 'webp' : 'jpg'}`
+    const { error } = await supabase.storage.from('cs-plot').upload(path, f, { contentType: f.type, upsert: false })
+    if (error) { setUpErr(`بارگذاری نشد: ${error.message}`); return }
+    // the image keeps its proportions over the site boundary; resize the boundary to set the scale
+    const w = site?.w || Math.max(ext.w, 100)
+    const patch = { imagePath: path, imageOpacity: site?.imageOpacity ?? 0.55, w, h: Math.round((w * dims.h) / dims.w * 10) / 10 }
+    if (site) await st.save('plot', projectId, { id: site.id, ...patch })
+    else await st.save('plot', projectId, { kind: 'site', label: 'محدودهٔ ایستگاه', x: 0, y: 0, z: -1, points: [], ...patch })
+    fitted.current = false
+  }
   const runAuto = async () => {
     if (!missing.length) return
     if (!window.confirm(`${fa(missing.length)} شکل (ناحیه، تجهیز، لاین) از روی ثبت‌ها چیده شود؟ شکل‌های کشیده‌شده جابه‌جا نمی‌شوند.`)) return
@@ -125,13 +154,18 @@ export function StationTwin({ projectId }: { projectId: string }) {
           {missing.length > 0 && <button className="im-btn im-btn-sm" onClick={() => void runAuto()}><Sparkles size={13} /> چیدمان خودکار ({fa(missing.length)})</button>}
           <button className={`im-btn im-btn-sm ${edit ? 'im-btn-primary' : ''}`} aria-pressed={edit} onClick={() => { setEdit((x) => !x); setRoute(null) }}><Pencil size={13} /> {edit ? 'پایان ویرایش نقشه' : 'ویرایش نقشه'}</button>
           {edit && <button className="im-btn im-btn-sm" onClick={() => void addArea()}><SquarePlus size={13} /> ناحیه</button>}
+          {edit && <><button className="im-btn im-btn-sm" onClick={() => fileRef.current?.click()}><ImageUp size={13} /> {site?.imagePath ? 'تعویض تصویر پلات‌پلن' : 'تصویر پلات‌پلن'}</button>
+            <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void uploadPlan(f) }} /></>}
+          {edit && site?.imagePath && <label className="tw-opacity">شفافیت تصویر<input type="range" min={10} max={100} value={Math.round((site.imageOpacity ?? 0.55) * 100)} onChange={(e) => { const v = Number(e.target.value) / 100; setLive((m) => ({ ...m, [site.id]: { ...(m[site.id] ?? {}), imageOpacity: v } })) }} onPointerUp={(e) => void st.save('plot', projectId, { id: site.id, imageOpacity: Number((e.target as HTMLInputElement).value) / 100 })} /></label>}
+          {edit && site?.imagePath && <button className="im-btn im-btn-sm" onClick={() => { if (window.confirm('تصویر پلات‌پلن از زیر نقشه برداشته شود؟ (فایل در بایگانی می‌ماند)')) void st.save('plot', projectId, { id: site.id, imagePath: null }) }}>برداشتن تصویر</button>}
+          {upErr && <span className="tw-err" role="alert">{upErr}</span>}
         </div>}
       </div>
 
       <div className="tw-body">
         <div className={`tw-canvas ${edit ? 'is-edit' : ''} ${route ? 'is-route' : ''}`}>
           {!shapes.length ? (
-            <div className="tw-empty"><b>هنوز نقشه‌ای کشیده نشده است.</b><span>با «چیدمان خودکار» یک نقشهٔ اولیه از ناحیه‌ها، تجهیزات و لاین‌های ثبت‌شده ساخته می‌شود؛ سپس در «ویرایش نقشه» هر شکل را به جای واقعی‌اش بکشید.</span></div>
+            <div className="tw-empty"><b>هنوز نقشه‌ای کشیده نشده است.</b><span>با «چیدمان خودکار» یک نقشهٔ اولیه از ناحیه‌ها، تجهیزات و لاین‌های ثبت‌شده ساخته می‌شود؛ سپس در «ویرایش نقشه» تصویر پلات‌پلن واقعی را زیر نقشه بگذارید و هر شکل را روی جای واقعی‌اش بکشید.</span></div>
           ) : (
             <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="نقشهٔ جانمایی ایستگاه"
               onPointerDown={(e) => down(e, 'pan')} onPointerMove={move} onPointerUp={() => void up()} onClick={clickCanvas} onDoubleClick={() => void finishRoute()}>
@@ -139,7 +173,13 @@ export function StationTwin({ projectId }: { projectId: string }) {
               <rect x={vb.x - vb.w} y={vb.y - vb.h} width={vb.w * 3} height={vb.h * 3} fill="url(#tw-grid)" className="tw-gridbg" />
               {shapes.map((s0) => {
                 const s = shapeOf(s0), on = s.id === sel
-                if (s.kind === 'site') return <rect key={s.id} x={s.x} y={s.y} width={s.w} height={s.h} className="tw-site" onPointerDown={edit ? (e) => down(e, 'move', s) : undefined} />
+                if (s.kind === 'site') return (
+                  <g key={s.id}>
+                    {imgUrl && <image href={imgUrl} x={s.x} y={s.y} width={s.w} height={s.h} preserveAspectRatio="none" opacity={s.imageOpacity ?? 0.55} className="tw-plan" />}
+                    <rect x={s.x} y={s.y} width={s.w} height={s.h} className="tw-site" onPointerDown={edit ? (e) => down(e, 'move', s) : undefined} />
+                    {edit && <rect x={s.x + s.w - 2.4} y={s.y + s.h - 2.4} width={2.4} height={2.4} className="tw-handle" onPointerDown={(e) => down(e, 'size', s)} />}
+                  </g>
+                )
                 if (s.kind === 'area') {
                   const a = state.areas.get(s.areaName), c = mode === 'progress' ? progressColor(a?.pct ?? 0) : a?.issues && mode === 'quality' ? '#ef4444' : '#64748b'
                   return (

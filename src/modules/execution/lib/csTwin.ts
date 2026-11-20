@@ -11,6 +11,8 @@ export type ShapeKind = 'site' | 'area' | 'equipment' | 'line' | 'label'
 export interface PlotShape {
   id: string; projectId: string; kind: ShapeKind; refId: string | null; areaName: string; label: string
   x: number; y: number; w: number; h: number; rot: number; points: [number, number][]; z: number; note: string; archived: boolean
+  /** the real plot plan laid over the site shape (migration 055): a path in the private «cs-plot» bucket */
+  imagePath?: string | null; imageOpacity?: number
 }
 export type NewShape = Omit<PlotShape, 'id' | 'projectId' | 'archived'>
 export interface Registers { lines: CsLine[]; spools: CsSpool[]; welds: CsWeld[]; equipment: CsEquipment[]; packs: CsTestPack[]; inspections: CsInspection[] }

@@ -13,7 +13,7 @@ const res = []
 const check = (id, title, pass, note = '') => res.push({ id, title, pass: !!pass, note })
 
 // clean slate for this script's own rows (test DB only)
-psql(`delete from cs_plot_shapes where project_id='${P}'; delete from cs_inspections where project_id='${P}'; delete from cs_qc_settings where project_id='${P}'; delete from cs_history where project_id='${P}'; delete from cs_welds where project_id='${P}'; delete from cs_spools where project_id='${P}'; delete from cs_lines where project_id='${P}'; delete from cs_equipment where project_id='${P}'; delete from cs_test_packs where project_id='${P}';`)
+psql(`delete from storage.objects where bucket_id='cs-plot'; delete from cs_plot_shapes where project_id='${P}'; delete from cs_inspections where project_id='${P}'; delete from cs_qc_settings where project_id='${P}'; delete from cs_history where project_id='${P}'; delete from cs_welds where project_id='${P}'; delete from cs_spools where project_id='${P}'; delete from cs_lines where project_id='${P}'; delete from cs_equipment where project_id='${P}'; delete from cs_test_packs where project_id='${P}';`)
 
 // C01 — the contractor records lines, a pack, spools and welds
 let r = as('contractor', `
@@ -128,5 +128,14 @@ insert into pssr_systems (id, master_project_id, code, name, kind) values ('a000
 const link = as('contractor', `update cs_test_packs set pssr_system_id='a0000000-0000-4000-8000-0000000000f1' where id='a0000000-0000-4000-8000-0000000000a1'; update cs_equipment set pssr_system_id='a0000000-0000-4000-8000-0000000000f1' where project_id='${P}'`)
 const cross = as('contractor', `update cs_test_packs set pssr_system_id='a0000000-0000-4000-8000-0000000000f2' where id='a0000000-0000-4000-8000-0000000000a1'`)
 check('S01', 'تست‌پک و تجهیز به سیستم PSSR همان پروژه وصل می‌شوند؛ سیستم پروژهٔ دیگر پذیرفته نمی‌شود', link.ok && !cross.ok && cross.error.includes('cross_project'), `${link.error} | ${cross.error}`)
+
+// ── 055: plot-plan image in the private bucket, by project folder ──
+const up = as('contractor', `insert into storage.objects (bucket_id, name) values ('cs-plot', '${P}/plot-1.png')`)
+const upOther = as('contractor', `insert into storage.objects (bucket_id, name) values ('cs-plot', 'a0000000-0000-4000-8000-0000000000f9/plot-1.png')`)
+const upViewer = as('viewer', `insert into storage.objects (bucket_id, name) values ('cs-plot', '${P}/plot-2.png')`)
+const seeV = as('viewer', `select count(*) from storage.objects where bucket_id='cs-plot'`)
+const seeO = as('outsider', `select count(*) from storage.objects where bucket_id='cs-plot'`)
+const img = as('contractor', `update cs_plot_shapes set image_path='${P}/plot-1.png' where project_id='${P}' and kind='equipment'`)
+check('S02', 'تصویر پلات‌پلن: پیمانکار در پوشهٔ پروژهٔ خودش بارگذاری می‌کند، بیننده فقط می‌بیند، فرد بیرونی نمی‌بیند؛ تصویر فقط روی محدودهٔ سایت', up.ok && !upOther.ok && !upViewer.ok && seeV.out.trim() === '1' && seeO.out.trim() === '0' && !img.ok, `${up.error} | ${upOther.error} | ${upViewer.error} | ${seeV.out} | ${seeO.out} | ${img.error}`)
 
 console.log(JSON.stringify({ passed: res.filter((x) => x.pass).length, total: res.length, results: res }, null, 1))
