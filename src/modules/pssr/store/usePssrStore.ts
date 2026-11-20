@@ -20,7 +20,15 @@ const logOf = (r: Row): GasinLog => ({ id: r.id, permitId: r.permit_id, at: s(r.
 /** what other modules say about this project's readiness: open NCRs, engineering documents not yet approved, open changes (MOC) */
 export interface PssrAdvisories { ncr: { code: string; text: string }[]; docs: { code: string; text: string; asBuilt: boolean }[]; moc: { code: string; text: string; status: string }[]
   /** hydrotest sections of the line (testing module) not yet accepted */
-  ht: { code: string; kmFrom: number; kmTo: number; failed: boolean }[] }
+  ht: { code: string; kmFrom: number; kmTo: number; failed: boolean }[]
+  /** compressor-station test packs linked to a system and not yet tested / reinstated (execution module, migration 053) */
+  packs: { systemId: string; code: string; text: string }[]
+  /** compressor-station equipment linked to a system whose installation is not complete */
+  equipment: { systemId: string; code: string; text: string }[] }
+// equipment installation steps (execution module's csCore EQ_STEPS without the civil prerequisite)
+const INSTALL_STEPS: [string, string][] = [['set', 'استقرار'], ['level', 'تراز'], ['grout', 'گروت'], ['align', 'الاینمنت'], ['piping', 'اتصال لوله‌کشی']]
+const installDone = (steps: unknown) => INSTALL_STEPS.every(([k]) => !!(steps as Record<string, string> | null)?.[k])
+const installLeft = (steps: unknown) => INSTALL_STEPS.filter(([k]) => !(steps as Record<string, string> | null)?.[k]).map(([, f]) => f).join('، ')
 const NCR_DONE = new Set(['closed', 'void']), DOC_DONE = new Set(['approved', 'superseded']), MOC_DONE = new Set(['closed', 'rejected', 'cancelled', 'implemented'])
 const tplOf = (r: Row): PssrTemplateItem => ({ id: Number(r.id), kind: r.kind, category: s(r.category), seq: Number(r.seq ?? 0), title: s(r.title), mandatory: !!r.mandatory, active: !!r.is_active, area: s(r.area), priority: (r.priority || 'B') as Priority, refNo: nn(r.ref_no), kinds: Array.isArray(r.kinds) ? r.kinds : null, source: s(r.source) })
 /** does a template item apply to a system of this kind? (the official items list their kinds; older ones have one kind) */
@@ -75,7 +83,7 @@ export const usePssrStore = create<State>()((set, get) => {
       if (sys.error) { set({ loading: false, error: sys.error.message, systems: [] }); return }
       const ids = (sys.data ?? []).map((r: Row) => r.id)
       const any = ids.length ? ids : ['00000000-0000-0000-0000-000000000000']
-      const [ch, me, pu, sg, so, tp, pm, nc, dc, cr, ht] = await Promise.all([
+      const [ch, me, pu, sg, so, tp, pm, nc, dc, cr, ht, cp, ce] = await Promise.all([
         supabase.from('pssr_checks').select('*').in('system_id', any).order('seq'),
         supabase.from('pssr_meetings').select('*').in('system_id', any).order('held_on', { ascending: false }),
         supabase.from('pssr_punches').select('*').in('system_id', any).order('raised_at'),
@@ -87,6 +95,9 @@ export const usePssrStore = create<State>()((set, get) => {
         supabase.from('ex_eng_docs').select('doc_no, title, status, category').eq('project_id', projectId),
         supabase.from('chg_change_requests').select('cr_number, title, status').eq('master_project_id', projectId),
         supabase.from('ht_sections').select('code, km_from, km_to, stage, failed').eq('master_project_id', projectId).order('seq'),
+        // a station's test packs and equipment tied to PSSR systems (absent tables / columns → nothing to add)
+        supabase.from('cs_test_packs').select('pack_no, status, punch_a, pssr_system_id').eq('project_id', projectId).eq('archived', false).not('pssr_system_id', 'is', null),
+        supabase.from('cs_equipment').select('tag, title, steps, pssr_system_id').eq('project_id', projectId).eq('archived', false).not('pssr_system_id', 'is', null),
       ])
       const permits = (pm.data ?? []).map(permitOf)
       const lg = permits.length ? await supabase.from('pssr_gasin_logs').select('*').in('permit_id', permits.map((x) => x.id)).order('at') : { data: [] as Row[] }
@@ -100,6 +111,8 @@ export const usePssrStore = create<State>()((set, get) => {
           docs: (dc.data ?? []).filter((r: Row) => !DOC_DONE.has(r.status)).map((r: Row) => ({ code: s(r.doc_no), text: s(r.title), asBuilt: /as.?built|ازبیلت|چون.?ساخت/i.test(`${r.title} ${r.category ?? ''}`) })),
           moc: (cr.data ?? []).filter((r: Row) => !MOC_DONE.has(r.status)).map((r: Row) => ({ code: s(r.cr_number), text: s(r.title), status: s(r.status) })),
           ht: (ht.data ?? []).filter((r: Row) => r.stage !== 'accepted' || r.failed).map((r: Row) => ({ code: s(r.code), kmFrom: Number(r.km_from), kmTo: Number(r.km_to), failed: !!r.failed })),
+          packs: (cp.error ? [] : cp.data ?? []).filter((r: Row) => r.status !== 'tested' && r.status !== 'reinstated' || Number(r.punch_a) > 0).map((r: Row) => ({ systemId: s(r.pssr_system_id), code: s(r.pack_no), text: r.status === 'tested' || r.status === 'reinstated' ? `آزمون‌شده، ${Number(r.punch_a).toLocaleString('fa-IR')} پانچ A باز` : r.status === 'ready' ? 'آمادهٔ آزمون، هنوز آزمون نشده' : 'در حال تکمیل — آزمون نشده' })),
+          equipment: (ce.error ? [] : ce.data ?? []).filter((r: Row) => !installDone(r.steps)).map((r: Row) => ({ systemId: s(r.pssr_system_id), code: s(r.tag), text: `${s(r.title)} — نصب ناتمام (${installLeft(r.steps)})` })),
         },
       })
     },

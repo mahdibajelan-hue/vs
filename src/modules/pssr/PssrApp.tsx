@@ -697,7 +697,12 @@ function printGasin(sys: PssrSystem, permit: GasinPermit, logs: GasinLog[], proj
 
 // ── advisories from other modules ────────────────────────────────────────────
 /** a checklist item's related warning from the other modules: open changes for MOC, unapproved documents for As-built, open NCRs for NDT/welds */
-function adviceFor(title: string, a: PssrAdvisories, sys?: { kmFrom: number | null; kmTo: number | null }): string | null {
+function adviceFor(title: string, a: PssrAdvisories, sys?: { id?: string; kmFrom: number | null; kmTo: number | null }): string | null {
+  // a compressor station: this system's test packs and equipment from the execution module
+  const packs = sys?.id ? a.packs.filter((x) => x.systemId === sys.id) : []
+  const eq = sys?.id ? a.equipment.filter((x) => x.systemId === sys.id) : []
+  if (/هیدرو|hydro|تست|آزمون فشار|pressure test|test pack/i.test(title) && packs.length) return `${fa(packs.length)} تست‌پک این سیستم هنوز کامل نیست: ${packs.slice(0, 4).map((x) => `${x.code} (${x.text})`).join('، ')}${packs.length > 4 ? '…' : ''}`
+  if (/تکمیل مکانیکی|mechanical completion|نصب|تجهیز|equipment|MC\b/i.test(title) && eq.length) return `${fa(eq.length)} تجهیز این سیستم نصبش کامل نیست: ${eq.slice(0, 4).map((x) => x.code).join('، ')}${eq.length > 4 ? '…' : ''}`
   if (/هیدرو|hydro/i.test(title) && a.ht.length) {
     // the sections that overlap this system's stretch (a system without a chainage: the whole line)
     const lo = sys?.kmFrom, hi = sys?.kmTo != null && lo != null && sys.kmTo > lo ? sys.kmTo : lo
@@ -712,12 +717,18 @@ function adviceFor(title: string, a: PssrAdvisories, sys?: { kmFrom: number | nu
 
 function AdvisoryPanel() {
   const a = usePssrStore((s) => s.advisories)
+  const systems = usePssrStore((s) => s.systems)
+  const sysCode = (id: string) => systems.find((x) => x.id === id)?.code ?? '—'
   if (!a) return null
   const items = [
     { key: 'ncr', label: 'NCR باز (ماژول اجرا)', list: a.ncr, color: '#ef4444' },
     { key: 'docs', label: 'مدارک مهندسی تأییدنشده', list: a.docs, color: '#f59e0b' },
     { key: 'moc', label: 'تغییرات (MOC) باز', list: a.moc, color: '#a855f7' },
     { key: 'ht', label: 'قطعهٔ هیدروتست پذیرفته‌نشده', list: a.ht.map((h) => ({ code: h.code, text: `کیلومتر ${fa(h.kmFrom)} تا ${fa(h.kmTo)}${h.failed ? ' · مردود' : ''}` })), color: '#0ea5e9' },
+    ...(a.packs.length || a.equipment.length ? [
+      { key: 'packs', label: 'تست‌پک ایستگاه ناتمام', list: a.packs.map((x) => ({ code: x.code, text: `${sysCode(x.systemId)} · ${x.text}` })), color: '#6366f1' },
+      { key: 'eq', label: 'تجهیز ایستگاه با نصب ناتمام', list: a.equipment.map((x) => ({ code: x.code, text: `${sysCode(x.systemId)} · ${x.text}` })), color: '#14b8a6' },
+    ] : []),
   ]
   return (
     <section className="ps-card ps-adv">

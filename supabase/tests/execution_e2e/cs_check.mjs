@@ -122,4 +122,11 @@ const mv = as('contractor', `update cs_plot_shapes set x = 30 where project_id='
 const ph = json(`select count(*)::int n from cs_history where project_id='${P}' and entity='cs_plot_shapes' and action='update'`)[0].n
 check('P02', 'هر تجهیز یک شکل؛ جابه‌جایی در تاریخچه ثبت می‌شود', !dup.ok && mv.ok && ph >= 1, `${dup.error} | ${mv.error} | ${ph}`)
 
+// ── 053: test packs / equipment → PSSR systems ──
+psql(`insert into master_projects (id, project_id_code, official_name) values ('a0000000-0000-4000-8000-0000000000f9', 'TEST-OTHER', 'پروژهٔ دیگر آزمون') on conflict (id) do nothing;
+insert into pssr_systems (id, master_project_id, code, name, kind) values ('a0000000-0000-4000-8000-0000000000f1', '${P}', 'SYS-CS-01', 'سیستم گاز فرآیندی', 'station'), ('a0000000-0000-4000-8000-0000000000f2', 'a0000000-0000-4000-8000-0000000000f9', 'SYS-X', 'سیستم پروژهٔ دیگر', 'station') on conflict (id) do nothing;`)
+const link = as('contractor', `update cs_test_packs set pssr_system_id='a0000000-0000-4000-8000-0000000000f1' where id='a0000000-0000-4000-8000-0000000000a1'; update cs_equipment set pssr_system_id='a0000000-0000-4000-8000-0000000000f1' where project_id='${P}'`)
+const cross = as('contractor', `update cs_test_packs set pssr_system_id='a0000000-0000-4000-8000-0000000000f2' where id='a0000000-0000-4000-8000-0000000000a1'`)
+check('S01', 'تست‌پک و تجهیز به سیستم PSSR همان پروژه وصل می‌شوند؛ سیستم پروژهٔ دیگر پذیرفته نمی‌شود', link.ok && !cross.ok && cross.error.includes('cross_project'), `${link.error} | ${cross.error}`)
+
 console.log(JSON.stringify({ passed: res.filter((x) => x.pass).length, total: res.length, results: res }, null, 1))

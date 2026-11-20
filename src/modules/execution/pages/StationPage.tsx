@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { supabase } from '../../../lib/supabaseClient'
 import { Check, Download, Pencil, Plus, Search, Upload, Wrench, X } from 'lucide-react'
 import { useCsStore, type CsEntity } from '../store/useCsStore'
 import { useExecutionStore } from '../store/useExecutionStore'
@@ -46,6 +47,17 @@ function useCs() {
   const lines = useCsStore((s) => s.lines), spools = useCsStore((s) => s.spools), welds = useCsStore((s) => s.welds), equipment = useCsStore((s) => s.equipment), packs = useCsStore((s) => s.packs)
   return { lines, spools, welds, equipment, packs }
 }
+/** the project's PSSR (commissioning) systems, for linking packs and equipment (empty when the PSSR module is not used) */
+function usePssrSystems(projectId: string) {
+  const [list, setList] = useState<{ value: string; label: string }[]>([])
+  useEffect(() => {
+    let on = true
+    void supabase.from('pssr_systems').select('id, code, name').eq('master_project_id', projectId).order('code').then(({ data }) => { if (on) setList((data ?? []).map((r) => ({ value: r.id as string, label: `${r.code} — ${r.name}` }))) })
+    return () => { on = false }
+  }, [projectId])
+  return list
+}
+const pssrField = (opts: { value: string; label: string }[]): FieldDef[] => (opts.length ? [{ key: 'pssrSystemId', label: 'سیستم PSSR (راه‌اندازی)', kind: 'select', options: [{ value: '', label: '—' }, ...opts], hint: 'وضعیت این مورد در ماژول PSSR، کنار بندهای همان سیستم دیده می‌شود.' }] : [])
 function useRights(projectId: string) {
   const can = useExecutionStore((s) => s.can)
   const review = can(projectId, 'review')
@@ -313,6 +325,7 @@ function WeldsView({ projectId }: { projectId: string }) {
 
 // ── equipment ──────────────────────────────────────────────────────────
 function EquipmentView({ projectId }: { projectId: string }) {
+  const pssr = usePssrSystems(projectId)
   const d = useCs(), save = useCsStore((s) => s.save)
   const r = useRights(projectId)
   const [q, setQ] = useState(''), [form, setForm] = useState<{ eq?: CsEquipment } | null>(null)
@@ -324,7 +337,7 @@ function EquipmentView({ projectId }: { projectId: string }) {
   }
   const fields: FieldDef[] = [
     { key: 'tag', label: 'تگ', kind: 'text', required: true }, { key: 'kind', label: 'نوع', kind: 'select', required: true, options: Object.entries(EQ_KINDS).map(([value, label]) => ({ value, label })) },
-    { key: 'title', label: 'شرح', kind: 'text', span: 2 }, { key: 'area', label: 'ناحیه / واحد', kind: 'text' }, { key: 'weightT', label: 'وزن (تن)', kind: 'num' }, { key: 'note', label: 'یادداشت', kind: 'text', span: 2 },
+    { key: 'title', label: 'شرح', kind: 'text', span: 2 }, { key: 'area', label: 'ناحیه / واحد', kind: 'text' }, { key: 'weightT', label: 'وزن (تن)', kind: 'num' }, ...pssrField(pssr), { key: 'note', label: 'یادداشت', kind: 'text', span: 2 },
   ]
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -344,14 +357,16 @@ function EquipmentView({ projectId }: { projectId: string }) {
         ]} />
       </Section>
       {form && <FormModal title={form.eq ? `ویرایش ${form.eq.tag}` : 'تجهیز تازه'} fields={fields} onClose={() => setForm(null)}
-        initial={{ tag: form.eq?.tag ?? '', kind: form.eq?.kind ?? 'compressor', title: form.eq?.title ?? '', area: form.eq?.area ?? '', weightT: form.eq?.weightT ?? '', note: form.eq?.note ?? '' }}
-        onSubmit={async (v) => { await save('equipment', projectId, { id: form.eq?.id, tag: String(v.tag).trim(), kind: String(v.kind), title: String(v.title ?? ''), area: String(v.area ?? ''), weightT: v.weightT === '' || v.weightT == null ? null : Number(v.weightT), note: String(v.note ?? '') }) }} />}
+        initial={{ tag: form.eq?.tag ?? '', kind: form.eq?.kind ?? 'compressor', title: form.eq?.title ?? '', area: form.eq?.area ?? '', weightT: form.eq?.weightT ?? '', pssrSystemId: form.eq?.pssrSystemId ?? '', note: form.eq?.note ?? '' }}
+        onSubmit={async (v) => { await save('equipment', projectId, { id: form.eq?.id, tag: String(v.tag).trim(), kind: String(v.kind), title: String(v.title ?? ''), area: String(v.area ?? ''), weightT: v.weightT === '' || v.weightT == null ? null : Number(v.weightT), ...(pssr.length ? { pssrSystemId: v.pssrSystemId || null } : {}), note: String(v.note ?? '') }) }} />}
     </div>
   )
 }
 
 // ── test packs ─────────────────────────────────────────────────────────
 function PacksView({ projectId }: { projectId: string }) {
+  const pssr = usePssrSystems(projectId)
+  const pssrName = (id?: string | null) => (id ? pssr.find((x) => x.value === id)?.label.split(' — ')[0] ?? '' : '')
   const d = useCs(), save = useCsStore((s) => s.save)
   const r = useRights(projectId)
   const [form, setForm] = useState<{ pack?: CsTestPack } | null>(null), [test, setTest] = useState<{ pack: CsTestPack; to: 'tested' | 'reinstated' } | null>(null)
@@ -359,7 +374,7 @@ function PacksView({ projectId }: { projectId: string }) {
   const fields: FieldDef[] = [
     { key: 'packNo', label: 'شمارهٔ تست‌پک', kind: 'text', required: true }, { key: 'system', label: 'سیستم / زیرسیستم', kind: 'text' },
     { key: 'medium', label: 'نوع آزمون', kind: 'select', required: true, options: [{ value: 'hydro', label: 'هیدرواستاتیک' }, { value: 'pneumatic', label: 'پنوماتیک' }, { value: 'service', label: 'سرویس / نشتی' }] },
-    { key: 'testPressBar', label: 'فشار آزمون (bar)', kind: 'num' }, { key: 'punchA', label: 'پانچ A باز', kind: 'num' }, { key: 'punchB', label: 'پانچ B باز', kind: 'num' }, { key: 'note', label: 'یادداشت', kind: 'text', span: 2 },
+    { key: 'testPressBar', label: 'فشار آزمون (bar)', kind: 'num' }, { key: 'punchA', label: 'پانچ A باز', kind: 'num' }, { key: 'punchB', label: 'پانچ B باز', kind: 'num' }, ...pssrField(pssr), { key: 'note', label: 'یادداشت', kind: 'text', span: 2 },
   ]
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -372,7 +387,7 @@ function PacksView({ projectId }: { projectId: string }) {
             return (
               <article key={p.id} className="im-card cs-pack">
                 <header><b className="fn-code" dir="ltr">{p.packNo}</b><Chip tone={done ? 'good' : rd.ready ? 'good' : 'warn'}>{done ? PACK_STATUS_FA[p.status] : rd.ready ? 'آمادهٔ آزمون' : 'ناآماده'}</Chip></header>
-                <p className="sub">{[p.system, p.medium === 'hydro' ? 'هیدرواستاتیک' : p.medium === 'pneumatic' ? 'پنوماتیک' : 'سرویس', p.testPressBar ? `${fa(p.testPressBar)} bar` : ''].filter(Boolean).join(' · ')}</p>
+                <p className="sub">{[pssrName(p.pssrSystemId), p.system, p.medium === 'hydro' ? 'هیدرواستاتیک' : p.medium === 'pneumatic' ? 'پنوماتیک' : 'سرویس', p.testPressBar ? `${fa(p.testPressBar)} bar` : ''].filter(Boolean).join(' · ')}</p>
                 <div className="cs-pack-nums"><span><b>{fa(rd.lines)}</b> لاین</span><span><b>{fa(rd.welded)}/{fa(rd.welds)}</b> جوش</span><span><b>{fa(rd.accepted)}</b> قبول NDT</span><span><b>{fa(p.punchA)}</b> پانچ A</span></div>
                 <Bar value={rd.welds ? (rd.welds - rd.blocking) / rd.welds : 0} />
                 {!done && rd.reasons.length > 0 && <ul className="cs-reasons">{rd.reasons.map((x) => <li key={x}>{x}</li>)}</ul>}
@@ -388,8 +403,8 @@ function PacksView({ projectId }: { projectId: string }) {
         </div>
       )}
       {form && <FormModal title={form.pack ? `ویرایش ${form.pack.packNo}` : 'تست‌پک تازه'} fields={fields} onClose={() => setForm(null)}
-        initial={{ packNo: form.pack?.packNo ?? '', system: form.pack?.system ?? '', medium: form.pack?.medium ?? 'hydro', testPressBar: form.pack?.testPressBar ?? '', punchA: form.pack?.punchA ?? 0, punchB: form.pack?.punchB ?? 0, note: form.pack?.note ?? '' }}
-        onSubmit={async (v) => { await save('packs', projectId, { id: form.pack?.id, packNo: String(v.packNo).trim(), system: String(v.system ?? ''), medium: v.medium, testPressBar: v.testPressBar === '' || v.testPressBar == null ? null : Number(v.testPressBar), punchA: Number(v.punchA) || 0, punchB: Number(v.punchB) || 0, note: String(v.note ?? '') }) }} />}
+        initial={{ packNo: form.pack?.packNo ?? '', system: form.pack?.system ?? '', medium: form.pack?.medium ?? 'hydro', testPressBar: form.pack?.testPressBar ?? '', punchA: form.pack?.punchA ?? 0, punchB: form.pack?.punchB ?? 0, pssrSystemId: form.pack?.pssrSystemId ?? '', note: form.pack?.note ?? '' }}
+        onSubmit={async (v) => { await save('packs', projectId, { id: form.pack?.id, packNo: String(v.packNo).trim(), system: String(v.system ?? ''), medium: v.medium, testPressBar: v.testPressBar === '' || v.testPressBar == null ? null : Number(v.testPressBar), punchA: Number(v.punchA) || 0, punchB: Number(v.punchB) || 0, ...(pssr.length ? { pssrSystemId: v.pssrSystemId || null } : {}), note: String(v.note ?? '') }) }} />}
       {test && <FormModal title={test.to === 'tested' ? `ثبت آزمون ${test.pack.packNo}` : `ثبت بازگردانی ${test.pack.packNo}`} submitLabel="ثبت" fields={[{ key: 'd', label: test.to === 'tested' ? 'تاریخ آزمون' : 'تاریخ بازگردانی', kind: 'date', required: true }]}
         initial={{ d: todayTehran() }} onClose={() => setTest(null)}
         onSubmit={async (v) => { await save('packs', projectId, test.to === 'tested' ? { id: test.pack.id, status: 'tested', testDate: String(v.d) } : { id: test.pack.id, status: 'reinstated', reinstatedDate: String(v.d) }) }} />}
