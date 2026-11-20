@@ -2,6 +2,8 @@ import { Fragment } from 'react'
 import { fmtD } from '../../finance/components/fn'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { epcSettings } from '../lib/epcSettings'
+import { usePartyBrand } from './epc/PaperFrame'
+import { partyLogoCells } from '../forms/partyLogos'
 import { GridSheet, printPlan } from '../forms/GridTemplate'
 import { ROWS_PER_PAGE, weldingGridPage, type WeldRow } from '../forms/weldingGrid'
 import { WELDING_LOGO_SLOTS } from '../forms/weldingBindings'
@@ -79,13 +81,16 @@ function SpecPaper({ c, template, note }: { c: PaperCtx; template: FormTemplateR
   const inp = specInputOf(r, c.lines, id, c.metrics)
   const rows = inp.rows
   const pages = specPages(spec, rows.length), plan = printPlan(template.layout)
+  // the parties' logos go into the empty logo boxes at the top of the approved sheet
+  const brand = usePartyBrand(r.projectId, r.letterhead ?? undefined)
+  const logoCells = partyLogoCells(template.layout, brand)
   const logos: Record<string, string> = {}
   template.layout.logos.forEach((l) => { if (l.from && l.kind === 'pic') logos[`${l.from[0]},${l.from[1]}`] = ep.parties.employer?.logo || `${import.meta.env.BASE_URL}form-logo-welding-original.png` })
   return (
     <div className="mt-printable gt-paper" dir="ltr">
       {note && <p style={{ margin: '0 0 4px', fontSize: 11, textAlign: 'center' }}>{note}</p>}
       <style>{`${plan.css} @media print { .gt-page { zoom: ${plan.scale}; break-after: page; } .gt-page:last-child { break-after: auto; } }`}</style>
-      {Array.from({ length: pages }, (_, p) => <div key={p} className="gt-page" style={{ width: 'fit-content', margin: '0 auto' }}><GridSheet signs={signMap(template, c.signatures)} tpl={template.layout} values={specPage(spec, template.layout, inp, p).values} logos={logos} /></div>)}
+      {Array.from({ length: pages }, (_, p) => <div key={p} className="gt-page" style={{ width: 'fit-content', margin: '0 auto' }}><GridSheet signs={{ ...logoCells, ...signMap(template, c.signatures) }} tpl={template.layout} values={specPage(spec, template.layout, inp, p).values} logos={logos} /></div>)}
       <small className="wd-foot">{r.reportNo} · نسخهٔ قالب {template.version} · نسخهٔ بایگانی</small>
     </div>
   )

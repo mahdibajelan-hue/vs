@@ -1,5 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { GridSheet, printPlan } from '../forms/GridTemplate'
+import { partyLogoCells } from '../forms/partyLogos'
+import { usePartyBrand } from './epc/PaperFrame'
 import { GRID_SPECS, cellTarget, editableCells, specPage, specPages, type CellTarget } from '../forms/gridSpecs'
 import { specInputOf } from './TemplatePaper'
 import type { FieldDef, FormDef } from '../lib/formCatalog'
@@ -21,13 +23,15 @@ export function SheetEntry({ template, form, report, rows, identity, metrics, ed
   renderHeader: (f: FieldDef) => ReactNode
 }) {
   const spec = GRID_SPECS[template.formKey]
+  const brand = usePartyBrand(report.projectId, report.letterhead ?? undefined)
+  const logoCells = useMemo(() => partyLogoCells(template.layout, brand), [template.layout, brand])
   const [page, setPage] = useState(0)
   const [sel, setSel] = useState<{ a: string; t: CellTarget } | null>(null)
   const inp = useMemo(() => specInputOf(report, rows, identity, metrics), [report, rows, identity, metrics])
   const pages = specPages(spec, Math.max(rows.length, 1))
   const shown = specPage(spec, template.layout, inp, Math.min(page, pages - 1))
   const editable0 = useMemo(() => editableCells(spec, page), [spec, page])
-  const mark = new Set([...editable0].filter((a) => !(a in shown.values) && a !== sel?.a)) // empty fillable cells are tinted
+  const mark = new Set(editable ? [...editable0].filter((a) => !(a in shown.values) && a !== sel?.a) : []) // empty fillable cells are tinted
   const plan = printPlan(template.layout)
   const field = !sel ? null : sel.t.kind === 'header' ? form.header.find((f) => f.key === sel.t.key) ?? null : form.columns.find((f) => f.key === sel.t.key) ?? null
   const row = sel && sel.t.kind === 'row' ? rows[sel.t.row] : undefined
@@ -56,7 +60,7 @@ export function SheetEntry({ template, form, report, rows, identity, metrics, ed
         </span>
       </div>
       <div style={{ overflow: 'auto', maxWidth: '100%' }} dir="ltr"><style>{plan.css}</style>
-        <div className="gt-page" style={{ width: 'fit-content', margin: '0 auto' }}><GridSheet tpl={template.layout} values={shown.values} mark={mark} selected={sel?.a} onCell={click} /></div>
+        <div className="gt-page" style={{ width: 'fit-content', margin: '0 auto' }}><GridSheet signs={logoCells} tpl={template.layout} values={shown.values} mark={mark} selected={sel?.a} onCell={click} /></div>
       </div>
     </div>
   )
