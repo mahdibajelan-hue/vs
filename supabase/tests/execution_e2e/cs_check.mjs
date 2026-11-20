@@ -13,7 +13,7 @@ const res = []
 const check = (id, title, pass, note = '') => res.push({ id, title, pass: !!pass, note })
 
 // clean slate for this script's own rows (test DB only)
-psql(`delete from storage.objects where bucket_id='cs-plot'; delete from cs_plot_shapes where project_id='${P}'; delete from cs_inspections where project_id='${P}'; delete from cs_qc_settings where project_id='${P}'; delete from cs_history where project_id='${P}'; delete from cs_welds where project_id='${P}'; delete from cs_spools where project_id='${P}'; delete from cs_lines where project_id='${P}'; delete from cs_equipment where project_id='${P}'; delete from cs_test_packs where project_id='${P}';`)
+psql(`delete from ex_entry_timings where project_id='${P}'; delete from storage.objects where bucket_id='cs-plot'; delete from cs_plot_shapes where project_id='${P}'; delete from cs_inspections where project_id='${P}'; delete from cs_qc_settings where project_id='${P}'; delete from cs_history where project_id='${P}'; delete from cs_welds where project_id='${P}'; delete from cs_spools where project_id='${P}'; delete from cs_lines where project_id='${P}'; delete from cs_equipment where project_id='${P}'; delete from cs_test_packs where project_id='${P}';`)
 
 // C01 — the contractor records lines, a pack, spools and welds
 let r = as('contractor', `
@@ -137,5 +137,15 @@ const seeV = as('viewer', `select count(*) from storage.objects where bucket_id=
 const seeO = as('outsider', `select count(*) from storage.objects where bucket_id='cs-plot'`)
 const img = as('contractor', `update cs_plot_shapes set image_path='${P}/plot-1.png' where project_id='${P}' and kind='equipment'`)
 check('S02', 'تصویر پلات‌پلن: پیمانکار در پوشهٔ پروژهٔ خودش بارگذاری می‌کند، بیننده فقط می‌بیند، فرد بیرونی نمی‌بیند؛ تصویر فقط روی محدودهٔ سایت', up.ok && !upOther.ok && !upViewer.ok && seeV.out.trim() === '1' && seeO.out.trim() === '0' && !img.ok, `${up.error} | ${upOther.error} | ${upViewer.error} | ${seeV.out} | ${seeO.out} | ${img.error}`)
+
+// T01 — entry timing (056): each person writes only their own rows, for a report of the same project; reviewers see all
+const rep = psql(`select id from ex_reports where project_id='${P}' order by report_date limit 1;`)
+const tRow = (extra = '') => `insert into ex_entry_timings (project_id, report_id, form_key, outcome, started_at, ended_at, active_sec, wall_sec, edits, lines, device${extra ? ', user_id' : ''}) values ('${P}', '${rep}', 'work', 'submitted', now() - interval '9 minutes', now(), 380, 540, 42, 6, 'mobile'${extra})`
+const tOwn = as('contractor', tRow()), tViewer = as('viewer', tRow())
+const tForge = as('contractor', tRow(`, '${U.supervision}'`)), tOut = as('outsider', tRow())
+const tOther = as('contractor', `insert into ex_entry_timings (project_id, report_id, outcome, started_at, ended_at, active_sec, wall_sec) values ('${P}', '${psql(`select coalesce((select id from ex_reports where project_id <> '${P}' limit 1)::text, gen_random_uuid()::text);`)}', 'saved', now(), now(), 1, 1)`)
+const tEdit = as('contractor', `update ex_entry_timings set active_sec = 1 where project_id='${P}' returning 1`)
+const seeSup = as('supervision', `select count(*) from ex_entry_timings where project_id='${P}'`), seeView = as('viewer', `select count(*) from ex_entry_timings where project_id='${P}'`), seeOut = as('outsider', `select count(*) from ex_entry_timings where project_id='${P}'`)
+check('T01', 'زمان ثبت گزارش: هر فرد فقط ردیف خودش را برای گزارش همان پروژه ثبت می‌کند؛ ردیف تغییرپذیر نیست؛ ناظر همه را می‌بیند و بیننده فقط ردیف خودش را', tOwn.ok && tViewer.ok && !tForge.ok && !tOut.ok && !tOther.ok && (!tEdit.ok || tEdit.out === '') && seeSup.out === '2' && seeView.out === '1' && seeOut.out === '0', `${tOwn.error} | ${tViewer.error} | forge:${tForge.ok} out:${tOut.ok} other:${tOther.ok} edit:${tEdit.ok}/${tEdit.out} | ${seeSup.out}/${seeView.out}/${seeOut.out}`)
 
 console.log(JSON.stringify({ passed: res.filter((x) => x.pass).length, total: res.length, results: res }, null, 1))

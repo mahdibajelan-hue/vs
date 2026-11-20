@@ -1,6 +1,7 @@
 import { TEAM_POSITION_LABEL } from '../../masterdata/types'
 import { SigningRoles, useSignRoles } from '../components/SigningRoles'
 import { ActionsSettings } from './ActionsSettings'
+import { EntryTimingPage } from './EntryTimingPage'
 import { FrontsEditor } from './FrontsEditor'
 import { useMasterDataStore, useTeam } from '../../masterdata/store/useMasterDataStore'
 import { useLookupOptions } from '../../material/lib/control/lookups'
@@ -18,6 +19,7 @@ import { EX_ROLE_LABEL_FA, WEEKDAY_FA, type ExRole } from '../types'
 export function SettingsPage({ projectId, sub }: { projectId: string; sub: string }) {
   if (sub === 'rules') return <RulesView projectId={projectId} />
   if (sub === 'actions') return <ActionsSettings projectId={projectId} />
+  if (sub === 'timing') return <EntryTimingPage projectId={projectId} />
   if (sub === 'tpl') return <TemplateLibrary projectId={projectId} />
   return <RolesView projectId={projectId} />
 }

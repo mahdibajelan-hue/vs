@@ -36,6 +36,7 @@ import { WELDER_FIELDS, fromScan, checkPipeCell, checkWelderCell, isPipeField, i
 import { epcSettings } from '../lib/epcSettings'
 import { GRID_SPECS } from '../forms/gridSpecs'
 import { NextDayPlan, NumberedLines, asList, asNext } from './DayNotes'
+import { useEntryMeter } from '../lib/useEntryMeter'
 
 /** a stoppage row; the delay-register fields ride along so saving the report never drops an assessment or notice */
 interface StopRow { key: string; category: StoppageCategory; hours: number; description: string; materialId: string | null; responsibility?: Stoppage['responsibility']; critical?: boolean; noticeDate?: string | null; noticeRef?: string; assessNote?: string }
@@ -80,6 +81,10 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
 
   const canRecord = ex.can(m.projectId, 'record')
   const editable = canRecord && EDITABLE.has(r.status)
+  // entry time on real use (056): only sittings of someone who can enter the report; a report created in the last two minutes counts as new
+  const [isNew] = useState(() => Date.now() - new Date(r.createdAt).getTime() < 120_000)
+  const meter = useEntryMeter({ enabled: editable, projectId: m.projectId, reportId, formKey: r.formKey, newReport: isNew })
+  const lineCount = () => rows.filter((x) => x.activityId || x.qty > 0 || Object.keys(x.detail ?? {}).length > 0).length
   const setH = (k: keyof typeof head, v: string) => { setHead((h) => ({ ...h, [k]: v })); setDirty(true) }
   const setD = (k: string, v: unknown) => { setData((d) => ({ ...d, [k]: v })); setDirty(true) }
   const patchRow = (key: string, p: Partial<LRow>) => { setRows((a) => a.map((x) => (x.key === key ? { ...x, ...p } : x))); setDirty(true) }
@@ -159,7 +164,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     const okC = !okB || !crewDirty || !epcAvailable || await useEpcStore.getState().saveCrewLogs(reportId, crews.map((c) => ({ activityId: c.activityId, crewName: c.crewName, composition: c.composition, usefulHours: c.usefulHours, idleHours: c.idleHours, outputQty: c.outputQty, conditions: c.conditions, note: c.note })))
     setBusy(false)
     if (okB) void useEpcStore.getState().loadSignatures(reportId) // a real change clears the signatures in the database; show that at once
-    if (okB && okC) { setDirty(false); setCrewDirty(false); if (form) void (async () => { await useEpcStore.getState().syncWelds(reportId); if (centralOn) await useEpcStore.getState().weldAbsorb(reportId) })() } // keeps the weld registry (an index over the forms) in step; never blocks saving
+    if (okB && okC) { meter.mark('saved', lineCount()); setDirty(false); setCrewDirty(false); if (form) void (async () => { await useEpcStore.getState().syncWelds(reportId); if (centralOn) await useEpcStore.getState().weldAbsorb(reportId) })() } // keeps the weld registry (an index over the forms) in step; never blocks saving
     return !!okB && okC
   }
   const send = async () => {
@@ -173,7 +178,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     // the report remembers which approved sheet version it was printed on
     const tpl = form ? useEpcStore.getState().templates.find((t) => t.formKey === form.key && t.status === 'approved') : undefined
     if (tpl) await useEpcStore.getState().stampTemplate(reportId, tpl.id)
-    if (await ex.submitReport(reportId)) onClose()
+    if (await ex.submitReport(reportId)) { meter.mark('submitted', lineCount()); onClose() }
   }
   const remove = async () => { if (window.confirm('این پیش‌نویس حذف شود؟')) { if (await ex.deleteReport(reportId)) onClose() } }
 
@@ -321,7 +326,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   )
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
+    <div ref={meter.root as React.RefObject<HTMLDivElement>} style={{ display: 'grid', gap: 12 }}>
       <div className="mt-filters no-print">
         <button className="im-btn im-btn-sm" onClick={() => { if (!dirty || window.confirm('تغییرات ذخیره‌نشده از بین می‌رود. خارج شوید؟')) onClose() }}><ArrowRight size={14} /> بازگشت به فهرست</button>
         <b style={{ fontSize: 15 }}>{form ? form.title : 'گزارش کارکرد روزانه'} · <span className="fn-code">{r.reportNo}</span></b>
