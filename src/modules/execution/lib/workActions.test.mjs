@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { resolveLines, ruleFor, DEFAULT_ACTIONS } from './workActions.ts'
+import { resolveLines, ruleFor, conditionMet, DEFAULT_ACTIONS } from './workActions.ts'
 const L = (id, detail, o = {}) => ({ id, reportId: 'r', lineNo: 0, activityId: null, qty: 10, kmFrom: null, kmTo: null, location: '', note: '', detail, status: 'approved', approvedQty: 8, reviewNote: '', sourceReportId: null, ...o })
 const rules = [
   { id: '1', actionKey: 'trench', activityId: 'A-soil', factor: 1, whenField: '', whenValue: '', note: '' },
@@ -21,4 +21,19 @@ const vol = resolveLines([L('v1', { actionKey: 'trench', widthM: 1.2, depthM: 2 
 assert.equal(vol.lines[0].qty, 240); assert.equal(vol.lines[0].approvedQty, 120); assert.equal(vol.lines[0].activityId, 'A-vol')
 assert.equal(vol.lines[1].activityId, null); assert.equal(vol.unmapped.length, 1); assert.match(vol.unmapped[0].reason, /depthM/) // incomplete line is flagged, not guessed
 assert.equal(vol.lines[2].activityId, null) // informational action: untouched and not reported as unmapped
+// numeric conditions
+assert.ok(conditionMet('48', '48.0')); assert.ok(conditionMet('۴۸', '>=40')); assert.ok(!conditionMet(36, '>=40')); assert.ok(conditionMet(30, '24-36')); assert.ok(conditionMet(12, '<=12')); assert.ok(!conditionMet(12, '<12')); assert.ok(conditionMet('سنگی', 'سنگی')); assert.ok(!conditionMet('', '>=0')); assert.ok(!conditionMet(5, ''))
+// rules on the central weld table: diameter class picks the price item, size × thickness is the multiplier
+const cRules = [
+  { id: 'c1', actionKey: 'welding', activityId: 'W-small', factor: 1, whenField: '', whenValue: '', note: '' },
+  { id: 'c2', actionKey: 'welding', activityId: 'W-big', factor: 1, whenField: 'central.size', whenValue: '>=40', note: '', multFields: 'central.size' },
+]
+const central = { a: { size: '48', thk: '19.1' }, b: { size: '12' } }
+const cOf = (l) => central[l.detail.w]
+const cr = resolveLines([L('a', { actionKey: 'welding', w: 'a' }, { qty: 1, approvedQty: 1 }), L('b', { actionKey: 'welding', w: 'b' }, { qty: 1 }), L('n', { actionKey: 'welding', w: 'none' }, { qty: 1 })], cRules, [], cOf)
+assert.deepEqual(cr.lines.map((l) => l.activityId), ['W-big', 'W-small', 'W-small'])
+assert.equal(cr.lines[0].qty, 48) // inch-dia from the central table
+assert.equal(ruleFor(L('x', { actionKey: 'welding' }), cRules).activityId, 'W-small') // without the central table the default applies
+const miss = resolveLines([L('m', { actionKey: 'welding', w: 'b' }, { qty: 1 })], [{ ...cRules[0], multFields: 'central.thk' }], [], cOf)
+assert.equal(miss.lines[0].activityId, null); assert.match(miss.unmapped[0].reason, /جدول مرکزی/) // missing central fact is flagged
 console.log('workActions ok')

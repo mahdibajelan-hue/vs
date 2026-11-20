@@ -1,9 +1,9 @@
 import type { useExecutionStore } from '../store/useExecutionStore'
 import type { useEpcStore } from '../store/useEpcStore'
-import { overlayDetail } from './weldCentral'
+import { centralKey, overlayDetail } from './weldCentral'
 import { resolveLines } from './workActions'
 import { physicalProgress, plannedOverall } from './progress'
-import { DEFAULT_EX_SETTINGS } from '../types'
+import { DEFAULT_EX_SETTINGS, type ReportLine } from '../types'
 import { todayTehran } from '../../../lib/today'
 import { inView, type ProjectKind, type ScopeView } from '../../../lib/projectProfile'
 
@@ -33,7 +33,12 @@ export function executionCore(st: ExState, epc: EpcState, projectId: string, tod
   }
   const enteredLines = lines
   // lines entered by ACTION are converted to the mapped price-book activity (qty × factor) for every computation; `enteredLines` keeps what was entered
-  const res = resolveLines(lines, epc.actionRules.filter((r) => r.projectId === pid), epc.workActions.filter((a) => a.projectId === pid))
+  // a rule may read the weld's facts from the central weld table: the line's linked weld, else the weld it names (section + weld no.)
+  const pidWelds = epc.welds.filter((w) => w.projectId === pid && w.status !== 'merged')
+  const weldById = new Map(pidWelds.map((w) => [w.id, w])), weldByKey = new Map(pidWelds.map((w) => [`${w.sectionKey}|${w.weldKey}`, w]))
+  const linkOf = new Map(epc.lineWelds.filter((x) => x.projectId === pid).map((x) => [x.lineId, x.weldId]))
+  const centralOf = (l: Pick<ReportLine, 'id' | 'detail'>) => { const ck = centralKey(l.detail); return (weldById.get(linkOf.get(l.id) ?? '') ?? (ck ? weldByKey.get(ck) : undefined))?.central }
+  const res = resolveLines(lines, epc.actionRules.filter((r) => r.projectId === pid), epc.workActions.filter((a) => a.projectId === pid), centralOf)
   lines = res.lines
   const base = { activities, baselines, blines, reports, lines }
   const groupWeights = settings.groupWeights

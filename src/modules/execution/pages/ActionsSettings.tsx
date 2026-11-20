@@ -7,7 +7,12 @@ import { EpcGate } from '../components/epc/EpcBanner'
 import { ActivityPicker } from '../components/ActivityPicker'
 import { Chip, Section } from '../../finance/components/fn'
 import { fa } from '../components/common'
-import type { ActionField, WorkAction } from '../lib/workActions'
+import { CENTRAL_PREFIX, type ActionField, type WorkAction } from '../lib/workActions'
+import { ATTR_LABEL, type Attr } from '../lib/weldCentral'
+
+/** the weld facts a rule may read from the central weld table; pipe no. is text, the rest numeric */
+const CENTRAL_NUM: Attr[] = ['size', 'thk', 'length', 'bend']
+const fieldLabel = (a: WorkAction, k: string) => k.startsWith(CENTRAL_PREFIX) ? `${ATTR_LABEL[k.slice(CENTRAL_PREFIX.length) as Attr] ?? k.slice(CENTRAL_PREFIX.length)} (جدول مرکزی)` : a.fields.find((f) => f.key === k)?.label ?? k
 
 const hash = (s: string) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h.toString(36) }
 /** one field per line: «عنوان | num / text / select | گزینه۱، گزینه۲» */
@@ -49,6 +54,7 @@ function Inner({ projectId }: { projectId: string }) {
   const [edit, setEdit] = useState<{ key: string; title: string; unit: string; group: string; fields: string; billable: boolean } | null>(null)
   const [rule, setRule] = useState<Record<string, { act: string; factor: number; wf: string; wv: string; mf: string[] }>>({})
   const title = (id: string) => m.ex.actById.get(id)?.title ?? '—'
+  const central = !!flags.centralWeld
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <Section title="ثبت گزارش روزانه بر اساس اقدام" hint="با روشن‌کردن این گزینه، نیروی کارگاه در گزارش روزانه فقط «اقدام» (جوشکاری، رادیوگرافی، حفاری کانال …) را انتخاب و فیلدهای همان اقدام را پر می‌کند؛ تطبیق با فهرست‌بها بعداً انجام می‌شود. ردیف‌های قبلی که با ردیف فهرست‌بها ثبت شده‌اند همان‌طور کار می‌کنند.">
@@ -69,18 +75,19 @@ function Inner({ projectId }: { projectId: string }) {
         </tbody></table></div>}
       </Section>
       <UnmappedActions projectId={projectId} can={can} />
-      <Section title="تطبیق اقدام‌ها با فهرست‌بهای پیمان" hint="هر اقدام را به یک یا چند ردیف فهرست‌بها وصل کنید: مقدار ردیف = مقدار اقدام × ضریب. با «شرط» می‌توان بر اساس یکی از فیلدهای اقدام ردیف دیگری را انتخاب کرد (مثلاً نوع زمین سنگی ← ردیف حفاری در سنگ). ردیف بدون شرط، پیش‌فرض است.">
+      <Section title="تطبیق اقدام‌ها با فهرست‌بهای پیمان" hint="هر اقدام را به یک یا چند ردیف فهرست‌بها وصل کنید: مقدار ردیف = مقدار اقدام × ضریب. با «شرط» می‌توان بر اساس یکی از فیلدهای اقدام ردیف دیگری را انتخاب کرد (مثلاً نوع زمین سنگی ← ردیف حفاری در سنگ). ردیف بدون شرط، پیش‌فرض است. شرط عددی می‌تواند «48»، «>=40»، «<12» یا بازهٔ «24-36» باشد. وقتی جدول مرکزی جوش روشن است، شرط و ضرب می‌توانند از قطر، ضخامت، طول و زاویهٔ خم همان سرجوش در جدول مرکزی خوانده شوند.">
         {actions.map((a: WorkAction & { projectId: string }) => { const mine = rules.filter((r) => r.actionKey === a.key), d = rule[a.key] ?? { act: '', factor: 1, wf: '', wv: '', mf: [] }; const sel = a.fields.find((f) => f.key === d.wf); return (
           <div key={a.key} className="im-card" style={{ padding: 10, marginBottom: 8 }}>
             <b>{a.title}</b> <span className="im-helper">({a.unit})</span>
-            {mine.map((r) => <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '4px 0' }}><Chip tone="good">× {fa(r.factor, 4)}</Chip><span dir="auto">{title(r.activityId)}</span>{r.multFields && <Chip tone="neutral">× {r.multFields.split(',').map((k) => a.fields.find((f) => f.key === k)?.label ?? k).join(' × ')}</Chip>}{r.whenField && <Chip tone="neutral">اگر {a.fields.find((f) => f.key === r.whenField)?.label ?? r.whenField} = {r.whenValue}</Chip>}{can && <button className="im-btn im-btn-sm" aria-label="حذف تطبیق" onClick={() => void epc.removeRule(r.id)}><Trash2 size={12} /></button>}</div>)}
+            {mine.map((r) => <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '4px 0' }}><Chip tone="good">× {fa(r.factor, 4)}</Chip><span dir="auto">{title(r.activityId)}</span>{r.multFields && <Chip tone="neutral">× {r.multFields.split(',').map((k) => fieldLabel(a, k)).join(' × ')}</Chip>}{r.whenField && <Chip tone="neutral">اگر {fieldLabel(a, r.whenField)} {/^[<>=]/.test(r.whenValue) ? '' : '= '}{r.whenValue}</Chip>}{can && <button className="im-btn im-btn-sm" aria-label="حذف تطبیق" onClick={() => void epc.removeRule(r.id)}><Trash2 size={12} /></button>}</div>)}
             {mine.length === 0 && <div className="im-helper">تطبیقی ندارد.</div>}
             {can && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 }}>
               <ActivityPicker activities={m.ex.activities.filter((x) => x.active)} value={d.act} onChange={(v) => setRule({ ...rule, [a.key]: { ...d, act: v } })} emptyLabel="ردیف فهرست‌بها…" title={`تطبیق «${a.title}»`} width={420} />
               <label className="im-helper">ضریب <input type="number" step="any" min="0" value={d.factor} onChange={(e) => setRule({ ...rule, [a.key]: { ...d, factor: Number(e.target.value) || 1 } })} style={{ width: 80 }} /></label>
-              <select value={d.wf} onChange={(e) => setRule({ ...rule, [a.key]: { ...d, wf: e.target.value, wv: '' } })} aria-label="شرط"><option value="">بدون شرط (پیش‌فرض)</option>{a.fields.filter((f) => f.kind === 'select').map((f) => <option key={f.key} value={f.key}>اگر {f.label} …</option>)}</select>
-              {a.fields.some((f) => f.kind === 'num') && <span className="im-helper" style={{ display: 'inline-flex', gap: 6 }}>ضرب در: {a.fields.filter((f) => f.kind === 'num').map((f) => <label key={f.key} style={{ display: 'inline-flex', gap: 3 }}><input type="checkbox" checked={d.mf.includes(f.key)} onChange={(e) => setRule({ ...rule, [a.key]: { ...d, mf: e.target.checked ? [...d.mf, f.key] : d.mf.filter((x) => x !== f.key) } })} />{f.label}</label>)}</span>}
-              {sel && <select value={d.wv} onChange={(e) => setRule({ ...rule, [a.key]: { ...d, wv: e.target.value } })} aria-label="مقدار شرط"><option value="">مقدار…</option>{sel.options?.map((o) => <option key={o} value={o}>{o}</option>)}</select>}
+              <select value={d.wf} onChange={(e) => setRule({ ...rule, [a.key]: { ...d, wf: e.target.value, wv: '' } })} aria-label="شرط"><option value="">بدون شرط (پیش‌فرض)</option>{a.fields.filter((f) => f.kind === 'select' || f.kind === 'num').map((f) => <option key={f.key} value={f.key}>اگر {f.label} …</option>)}{central && (Object.keys(ATTR_LABEL) as Attr[]).map((k) => <option key={k} value={CENTRAL_PREFIX + k}>اگر {ATTR_LABEL[k]} (جدول مرکزی جوش) …</option>)}</select>
+              {(a.fields.some((f) => f.kind === 'num') || central) && <span className="im-helper" style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>ضرب در: {[...a.fields.filter((f) => f.kind === 'num').map((f) => ({ key: f.key, label: f.label })), ...(central ? CENTRAL_NUM.map((k) => ({ key: CENTRAL_PREFIX + k, label: `${ATTR_LABEL[k]} (مرکزی)` })) : [])].map((f) => <label key={f.key} style={{ display: 'inline-flex', gap: 3 }}><input type="checkbox" checked={d.mf.includes(f.key)} onChange={(e) => setRule({ ...rule, [a.key]: { ...d, mf: e.target.checked ? [...d.mf, f.key] : d.mf.filter((x) => x !== f.key) } })} />{f.label}</label>)}</span>}
+              {sel?.kind === 'select' ? <select value={d.wv} onChange={(e) => setRule({ ...rule, [a.key]: { ...d, wv: e.target.value } })} aria-label="مقدار شرط"><option value="">مقدار…</option>{sel.options?.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+                : d.wf && <input value={d.wv} onChange={(e) => setRule({ ...rule, [a.key]: { ...d, wv: e.target.value } })} placeholder="مثلاً 48 یا >=40 یا 24-36" aria-label="مقدار شرط" dir="ltr" style={{ width: 150 }} />}
               <button className="im-btn im-btn-primary im-btn-sm" disabled={!d.act || (!!d.wf && !d.wv)} onClick={async () => { if (await epc.saveRule(projectId, { actionKey: a.key, activityId: d.act, factor: d.factor, whenField: d.wf, whenValue: d.wv, multFields: d.mf.join(',') })) setRule({ ...rule, [a.key]: { act: '', factor: 1, wf: '', wv: '', mf: [] } }) }}>افزودن تطبیق</button>
             </div>}
           </div>) })}

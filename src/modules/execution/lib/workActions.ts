@@ -51,30 +51,58 @@ export const STATION_ACTIONS: Omit<WorkAction, 'id'>[] = [
 
 export const actionOf = (l: Pick<ReportLine, 'detail'>): string => String(l.detail.actionKey ?? '')
 
-/** The best rule for one entered line: a rule whose condition matches the line's field value beats the default rule (no condition). */
-export function ruleFor(line: Pick<ReportLine, 'detail'>, rules: ActionRule[]): ActionRule | null {
+/**
+ * A rule's field may be one of the action's own fields, or «central.<attr>»: the weld's fact in the central weld table
+ * (size, thickness, length, bend angle, pipe) for a line that names a weld — so a rule can depend on the diameter even
+ * when the person entering the work did not type it.
+ */
+export type CentralOf = (line: Pick<ReportLine, 'id' | 'detail'>) => Partial<Record<string, string>> | undefined
+export const CENTRAL_PREFIX = 'central.'
+export function fieldValue(line: Pick<ReportLine, 'id' | 'detail'>, field: string, centralOf?: CentralOf): unknown {
+  return field.startsWith(CENTRAL_PREFIX) ? centralOf?.(line)?.[field.slice(CENTRAL_PREFIX.length)] : line.detail[field]
+}
+const toNum = (v: unknown): number | null => { const s = String(v ?? '').replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٫,]/g, '.').replace(/["″in]/gi, '').trim(); if (!s) return null; const n = Number(s); return Number.isFinite(n) ? n : null }
+/**
+ * Does a value meet a rule's condition? Text conditions match exactly; numeric ones also accept «>=40», «<12», «24-36»
+ * (inclusive range) and treat 48 and 48.0 as equal — price lists are often split by diameter or thickness classes.
+ */
+export function conditionMet(value: unknown, cond: string): boolean {
+  const c = cond.trim(), raw = String(value ?? '').trim()
+  if (!c) return false
+  if (raw === c) return true
+  const v = toNum(value); if (v == null) return false
+  const m = c.match(/^(>=|<=|>|<|=)\s*(.+)$/)
+  if (m) { const n = toNum(m[2]); if (n == null) return false; return m[1] === '>=' ? v >= n : m[1] === '<=' ? v <= n : m[1] === '>' ? v > n : m[1] === '<' ? v < n : v === n }
+  const r = c.match(/^(.+?)\s*(?:-|–|تا)\s*(.+)$/)
+  if (r) { const a = toNum(r[1]), b = toNum(r[2]); if (a != null && b != null) return v >= Math.min(a, b) && v <= Math.max(a, b) }
+  const n = toNum(c); return n != null && n === v
+}
+
+/** The best rule for one entered line: a rule whose condition matches the line (own field or central weld fact) beats the default rule (no condition). */
+export function ruleFor(line: Pick<ReportLine, 'id' | 'detail'>, rules: ActionRule[], centralOf?: CentralOf): ActionRule | null {
   const key = actionOf(line); if (!key) return null
   const mine = rules.filter((r) => r.actionKey === key)
-  const hit = mine.find((r) => r.whenField && String(line.detail[r.whenField] ?? '').trim() === r.whenValue)
+  const hit = mine.find((r) => r.whenField && conditionMet(fieldValue(line, r.whenField, centralOf), r.whenValue))
   return hit ?? mine.find((r) => !r.whenField) ?? null
 }
 
 export interface Resolved { lines: ReportLine[]; unmapped: { actionKey: string; title: string; unit: string; qty: number; lines: number; reason?: string }[] }
 const mults = (r: ActionRule) => (r.multFields ?? '').split(',').map((x) => x.trim()).filter(Boolean)
 /** Lines entered by action (no price-book activity) become lines of the mapped activity with qty × factor × the rule's multiplier fields (approved quantity too). Lines with an activity are untouched; informational (non-billable) actions are left alone; unmapped or incomplete action lines are reported, never guessed. */
-export function resolveLines(lines: ReportLine[], rules: ActionRule[], actions: Pick<WorkAction, 'key' | 'billable'>[] = []): Resolved {
+export function resolveLines(lines: ReportLine[], rules: ActionRule[], actions: Pick<WorkAction, 'key' | 'billable'>[] = [], centralOf?: CentralOf): Resolved {
   const out: ReportLine[] = [], miss = new Map<string, { actionKey: string; title: string; unit: string; qty: number; lines: number; reason?: string }>()
   const info = new Set(actions.filter((a) => a.billable === false).map((a) => a.key))
   const note = (l: ReportLine, key: string, reason?: string) => { const k = reason ? `${key}|${reason}` : key, m = miss.get(k) ?? { actionKey: key, title: String(l.detail.actionTitle ?? key), unit: String(l.detail.actionUnit ?? ''), qty: 0, lines: 0, ...(reason ? { reason } : {}) }; m.qty += l.qty; m.lines += 1; miss.set(k, m) }
   for (const l of lines) {
     const key = actionOf(l)
     if (l.activityId || !key || info.has(key)) { out.push(l); continue }
-    const r = ruleFor(l, rules)
+    const r = ruleFor(l, rules, centralOf)
     if (!r) { note(l, key); out.push(l); continue }
     let k = r.factor
-    const bad = mults(r).find((f) => !(Number(l.detail[f]) > 0))
-    if (bad) { note(l, key, `فیلد «${bad}» پر نشده`); out.push(l); continue }
-    for (const f of mults(r)) k *= Number(l.detail[f])
+    const val = (f: string) => toNum(fieldValue(l, f, centralOf)) ?? 0
+    const bad = mults(r).find((f) => !(val(f) > 0))
+    if (bad) { note(l, key, bad.startsWith(CENTRAL_PREFIX) ? `«${bad.slice(CENTRAL_PREFIX.length)}» این سرجوش در جدول مرکزی جوش ثبت نشده` : `فیلد «${bad}» پر نشده`); out.push(l); continue }
+    for (const f of mults(r)) k *= val(f)
     out.push({ ...l, activityId: r.activityId, qty: l.qty * k, approvedQty: l.approvedQty == null ? null : l.approvedQty * k, employerQty: l.employerQty == null ? null : l.employerQty * k })
   }
   return { lines: out, unmapped: [...miss.values()] }
