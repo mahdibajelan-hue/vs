@@ -15,6 +15,7 @@ export function SignaturesCard({ report, dirty }: { report: Pick<Report, 'id' | 
   const sigs = useEpcStore((s) => s.signatures).filter((x) => x.reportId === report.id)
   const epc = useEpcStore.getState()
   const me = useAuthStore((s) => s.session?.user.id)
+  const isAdmin = useAuthStore((s) => Boolean(s.profile?.isAdmin))
   const people = useEpcPeople()
   useEffect(() => { void useEpcStore.getState().loadSignatures(report.id) }, [report.id, report.status])
   if (slots.length === 0) return null
@@ -27,7 +28,7 @@ export function SignaturesCard({ report, dirty }: { report: Pick<Report, 'id' | 
         {slots.map((sl, i) => {
           const sg = sigs.find((x) => x.slotKey === sl.slotKey)
           const prevOk = slots.slice(0, i).every((p) => !p.required || sigs.some((x) => x.slotKey === p.slotKey))
-          const mine = sl.userId === me
+          const mine = sl.userId === me, asAdmin = !mine && isAdmin   // the system admin may sign any slot, under their own name
           return (
             <div key={sl.id} style={{ border: '1px solid var(--im-line, #e2e8f0)', borderRadius: 10, padding: 8, display: 'grid', gap: 4, minHeight: 112 }}>
               <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}><b>{sl.label}</b><Chip tone="neutral">{PARTY_FA[sl.party]}</Chip>{!sl.required && <Chip tone="neutral">اختیاری</Chip>}</span>
@@ -35,10 +36,10 @@ export function SignaturesCard({ report, dirty }: { report: Pick<Report, 'id' | 
               {sg ? <>
                 <img src={sg.image} alt={`امضای ${sg.userName}`} style={{ maxHeight: 54, maxWidth: '100%', objectFit: 'contain', alignSelf: 'start' }} />
                 <small>{sg.userName} · {fmtD(sg.signedAt.slice(0, 10))} {new Date(sg.signedAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</small>
-                {(sg.userId === me) && draftish && <button className="im-btn im-btn-sm" style={{ justifySelf: 'start' }} onClick={() => void epc.unsignReport(report.id, sl.slotKey)}><Undo2 size={12} /> لغو امضا</button>}
+                {(sg.userId === me || isAdmin) && draftish && <button className="im-btn im-btn-sm" style={{ justifySelf: 'start' }} onClick={() => void epc.unsignReport(report.id, sl.slotKey)}><Undo2 size={12} /> لغو امضا</button>}
               </> : <>
                 <Chip tone="warn">امضا نشده</Chip>
-                {mine && <button className="im-btn im-btn-primary im-btn-sm" disabled={!prevOk || !!dirty || report.status === 'rejected'} title={!prevOk ? 'ابتدا امضاهای قبلی ثبت شود' : undefined} style={{ justifySelf: 'start' }} onClick={() => void epc.signReport(report.id, sl.slotKey)}><PenLine size={13} /> امضا با حساب من</button>}
+                {(mine || asAdmin) && <button className="im-btn im-btn-primary im-btn-sm" disabled={!prevOk || !!dirty || report.status === 'rejected'} title={!prevOk ? 'ابتدا امضاهای قبلی ثبت شود' : undefined} style={{ justifySelf: 'start' }} onClick={() => void epc.signReport(report.id, sl.slotKey)}><PenLine size={13} /> {asAdmin ? 'امضا به‌عنوان مدیر سامانه' : 'امضا با حساب من'}</button>}
               </>}
             </div>
           )
