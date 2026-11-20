@@ -119,19 +119,30 @@ export function PhotoRotator({ projectId, height = 260, onOpenGallery }: { proje
   const still = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches, [])
   useEffect(() => { if (paused || still || list.length < 2) return; const t = setInterval(() => { if (!hover.current && !document.hidden) setI((x) => (x + 1) % list.length) }, 5500); return () => clearInterval(t) }, [paused, still, list.length])
   if (!list.length) return null
-  const cur = list[i % list.length], pk = picksOf(cur)
+  const n = list.length, at = (k: number) => list[(i + k) % n]
+  // each slot shows the whole photo (contain) over a blurred copy of itself, so any aspect ratio looks right in a wide frame;
+  // wide frames show the next photo beside the current one (CSS hides the second slot on narrow screens)
+  const slot = (k: number) => {
+    const p = at(k), url = urls[p.path], pk = picksOf(p)
+    return (
+      <div key={k} className={`xp-rot-slot${k ? ' is-next' : ''}`} aria-hidden={k > 0 || undefined}>
+        {url && <div className="xp-rot-bg" style={{ backgroundImage: `url("${url}")` }} />}
+        {list.map((q, j) => (urls[q.path] ? <img key={q.id} src={urls[q.path]} alt={!k && j === i % n ? q.caption || 'عکس کارگاه' : ''} className={j === (i + k) % n ? 'is-on' : ''} loading={j < 3 ? 'eager' : 'lazy'} aria-hidden={k > 0 || j !== (i + k) % n} /> : null))}
+        <figcaption>
+          {pk.length > 0 && <span className="xp-medal is-inline"><Award size={12} aria-hidden />{pk.map((x) => PERIOD_FA[x]).join(' · ')}</span>}
+          <b>{p.caption || 'عکس کارگاه'}</b><small>{jd(p.takenOn)}{p.front ? ` · ${p.front}` : ''}{p.subject ? ` · ${p.subject}` : ''}</small>
+        </figcaption>
+      </div>
+    )
+  }
   return (
-    <figure className="xp-rot" style={{ '--h': `${height}px` } as CSSProperties} onPointerEnter={() => { hover.current = true }} onPointerLeave={() => { hover.current = false }} aria-roledescription="نمایش چرخشی عکس‌های پروژه">
-      {list.map((p, k) => (urls[p.path] ? <img key={p.id} src={urls[p.path]} alt={k === i % list.length ? p.caption || 'عکس کارگاه' : ''} className={k === i % list.length ? 'is-on' : ''} loading={k < 2 ? 'eager' : 'lazy'} aria-hidden={k !== i % list.length} /> : null))}
-      <figcaption>
-        {pk.length > 0 && <span className="xp-medal is-inline"><Award size={12} aria-hidden />{pk.map((k) => PERIOD_FA[k]).join(' · ')}</span>}
-        <b>{cur.caption || 'عکس کارگاه'}</b><small>{jd(cur.takenOn)}{cur.front ? ` · ${cur.front}` : ''}{cur.subject ? ` · ${cur.subject}` : ''}</small>
-      </figcaption>
+    <figure className={`xp-rot${n > 1 ? ' has-two' : ''}`} style={{ '--h': `${height}px` } as CSSProperties} onPointerEnter={() => { hover.current = true }} onPointerLeave={() => { hover.current = false }} aria-roledescription="نمایش چرخشی عکس‌های پروژه">
+      <div className="xp-rot-track">{slot(0)}{n > 1 && slot(1)}</div>
       <div className="xp-rot-ctl">
-        {list.length > 1 && <><button type="button" aria-label="عکس قبلی" onClick={() => setI((x) => (x - 1 + list.length) % list.length)}><ChevronRight size={15} aria-hidden /></button>
+        {n > 1 && <><button type="button" aria-label="عکس قبلی" onClick={() => setI((x) => (x - 1 + n) % n)}><ChevronRight size={15} aria-hidden /></button>
           <button type="button" aria-label={paused ? 'ادامهٔ نمایش' : 'توقف نمایش'} aria-pressed={paused} onClick={() => setPaused(!paused)}>{paused || still ? <Play size={13} aria-hidden /> : <Pause size={13} aria-hidden />}</button>
-          <button type="button" aria-label="عکس بعدی" onClick={() => setI((x) => (x + 1) % list.length)}><ChevronLeft size={15} aria-hidden /></button>
-          <span>{((i % list.length) + 1).toLocaleString('fa-IR')} / {list.length.toLocaleString('fa-IR')}</span></>}
+          <button type="button" aria-label="عکس بعدی" onClick={() => setI((x) => (x + 1) % n)}><ChevronLeft size={15} aria-hidden /></button>
+          <span>{((i % n) + 1).toLocaleString('fa-IR')} / {n.toLocaleString('fa-IR')}</span></>}
         {onOpenGallery && <button type="button" className="xp-rot-all" onClick={onOpenGallery}>همهٔ عکس‌ها</button>}
       </div>
     </figure>

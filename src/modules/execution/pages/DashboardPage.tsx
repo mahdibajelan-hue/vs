@@ -37,7 +37,7 @@ export function DashboardPage({ projectId, onGo }: { projectId: string; sub: str
   )
   return (
     <div style={{ display: 'grid', gap: 12 }}>
-      <PhotoRotator projectId={projectId} height={240} onOpenGallery={() => onGo('photos')} />
+      <PhotoRotator projectId={projectId} height={300} onOpenGallery={() => onGo('photos')} />
       <RoleDesk m={m} onGo={onGo} />
       {m.kind === 'hybrid' && m.scopeView === 'all' && <ScopeSplit projectId={projectId} kind={m.kind} total={m.approved.overall} />}
       <div className="fn-kpis">
