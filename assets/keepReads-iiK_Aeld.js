@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`cesium/`;import{r as e,s as t}from"./supabaseClient-7DHc9Mya.js";function n(n){return{from:(r=>{let i=e.from(r),a=i.select.bind(i);return i.select=(...e)=>a(...e).setHeader(t,n),i})}}export{n as t};

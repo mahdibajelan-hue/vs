@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`cesium/`;import{t as e}from"./react-BxkTvA5q.js";var t=e()(e=>({pendingMasterId:null,request:t=>e({pendingMasterId:t}),clear:()=>e({pendingMasterId:null})}));export{t};

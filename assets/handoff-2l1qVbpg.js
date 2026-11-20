@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`cesium/`;import{a as e,n as t}from"./useModuleStore-Cd3d71aM.js";var n=null,r=()=>n,i=()=>{n=null};function a(r,i,a=!1){n=a?null:i,e.getState().setProject(r),t.getState().enterModule(`weldqc`,void 0,a?`coating`:`welders`)}export{a as n,r,i as t};
