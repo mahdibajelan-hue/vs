@@ -58,15 +58,18 @@ def sql():
                     r['pct_complete'] = round(done * 100, 1)
                     slip = 240 if code in ('A3015', 'A7010', 'A7020', 'A7030') or wbs == '7' else (150 if wbs in ('5', '6') else 75)
                     if ps_ > TODAY or done < 1: r['planned_finish'] = max(add(pf_, slip), add(TODAY, 30)); r['planned_start'] = ps_ if done > 0 else max(add(ps_, slip // 2), add(TODAY, 100))
-                    r['rem_duration'] = max(1, (r['planned_finish'] - TODAY).days * 6 // 7)
+                    if code == 'A3015': r['planned_finish'] = D(2028, 7, 31)  # unit C: Hot Section parts held — arrival forecast end of Tir 1407
+                    # started work: what is left until its forecast finish; work not started: its own duration (the logic places it)
+                    r['rem_duration'] = max(1, (r['planned_finish'] - TODAY).days * 6 // 7) if done > 0 else dur
             rows.append(r)
         out += ins('sch_activities', rows)
         rel = []
         seq = [a[0] for a in acts]
         for a, b in zip(seq, seq[1:]):
-            if a[0] == b[0] or (a.startswith('C') and b.startswith('C')):
-                rel.append(dict(id=U(f'sr/{v}/{a}/{b}'), project_id=P, version_id=v, pred_id=U(f'sa/{v}/{a}'), succ_id=U(f'sa/{v}/{b}'), rel_type='SS' if a.startswith('C') else 'FS', lag_days=10 if a.startswith('C') else 0))
-        for a, b in [('A2040', 'C0202'), ('A3010', 'A3015'), ('A3015', 'C0801'), ('A2050', 'C0701'), ('A3040', 'C0701'), ('C0702', 'C0706'), ('C0706', 'A7010'), ('C1003', 'A7010'), ('A7010', 'A7020'), ('A7020', 'A7030'), ('A3060', 'C0903'), ('A3070', 'C1003')]:
+            same = dict((x[0], x[2]) for x in acts)
+            if same[a] == same[b]:  # neighbours in one discipline overlap: start-to-start
+                rel.append(dict(id=U(f'sr/{v}/{a}/{b}'), project_id=P, version_id=v, pred_id=U(f'sa/{v}/{a}'), succ_id=U(f'sa/{v}/{b}'), rel_type='SS', lag_days=10 if a.startswith('C') else 0))
+        for a, b in [('A2040', 'C0202'), ('A3010', 'A3015'), ('A3015', 'C0801'), ('C0801', 'A7010'), ('A2050', 'C0701'), ('A3040', 'C0701'), ('C0702', 'C0706'), ('C0706', 'A7010'), ('C1003', 'A7010'), ('A7010', 'A7020'), ('A7020', 'A7030'), ('A3060', 'C0903'), ('A3070', 'C1003')]:
             rel.append(dict(id=U(f'sr/{v}/{a}/{b}/x'), project_id=P, version_id=v, pred_id=U(f'sa/{v}/{a}'), succ_id=U(f'sa/{v}/{b}'), rel_type='FS', lag_days=0))
         seen = set(); rel = [x for x in rel if (x['pred_id'], x['succ_id'], x['rel_type']) not in seen and not seen.add((x['pred_id'], x['succ_id'], x['rel_type']))]
         out += ins('sch_relations', rel)

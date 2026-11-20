@@ -81,6 +81,11 @@ delete from sv_attendance where master_project_id='5a0538d4-3e6a-5367-81fa-51585
 delete from sv_people where master_project_id='5a0538d4-3e6a-5367-81fa-5158578db748';
 delete from sv_sites where master_project_id='5a0538d4-3e6a-5367-81fa-5158578db748';
 delete from ms_missions where master_project_id='5a0538d4-3e6a-5367-81fa-5158578db748';
+delete from sg_client_reports where project_name=(select name from sg_projects where master_project_id='5a0538d4-3e6a-5367-81fa-5158578db748');
+delete from sg_lifecycle_schedule_items where project_name=(select name from sg_projects where master_project_id='5a0538d4-3e6a-5367-81fa-5158578db748');
+delete from sg_project_lifecycle_phases where project_name=(select name from sg_projects where master_project_id='5a0538d4-3e6a-5367-81fa-5158578db748');
+delete from sg_lifecycle_gate_decisions where project_name=(select name from sg_projects where master_project_id='5a0538d4-3e6a-5367-81fa-5158578db748');
+delete from sg_project_phase_items where project_name=(select name from sg_projects where master_project_id='5a0538d4-3e6a-5367-81fa-5158578db748');
 delete from rasta_project_mappings where master_project_id='5a0538d4-3e6a-5367-81fa-5158578db748';
 delete from sg_projects where master_project_id='5a0538d4-3e6a-5367-81fa-5158578db748';
 delete from master_project_team where project_id='5a0538d4-3e6a-5367-81fa-5158578db748';
@@ -92,3 +97,5 @@ delete from fin_audit where master_project_id='5a0538d4-3e6a-5367-81fa-5158578db
 delete from fin_sync_log where master_project_id='5a0538d4-3e6a-5367-81fa-5158578db748';
 delete from organizations where id in ('cc6cc3f5-b01c-5687-a1dc-11325d6a63fa','bac01e39-6595-5fbd-8e41-d98a781d00b7','12b8fccc-30a3-5aa5-9d91-72c3fc888dbd','2dc6dfa6-bee8-5b85-8131-545373b9a2a8','e6e45dc3-3ca4-5cf0-bd33-720db78de251','f54ba1a2-9f64-501b-89e6-47f1a7376696');
 commit;
+-- the staging helper used to load the seed (see hamedan_cs/staging.sql):
+drop table if exists public.demo_seed_staging;

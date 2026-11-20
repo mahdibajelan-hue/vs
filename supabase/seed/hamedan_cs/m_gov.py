@@ -65,16 +65,16 @@ def sql():
     # issues
     iss = []
     for i, (title, cat, stage, sev, pri, owner, ago, idays, cost) in enumerate(ISSUES):
-        iss.append(dict(id=U(f'iss/{i}'), code=f'HMD-ISS-{i + 1:02d}', project_id=IM_P, title=title, description=title + '.', pursuer_id=owner, approver_id=EMP_PM, priority=pri, deadline_days=30, status='open', created_by=EMP_REP[0],
+        iss.append(dict(id=U(f'iss/{i}'), seq_no=Raw(f'(select coalesce(max(seq_no), 0) + {i + 1} from im_issues)'), code=f'HMD-ISS-{i + 1:02d}', project_id=IM_P, title=title, description=title + '.', pursuer_id=owner, approver_id=EMP_PM, priority=pri, deadline_days=30, status='open', created_by=EMP_REP[0],
                         created_at=ts(add(TODAY, -ago)), source='report' if i in (2, 5, 7) else 'manual', category=cat, discipline={'procurement': 'تأمین', 'quality': 'کنترل کیفیت', 'hse': 'HSE'}.get(cat, 'مدیریت پروژه'), location='ایستگاه همدان',
                         identified_at=add(TODAY, -ago), severity=sev, urgency=pri, impact_time_days=idays, impact_cost=cost, impact_quality=2 if cat == 'quality' else 0, impact_safety=3 if cat == 'hse' else 0, impact_contract=2 if cat in ('contract_commercial', 'finance') else 0,
                         owner_id=owner, resolve_due_date=add(TODAY, 45 - ago // 3), authority_level='management' if sev == 'critical' else 'project_manager', workflow_key='standard', stage=stage,
                         root_cause_summary='وابستگی به تأمین‌کنندهٔ خارجی واحد و نبود منبع جایگزین' if i == 0 else '', resolution_summary='تأمین از بازار تهران با قیمت بالاتر' if stage == 'closed' else '',
                         lessons_learned='برای اقلام بحرانی دست‌کم دو منبع تأمین در مرحلهٔ RFQ تأیید شود' if i == 0 else ''))
     out += ins('im_issues', iss)
-    out += ins('im_decisions', [dict(id=U('imd/0'), project_id=IM_P, issue_id=U('iss/0'), title='انتخاب مسیر جایگزین تأمین قطعات Hot Section واحد C', question='آیا هزینهٔ اضافی حمل هوایی و نمایندهٔ دوم (≈ ۴۲۰ میلیارد ریال) پذیرفته شود؟',
+    out += ins('im_decisions', [dict(id=U('imd/0'), seq_no=Raw('(select coalesce(max(seq_no), 0) + 1 from im_decisions)'), project_id=IM_P, issue_id=U('iss/0'), title='انتخاب مسیر جایگزین تأمین قطعات Hot Section واحد C', question='آیا هزینهٔ اضافی حمل هوایی و نمایندهٔ دوم (≈ ۴۲۰ میلیارد ریال) پذیرفته شود؟',
                                      requested_by=CTR_PM, decider_id=ME, needed_by=add(TODAY, 10), status='pending', rationale=''),
-                                dict(id=U('imd/1'), project_id=IM_P, issue_id=U('iss/2'), title='تصمیم دربارهٔ بلوک بتنی واحد B با مقاومت کمتر', question='مغزه‌گیری و ارزیابی سازه‌ای یا تخریب و بتن‌ریزی مجدد؟',
+                                dict(id=U('imd/1'), seq_no=Raw('(select coalesce(max(seq_no), 0) + 2 from im_decisions)'), project_id=IM_P, issue_id=U('iss/2'), title='تصمیم دربارهٔ بلوک بتنی واحد B با مقاومت کمتر', question='مغزه‌گیری و ارزیابی سازه‌ای یا تخریب و بتن‌ریزی مجدد؟',
                                      requested_by=CONS_PM, decider_id=EMP_PM, needed_by=add(TODAY, 15), status='pending', rationale='')])
     out += ins('im_lessons', [dict(id=U('iml/0'), source_issue_id=U('iss/4'), project_id=IM_P, title='ذخیرهٔ احتیاطی میلگرد پیش از فصل کاری', context='کمبود میلگرد سایزهای درشت در بازار منطقه در اوج فصل بتن‌ریزی', root_cause='خرید تدریجی و نبود قرارداد چارچوب',
                                     solution='خرید از بازار تهران', prevention='قرارداد چارچوب با دو تأمین‌کننده و انبار ذخیرهٔ ۲۰٪ پیش از فروردین', category='procurement', tags=Raw("array['تأمین','سیویل']::text[]"), status='published', created_by=CONS_PM, approved_by=EMP_PM, approved_at=ts(add(TODAY, -60))),

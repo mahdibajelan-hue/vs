@@ -37,6 +37,9 @@ T = [  # child tables first; every condition names this project's own ids
  f"delete from fin_annual_budgets where master_project_id={p}", f"delete from fin_budget_lines where master_project_id={p}", f"delete from fin_budgets where master_project_id={p}",
  f"delete from sh_concerns where master_project_id={p}", f"delete from sh_engagements where master_project_id={p}", f"delete from sh_stakeholders where master_project_id={p}",
  f"delete from sv_vehicle_days where master_project_id={p}", f"delete from sv_vehicles where master_project_id={p}", f"delete from sv_attendance where master_project_id={p}", f"delete from sv_people where master_project_id={p}", f"delete from sv_sites where master_project_id={p}", f"delete from ms_missions where master_project_id={p}",
+ f"delete from sg_client_reports where project_name=(select name from sg_projects where master_project_id={p})", f"delete from sg_lifecycle_schedule_items where project_name=(select name from sg_projects where master_project_id={p})",
+ f"delete from sg_project_lifecycle_phases where project_name=(select name from sg_projects where master_project_id={p})", f"delete from sg_lifecycle_gate_decisions where project_name=(select name from sg_projects where master_project_id={p})",
+ f"delete from sg_project_phase_items where project_name=(select name from sg_projects where master_project_id={p})",
  f"delete from rasta_project_mappings where master_project_id={p}", f"delete from sg_projects where master_project_id={p}",
  f"delete from master_project_team where project_id={p}", f"delete from master_project_parties where project_id={p}", f"delete from master_projects where id={p}",
  f"delete from ex_audit where project_id={p}", f"delete from mtl_audit where master_project_id={p}", f"delete from fin_audit where master_project_id={p}", f"delete from fin_sync_log where master_project_id={p}",
@@ -46,4 +49,4 @@ EXTRA_FILE = os.path.join(os.path.dirname(__file__), 'cleanup_extra.sql')
 with open(os.path.join(os.path.dirname(__file__), '..', 'demo_hamedan_cs_cleanup.sql'), 'w') as f:
     f.write("-- Removes the Hamedan compressor-station DEMO project and every row its seed added. Run BY HAND (SQL editor) only.\n-- It touches only rows of this project (id " + P + ") and the six demo supplier organisations the seed created.\nbegin;\nselect set_config('ex.rpc', '1', true), set_config('mtl.rpc', '1', true), set_config('sch.rpc', '1', true), set_config('app.cm_rpc', '1', true);\n")
     if os.path.exists(EXTRA_FILE): f.write(open(EXTRA_FILE).read())
-    f.write(";\n".join(T) + ";\ncommit;\n")
+    f.write(";\n".join(T) + ";\ncommit;\n-- the staging helper used to load the seed (see hamedan_cs/staging.sql):\ndrop table if exists public.demo_seed_staging;\n")

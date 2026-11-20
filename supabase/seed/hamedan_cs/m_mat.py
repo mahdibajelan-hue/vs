@@ -183,7 +183,7 @@ def sql():
                          notes='سفارش بلندمدت (Long Lead) — ریسک بالای تأمین؛ پیگیری هفتگی' if code == 'PK-01' else ''))
     for i in items:
         i['item'] = U('item/' + i['code'])
-        its.append(dict(id=i['item'], package_id=U('pkg/' + i['pkg']), material_id=i['id'], qty=i['qty'], unit_price=i['price'] * i['rate'], currency='IRR',
+        its.append(dict(id=i['item'], package_id=U('pkg/' + i['pkg']), material_id=i['id'], qty=i['qty'], unit_price=i['price'], currency='EUR' if i['fx'] else 'IRR',  # the app multiplies by the material's fx_rate
                         supplier_org_id=SUP[dict((p[0], p[2]) for p in PKG)[i['pkg']]][0], planned_delivery=d(i['plan'][8] or i['plan'][7]), baseline_version=1))
     out += ins('mtl_materials', mats) + ins('mtl_packages', pkgs) + ins('mtl_package_items', its)
     # stages: plan dates for all, approvals with dates and quantities
@@ -195,8 +195,8 @@ def sql():
             if f > 0:
                 adate = min(add(d(pdate) if pdate else D(2025, 10, 1), rnd.randint(-5, 35) if s != 'manufacturing' or not i['code'].startswith('TC') else 160), add(TODAY, -2))
                 aq = round(i['qty'] * f, 3)
-                sets += ["status='approved'", f"done_qty={aq}", f"approved_qty={aq}", f"actual_date={q(adate)}", f"approved_at={q(ts(add(adate, 3)))}", f"approved_by={q(CONS_PM)}",
-                         f"submitted_by={q(CTR_REP)}", f"submitted_at={q(ts(adate))}", f"reviewed_by={q(CONS_PM)}", f"reviewed_at={q(ts(add(adate, 2)))}", "evidence_note='مدرک مرحله پیوست شد (آزمایشی)'"]
+                sets += ["status='approved'", f"done_qty={aq}", f"approved_qty={aq}", f"actual_date={q(adate)}", f"approved_at={q(ts(min(add(adate, 3), add(TODAY, -1))))}", f"approved_by={q(CONS_PM)}",
+                         f"submitted_by={q(CTR_REP)}", f"submitted_at={q(ts(adate))}", f"reviewed_by={q(CONS_PM)}", f"reviewed_at={q(ts(min(add(adate, 2), add(TODAY, -1))))}", "evidence_note='مدرک مرحله پیوست شد (آزمایشی)'"]
             elif i['code'] == 'TC-PKG-B' and s == 'release':
                 sets += ["status='rejected'", f"submitted_by={q(CTR_REP)}", f"submitted_at={q(ts(D(2026, 11, 8)))}", f"reviewed_by={q(CONS_PM)}", f"reviewed_at={q(ts(D(2026, 11, 12)))}",
                          "reject_reason='مجوز حمل واحد B صادر نشد: مرحلهٔ دوم اعتبار اسنادی هنوز گشایش نشده و گواهی بازرس TPI برای آزمون مجدد FAT پیوست نیست'"]
@@ -222,7 +222,7 @@ def sql():
                         notes='سفارش بلندمدت؛ تحویل CIF بندرعباس؛ پرداخت با اعتبار اسنادی ارزی' if code == 'PK-01' else ''))
         for i in ordered:
             pl_id = U('pol/' + i['code'])
-            pol.append(dict(id=pl_id, po_id=po, material_id=i['id'], quantity_ordered=i['qty'], unit_price=i['price'] * i['rate'], planned_delivery_date=d(i['plan'][8] or i['plan'][7])))
+            pol.append(dict(id=pl_id, po_id=po, material_id=i['id'], quantity_ordered=i['qty'], unit_price=i['price'], planned_delivery_date=d(i['plan'][8] or i['plan'][7])))
             if i['pat'] == 'EQUIP':
                 st = 'fat_passed' if i['act'].get('inspection') else 'in_progress' if i['act'].get('manufacturing', 0) < 1 or i['code'] == 'TC-PKG-B' else 'fat_scheduled'
                 if i['act'].get('release'): st = 'ready_for_shipment'
