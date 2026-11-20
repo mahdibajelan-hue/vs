@@ -46,7 +46,8 @@ export function missingForReport(report: Pick<Report, 'formKey' | 'front' | 'con
   if (!filled(report.front)) miss.push('جبهه کاری')
   if (!filled(report.data.weather)) miss.push('وضعیت آب‌وهوا')
   if (!form) {
-    if (!lines.length) miss.push('جدول کارکرد (حداقل یک ردیف)')
+    // the daily work report carries site condition, manpower, machinery and the narrative; executed quantities are entered only
+    // in the site minutes (صورتجلسات کارگاهی). Rows that an older report still has are checked as before.
     lines.forEach((l, i) => { if (!l.activityId && !l.detail.actionKey) miss.push(`ردیف ${i + 1}: ${l.detail.actionKey === undefined ? 'فعالیت' : 'اقدام'}`); if (!(l.qty > 0)) miss.push(`ردیف ${i + 1}: مقدار کارکرد`) })
     if (!resources.some((r) => r.kind === 'man' && (r.totalQty > 0 || r.activeQty > 0 || r.idleQty > 0))) miss.push('نیروی انسانی')
     return miss

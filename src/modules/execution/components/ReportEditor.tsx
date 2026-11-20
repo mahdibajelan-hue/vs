@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Copy, History, Plus, Printer, Send, Trash2, Wand2 } from 'lucide-react'
+import { ArrowRight, Copy, History, Plus, Printer, Send, Trash2 } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { projectParties } from '../lib/projectParties'
 import { useLookupOptions } from '../../material/lib/control/lookups'
@@ -12,14 +12,13 @@ import type { ExecutionModel } from '../lib/useExecutionModel'
 import { primaryScope, rowScope, scopeTerms, writeScope } from '../../../lib/projectProfile'
 import { FORM_BY_KEY, STOPPAGE_CATEGORY_FA, type FieldDef } from '../lib/formCatalog'
 import { mergeCatalog, resUsed, toRow, type ResRow } from '../lib/resourceCatalog'
-import { computeMetrics, cumulativeMetrics, inconsistenciesForReport, missingForReport } from '../lib/forms'
+import { cumulativeMetrics, inconsistenciesForReport, missingForReport } from '../lib/forms'
 import { cumulative } from '../lib/progress'
 import type { Activity, Report, ReportLine, ReportResource, Stoppage, StoppageCategory } from '../types'
 import { LINE_STATUS_LABEL_FA } from '../types'
 import { Chip } from '../../finance/components/fn'
 import { LineStatusChip, ReportStatusChip, fa } from './common'
 import { PaperModal, type PaperCtx } from './ReportPaper'
-import { ActivityPicker } from './ActivityPicker'
 import { ActionLines } from './ActionLines'
 import { SignaturesCard } from './SignaturesCard'
 import { ReportPhotos } from '../photos/PhotoParts'
@@ -69,7 +68,6 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const [rows, setRows] = useState<LRow[]>(() => (m.linesByReport.get(reportId) ?? []).map((l) => ({ key: l.id, id: l.id, activityId: l.activityId, qty: l.qty, kmFrom: l.kmFrom, kmTo: l.kmTo, location: l.location, note: l.note, detail: { ...l.detail }, status: l.status, approvedQty: l.approvedQty, reviewNote: l.reviewNote, sourceReportId: l.sourceReportId })))
   const [res, setRes] = useState<ResRow[]>(() => mergeCatalog(m.resources.filter((x) => x.reportId === reportId).map(toRow)))
   const [stops, setStops] = useState<StopRow[]>(() => m.stoppages.filter((x) => x.reportId === reportId).map((x) => ({ key: x.id, category: x.category, hours: x.hours, description: x.description, materialId: x.materialId, responsibility: x.responsibility, critical: x.critical, noticeDate: x.noticeDate, noticeRef: x.noticeRef, assessNote: x.assessNote })))
-  const [pick, setPick] = useState('')
   const epcAvailable = useEpcStore((x) => x.available)
   const epcCrew = useEpcStore((x) => x.crewLogs)
   const [crews, setCrews] = useState<CrewDraft[]>(() => epcCrew.filter((c) => c.reportId === reportId).map((c) => ({ key: c.id, activityId: c.activityId, crewName: c.crewName, composition: c.composition, usefulHours: c.usefulHours, idleHours: c.idleHours, outputQty: c.outputQty, conditions: c.conditions, note: c.note })))
@@ -92,14 +90,6 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const lockedLine = (l: LRow) => !editable || l.status === 'approved'
 
   const acts = useMemo(() => m.activities.filter((a) => a.approval === 'approved' && a.active), [m.activities])
-  const options = useMemo(() => acts.filter((a) => !rows.some((x) => x.activityId === a.id && x.location === '' && x.kmFrom == null)), [acts, rows])
-  const addActivity = () => {
-    if (!pick) return
-    const blank = (activityId: string, note = ''): LRow => ({ key: uid0(), activityId, qty: 0, kmFrom: null, kmTo: null, location: '', note, detail: {}, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null })
-    // a surcharge (اضافه‌بها) is executed together with the row it is added to: its lines are offered right away
-    const kids = acts.filter((x) => x.parentActivityId === pick && !rows.some((r) => r.activityId === x.id && r.location === ''))
-    setRows((a) => [...a, blank(pick), ...kids.map((k) => blank(k.id, 'اضافه‌بها — مقدار را وارد یا ردیف را حذف کنید'))]); setPick(''); setDirty(true)
-  }
   // the form opens on its approved sheet (exactly as the paper); the table stays one click away
   const [sheetMode, setSheetMode] = useState(true)
   const sheetTpl = useEpcStore((x) => (form && GRID_SPECS[form.key] && form.key !== 'welding' ? x.templates.find((t) => t.formKey === form.key && t.status === 'approved') : undefined))
@@ -188,22 +178,6 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   }
   const remove = async () => { if (window.confirm('این پیش‌نویس حذف شود؟')) { if (await ex.deleteReport(reportId)) onClose() } }
 
-  // fill the quantities of mapped technical-form counters of the same day (each source form can feed an activity once)
-  const prefill = () => {
-    const sameDay = m.reports.filter((x) => x.formKey !== 'work' && x.reportDate === head.reportDate && x.status !== 'rejected' && (!head.front || !x.front || x.front === head.front))
-    const add: LRow[] = []
-    for (const t of sameDay) {
-      const f = FORM_BY_KEY[t.formKey]; if (!f) continue
-      for (const mr of computeMetrics(f, m.linesByReport.get(t.id) ?? [])) {
-        const map = m.maps.find((x) => x.formKey === t.formKey && x.metricKey === mr.metric.key && (x.groupValue === mr.group || x.groupValue === ''))
-        if (!map || mr.value <= 0) continue
-        if (rows.some((x) => x.sourceReportId === t.id && x.activityId === map.activityId) || add.some((x) => x.sourceReportId === t.id && x.activityId === map.activityId)) continue
-        add.push({ key: uid0(), activityId: map.activityId, qty: mr.value, kmFrom: null, kmTo: null, location: '', note: `از ${f.title} ${t.reportNo}${mr.group ? ` (${mr.group})` : ''}`, detail: {}, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: t.id })
-      }
-    }
-    if (!add.length) { window.alert('فرم فنی امروزی که به فعالیتی وصل شده باشد پیدا نشد. اتصال فرم‌ها در «تنظیمات ← اتصال فرم فنی به فعالیت» تعریف می‌شود.'); return }
-    setRows((a) => [...a, ...add]); setDirty(true)
-  }
 
   // the most recent earlier daily report of the same front that carries a resource list — a starting point for today's list
   const lastRes = useMemo(() => m.reports.filter((x) => x.formKey === 'work' && x.id !== reportId && x.reportDate < head.reportDate && (!head.front || x.front === head.front) && m.resources.some((y) => y.reportId === x.id)).sort((a, b) => (a.reportDate < b.reportDate ? 1 : -1))[0], [m.reports, m.resources, head.front, head.reportDate, reportId])
@@ -211,15 +185,6 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     if (!lastRes) { window.alert('گزارش قبلی همین جبهه که فهرست نفرات و ماشین‌آلات داشته باشد پیدا نشد.'); return }
     if (res.some(resUsed) && !window.confirm('مقدارهای فعلی نفرات و ماشین‌آلات با گزارش قبلی جایگزین شود؟')) return
     setRes(mergeCatalog(m.resources.filter((y) => y.reportId === lastRes.id).map(toRow))); setDirty(true)
-  }
-  // continue yesterday's work: the activities (and places) of the latest earlier report of the same front, with empty quantities
-  const copyLastRows = () => {
-    const prev = m.reports.filter((x) => x.formKey === 'work' && x.id !== reportId && x.reportDate < head.reportDate && (!head.front || x.front === head.front) && (m.linesByReport.get(x.id)?.length ?? 0) > 0).sort((a, b) => (a.reportDate < b.reportDate ? 1 : -1))[0]
-    if (!prev) { window.alert('گزارش قبلی همین جبهه با ردیف کارکرد پیدا نشد.'); return }
-    const have = new Set(rows.map((x) => `${x.activityId}|${x.location}`))
-    const add: LRow[] = (m.linesByReport.get(prev.id) ?? []).filter((l) => l.activityId && m.actById.get(l.activityId)?.active && !have.has(`${l.activityId}|${l.location}`)).map((l) => ({ key: uid0(), activityId: l.activityId, qty: 0, kmFrom: l.kmFrom, kmTo: l.kmTo, location: l.location, note: '', detail: {}, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null }))
-    if (!add.length) { window.alert('همهٔ ردیف‌های گزارش قبلی از قبل در این گزارش هست.'); return }
-    setRows((a) => [...a, ...add]); setDirty(true)
   }
   const lastRows = useMemo(() => (lastRes ? mergeCatalog(m.resources.filter((y) => y.reportId === lastRes.id).map(toRow)) : null), [lastRes, m.resources])
   // a new report starts from yesterday's roster — the person only records what changed
@@ -257,13 +222,8 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const actionOn = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { actionEntry?: boolean } } | undefined)?.flags?.actionEntry
   const allActions = useEpcStore((x) => x.workActions)
   const actions = useMemo(() => allActions.filter((a) => a.projectId === m.projectId && a.active && (m.kind !== 'hybrid' || actionInScope(a.key, repScope))).sort((a, b) => a.sort - b.sort), [allActions, m.projectId, m.kind, repScope])
-  const [pickAction, setPickAction] = useState('')
   const allRules = useEpcStore((x) => x.actionRules)
   const actionRules = useMemo(() => allRules.filter((x) => x.projectId === m.projectId), [allRules, m.projectId])
-  const addAction = () => {
-    const a = actions.find((x) => x.key === pickAction); if (!a) return
-    setRows((r) => [...r, { key: uid0(), activityId: null, qty: 0, kmFrom: null, kmTo: null, location: '', note: '', detail: { actionKey: a.key, actionTitle: a.title, actionUnit: a.unit }, status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null }]); setDirty(true)
-  }
   // cumulative per ACTION from the other registered work reports (what was entered, in the action's own unit)
   const actionCum = (key: string, today: number) => {
     const ids = new Set(m.reports.filter((x) => x.formKey === 'work' && x.id !== reportId && x.reportDate < head.reportDate && x.status !== 'rejected' && x.status !== 'draft').map((x) => x.id))
@@ -344,6 +304,11 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     </label>
   )
 
+  const photosAndSigns = <>
+    <ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />
+    <SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} />
+  </>
+
   return (
     <div ref={meter.root as React.RefObject<HTMLDivElement>} style={{ display: 'grid', gap: 12 }}>
       <div className="mt-filters no-print">
@@ -365,6 +330,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
       {!EDITABLE.has(r.status) && <div className="im-card" style={{ padding: '8px 14px' }}><span className="im-helper" style={{ margin: 0 }}>این گزارش ارسال یا بررسی شده و فقط‌خواندنی است. برای اصلاح، دستگاه نظارت باید آن را برگرداند یا بازگشایی کند.</span></div>}
 
       {form && <><datalist id="ex-hint-welder">{welderList.filter((w) => w.status === 'active').map((w) => <option key={w.id} value={w.raw}>{w.fullName}</option>)}</datalist><datalist id="ex-hint-weld">{[...new Set(weldHints.map((w) => w.weld))].slice(0, 400).map((x) => <option key={x} value={x} />)}</datalist><datalist id="ex-hint-pipe">{pipeHints.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}</datalist></>}
+      {!form && <SecTitle n={1} title="وضعیت سایت" hint="تاریخ، جبهه، شیفت و شرایط جوی کارگاه" />}
       <div className="im-card" style={{ padding: 14 }}>
         <div className="ex-sheet-grid">
           <label>تاریخ گزارش *<JalaliDateInput value={head.reportDate} onChange={(x) => editable && setH('reportDate', x)} /></label>
@@ -383,31 +349,24 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
       {form && regWarnings.length > 0 && <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: `3px solid ${strictRegs ? 'var(--im-coral)' : 'var(--im-amber)'}` }}><b>{strictRegs ? 'موارد رجیستر که پیش از ارسال باید اصلاح شود' : 'هشدار رجیستر لوله و جوشکار'} ({fa(regWarnings.length)})</b>
         <ul style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>{regWarnings.slice(0, 12).map((w) => <li key={w}>{w}</li>)}{regWarnings.length > 12 && <li>و {fa(regWarnings.length - 12)} مورد دیگر…</li>}</ul>
         <small className="sub">جوشکاران در «ارزیابی شایستگی ← صلاحیت جوشکاران و عایق‌کاران» و لوله‌ها در «کالا ← ورود لوله به کارگاه (MRS)» ثبت می‌شوند؛ شناسهٔ تازه را آنجا ثبت کنید.</small></div>}
-      <ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />
-      <SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} />
+      {form && photosAndSigns}
 
       {form && epcAvailable && <LinkCard reportId={reportId} projectId={m.projectId} date={head.reportDate} front={head.front} model={m} />}
 
       {!form && <WeatherCard data={data} editable={editable} onChange={(k, v) => setD(k, v)} />}
 
-      <div className="im-card" style={{ padding: 0 }}>
+      {!form && <>
+        <SecTitle n={2} title="نیروی انسانی کارگاه" />
+        <ResourcePanel only="man" rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} onCopyLast={copyLastResources} />
+        <SecTitle n={3} title="ماشین‌آلات کارگاه" />
+        <ResourcePanel only="equip" rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} />
+        {epcAvailable && <CrewLogsPanel rows={crews} editable={editable} activities={acts} onChange={(n) => { setCrews(n); setCrewDirty(true); setDirty(true) }} />}
+      </>}
+
+      {(form || rows.length > 0) && <div className="im-card" style={{ padding: 0 }}>
         <div className="mt-filters no-print" style={{ padding: '10px 14px' }}>
-          <b>{form ? 'جدول ردیف‌ها' : 'جدول کارکرد روزانه'}</b>
+          <b>{form ? 'جدول ردیف‌ها' : 'ردیف‌های کارکرد (ثبت‌شده پیش از انتقال کارکرد به صورتجلسات کارگاهی)'}</b>
           {form?.hint && <span className="im-helper" style={{ margin: 0 }}>{form.hint}</span>}
-          {editable && !form && actionOn && (
-            <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', marginInlineStart: 'auto' }}>
-              <select value={pickAction} onChange={(e) => setPickAction(e.target.value)} aria-label="اقدام"><option value="">اقدام را انتخاب کنید ({fa(actions.length)})…</option>{[...new Set(actions.map((a) => a.group))].map((g) => <optgroup key={g} label={g || 'سایر'}>{actions.filter((a) => a.group === g).map((a) => <option key={a.key} value={a.key}>{a.title} ({a.unit})</option>)}</optgroup>)}</select>
-              <button className="im-btn im-btn-primary im-btn-sm" disabled={!pickAction} onClick={addAction}><Plus size={13} /> افزودن</button>
-            </span>
-          )}
-          {editable && !form && !actionOn && (
-            <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', marginInlineStart: 'auto' }}>
-              <ActivityPicker activities={options} value={pick} onChange={setPick} emptyLabel={`فعالیت را انتخاب کنید (${fa(options.length)})…`} title="انتخاب فعالیت برای گزارش" width={420} />
-              <button className="im-btn im-btn-primary im-btn-sm" disabled={!pick} onClick={addActivity}><Plus size={13} /> افزودن</button>
-              <button className="im-btn im-btn-sm" onClick={copyLastRows} title="ردیف‌ها و محل‌های آخرین گزارش همین جبهه را با مقدار خالی اضافه می‌کند — فقط مقدار امروز را بنویسید"><Copy size={13} /> ادامهٔ کار قبلی</button>
-              <button className="im-btn im-btn-sm" onClick={prefill} title="مقدارهای فرم‌های فنی همین روز را که به فعالیت وصل شده‌اند وارد می‌کند"><Wand2 size={13} /> پیش‌پر از فرم‌های فنی</button>
-            </span>
-          )}
           {form && sheetTpl && <button className={`im-btn im-btn-sm${sheetMode ? ' im-btn-primary' : ''}`} style={{ marginInlineStart: 'auto' }} onClick={() => setSheetMode((x) => !x)} title="خود فرم مصوب (اکسل) را باز می‌کند تا مقدارها را روی همان سلول‌ها وارد کنید">{sheetMode ? 'ورود جدولی' : 'ورود روی خود فرم'}</button>}
           {editable && form && !sheetMode && <button className="im-btn im-btn-primary im-btn-sm" style={form && sheetTpl ? undefined : { marginInlineStart: 'auto' }} onClick={addBlank}><Plus size={13} /> ردیف جدید</button>}
         </div>
@@ -444,7 +403,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
             </table>
           )}
         </div>
-      </div>
+      </div>}
 
       {form && metrics.length > 0 && (
         <div className="im-card" style={{ padding: 0 }}>
@@ -454,12 +413,11 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
         </div>
       )}
 
-      {!form && epcAvailable && <CrewLogsPanel rows={crews} editable={editable} activities={acts} onChange={(n) => { setCrews(n); setCrewDirty(true); setDirty(true) }} />}
-      {(!form || form.resources) && <ResourcePanel rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} onCopyLast={copyLastResources} />}
+      {form?.resources && <ResourcePanel rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} onCopyLast={copyLastResources} />}
 
       {!form && (
         <div className="im-card" style={{ padding: 14, display: 'grid', gap: 10 }}>
-          <b>توقف‌ها، مشکلات اجرایی و HSE</b>
+          <b>۴. توقف‌ها، مشکلات اجرایی و HSE</b>
           {stops.map((s) => (
             <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '170px 90px 1fr auto', gap: 6, alignItems: 'center' }}>
               <select disabled={!editable} value={s.category} onChange={(e) => { setStops((a) => a.map((x) => (x.key === s.key ? { ...x, category: e.target.value as StoppageCategory } : x))); setDirty(true) }}>{Object.entries(STOPPAGE_CATEGORY_FA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
@@ -486,11 +444,13 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
 
       {!form && (
         <div className="im-card" style={{ padding: 14, display: 'grid', gap: 14 }}>
+          <b>۵. شرح عملیات، موانع و مشکلات</b>
           <NumberedLines title="شرح عملیات" hint="خلاصهٔ عملیات انجام‌شده امروز — هر مورد در یک ردیف." value={asList(data.ops)} max={12} editable={editable} onChange={(v) => setD('ops', v)} />
           <NumberedLines title="موانع و مشکلات" hint="هر مانع یا مشکل اجرایی امروز در یک ردیف؛ برای توقف مشخص بالاتر «توقف‌ها» را هم ثبت کنید." value={asList(data.obstacles)} max={6} editable={editable} onChange={(v) => setD('obstacles', v)} />
         </div>
       )}
-      {!form && <NextDayPlan value={asNext(data.nextDay)} editable={editable} onChange={(v) => setD('nextDay', v)} />}
+      {!form && <><SecTitle n={6} title="پیش‌بینی عملیات اجرایی روز آتی" /><NextDayPlan value={asNext(data.nextDay)} editable={editable} onChange={(v) => setD('nextDay', v)} /></>}
+      {!form && photosAndSigns}
 
       {(missing.length > 0 || incons.length > 0) && editable && (
         <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: '3px solid var(--im-amber)' }}>
@@ -563,4 +523,9 @@ function LineForms({ lineId, activityId, projectId, reportId, head, model: m, ed
       )}
     </div>
   )
+}
+
+/** numbered section heading of the daily work report */
+function SecTitle({ n, title, hint }: { n: number; title: string; hint?: string }) {
+  return <div className="ex-sec-title"><span>{n.toLocaleString('fa-IR')}</span><b>{title}</b>{hint && <small>{hint}</small>}</div>
 }

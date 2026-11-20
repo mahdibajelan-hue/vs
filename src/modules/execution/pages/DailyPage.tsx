@@ -10,6 +10,7 @@ import { useModuleStore } from '../../../store/useModuleStore'
 import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { Chip, DataTable, KpiCard, fmtD, type Col } from '../../finance/components/fn'
 import { ReportEditor } from '../components/ReportEditor'
+import { DayView } from './DayView'
 import { ReportStatusChip, Empty, fa } from '../components/common'
 import { REPORT_STATUS_LABEL_FA, type Report, type ReportStatus } from '../types'
 
@@ -33,12 +34,26 @@ export function DailyPage({ projectId, sub, scope = 'execution' }: { projectId: 
   const orgName = (id: string | null) => orgs.find((o) => o.id === id)?.name ?? '—'
   const myOrg = ex.roles.find((x) => x.projectId === projectId && x.active && x.organizationId)?.organizationId ?? null
 
-  const create = async (key: string) => {
-    const front = m.settings.expectedFronts[0] ?? ''
-    const id = await ex.createReport({ projectId, formKey: key, reportDate: m.today, front, contractorOrgId: projectParties(project, orgs).contractor?.id ?? myOrg })
+  const archiveCols: Col<Report>[] = [
+    { key: 'n', label: 'شماره', render: (r) => <span className="strong fn-code">{r.reportNo}</span>, sort: (r) => r.reportNo },
+    { key: 'd', label: 'تاریخ', render: (r) => fmtD(r.reportDate), sort: (r) => r.reportDate },
+    { key: 'fr', label: 'جبهه / ایستگاه', render: (r) => [r.front, r.station].filter(Boolean).join(' · ') || '—' },
+    { key: 's', label: 'وضعیت', render: (r) => <><ReportStatusChip status={r.status} />{r.completionOf && <Chip tone="warn">تکمیلی</Chip>}</> },
+  ]
+  const create = async (key: string, date = m.today, front = m.settings.expectedFronts[0] ?? '') => {
+    const id = await ex.createReport({ projectId, formKey: key, reportDate: date, front, contractorOrgId: projectParties(project, orgs).contractor?.id ?? myOrg })
     if (id) setOpen(id)
   }
   if (open) return <ReportEditor reportId={open} model={m} onClose={() => setOpen(null)} />
+  // the execution module's day page: the daily work report and the day's site minutes, one tile each
+  if (isWork && scope === 'execution') return (
+    <div style={{ display: 'grid', gap: 14 }}>
+      <DayView model={m} canRecord={canRecord} onOpen={setOpen} onCreate={(k, d, f) => void create(k, d, f)} />
+      <details className="im-card" style={{ padding: '10px 14px' }}><summary style={{ cursor: 'pointer', fontWeight: 700 }}>بایگانی گزارش‌های کارکرد روزانه ({fa(rows.length)})</summary>
+        <div style={{ marginTop: 10 }}>{rows.length === 0 ? <Empty>گزارشی ثبت نشده است.</Empty> : <DataTable cols={archiveCols} rows={rows} rowKey={(r) => r.id} onRow={(r) => setOpen(r.id)} />}</div>
+      </details>
+    </div>
+  )
 
   const cols: Col<Report>[] = [
     { key: 'n', label: 'شماره', render: (r) => <span className="strong fn-code">{r.reportNo}</span>, sort: (r) => r.reportNo },
@@ -72,7 +87,7 @@ export function DailyPage({ projectId, sub, scope = 'execution' }: { projectId: 
           <button className="im-btn im-btn-sm" style={{ marginInlineStart: 'auto' }} onClick={() => { useProjectContextStore.getState().setProject(projectId); useModuleStore.getState().enterModule('weldqc', undefined, 'forms') }}>رفتن به کنترل کیفیت</button>
         </div>
       )}
-      {canRecord && (
+      {canRecord && scope !== 'execution' && (
         <div style={{ display: 'grid', gap: 10 }}>
           {groups.map(({ g, items }) => (
             <div key={g}><div className="im-helper" style={{ margin: '0 0 6px', fontWeight: 700 }}>{FORM_GROUP_LABEL_FA[g]}</div>

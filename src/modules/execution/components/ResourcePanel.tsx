@@ -16,8 +16,8 @@ const isCatalog = (r: ResRow) => cat.has(key(r))
  * Manpower / machinery of the day. The standing roster is carried over from the previous report, so the day's work is only the CHANGES:
  * a summary with icons, the list of what differs from yesterday, and the full grouped list (collapsed) for editing.
  */
-export function ResourcePanel({ rows, editable, onChange, baseline, baselineLabel, onCopyLast }: { rows: ResRow[]; editable: boolean; onChange: (next: ResRow[]) => void; baseline: ResRow[] | null; baselineLabel?: string; onCopyLast?: () => void }) {
-  const [kind, setKind] = useState<'man' | 'equip'>('man')
+export function ResourcePanel({ rows, editable, onChange, baseline, baselineLabel, onCopyLast, only }: { /** show one kind only (manpower or machinery) as its own section of the daily report */ only?: 'man' | 'equip'; rows: ResRow[]; editable: boolean; onChange: (next: ResRow[]) => void; baseline: ResRow[] | null; baselineLabel?: string; onCopyLast?: () => void }) {
+  const [kind, setKind] = useState<'man' | 'equip'>(only ?? 'man')
   const [open, setOpen] = useState<Set<string>>(() => new Set())
   const [q, setQ] = useState('')
   const [adding, setAdding] = useState<{ section: string; name: string } | null>(null)
@@ -27,7 +27,7 @@ export function ResourcePanel({ rows, editable, onChange, baseline, baselineLabe
 
   const stats = (k: 'man' | 'equip') => { const l = rows.filter((r) => r.kind === k); const b = (baseline ?? []).filter((r) => r.kind === k); return { total: sum(l, 'totalQty'), active: sum(l, 'activeQty'), idle: k === 'man' ? sum(l, 'leaveQty') : sum(l, 'idleQty'), stopped: sum(l, 'stoppedQty'), prevTotal: sum(b, 'totalQty'), prevActive: sum(b, 'activeQty') } }
   const sm = stats('man'), se = stats('equip')
-  const changed = useMemo(() => idx.filter(({ r }) => baseline && sig(r) !== sig(base.get(key(r)))).map(({ r, i }) => ({ r, i, prev: base.get(key(r)) })), [idx, baseline, base])
+  const changed = useMemo(() => idx.filter(({ r }) => baseline && (!only || r.kind === only) && sig(r) !== sig(base.get(key(r)))).map(({ r, i }) => ({ r, i, prev: base.get(key(r)) })), [idx, baseline, base, only])
   const mine = idx.filter((x) => x.r.kind === kind)
   const sections = useMemo(() => { const m = new Map<string, { r: ResRow; i: number }[]>(); for (const x of mine) { const a = m.get(x.r.section) ?? []; a.push(x); m.set(x.r.section, a) } return [...m.entries()] }, [mine])
   const patch = (i: number, f: ResField, v: number) => onChange(rows.map((r, j) => (j === i ? { ...r, [f]: v } : r)))
@@ -55,7 +55,7 @@ export function ResourcePanel({ rows, editable, onChange, baseline, baselineLabe
   return (
     <div className="im-card rp" style={{ padding: 0 }}>
       <div className="rp-head">
-        <div className="rp-tiles">{tile('man', sm, '#38bdf8')}{tile('equip', se, '#f97316')}</div>
+        <div className="rp-tiles">{only !== 'equip' && tile('man', sm, '#38bdf8')}{only !== 'man' && tile('equip', se, '#f97316')}</div>
         {editable && onCopyLast && <button className="im-btn im-btn-sm" onClick={onCopyLast} title="فهرست و مقدارهای آخرین گزارش همین جبهه را جایگزین می‌کند"><ClipboardCopy size={13} /> {baselineLabel ? `مثل ${baselineLabel}` : 'مثل گزارش قبلی'}</button>}
       </div>
 
