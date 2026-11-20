@@ -31,6 +31,8 @@ export function SheetEntry({ template, form, report, rows, identity, metrics, ed
   const plan = printPlan(template.layout)
   const field = !sel ? null : sel.t.kind === 'header' ? form.header.find((f) => f.key === sel.t.key) ?? null : form.columns.find((f) => f.key === sel.t.key) ?? null
   const row = sel && sel.t.kind === 'row' ? rows[sel.t.row] : undefined
+  const onSheet = useMemo(() => new Set(spec.rows.cols.map((c) => c.get.key).filter(Boolean) as string[]), [spec])
+  const extras = form.columns.filter((x) => !onSheet.has(x.key) && x.key !== field?.key)
   const click = (a: string) => {
     const t = cellTarget(spec, a, Math.min(page, pages - 1)); if (!t) return
     if (t.kind === 'row' && editable && t.row >= rows.length) ensureRows(t.row + 1)
@@ -43,6 +45,8 @@ export function SheetEntry({ template, form, report, rows, identity, metrics, ed
           <>
             <b>{field.label}</b>{sel.t.kind === 'row' && <span className="sub">ردیف {sel.t.row + 1}</span>}
             <span style={{ minWidth: 220 }}>{sel.t.kind === 'header' ? renderHeader(field) : row ? renderRow(field, row.key) : <span className="im-helper">ردیف ساخته می‌شود…</span>}</span>
+            {/* the row's fields that have no cell on the sheet (stringing location, the status choice behind the ticks …) */}
+            {sel.t.kind === 'row' && row && extras.map((x) => <label key={x.key} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><span className="sub">{x.label}</span>{renderRow(x, row.key)}</label>)}
             <button className="im-btn im-btn-sm" onClick={() => setSel(null)}>بستن</button>
           </>
         )}

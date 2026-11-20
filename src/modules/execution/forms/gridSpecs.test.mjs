@@ -5,6 +5,7 @@ import { GRID_SPECS, specPage, specPages } from './gridSpecs.ts'
 
 const file = { fitup: 'fit_up', bend: 'bend', weld_repair: 'repair', tie_in: 'connection', rt_request: 'rt_req_full', rt_request_rp: 'rt_req_repair', rt_report: 'rt_report', pipe_entry: 'pipe_entry' }
 for (const [key, spec] of Object.entries(GRID_SPECS)) {
+  if (!file[key]) continue   // sheet stored only in the template library (e.g. string) — covered by its own test
   const t = JSON.parse(readFileSync(new URL(`./templates/${file[key]}.grid.json`, import.meta.url)))
   assert.equal(t.formKey, key)
   const have = new Set(t.cells.map((c) => addr(c.r, c.c)))

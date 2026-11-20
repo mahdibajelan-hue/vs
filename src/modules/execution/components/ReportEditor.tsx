@@ -100,7 +100,8 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     const kids = acts.filter((x) => x.parentActivityId === pick && !rows.some((r) => r.activityId === x.id && r.location === ''))
     setRows((a) => [...a, blank(pick), ...kids.map((k) => blank(k.id, 'اضافه‌بها — مقدار را وارد یا ردیف را حذف کنید'))]); setPick(''); setDirty(true)
   }
-  const [sheetMode, setSheetMode] = useState(false)
+  // the form opens on its approved sheet (exactly as the paper); the table stays one click away
+  const [sheetMode, setSheetMode] = useState(true)
   const sheetTpl = useEpcStore((x) => (form && GRID_SPECS[form.key] && form.key !== 'welding' ? x.templates.find((t) => t.formKey === form.key && t.status === 'approved') : undefined))
   const exSettings = useExecutionStore((x) => x.settingsByProject.get(m.projectId))
   const ensureRows = (n: number) => { setRows((a) => (a.length >= n ? a : [...a, ...Array.from({ length: n - a.length }, () => ({ key: uid0(), activityId: null, qty: 0, kmFrom: null, kmTo: null, location: '', note: '', detail: {}, status: 'pending' as const, approvedQty: null, reviewNote: '', sourceReportId: null }))])); setDirty(true) }
@@ -146,10 +147,15 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
         const c = checkPipeCell(l.detail.pipeNo, pipeList)
         if (c.unknown && form.key !== 'pipe_entry') out.push(`${at}: لولهٔ «${String(l.detail.pipeNo).trim()}» در رجیستر لوله‌های ورودی نیست`)
         if (c.bad) out.push(`${at}: لولهٔ «${String(l.detail.pipeNo).trim()}» مردود/اسقاط ثبت شده است`)
+        if (form.key === 'string' && !c.unknown) {
+          const k = registerKey(l.detail.pipeNo), formOf = new Map(m.reports.map((x) => [x.id, x]))
+          const other = m.lines.find((x) => x.reportId !== reportId && formOf.get(x.reportId)?.formKey === 'string' && x.status !== 'rejected' && registerKey(x.detail.pipeNo) === k)
+          if (other) out.push(`${at}: لولهٔ «${String(l.detail.pipeNo).trim()}» قبلاً در گزارش ریسهٔ ${formOf.get(other.reportId)?.reportNo ?? ''} ثبت شده است`)
+        }
       }
     })
     return [...new Set(out)]
-  }, [form, rows, welderList, pipeList, regQuals, head.reportDate])
+  }, [form, rows, welderList, pipeList, regQuals, head.reportDate, m.reports, m.lines, reportId])
   const missing = [...missingForReport({ formKey: r.formKey, front: head.front, contractorOrgId: head.contractorOrgId || null, data }, asLines(), form, asRes()), ...unsignedPrep, ...(strictRegs ? regWarnings : [])]
   const incons = form ? [] : inconsistenciesForReport(asLines(), m.actById)
   const overRows = useMemo(() => new Set(rows.filter((x) => { const a = x.activityId ? m.actById.get(x.activityId) : undefined; if (!a) return false; const base = m.baseOf(a, head.reportDate); return base > 0 && (upToday.get(a.id) ?? 0) + rows.filter((y) => y.activityId === a.id).reduce((s, y) => s + y.qty, 0) > base * (1 + m.settings.overBasePct / 100) + 1e-9 }).map((x) => x.key)), [rows, upToday, m, head.reportDate])
@@ -280,6 +286,19 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const [autoFilled, setAutoFilled] = useState<Record<string, string[]>>({})
   const colKeys = useMemo(() => new Set(form?.columns.map((c) => c.key) ?? []), [form])
   const weldHints = useMemo(() => welds.filter((w) => w.projectId === m.projectId && w.status !== 'merged').map((w) => ({ weld: w.weldRaw, sec: w.sectionRaw, pipe: w.pipeNo ?? '' })), [welds, m.projectId])
+  // pipe numbers offered in the row: on the stringing record only pipes registered by a delivery record, not rejected,
+  // and not strung yet (in another record or another row of this one); elsewhere every registered pipe
+  const pipeHints = useMemo(() => {
+    const lineStatus = new Map(m.lines.map((l) => [l.id, l.status]))
+    const label = (p: (typeof pipeList)[number]) => [p.lengthM != null ? `${p.lengthM} m` : '', p.wtIn != null ? `${p.wtIn}"` : '', p.entryLineId && lineStatus.get(p.entryLineId) === 'pending' ? 'در انتظار تأیید ناظر' : ''].filter(Boolean).join(' · ')
+    if (form?.key === 'string') {
+      const formOf = new Map(m.reports.map((r) => [r.id, r.formKey]))
+      const strung = new Set(m.lines.filter((l) => l.reportId !== reportId && formOf.get(l.reportId) === 'string' && l.status !== 'rejected').map((l) => registerKey(l.detail.pipeNo)).filter(Boolean))
+      for (const r of rows) { const k = registerKey(r.detail.pipeNo); if (k) strung.add(k) }
+      return pipeList.filter((p) => p.status === 'in_stock' && !strung.has(p.key)).map((p) => ({ value: p.raw, label: label(p) }))
+    }
+    return [...new Map([...pipeList.map((p) => [p.raw, { value: p.raw, label: label(p) }] as const), ...weldHints.filter((w) => w.pipe).map((w) => [w.pipe, { value: w.pipe, label: '' }] as const)]).values()].slice(0, 800)
+  }, [form?.key, pipeList, m.lines, m.reports, reportId, rows]) // eslint-disable-line react-hooks/exhaustive-deps
   const cell = (f: FieldDef, l: LRow) => {
     const v = l.detail[f.key]
     const dis = lockedLine(l)
@@ -345,7 +364,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
       {r.status === 'incomplete' && <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: '3px solid var(--im-amber)' }}><b>فرم نیازمند تکمیل است.</b> این گزارش از اطلاعات موجود پیش‌پر شده؛ فقط بخش‌های ناقص زیر را کامل کنید:<ul style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>{r.missing.map((x) => <li key={x}>{x}</li>)}</ul></div>}
       {!EDITABLE.has(r.status) && <div className="im-card" style={{ padding: '8px 14px' }}><span className="im-helper" style={{ margin: 0 }}>این گزارش ارسال یا بررسی شده و فقط‌خواندنی است. برای اصلاح، دستگاه نظارت باید آن را برگرداند یا بازگشایی کند.</span></div>}
 
-      {form && <><datalist id="ex-hint-welder">{welderList.filter((w) => w.status === 'active').map((w) => <option key={w.id} value={w.raw}>{w.fullName}</option>)}</datalist><datalist id="ex-hint-weld">{[...new Set(weldHints.map((w) => w.weld))].slice(0, 400).map((x) => <option key={x} value={x} />)}</datalist><datalist id="ex-hint-pipe">{[...new Set([...pipeList.map((p) => p.raw), ...weldHints.map((w) => w.pipe)].filter(Boolean))].slice(0, 800).map((x) => <option key={x} value={x} />)}</datalist></>}
+      {form && <><datalist id="ex-hint-welder">{welderList.filter((w) => w.status === 'active').map((w) => <option key={w.id} value={w.raw}>{w.fullName}</option>)}</datalist><datalist id="ex-hint-weld">{[...new Set(weldHints.map((w) => w.weld))].slice(0, 400).map((x) => <option key={x} value={x} />)}</datalist><datalist id="ex-hint-pipe">{pipeHints.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}</datalist></>}
       <div className="im-card" style={{ padding: 14 }}>
         <div className="ex-sheet-grid">
           <label>تاریخ گزارش *<JalaliDateInput value={head.reportDate} onChange={(x) => editable && setH('reportDate', x)} /></label>

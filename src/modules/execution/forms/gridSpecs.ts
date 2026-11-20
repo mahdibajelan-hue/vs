@@ -8,7 +8,13 @@ export interface GridSpec {
   formKey: string
   headers: HeaderBind[]
   /** `first` = 0-based row of the first record, `step` rows per record, `per` records per page, `numCol` = column that prints the running number (continued on later pages) */
-  rows: { first: number; step: number; per: number; numCol: number; numDr?: number; cols: RowCol[] }
+  rows: { first: number; step: number; per: number; numCol: number; numDr?: number; cols: RowCol[]
+    /** side-by-side blocks of the same row layout (column offsets): records fill the first block, then the next; `per` counts all blocks */
+    blocks?: number[]
+    /** print the running number on every page (sheets whose printed numbering is incomplete) */
+    numAlways?: boolean }
+  /** totals by wall thickness in a small table: one row per thickness (label column), earlier / today / to-date count and length */
+  tsum?: { rows: number[]; labelCol: number; prevCnt: number; prevLen: number; todayCnt: number; todayLen: number; untilCnt: number; untilLen: number }
   thk?: ThkTotals
   /** totals printed as stacked blocks, one per wall thickness (the pipe-delivery sheet): rows `today`/`until`, thickness read from the label cell, length and count columns */
   vblocks?: { labelCol: number; lenCol: number; cntCol: number; blocks: { today: number; until: number }[]; grand?: { row: number; cntRow?: number } }
@@ -61,6 +67,12 @@ export const GRID_SPECS: Record<string, GridSpec> = {
     headers: [{ cell: 'F4', key: 'date' }, { cell: 'T4', key: 'page' }, { cell: 'U4', key: 'reportNo', mode: 'append' }, { cell: 'P5', key: 'code', mode: 'append' }, { cell: 'O6', key: 'iqi', mode: 'append' }, { cell: 'A7', key: 'focal', mode: 'append' }, { cell: 'H7', key: 'strength', mode: 'append' }, { cell: 'O7', key: 'sensitivity', mode: 'append' }, { cell: 'R7', key: 'groove', mode: 'append' }, { cell: 'U7', key: 'sfd', mode: 'append' }, { cell: 'A9', key: 'isotope', mode: 'append' }, { cell: 'H9', key: 'exposure', mode: 'append' }, { cell: 'O9', key: 'film', mode: 'append' }, { cell: 'R9', key: 'process', mode: 'append' }, { cell: 'U9', key: 'ug', mode: 'append' }],
     rows: { first: 11, step: 1, per: 20, numCol: 0, cols: [{ c: 1, get: k('rtReqNo') }, { c: 2, get: k('sec') }, { c: 3, get: k('weldNo') }, { c: 5, get: k('odIn') }, { c: 6, get: k('thkIn') }, { c: 8, get: mark('result', 'acc') }, { c: 9, get: mark('result', 'rep') }, { c: 10, get: mark('repairKind', 'RS') }, { c: 11, get: mark('repairKind', 'RT') }, { c: 12, get: mark('repairKind', 'CO') }, { c: 13, get: mark('repairKind', 'RC') }, { c: 14, get: k('defect') }] },
   },
+  string: {
+    formKey: 'string', dateSep: '/',
+    headers: [{ cell: 'C5', key: 'date', mode: 'append' }, { cell: 'J5', key: 'reportNo', mode: 'append' }],
+    rows: { first: 7, step: 1, per: 40, numCol: 0, blocks: [0, 6], numAlways: true, cols: [{ c: 1, get: k('pipeNo') }, { c: 2, get: k('lengthM') }, { c: 3, get: k('thkIn') }, { c: 4, get: mark('origin', 'factory') }, { c: 5, get: mark('origin', 'depot') }] },
+    tsum: { rows: [30, 31, 32, 33], labelCol: 1, prevCnt: 2, prevLen: 3, todayCnt: 4, todayLen: 6, untilCnt: 8, untilLen: 9 },
+  },
   pipe_entry: {
     formKey: 'pipe_entry', dateSep: '/',
     headers: [{ cell: 'A4', key: 'date' }, { cell: 'H4', key: 'reportNo' }],
@@ -74,6 +86,11 @@ const th = (t: number) => (t ? `${t.toFixed(3)}"` : '')
 const near = (a: number, b: number) => b > 0 && Math.abs(a - b) < 0.0005
 
 export const specPages = (spec: GridSpec, n: number) => Math.max(1, Math.ceil(n / spec.rows.per))
+/** sheet row and column offset of record `i` of a page (side-by-side blocks fill one after the other) */
+export function slotOf(R: GridSpec['rows'], i: number): { row: number; off: number } {
+  const b = R.blocks?.length ? R.blocks : [0], per = Math.ceil(R.per / b.length), bi = Math.min(b.length - 1, Math.floor(i / per))
+  return { row: R.first + R.step * (i - bi * per), off: b[bi] }
+}
 
 /** Cell values for page `p` (0-based) of a sheet mapped by `spec`. */
 export function specPage(spec: GridSpec, tpl: GridTemplate, inp: SpecInput, p: number): SpecPage {
@@ -85,9 +102,9 @@ export function specPage(spec: GridSpec, tpl: GridTemplate, inp: SpecInput, p: n
   for (const h of spec.headers) { const v = hv[h.key] ?? ''; if (!v) continue; out[h.cell] = h.mode === 'append' ? `${(fixed[h.cell] ?? '').trim()} ${v}` : v }
   const R = spec.rows, slice = inp.rows.slice(p * R.per, (p + 1) * R.per), before = inp.rows.slice(0, p * R.per)
   slice.forEach((row, i) => {
-    const base = R.first + R.step * i
-    if (p > 0) set(base + (R.numDr ?? 0), R.numCol, String(p * R.per + i + 1))
-    for (const c of R.cols) set(base + (c.dr ?? 0), c.c, c.get(row))
+    const { row: base, off } = slotOf(R, i)
+    if (p > 0 || R.numAlways) set(base + (R.numDr ?? 0), R.numCol + off, String(p * R.per + i + 1))
+    for (const c of R.cols) set(base + (c.dr ?? 0), c.c + off, c.get(row))
   })
   const T = spec.thk, thk = (inp.thk ?? []).slice(0, 4)
   if (T) {
@@ -114,6 +131,19 @@ export function specPage(spec: GridSpec, tpl: GridTemplate, inp: SpecInput, p: n
     }
     if (V.grand) { set(V.grand.row, V.lenCol, f2(gl)); set(V.grand.row, V.cntCol, String(gc)) }
   }
+  const S = spec.tsum
+  if (S) {
+    // the thicknesses of the record's header set, else the ones that occur (earlier totals included), smallest first
+    const seen = [...new Set([...inp.rows.map((r) => Number(r.thkIn)).filter((t) => t > 0).map((t) => t.toFixed(3)), ...Object.keys(inp.priorByThk ?? {})])].map(Number)
+    const list = (thk.length ? thk : seen.sort((a, b) => a - b)).slice(0, S.rows.length)
+    list.forEach((t, i) => {
+      const r = S.rows[i], sel = (rs: Record<string, string>[]) => rs.filter((x) => near(Number(x.thkIn), t))
+      const tc = sel(slice).length, tl = sel(slice).reduce((a, x) => a + (Number(x.lengthM) || 0), 0)
+      const pr = inp.priorByThk?.[t.toFixed(3)] ?? { len: 0, joints: 0 }
+      const bc = sel(before).length + pr.joints, bl = sel(before).reduce((a, x) => a + (Number(x.lengthM) || 0), 0) + pr.len
+      set(r, S.labelCol, th(t)); set(r, S.prevCnt, String(bc)); set(r, S.prevLen, f2(bl)); set(r, S.todayCnt, String(tc)); set(r, S.todayLen, f2(tl)); set(r, S.untilCnt, String(bc + tc)); set(r, S.untilLen, f2(bl + tl))
+    })
+  }
   const have = new Set(tpl.cells.map((c) => addr(c.r, c.c)))
   return { values: out, missing: Object.keys(out).filter((a) => !have.has(a)), pages }
 }
@@ -126,14 +156,15 @@ export function cellTarget(spec: GridSpec, address: string, page: number): CellT
   if (h) return DERIVED_HEADER.has(h.key) ? null : { kind: 'header', key: h.key }
   const R = spec.rows
   for (let i = 0; i < R.per; i++) for (const c of R.cols) {
-    if (addr(R.first + R.step * i + (c.dr ?? 0), c.c) === address && c.get.key) return { kind: 'row', row: page * R.per + i, key: c.get.key }
+    const { row, off } = slotOf(R, i)
+    if (addr(row + (c.dr ?? 0), c.c + off) === address && c.get.key) return { kind: 'row', row: page * R.per + i, key: c.get.key }
   }
   return null
 }
 /** every editable cell of page `page` (used to outline them on the sheet) */
 export function editableCells(spec: GridSpec, page: number): Set<string> {
   const out = new Set<string>(spec.headers.filter((h) => !DERIVED_HEADER.has(h.key)).map((h) => h.cell)), R = spec.rows
-  for (let i = 0; i < R.per; i++) for (const c of R.cols) if (c.get.key) out.add(addr(R.first + R.step * i + (c.dr ?? 0), c.c))
+  for (let i = 0; i < R.per; i++) for (const c of R.cols) if (c.get.key) { const { row, off } = slotOf(R, i); out.add(addr(row + (c.dr ?? 0), c.c + off)) }
   void page
   return out
 }

@@ -46,7 +46,7 @@ export const FORMS: FormDef[] = [
     metrics: [{ key: 'joints', label: 'تعداد شاخه', unit: 'شاخه', op: 'count' }, { key: 'length', label: 'متراژ', unit: 'm', op: 'sum', fields: ['lengthM'] }] },
   { key: 'string', title: 'گزارش روزانه عملیات ریسه', en: 'Stringing daily report', group: 'pipeline', kind: 'daily', sheet: 'string', signers: ['supervision', 'contractor'],
     header: [f('thkSet', 'ضخامت‌های جدول جمع‌بندی (in)', 'text', { hint: '0.406, 0.438, 0.688, 0.750' })],
-    columns: [f('pipeNo', 'شماره لوله'), f('lengthM', 'طول لوله', 'num', { req: true, unit: 'm' }), f('thkIn', 'ضخامت', 'num', { req: true, unit: 'in' }), f('origin', 'وضعیت', 'select', { options: [{ value: 'factory', label: 'حمل از کارخانه' }, { value: 'depot', label: 'حمل از دپو' }] })],
+    columns: [f('pipeNo', 'شماره لوله', 'text', { req: true, hint: 'از لوله‌های واردشده به کارگاه انتخاب کنید' }), f('lengthM', 'طول لوله', 'num', { req: true, unit: 'm' }), f('thkIn', 'ضخامت', 'num', { req: true, unit: 'in' }), f('origin', 'وضعیت', 'select', { options: [{ value: 'factory', label: 'حمل از کارخانه' }, { value: 'depot', label: 'حمل از دپو' }] }), f('km', 'محل ریسه (کیلومتر)', 'km')],
     metrics: [{ key: 'joints', label: 'تعداد شاخه', unit: 'شاخه', op: 'count', groupBy: 'thkIn' }, { key: 'length', label: 'متراژ', unit: 'm', op: 'sum', fields: ['lengthM'], groupBy: 'thkIn' }] },
   { key: 'bend', title: 'گزارش روزانه خمکاری', en: 'Bending daily report', group: 'pipeline', kind: 'daily', sheet: 'bend', signers: ['contractor', 'supervision'],
     header: [f('machine', 'BEND MACHINE MODEL')],
