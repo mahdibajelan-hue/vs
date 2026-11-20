@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;function e(e){return`${e}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`}export{e as t};

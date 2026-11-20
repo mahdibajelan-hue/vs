@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;function e(e,t={}){let n=window.open(``,`_blank`);if(!n)return!1;if(n.document.open(),n.document.write(e),n.document.close(),t.print){let e=()=>{try{n.focus(),n.print()}catch{}};(n.document.fonts?.ready??Promise.resolve()).then(()=>setTimeout(e,t.delay??400))}return!0}export{e as t};
