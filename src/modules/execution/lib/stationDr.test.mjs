@@ -53,6 +53,15 @@ const k = reg.rows.find((r) => String(r[1].v).startsWith('K-101')); assert.equal
 const built = buildReport({ ...ctx, baselines: [], blines: [], cs }, day, typeOf('station_daily'), typeOf('station_daily').sections)
 assert.deepEqual(built.tables.map((t) => t.key), ['disciplines', 'locations', 'registers', 'narrative', 'crew', 'fleet'])
 
+// count columns (DR-591 «تعداد / حجم»): turbo-compressor foundations 3 of 3, lightning-rod foundations 4 of 6 (+1 today)
+const cctx = { ...ctx, activities: ctx.activities.map((a) => (a.id === 'a1' ? { ...a, unitCount: 3 } : a.id === 'a3' ? { ...a, unitCount: 6 } : a)),
+  lines: ctx.lines.map((l) => (l.id === 'l1' ? { ...l, detail: { count: 3 } } : l.id === 'l3' ? { ...l, detail: { count: 3 } } : l.id === 'l4' ? { ...l, detail: { count: 1 } } : l)) }
+const cl = drLocations(cctx, day)
+assert.equal(cl.head.length, 15); assert.equal(cl.head[4], 'تعداد کل')
+const t2 = cl.rows.find((r) => r[1].v === 'توربوکمپرسورها'), l2 = cl.rows.find((r) => r[1].v === 'فونداسیون صاعقه‌گیر')
+assert.equal(t2[4].v, 3); assert.equal(t2[6].v, 3); assert.equal(t2[12].v, 0); assert.equal(t2[14].v, '۹۷٫۴۲٪')
+assert.equal(l2[8].v, 1); assert.equal(l2[10].v, 4); assert.equal(l2[12].v, 2); assert.equal(l2[11].v, 141.5)
+
 // template
 assert.equal(CIVIL_LOCATIONS.length, 16)
 assert.ok(STATION_DR_TEMPLATE.length > 120)

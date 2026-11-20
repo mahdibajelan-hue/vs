@@ -19,6 +19,8 @@ export interface Activity {
   rowNo: string; spec: string; remark: string; chapterNo: string; bookId: string | null; parentActivityId: string | null; surchargePct: number | null
   /** pipeline | station in a hybrid project; null = the project's main scope */
   scope?: 'pipeline' | 'station' | null
+  /** how many units the row covers (e.g. 3 foundations) — the DR count columns; units done are entered as line detail.count */
+  unitCount?: number | null
 }
 export interface Baseline { id: string; projectId: string; version: number; status: 'draft' | 'approved'; reason: string; effectiveDate: string; createdAt: string; approvedAt: string | null }
 export interface BaselineLine { id: string; baselineId: string; activityId: string; itemNo: string; title: string; unit: string; baseQty: number; weight: number; unitPrice: number; weightGroup: string; active: boolean }

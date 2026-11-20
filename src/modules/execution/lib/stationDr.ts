@@ -23,17 +23,19 @@ const pctS = (x: number) => `${r2(x * 100).toLocaleString('fa-IR', { maximumFrac
 const inP = (d: string | null | undefined, p: Period) => !!d && d >= p.from && d <= p.to
 const before = (d: string | null | undefined, p: Period) => !!d && d < p.from
 
-interface QRow { activity: Activity; base: number; prev: number; period: number }
+interface QRow { activity: Activity; base: number; prev: number; period: number; cPrev: number; cPeriod: number }
 /** every active price-list row with its reported quantity before and in the period (reported = submitted, not rejected) */
 function quantities(c: DrCtx, p: Period): QRow[] {
   const work = new Map(c.reports.filter((r) => r.formKey === 'work' && isRegistered(r) && r.reportDate <= p.to).map((r) => [r.id, r]))
   const m = new Map<string, QRow>()
-  for (const a of c.activities) if (a.active) m.set(a.id, { activity: a, base: c.baseOf(a, p.to), prev: 0, period: 0 })
+  for (const a of c.activities) if (a.active) m.set(a.id, { activity: a, base: c.baseOf(a, p.to), prev: 0, period: 0, cPrev: 0, cPeriod: 0 })
   for (const l of c.lines) {
     const r = work.get(l.reportId); const x = l.activityId ? m.get(l.activityId) : undefined
     if (!r || !x) continue
     const v = lineValue(l, 'registered', c.employer)
-    if (r.reportDate < p.from) x.prev += v; else x.period += v
+    // units completed (e.g. foundations), entered on the line; a rejected line counts none
+    const n = l.status !== 'rejected' ? Number(l.detail?.count ?? 0) || 0 : 0
+    if (r.reportDate < p.from) { x.prev += v; x.cPrev += n } else { x.period += v; x.cPeriod += n }
   }
   return [...m.values()]
 }
@@ -66,8 +68,18 @@ export function drLocations(c: DrCtx, p: Period, discipline = ''): DrTable {
   for (const q of qs) { const a = byArea.get(q.activity.area) ?? []; a.push(q); byArea.set(q.activity.area, a) }
   const rows: Cell[][] = []
   let i = 0
-  for (const [area, list] of byArea) list.sort((a, b) => a.activity.sort - b.activity.sort).forEach((q, j) => rows.push([{ v: ++i, n: true }, { v: j === 0 ? area : '' }, { v: q.activity.title }, { v: q.activity.unit }, ...numRow(q.base, q.prev, q.period)]))
-  return { title: `احجام به تفکیک محل اجرا${discipline ? ` — ${discipline}` : ''}`, head: ['ردیف', 'محل اجرا', 'بسته کاری', 'واحد', ...HEAD_Q], rows }
+  // with unit counts (the site DR's «تعداد / حجم» pairs): count and volume side by side for total, before, today, to date, remaining
+  const counted = qs.some((q) => (q.activity.unitCount ?? 0) > 0 || q.cPrev + q.cPeriod > 0)
+  const cnt = (q: QRow): Cell[] => { const tot = q.activity.unitCount ?? 0, cum = q.cPrev + q.cPeriod; return [{ v: r2(tot), n: true }, { v: r2(q.cPrev), n: true }, { v: r2(q.cPeriod), n: true }, { v: r2(cum), n: true }, { v: tot ? r2(Math.max(0, tot - cum)) : '—', n: true }] }
+  for (const [area, list] of byArea) list.sort((a, b) => a.activity.sort - b.activity.sort).forEach((q, j) => {
+    const vol = numRow(q.base, q.prev, q.period)
+    const c = counted ? cnt(q) : null
+    rows.push([{ v: ++i, n: true }, { v: j === 0 ? area : '' }, { v: q.activity.title }, { v: q.activity.unit }, ...(c ? [c[0], vol[0], c[1], vol[1], c[2], vol[2], c[3], vol[3], c[4], vol[4], vol[5]] : vol)])
+  })
+  const head = counted
+    ? ['ردیف', 'محل اجرا', 'بسته کاری', 'واحد', 'تعداد کل', 'حجم کل', 'تعداد تا روز قبل', 'حجم تا روز قبل', 'تعداد امروز', 'حجم امروز', 'تعداد تا کنون', 'حجم تا کنون', 'تعداد باقیمانده', 'حجم باقیمانده', 'درصد پیشرفت']
+    : ['ردیف', 'محل اجرا', 'بسته کاری', 'واحد', ...HEAD_Q]
+  return { title: `احجام به تفکیک محل اجرا${discipline ? ` — ${discipline}` : ''}`, head, rows, note: counted ? 'تعداد کل از «تعداد اجزا»ی ردیف و تعداد انجام‌شده از ستون «تعداد» گزارش‌های روزانه.' : undefined }
 }
 
 /** the station registers in the DR's units: fit-up / welding in dia-inch, NDT joints, spools, hydrotest and equipment % */
