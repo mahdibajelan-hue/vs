@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useFormSlots } from './useFormSlots'
 import { Printer } from 'lucide-react'
 import { ModalPortal } from '../../../components/common/ModalPortal'
 import { fmtD } from '../../finance/components/fn'
@@ -15,7 +16,8 @@ import { TemplatePaper } from './TemplatePaper'
 import { useEpcStore } from '../store/useEpcStore'
 import { useExecutionStore } from '../store/useExecutionStore'
 import { paperChoice, printModeOf } from '../forms/printMode'
-import type { ReportSignature } from '../epcTypes'
+import type { FormTemplateRow, ReportSignature } from '../epcTypes'
+import { sheetSignCells } from '../forms/signBoxes'
 
 export interface PaperCtx {
   projectName: string; orgName: string; people: Map<string, string>
@@ -44,6 +46,7 @@ export function ReportPaper({ c }: { c: PaperCtx }) {
   useEffect(() => { if (letterhead === undefined) void useExecutionStore.getState().loadLetterhead(c.report.id) }, [letterhead, c.report.id])
   const settings = useExecutionStore((s) => s.settingsByProject.get(c.report.projectId))
   const [preview, setPreview] = useState(false)
+  const slotKeys = useFormSlots(c.report.projectId, c.report.formKey).map((x) => x.slotKey)
   const approved = c.form ? templates.find((t) => t.formKey === c.form!.key && t.status === 'approved') : undefined
   // the built-in paper stays the default for every form; the approved sheet is used only when the form was switched to template mode after its conformity was signed, or for an explicit experimental preview
   const choice = paperChoice({ mode: c.form ? printModeOf(settings, c.form.key) : 'legacy', hasApproved: !!approved, preview })
@@ -58,7 +61,7 @@ export function ReportPaper({ c }: { c: PaperCtx }) {
           </div>
         )}
         <TemplatePaper c={c} template={approved} note={experimental ? 'پیش‌نمایش آزمایشی — بایگانی رسمی نیست' : undefined} />
-        {!approved.bindings.some((b) => b.source.startsWith('sign:')) && <SignatureStrip signatures={c.signatures} />}
+        {!sheetCarriesSigns(approved, slotKeys) && <SignatureRow c={c} />}
       </>
     )
   }
@@ -71,8 +74,34 @@ export function ReportPaper({ c }: { c: PaperCtx }) {
       )}
       {letterhead === undefined
         ? <p className="im-helper" role="status" style={{ padding: 16 }}>در حال خواندن سربرگ گزارش…</p>
-        : <PaperFrame projectId={c.report.projectId} letterhead={letterhead}><ReportPaperBody c={c} /><SignatureStrip signatures={c.signatures} /></PaperFrame>}
+        : <PaperFrame projectId={c.report.projectId} letterhead={letterhead}><div className={slotKeys.length ? 'ex-has-slots' : undefined}><ReportPaperBody c={c} /><SignatureRow c={c} /></div></PaperFrame>}
     </>
+  )
+}
+/** the approved sheet holds every signature itself: bound «sign:» cells, or caption + empty box found on the sheet */
+export function sheetCarriesSigns(t: FormTemplateRow, slotKeys: string[]) {
+  if (!slotKeys.length) return t.bindings.some((b) => b.source.startsWith('sign:'))
+  const bound = new Set(t.bindings.filter((b) => b.source.startsWith('sign:')).map((b) => b.source.slice(5)))
+  return slotKeys.every((k) => bound.has(k)) || Object.keys(sheetSignCells(t.layout, slotKeys)).length === slotKeys.length
+}
+/** Every signature of the form in ONE row, in signing order (technical office · site manager · specialist supervisor · head of
+ *  supervision): each box carries the role, the person assigned and — once signed — the signature, name and date. Unsigned
+ *  boxes stay empty for a wet signature. A form without defined slots prints the signatures it has. */
+export function SignatureRow({ c }: { c: PaperCtx }) {
+  const slots = useFormSlots(c.report.projectId, c.report.formKey)
+  if (!slots.length) return <SignatureStrip signatures={c.signatures} />
+  return (
+    <div className="ex-sign-row" style={{ gridTemplateColumns: `repeat(${slots.length}, minmax(0, 1fr))` }}>
+      {slots.map((sl) => { const g = c.signatures?.find((x) => x.slotKey === sl.slotKey)
+        return (
+          <div key={sl.slotKey}>
+            <b dir="auto">{sl.label}</b>
+            <span className="ex-sign-img">{g && <img src={g.image} alt={`امضای ${g.userName}`} />}</span>
+            <span dir="auto">{g ? g.userName : sl.userId ? c.people.get(sl.userId) ?? '' : ''}</span>
+            <small>{g ? fmtD(g.signedAt.slice(0, 10)) : 'تاریخ و امضا'}</small>
+          </div>
+        ) })}
+    </div>
   )
 }
 /** electronic signatures printed in a row (used where the paper has no bound signature boxes) */
