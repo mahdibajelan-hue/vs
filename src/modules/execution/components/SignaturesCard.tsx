@@ -20,6 +20,9 @@ export function SignaturesCard({ report, dirty }: { report: Pick<Report, 'id' | 
   useEffect(() => { void useEpcStore.getState().loadSignatures(report.id) }, [report.id, report.status])
   if (slots.length === 0) return null
   const draftish = report.status === 'draft' || report.status === 'returned' || report.status === 'incomplete'
+  const sent = report.status === 'submitted' || report.status === 'partially_approved'
+  // the last required supervision-side slot: its signature is the final approval of the report
+  const finalKey = [...slots].reverse().find((x) => x.required && x.party !== 'contractor')?.slotKey
   return (
     <div className="im-card" style={{ padding: 12, display: 'grid', gap: 8 }}>
       <b>امضاها</b>
@@ -39,7 +42,8 @@ export function SignaturesCard({ report, dirty }: { report: Pick<Report, 'id' | 
                 {(sg.userId === me || isAdmin) && draftish && <button className="im-btn im-btn-sm" style={{ justifySelf: 'start' }} onClick={() => void epc.unsignReport(report.id, sl.slotKey)}><Undo2 size={12} /> لغو امضا</button>}
               </> : <>
                 <Chip tone="warn">امضا نشده</Chip>
-                {(mine || asAdmin) && <button className="im-btn im-btn-primary im-btn-sm" disabled={!prevOk || !!dirty || report.status === 'rejected'} title={!prevOk ? 'ابتدا امضاهای قبلی ثبت شود' : undefined} style={{ justifySelf: 'start' }} onClick={() => void epc.signReport(report.id, sl.slotKey)}><PenLine size={13} /> {asAdmin ? 'امضا به‌عنوان مدیر سامانه' : 'امضا با حساب من'}</button>}
+                {(mine || asAdmin) && sl.party !== 'contractor' && !sent && <small className="im-helper">پس از ارسال گزارش برای نظارت امضا می‌شود</small>}
+                {(mine || asAdmin) && (sl.party === 'contractor' || sent) && <button className="im-btn im-btn-primary im-btn-sm" disabled={!prevOk || !!dirty || report.status === 'rejected'} title={!prevOk ? 'ابتدا امضاهای قبلی ثبت شود' : sl.slotKey === finalKey ? 'ردیف‌های در انتظار، با همین امضا تأیید نهایی می‌شوند' : undefined} style={{ justifySelf: 'start' }} onClick={() => void epc.signReport(report.id, sl.slotKey)}><PenLine size={13} /> {sl.slotKey === finalKey && sl.party !== 'contractor' ? 'امضا و تأیید نهایی' : asAdmin ? 'امضا به‌عنوان مدیر سامانه' : 'امضا با حساب من'}</button>}
               </>}
             </div>
           )

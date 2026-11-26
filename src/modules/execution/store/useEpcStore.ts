@@ -6,7 +6,7 @@ import { supabase } from '../../../lib/supabaseClient'
 import { useSystemStore } from '../../../store/useSystemStore'
 import { explainExecutionError } from '../lib/errors'
 import { FORM_BY_KEY } from '../lib/formCatalog'
-import { desiredSlots, diffSlots, type SignRole } from '../lib/signRoles'
+import { desiredSlots, diffSlots, disciplineOf, type SignRole } from '../lib/signRoles'
 import { DEFAULT_ACTIONS, STATION_ACTIONS, type ActionField, type ActionRule, type WorkAction } from '../lib/workActions'
 import { mapPipe } from '../lib/registers'
 import type { Welder, WelderQual, Pipe } from '../lib/registers'
@@ -384,7 +384,8 @@ export const useEpcStore = create<State>((set, get) => ({
   },
   applySignRoles: async (projectId, roles) => {
     const existing = get().signSlots.filter((x) => x.projectId === projectId).map((x) => ({ id: x.id, formKey: x.formKey, slotKey: x.slotKey, label: x.label, party: x.party, userId: x.userId, sort: x.sort, required: x.required }))
-    const { upsert, remove } = diffSlots(existing, desiredSlots(roles))
+    const own = ((useExecutionStore.getState().settingsByProject.get(projectId) as unknown as { formDisc?: Record<string, string> } | undefined)?.formDisc) ?? {}
+    const { upsert, remove } = diffSlots(existing, desiredSlots(roles, (f) => disciplineOf(f, FORM_BY_KEY[f]?.group, own)))
     if (upsert.length) { const { error } = await supabase.from('ex_sign_slots').upsert(upsert.map((u) => ({ project_id: projectId, form_key: u.formKey, slot_key: u.slotKey, label: u.label, party: u.party, user_id: u.userId, sort: u.sort, required: u.required, active: true })), { onConflict: 'project_id,form_key,slot_key' }); if (fail('ذخیرهٔ نقش‌های امضا', error)) return false }
     if (remove.length) { const { error } = await supabase.from('ex_sign_slots').delete().in('id', remove); if (fail('حذف جایگاه‌های امضا', error)) return false }
     await get().fetchAll(); return true
@@ -401,8 +402,9 @@ export const useEpcStore = create<State>((set, get) => ({
   },
   signReport: async (reportId, slotKey) => {
     const { error } = await supabase.rpc('ex_report_sign', { p_report: reportId, p_slot: slotKey })
-    if (error) { const m = error.message; window.alert(/signature_required/.test(m) ? 'امضای نمونهٔ شما ثبت نشده است؛ ابتدا از پروفایل خود امضا را ثبت کنید.' : /previous_missing/.test(m) ? 'ابتدا امضاهای قبلیِ این فرم (به ترتیب) باید ثبت شود.' : /not_assignee/.test(m) ? 'این جایگاه امضا برای شما تعریف نشده است.' : /already_signed/.test(m) ? 'این جایگاه قبلاً امضا شده است.' : /bad_state/.test(m) ? 'در این وضعیت گزارش امضا ممکن نیست.' : `امضا ثبت نشد: ${m}`); return false }
-    await get().loadSignatures(reportId); return true
+    if (error) { const m = error.message; window.alert(/signature_required/.test(m) ? 'امضای نمونهٔ شما ثبت نشده است؛ ابتدا از پروفایل خود امضا را ثبت کنید.' : /previous_missing/.test(m) ? 'ابتدا امضاهای قبلیِ این فرم (به ترتیب) باید ثبت شود.' : /not_assignee/.test(m) ? 'این جایگاه امضا برای شما تعریف نشده است.' : /already_signed/.test(m) ? 'این جایگاه قبلاً امضا شده است.' : /not_sent_yet/.test(m) ? 'امضای نظارت پس از ارسال گزارش برای دستگاه نظارت ممکن است.' : /bad_state/.test(m) ? 'در این وضعیت گزارش امضا ممکن نیست.' : `امضا ثبت نشد: ${m}`); return false }
+    // the head of the supervision's signature approves the report: refresh its status and rows
+    await Promise.all([get().loadSignatures(reportId), useExecutionStore.getState().reloadReports([reportId])]); return true
   },
   unsignReport: async (reportId, slotKey) => {
     const { error } = await supabase.rpc('ex_report_unsign', { p_report: reportId, p_slot: slotKey })
