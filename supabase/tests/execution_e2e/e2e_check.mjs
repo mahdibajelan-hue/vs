@@ -4,7 +4,7 @@
 // correction, measurement, statement and permission flows through the same RPCs the app calls, as the right person.
 //
 // Run: node --disable-warning=ExperimentalWarning supabase/tests/execution_e2e/e2e_check.mjs > results.json
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { cumulative, physicalProgress } from '../../../src/modules/execution/lib/progress.ts'
 import { activityRows, resourceSummary, stoppageSummary } from '../../../src/modules/execution/lib/periodReport.ts'
 import { monthOf, periodsBetween } from '../../../src/modules/execution/lib/periods.ts'
@@ -14,7 +14,20 @@ const P = '7e570000-0000-4000-8000-0000000000e2'
 const U = { contractor: 'c0000000-0000-4000-8000-000000000001', site_head: 'c0000000-0000-4000-8000-000000000002', supervision: 'c0000000-0000-4000-8000-000000000003',
   consultant: 'c0000000-0000-4000-8000-000000000004', employer: 'c0000000-0000-4000-8000-000000000005', viewer: 'c0000000-0000-4000-8000-000000000006', admin: 'c0000000-0000-4000-8000-000000000007' }
 
-const psql = (sql) => execFileSync('docker', ['exec', '-i', 'farin-test', 'psql', '-h', 'localhost', '-U', 'supabase_admin', '-d', 'postgres', '-X', '-q', '-tA', '-v', 'ON_ERROR_STOP=1'], { input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+// Explicit local PostgreSQL socket for environments where Docker is unavailable.
+const localSocket = process.env.FARIN_TEST_PG_SOCKET
+if (localSocket && !localSocket.startsWith('/tmp/')) throw new Error('Expected an isolated PostgreSQL socket under /tmp')
+const psqlFlags = ['-U', 'supabase_admin', '-X', '-q', '-tA', '-v', 'ON_ERROR_STOP=1']
+const psqlCommand = () => {
+  const bin = localSocket ? 'psql' : 'docker'
+  const args = localSocket ? ['-h', localSocket, '-p', '5432', '-d', 'farin_pilot', ...psqlFlags]
+    : ['exec', '-i', 'farin-test', 'psql', '-h', 'localhost', '-d', 'postgres', ...psqlFlags]
+  return { bin, args }
+}
+const psql = (sql) => {
+  const { bin, args } = psqlCommand()
+  return execFileSync(bin, args, { input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+}
 const json = (q) => JSON.parse(psql(`select coalesce(json_agg(t), '[]') from (${q}) t;`) || '[]')
 /** the same, read as a signed-in person (functions that check the caller) */
 const jsonAs = (who, q) => JSON.parse(psql(`begin; set local role authenticated; select set_config('request.jwt.claims', '${JSON.stringify({ sub: U[who], role: 'authenticated' })}', true) \\g /dev/null\nselect coalesce(json_agg(t), '[]') from (${q}) t; commit;`).replace(/^[^[]*/, '') || '[]')
@@ -94,7 +107,7 @@ rec('S06', 'رد، کسر مقدار، برگشت و اصلاح با سابقه'
 
 // S7 — guards: over the contract quantity, duplicate line, permissions
 const repNew = '1e000000-0000-4000-8000-0000000000aa'
-as('site_head', `insert into ex_reports (id, project_id, form_key, report_date, front, status) values ('${repNew}', '${P}', 'work', '2026-10-26', 'جبهه ۳ (KP 20–30)', 'draft');
+as('site_head', `insert into ex_reports (id, project_id, form_key, report_date, front, status) values ('${repNew}', '${P}', 'work', '2026-11-02', 'جبهه ۳ (KP 20–30)', 'draft');
   insert into ex_report_lines (report_id, line_no, activity_id, qty, location) values ('${repNew}', 1, 'ac000000-0000-4000-8000-000000000001', 999999, 'آزمون سقف');`)
 const over = as('site_head', `select ex_report_submit('${repNew}');`)
 const dupId = json(`select r.id, l.activity_id, l.location from ex_reports r join ex_report_lines l on l.report_id = r.id where r.project_id = '${P}' and r.report_date = '2026-10-20' limit 1`)[0]
@@ -112,7 +125,7 @@ const supEdit = { ...supEditTry, ok: supEditTry.ok && json(`select approved_qty 
 const employerOff = as('employer', `select ex_report_employer_review('${appr.rid}', '[]'::jsonb);`)
 rec('S07', 'کنترل‌ها و دسترسی', 'مقدار بیش از پیمان، ردیف تکراری، بیننده، تأیید توسط پیمانکار، ویرایش گزارش تأییدشده', 'همه رد شوند',
   { overBase: over, duplicate: dup, viewerInsert: viewerIns, contractorApprove: contractorReview, editApprovedLine: editLocked, supervisionDirectEdit: supEdit, employerReviewAdvisoryEmpty: employerOff },
-  !over.ok && /exceeds_base/.test(over.error) && !dup.ok && /duplicate_line/.test(dup.error) && !viewerIns.ok && !contractorReview.ok && !editLocked.ok && !supEdit.ok)
+  !over.ok && /exceeds_base/.test(over.error) && !dup.ok && /duplicate_daily/.test(dup.error) && !viewerIns.ok && !contractorReview.ok && !editLocked.ok && !supEdit.ok)
 psql(`set session_replication_role = replica; delete from ex_report_lines where report_id in ('${repNew}','1e000000-0000-4000-8000-0000000000ab'); delete from ex_reports where id in ('${repNew}','1e000000-0000-4000-8000-0000000000ab');`)
 
 // S8 — correcting an approved report through the allowed path, and its effect on the weekly / monthly figures
@@ -222,8 +235,10 @@ rec('S14', 'اصلاح یک ردیف تأییدشده بدون بازگشایی 
 // S15 — the statements module (to finance) is checked against the same server basis (047)
 psql(`insert into fin_contracts (id, master_project_id, contract_number, title, contract_value, status) values ('fc000000-0000-4000-8000-000000000001', '${P}', 'TEST-C-01', 'قرارداد آزمون اجرا', 900000000000, 'active') on conflict do nothing;`)
 const basisAban = Object.fromEntries(jsonAs('consultant', `select activity_id, sys_qty, unit_price from ex_payable_basis('${P}', '2026-11-21')`).map((x) => [x.activity_id, x]))
-const lineOf = (k) => ({ source_kind: 'activity', source_id: wld.id, code: 'C-04', title: wld.title, unit: wld.unit, group_label: 'اجرا', unit_price: n(basisAban[wld.id].unit_price), base_qty: wld.baseQty, base_amount: 0, sys_cum_qty: n(basisAban[wld.id].sys_qty) * k, sys_cum_amount: 0, cum_amount: 0, prev_amount: 0, edited: false, note: '', detail: {} })
-const head = { contract_id: 'fc000000-0000-4000-8000-000000000001', part: 'C', period_key: 'M1405-08', period_from: '2026-10-23', period_to: '2026-11-21' }
+const approvedAmount = n(basisAban[wld.id].unit_price) * n(basisAban[wld.id].sys_qty)
+const lineOf = (k) => ({ source_kind: 'activity', source_id: wld.id, code: 'C-04', title: wld.title, unit: wld.unit, group_label: 'اجرا', unit_price: n(basisAban[wld.id].unit_price), base_qty: wld.baseQty, base_amount: 0, sys_cum_qty: n(basisAban[wld.id].sys_qty) * k, sys_cum_amount: approvedAmount * k, cum_amount: approvedAmount * k, prev_amount: 0, edited: false, note: '', detail: {} })
+const head = { contract_id: 'fc000000-0000-4000-8000-000000000001', part: 'C', period_key: 'M1405-08', period_from: '2026-10-23', period_to: '2026-11-21',
+  cum_sys: approvedAmount, cum_amount: approvedAmount, this_amount: approvedAmount, payable: approvedAmount }
 const saveF = as('admin', `select pst_save('${JSON.stringify(head)}'::jsonb, '${JSON.stringify([lineOf(2)])}'::jsonb);`)
 const sid = json(`select id from pst_statements where contract_id = 'fc000000-0000-4000-8000-000000000001' and voided_at is null`)[0]?.id
 const flag = json(`select sys_cum_qty, srv_qty, srv_ok from pst_lines where statement_id = '${sid}'`)
@@ -232,7 +247,31 @@ const saveOk = as('admin', `select pst_save('${JSON.stringify({ ...head, id: sid
 const subOk = as('admin', `select pst_set_status('${sid}', 'submitted', '');`)
 rec('S15', 'صورت‌وضعیت ماژول مالی با مبنای سرور سنجیده شود', 'خط جوشکاری با ۲ برابر مقدار، سپس مقدار درست', 'نسخهٔ جعلی قابل ارسال نباشد؛ نسخهٔ درست ارسال شود',
   { savedForged: saveF, lineCheck: flag, submitForged: subF, savedCorrect: saveOk, submitCorrect: subOk }, saveF.ok && flag[0] && flag[0].srv_ok === false && !subF.ok && /source_mismatch/.test(subF.error) && saveOk.ok && subOk.ok)
-psql(`set session_replication_role = replica; delete from pst_lines where statement_id in (select id from pst_statements where master_project_id = '${P}'); delete from pst_statements where master_project_id = '${P}'; delete from fin_contracts where id = 'fc000000-0000-4000-8000-000000000001';`)
+const helperAcl = json(`select has_function_privilege('authenticated', 'public.pst_certify_in_finance(uuid)', 'EXECUTE') as direct_execute`)[0]
+function approveInSession(statementId, holdLock = false) {
+  return new Promise((resolve, reject) => {
+    const { bin, args } = psqlCommand()
+    const child = spawn(bin, args, { stdio: ['pipe', 'ignore', 'pipe'] })
+    let error = ''
+    child.stderr.setEncoding('utf8').on('data', (chunk) => { error += chunk })
+    child.on('error', reject)
+    child.on('close', (code) => resolve({ ok: code === 0, error: error.trim() }))
+    child.stdin.end(`begin; set local role authenticated;
+      select set_config('request.jwt.claims', '${JSON.stringify({ sub: U.admin, role: 'authenticated' })}', true);
+      select pst_set_status('${statementId}', 'approved', '');
+      ${holdLock ? 'select pg_sleep(0.2);' : ''}
+      commit;`)
+  })
+}
+const [approveF, retryF] = await Promise.all([approveInSession(sid, true), approveInSession(sid)])
+const certificates = json(`select c.id, c.status, c.certified_amount, s.status as statement_status from fin_payment_certificates c join pst_statements s on s.fin_certificate_id = c.id where s.id = '${sid}'`)
+const payment = certificates[0] ? as('admin', `insert into fin_payments (certificate_id, payment_date, amount, reference_number) values ('${certificates[0].id}', '2026-11-25', ${approvedAmount}, 'SARAKHS-MASHHAD-PILOT');`) : { ok: false }
+const amounts = json(`select count(distinct c.id) as certificates, coalesce(sum(p.amount),0) as paid from fin_payment_certificates c left join fin_payments p on p.certificate_id = c.id where c.contract_id = '${head.contract_id}'`)[0]
+rec('S17', 'تأیید صورت‌وضعیت، اجرای مجدد و ثبت پرداخت در دفتر', 'صورت‌وضعیت اجرایی تأییدشده، یک تلاش مجدد و یک پرداخت ریالی', 'یک گواهی مصوب، مبلغ دفتر برابر با کارکرد مصوب و مجوز اجرای مستقیم محدود',
+  { helperAcl, approveF, retryF, certificates, payment, amounts }, !helperAcl.direct_execute && approveF.ok && retryF.ok && certificates[0]?.status === 'certified'
+    && certificates[0]?.statement_status === 'posted' && n(certificates[0]?.certified_amount) === approvedAmount && approvedAmount > 0
+    && payment.ok && n(amounts.certificates) === 1 && n(amounts.paid) === approvedAmount)
+psql(`set session_replication_role = replica; delete from fin_payments where reference_number = 'SARAKHS-MASHHAD-PILOT'; delete from pst_lines where statement_id in (select id from pst_statements where master_project_id = '${P}'); delete from pst_statements where master_project_id = '${P}'; delete from fin_payment_certificates where contract_id = '${head.contract_id}'; delete from fin_contracts where id = '${head.contract_id}';`)
 
 // S16 — issuing a report under document control (048): number, revision, superseded, check / approve rules
 const content = (x) => JSON.stringify({ html: '<p>آزمون</p>', rows: x })
@@ -258,3 +297,5 @@ rec('S16', 'صدور گزارش با کنترل مدرک (ISO)', 'صدور، ب�
 psql(`delete from ex_issued_docs where project_id = '${P}';`)
 
 console.log(JSON.stringify({ when: new Date().toISOString(), project: P, pass: results.filter((r) => r.pass).length, fail: results.filter((r) => !r.pass).length, results }, null, 1))
+
+if (results.some((r) => !r.pass)) process.exitCode = 1

@@ -16,6 +16,9 @@ begin
   if s.status is distinct from 'submitted' or s.fin_certificate_id is not null then
     raise exception 'bad_transition';
   end if;
+  if exists (select 1 from pst_lines l where l.statement_id = p_stmt and l.gen = s.gen and l.srv_ok is false) then
+    raise exception 'source_mismatch';
+  end if;
   d := s.deductions;
   insert into fin_payment_certificates (contract_id, certificate_number, certificate_date, gross_amount, retention_amount, advance_recovery_amount,
       tax_deduction, insurance_deduction, certified_amount, certified_by, certified_date, approved_by, approved_date, status, submitted_date, certificate_type, notes, created_by)
@@ -37,6 +40,9 @@ begin
   if s.id is null then raise exception 'not_found'; end if;
   if p_status = 'submitted' and s.status = 'draft' then
     if not coalesce(pst_can_write(s.master_project_id), false) then raise exception 'not_allowed' using errcode = '42501'; end if;
+    if exists (select 1 from pst_lines l where l.statement_id = p_stmt and l.gen = s.gen and l.srv_ok is false) then
+      raise exception 'source_mismatch';
+    end if;
     update pst_statements set status = 'submitted', submitted_by = auth.uid(), submitted_at = now() where id = p_stmt;
   elsif p_status = 'approved' and s.status in ('submitted', 'posted') then
     if not coalesce(pst_can_approve(s.master_project_id), false) then raise exception 'not_allowed' using errcode = '42501'; end if;
