@@ -159,6 +159,7 @@ export interface ContractSummary {
 }
 
 export interface RadarData {
+  metrics?: Partial<Record<import('./radarMetric').MetricKey, import('./radarMetric').MetricSource>>
   availability?: 'unconfigured' | 'empty' | 'partial' | 'error' | 'ready'
   hasProgress?: boolean
   hasPlan?: boolean

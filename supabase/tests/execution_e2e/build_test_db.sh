@@ -19,11 +19,12 @@ db supabase_admin < live_overrides.sql
 # every execution migration from 046 on (the post-audit ones), in number order
 for f in $(ls $ROOT/execution/[0-9][0-9][0-9]_*.sql 2>/dev/null | sort -V | awk -F/ '{ n = substr($NF, 1, 3) + 0; if (n >= 46) print }'); do docker exec -i farin-test psql -h localhost -U supabase_admin -d postgres -q -v ON_ERROR_STOP=1 < "$f" >/dev/null; done
 # Re-apply the roadmap scripts after the execution migrations they extend.
-for f in "$ROOT"/security/{002_project_scoped_records,003_private_lifecycle_evidence}.sql "$ROOT"/statements/007_serialized_approval.sql; do
+for f in "$ROOT"/security/{002_project_scoped_records,003_private_lifecycle_evidence}.sql "$ROOT"/statements/007_serialized_approval.sql "$ROOT"/finance/006_payment_ledger_summary.sql "$ROOT"/weldqc/009_joint_release.sql; do
   docker exec -i farin-test psql -h localhost -U supabase_admin -d postgres -q -v ON_ERROR_STOP=1 < "$f" >/dev/null
 done
 # hosted Supabase grants the signed-in role these on Storage; the plain test image does not
 docker exec farin-test psql -h localhost -U supabase_admin -d postgres -q -c "grant select, insert, update on storage.objects to authenticated; grant select on storage.buckets to authenticated;" >/dev/null
 python3 gen_scenario.py | docker exec -i farin-test psql -h localhost -U supabase_admin -d postgres -q -v ON_ERROR_STOP=1 >/dev/null
 docker exec -i farin-test psql -h localhost -U supabase_admin -d postgres -q -v ON_ERROR_STOP=1 < roadmap_access.sql
+docker exec -i farin-test psql -h localhost -U supabase_admin -d postgres -q -v ON_ERROR_STOP=1 < roadmap_release_payments.sql
 echo "test database ready: $(docker exec farin-test psql -h localhost -U postgres -d postgres -tAc "select count(*) from pg_tables where schemaname='public'") tables"

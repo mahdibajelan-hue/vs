@@ -1,3 +1,4 @@
+import { metricSource, type MetricKey, type MetricSource } from './radarMetric'
 /**
  * Real-data bridge for Project Radar. Radar started as a Phase-1 mock-only screen (see
  * radarTypes.ts) — this reuses each module's own existing data layer instead of re-implementing
@@ -299,7 +300,7 @@ interface CriticalCounts {
 
 /** Risk/Issue section: signals, KPI counts, and the "critical & active" counts the Lifecycle
  * readiness engine needs — returned alongside rather than smuggled through the RadarData shape. */
-async function applyRiskIssueSection(base: RadarData, masterProjectId: string): Promise<{ data: RadarData; criticalCounts: CriticalCounts; failed?: boolean }> {
+async function applyRiskIssueSection(base: RadarData, masterProjectId: string): Promise<{ data: RadarData; criticalCounts: CriticalCounts; failed?: boolean; riskMapped?: boolean; issueMapped?: boolean }> {
   const noCritical: CriticalCounts = { openCriticalRisks: 0, openCriticalIssues: 0 }
   try {
     const bundle = await fetchProjectIntelligence(masterProjectId)
@@ -342,7 +343,7 @@ async function applyRiskIssueSection(base: RadarData, masterProjectId: string): 
       kpi: { ...base.kpi, activeRisks, activeRisksHigh, openIssues, openIssuesHigh },
       signals: [...riskSignals, ...issueSignals, ...otherSignals],
     }
-    return { data, criticalCounts }
+    return { data, criticalCounts, riskMapped, issueMapped }
   } catch (err) {
     console.warn('[radar] risk/issue fetch failed', err)
     return { data: base, criticalCounts: noCritical, failed: true }
@@ -380,7 +381,7 @@ function applyScheduleSection(base: RadarData, s: ScheduleSummary): RadarData {
 /** the radar with nothing in it yet: what is shown while the modules are read, and the start of the live picture */
 export function blankRadarData(from: RadarData): RadarData {
   return {
-    ...from, live: false, availability: undefined, hasProgress: false, hasPlan: false, costIndex: null, scheduleIndex: null, status: 'nominal', signals: [], lifecycle: [], lifecycleOverallPct: 0, currentStageLabel: '—', nextGate: NO_GATE, epc: null, contract: null, schedule: null, healthDetail: null,
+    ...from, metrics: undefined, live: false, availability: undefined, hasProgress: false, hasPlan: false, costIndex: null, scheduleIndex: null, status: 'nominal', signals: [], lifecycle: [], lifecycleOverallPct: 0, currentStageLabel: '—', nextGate: NO_GATE, epc: null, contract: null, schedule: null, healthDetail: null,
     kpi: { health: 0, progressPlanned: 0, progressActual: 0, cpi: 0, spi: 0, qualityPct: 0, costPerformancePct: 0, costVariancePct: 0, activeRisks: 0, activeRisksHigh: 0, openIssues: 0, openIssuesHigh: 0, delayedActivities: 0, pendingChanges: 0, upcomingMilestones: 0 },
   }
 }
@@ -414,8 +415,12 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   const pSp = settle(spRadarOf(masterProjectId, todayTehran()))
   const pCr = settle(Promise.resolve(supabase.from('chg_change_requests').select('id, cr_number, title, status, priority, proposed_schedule_impact_days, proposed_change_amount').eq('master_project_id', masterProjectId).in('status', ['submitted', 'evaluating', 'awaiting_approval', 'returned'])))
 
-  const { data: afterRiskIssue, criticalCounts, failed: riskIssueFailed } = await applyRiskIssueSection(base, masterProjectId)
+  const { data: afterRiskIssue, criticalCounts, failed: riskIssueFailed, riskMapped, issueMapped } = await applyRiskIssueSection(base, masterProjectId)
   let result = afterRiskIssue
+  const readAt = todayTehran()
+  const metrics: Partial<Record<MetricKey, MetricSource>> = {}
+  metrics.risks = metricSource('مدیریت ریسک', riskMapped ? result.kpi.activeRisks : null, null, riskIssueFailed, readAt)
+  metrics.issues = metricSource('موانع و اقدامات', issueMapped ? result.kpi.openIssues : null, null, riskIssueFailed, readAt)
 
   // --- Lifecycle / Gate / EPC ------------------------------------------------
   let plcLive = false
@@ -463,20 +468,28 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
       lifecycleLive = true
       result = { ...result, lifecycle: sg.lifecycle, lifecycleOverallPct: sg.overallPct, currentStageLabel: sg.currentStageLabel, nextGate: sg.nextGate ?? result.nextGate }
       // time performance = the lifecycle's actual vs planned progress
-      if (sg.overallPct != null) result = { ...result, hasProgress: true, hasPlan: sg.overallPlannedPct != null, kpi: { ...result.kpi, progressActual: sg.overallPct, progressPlanned: sg.overallPlannedPct ?? 0 } }
+      metrics.gate = metricSource('چرخهٔ عمر · Stage-Gate', sg.nextGate, sg.asOf, false, readAt)
+      metrics.progress = metricSource('چرخهٔ عمر · Stage-Gate', sg.asOf || sg.epc.overall ? sg.overallPct : null, sg.asOf, false, readAt)
+      if (metrics.progress.state === 'ready' && sg.overallPct != null) result = { ...result, hasProgress: true, hasPlan: sg.overallPlannedPct != null, kpi: { ...result.kpi, progressActual: sg.overallPct, progressPlanned: sg.overallPlannedPct ?? 0 } }
     }
   } catch (err) {
-    console.warn('[radar] Stage-Gate fetch failed, keeping the previous lifecycle picture', err)
+    metrics.progress = metricSource('چرخهٔ عمر · Stage-Gate', null, null, true)
+    metrics.gate = metrics.progress
+    console.warn('[radar] Stage-Gate fetch failed', err)
   }
 
   // --- EPC (engineering / procurement / construction modules) -------------------
   try {
     epc ??= await val(pEpc)
     const dims = epcDimensions(epc)
-    if (dims) result = { ...result, epc: dims }
+    if (dims) {
+      metrics.epc = metricSource('پیشرفت مهندسی، تأمین و اجرا', dims, null, false, readAt)
+      result = { ...result, epc: dims }
+    }
     // a project outside Stage-Gate: its lifecycle picture is the EPC modules' own progress, never the mock
     if (!lifecycleLive && epc.overall) {
       const o = epc.overall
+      metrics.progress = metricSource('تجمیع پیشرفت EPC', o.actual, null, false, readAt)
       result = {
         ...result,
         lifecycle: (dims ?? []).map((d) => ({
@@ -493,6 +506,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
       lifecycleLive = true
     }
   } catch (err) {
+    metrics.epc = metricSource('پیشرفت مهندسی، تأمین و اجرا', null, null, true)
     console.warn('[radar] EPC modules fetch failed', err)
   }
   // nothing recorded for this project anywhere: show empty, not the mock picture
@@ -504,11 +518,17 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   try {
     const snap = await val(pSnap)
     if (snap) {
+      metrics.spi = metricSource('داشبورد پروژه · خط مبنای EPC', snap.evm.spi, snap.asOf)
+      metrics.cpi = metricSource('داشبورد پروژه · کارکرد تأییدشده', snap.evm.cpi, snap.asOf)
       // cost variance = the EPC contract's CPI − 1 (0 when nothing has been certified yet), never the mock figure
       result = { ...result, scheduleIndex: snap.evm.spi, costIndex: snap.evm.cpi, kpi: { ...result.kpi, cpi: snap.evm.cpi ?? 0, spi: snap.evm.spi ?? 0, costVariancePct: snap.evm.cpi == null ? 0 : Math.round((snap.evm.cpi - 1) * 100) } }
       const dims = epcDimensions(snap.epc)
-      if (dims) result = { ...result, epc: dims }
+      if (dims) {
+        metrics.epc = metricSource('پیشرفت مهندسی، تأمین و اجرا', dims, snap.asOf)
+        result = { ...result, epc: dims }
+      }
       if (snap.health) {
+        metrics.health = metricSource('داشبورد پروژه', snap.health.score, snap.asOf)
         result = {
           ...result, healthDetail: snap.health,
           // the verdict, not the averaged score, sets the status (see HealthGuide)
@@ -522,6 +542,8 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
       }
     }
   } catch (err) {
+    metrics.spi = metricSource('داشبورد پروژه · خط مبنای EPC', null, null, true)
+    metrics.cpi = metricSource('داشبورد پروژه · کارکرد تأییدشده', null, null, true)
     console.warn('[radar] project snapshot failed', err)
   }
 
@@ -529,8 +551,15 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   // dashboard health with its index/verdict when a snapshot exists (so radar and مرکز سلامت agree).
   try {
     const hc = await val(pHc)
-    if (hc) result = { ...result, healthDetail: hc, status: STATUS_OF_HEALTH[hc.status], kpi: { ...result.kpi, health: hc.score } }
+    if (hc) {
+      metrics.health = metricSource('مرکز سلامت پروژه', hc.score, hc.asOf)
+      const cost = hc.dims.find((d) => d.dimension === 'cost')
+      metrics.cost = metricSource('مرکز سلامت · بُعد هزینه', cost?.score, hc.asOf)
+      result = { ...result, healthDetail: hc, status: STATUS_OF_HEALTH[hc.status], kpi: { ...result.kpi, health: hc.score, costPerformancePct: cost?.score ?? result.kpi.costPerformancePct } }
+    }
   } catch (err) {
+    metrics.health ??= metricSource('مرکز سلامت پروژه', null, null, true)
+    metrics.cost = metricSource('مرکز سلامت · بُعد هزینه', null, null, true)
     console.warn('[radar] health-centre snapshot failed', err)
   }
 
@@ -555,8 +584,10 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   // --- Contract ---------------------------------------------------------------
   try {
     const contract = await val(pContract)
+    metrics.contract = metricSource('قراردادها و مالی', contract, null, false, readAt)
     if (contract) result = { ...result, contract }
   } catch (err) {
+    metrics.contract = metricSource('قراردادها و مالی', null, null, true)
     console.warn('[radar] contract fetch failed', err)
   }
 
@@ -564,6 +595,9 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   try {
     const sum = await val(pSched)
     if (sum) {
+      metrics.finish = metricSource('برنامه‌ریزی و کنترل زمان', sum.forecastFinish, sum.dataDate)
+      metrics.overdue = metricSource('برنامه‌ریزی و کنترل زمان', sum.overdue, sum.dataDate)
+      metrics.milestones = metricSource('برنامه‌ریزی و کنترل زمان', sum.milestones.length, sum.dataDate)
       result = applyScheduleSection(result, sum)
       const [rMin, rMax] = SEVERITY_RADIUS_RANGE.low
       const ms: RadarSignal[] = sum.milestones.slice(0, 8).map((m, i, arr) => ({
@@ -575,6 +609,9 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
       result = { ...result, schedule: sum, signals: [...result.signals.filter((x) => x.category !== 'milestone'), ...ms], kpi: { ...result.kpi, delayedActivities: sum.overdue, upcomingMilestones: sum.milestones.length } }
     }
   } catch (err) {
+    metrics.finish = metricSource('برنامه‌ریزی و کنترل زمان', null, null, true)
+    metrics.overdue = metrics.finish
+    metrics.milestones = metrics.finish
     console.warn('[radar] live schedule fetch failed', err)
   }
 
@@ -583,6 +620,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
     const { data: crs, error } = await val(pCr)
     if (error) throw error
     const open = (crs ?? []) as { id: string; cr_number: string; title: string | null; status: string; priority: string | null; proposed_schedule_impact_days: number | null }[]
+    metrics.changes = metricSource('مدیریت تغییرات', open.length, null, false, readAt)
     const sevOf = (p: string | null): SignalSeverity => (p === 'critical' ? 'critical' : p === 'high' ? 'high' : p === 'low' ? 'low' : 'medium')
     const STATUS: Record<string, string> = { submitted: 'ثبت‌شده', evaluating: 'در ارزیابی', awaiting_approval: 'در انتظار تصویب', returned: 'برگشت‌خورده' }
     const sig: RadarSignal[] = open.slice(0, 12).map((c, i, arr) => {
@@ -597,6 +635,7 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
     })
     result = { ...result, signals: [...result.signals.filter((x) => x.category !== 'change'), ...sig], kpi: { ...result.kpi, pendingChanges: open.length } }
   } catch (err) {
+    metrics.changes = metricSource('مدیریت تغییرات', null, null, true)
     console.warn('[radar] change requests failed', err)
   }
 
@@ -649,6 +688,20 @@ export async function buildRadarData(masterProjectId: string, projectName: strin
   const hasEvidence = Boolean(result.healthDetail || result.hasProgress || result.lifecycle.length || result.epc || result.contract || result.schedule || result.signals.length)
   return {
     ...result,
+    metrics: {
+      health: metricSource('مرکز سلامت پروژه', null, null),
+      cost: metricSource('مرکز سلامت · بُعد هزینه', null, null),
+      progress: metricSource('چرخهٔ عمر · Stage-Gate', null, null),
+      spi: metricSource('داشبورد پروژه · خط مبنای EPC', null, null),
+      cpi: metricSource('داشبورد پروژه · کارکرد تأییدشده', null, null),
+      finish: metricSource('برنامه‌ریزی و کنترل زمان', null, null),
+      overdue: metricSource('برنامه‌ریزی و کنترل زمان', null, null),
+      milestones: metricSource('برنامه‌ریزی و کنترل زمان', null, null),
+      gate: metricSource('چرخهٔ عمر · Stage-Gate', null, null),
+      contract: metricSource('قراردادها و مالی', null, null),
+      epc: metricSource('پیشرفت مهندسی، تأمین و اجرا', null, null),
+      ...metrics,
+    },
     live: true,
     availability: hasEvidence ? (failed ? 'partial' : 'ready') : (failed ? 'error' : 'empty'),
     status: escalateStatus(result.healthDetail ? result.status : 'nominal', result.signals),

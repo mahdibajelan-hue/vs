@@ -63,7 +63,8 @@ export function JointFile({ weld, onBack }: { weld: repo.QcWeld; onBack: () => v
   const cover = !placed && round === 0 ? coveredHours(accFilms.map((f) => f.segment)) : null
   const crewLack = crewShort(od ? od / 25.4 : null, Object.fromEntries(PASSES.map((p) => [p, [...new Set([...weld.stampsBy[p], ...row.crew.filter((c) => !c.removed && c.pass === p).map((c) => c.welderKey)])]])) as Record<'root' | 'hot' | 'fill' | 'cap', string[]>, st.crewMin)
   const ht = st.sections ?? []
-  const htSec = weld.tieKm != null ? ht.find((s) => weld.tieKm! >= s.kmFrom && weld.tieKm! <= s.kmTo) : undefined
+  const matchingSections = weld.tieKm != null ? ht.filter((s) => weld.tieKm! >= s.kmFrom && weld.tieKm! <= s.kmTo) : []
+  const htSec = matchingSections.length === 1 ? matchingSections[0] : undefined
   const aiRuns = films.filter((f) => f.ai)
 
   const coatApplied = !!weld.coat.fj || row.coatings.some((c) => c.kind === 'application')
@@ -239,9 +240,10 @@ export function JointFile({ weld, onBack }: { weld: repo.QcWeld; onBack: () => v
                 <li className={htSec?.failed ? 'is-bad' : htSec?.stage === 'accepted' ? 'is-ok' : ''}><b>آزمون هیدرواستاتیک</b><span>{hydro || (weld.tieKm == null ? 'کیلومتر این سرجوش ثبت نشده' : 'قطعهٔ آزمون شامل این کیلومتر تعریف نشده')}</span></li>
               </ul>
               <h4 className="wq-sub">تأییدهای شناسنامه</h4>
+              <p className="ps-meta">آزادسازی سرجوش با تأیید سرپرست نظارت، پس از پذیرش امضاشده NDT و پذیرش هیدروتست قطعهٔ همان سرجوش ثبت می‌شود.</p>
               <div className="wq-signs">{SIGN_ROLES.map(([k, label]) => { const g = joint?.signs?.[k], may = k === 'supervision_head' ? can.approve : can.edit; return (
                 <div key={k} className={g ? 'is-done' : ''}><b>{label}</b>{g ? <span>{g.name}<small>{faDate(g.at)}</small></span> : <small>امضا نشده</small>}
-                  {may && <button type="button" className="ps-btn" onClick={() => void st.run(`تأیید «${label}» ثبت شد`, () => repo.passportSign(weld.id, k, st.me()))}>{g ? 'تأیید دوباره' : 'تأیید می‌کنم'}</button>}
+                  {may && <button type="button" className="ps-btn" onClick={() => void st.run(`تأیید «${label}» ثبت شد`, () => repo.passportSign(weld.id, k, st.me()))}>{k === 'supervision_head' ? 'ثبت آزادسازی' : g ? 'تأیید دوباره' : 'تأیید می‌کنم'}</button>}
                   {g && can.configure && <button type="button" className="ps-x" aria-label={`برداشتن تأیید ${label}`} onClick={() => void st.run('تأیید برداشته شد', () => repo.passportSign(weld.id, k, null))}>×</button>}</div>
               ) })}</div>
               <p className="ps-meta">هر تأیید با نام کاربر و تاریخ روی فرم شناسنامه چاپ می‌شود؛ برای نسخهٔ کاغذی، جای امضا و مهر زیر هر نام خالی می‌ماند.</p>

@@ -9,7 +9,7 @@ type Row = Record<string, unknown>
 const s = (v: unknown) => (v == null ? '' : String(v))
 
 /** The Stage-Gate picture of a master project (through sg_projects.master_project_id); null when it has none. */
-export async function loadStageGateRadar(masterProjectId: string): Promise<(SgRadarSection & { epc: EpcProgress }) | null> {
+export async function loadStageGateRadar(masterProjectId: string): Promise<(SgRadarSection & { epc: EpcProgress; asOf: string | null }) | null> {
   // every project has a lifecycle — created on first use when missing
   const project = await ensureLifecycleProject(masterProjectId)
   if (!project) return null
@@ -20,11 +20,13 @@ export async function loadStageGateRadar(masterProjectId: string): Promise<(SgRa
     supabase.from('sg_lifecycle_criteria').select('id, phase_code').eq('is_active', true),
     supabase.from('sg_project_phase_items').select('phase_code, kind, item_id, status, updated_at, updated_by').eq('project_name', project),
     supabase.from('sg_lifecycle_gate_decisions').select('phase_code, decision, decided_at, decided_by').eq('project_name', project),
-    supabase.from('sg_project_lifecycle_phases').select('phase_code, gate_status, actual_start, actual_finish, planned_start, planned_finish, manual_actual_pct, weight_pct').eq('project_name', project),
+    supabase.from('sg_project_lifecycle_phases').select('phase_code, gate_status, actual_start, actual_finish, planned_start, planned_finish, manual_actual_pct, weight_pct, updated_at').eq('project_name', project),
     supabase.from('sg_lifecycle_schedule_items').select('id, phase_code, parent_id, weight_pct, manual_actual_pct').eq('project_name', project),
     supabase.from('sg_client_reports').select('*').eq('project_name', project).order('created_at', { ascending: false }).limit(1),
   ])
-  if (ph.error || !ph.data?.length) return null
+  const error = [ph, ob, out, cr, it, dc, pr, sc, rep].find((response) => response.error)?.error
+  if (error) throw error
+  if (!ph.data?.length) return null
   const num = (v: unknown) => (v == null ? null : Number(v))
   const clientReport = ((rep.data ?? []) as Row[])[0] ?? null
   const epc = await loadEpcProgress(masterProjectId, clientReport)
@@ -47,5 +49,11 @@ export async function loadStageGateRadar(masterProjectId: string): Promise<(SgRa
     decisions: ((dc.data ?? []) as Row[]).map((r) => ({ project, phase: s(r.phase_code), decision: s(r.decision), decidedAt: s(r.decided_at), decidedBy: r.decided_by ? s(r.decided_by) : null })),
     phaseRows: ((pr.data ?? []) as Row[]).map((r) => ({ project, phase: s(r.phase_code), gateStatus: r.gate_status ? s(r.gate_status) : null, actualStart: r.actual_start ? s(r.actual_start) : null, actualFinish: r.actual_finish ? s(r.actual_finish) : null, plannedFinish: r.planned_finish ? s(r.planned_finish) : null, manualPct: r.manual_actual_pct == null ? null : Number(r.manual_actual_pct) })),
   })
-  return sec && { ...sec, epc }
+  const asOf = [
+    ...((it.data ?? []) as Row[]).map((r) => s(r.updated_at)),
+    ...((pr.data ?? []) as Row[]).map((r) => s(r.updated_at)),
+    ...((dc.data ?? []) as Row[]).map((r) => s(r.decided_at)),
+    s(clientReport?.created_at),
+  ].filter(Boolean).sort().at(-1) ?? null
+  return sec && { ...sec, epc, asOf }
 }

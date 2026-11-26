@@ -1,3 +1,4 @@
+import { MetricProvenance } from './MetricProvenance'
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   Activity, AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, CheckCircle2, CircleAlert, Clock3, FileText, Flag, Gauge, HeartPulse,
@@ -117,7 +118,7 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
             </div>
           </div>
           <div className="rc-hero-status">
-            <span className="rc-status-pill"><HeartPulse size={15} aria-hidden /> {loading ? 'در حال خواندن…' : unavailable ? 'وضعیت پروژه در دسترس نیست' : hasCriticalGate ? 'مانع بحرانی راه‌اندازی' : hd ? VERDICT_FA[hd.status] : STATUS_LABEL_FA[data.status]}</span>
+            <span className="rc-status-pill"><HeartPulse size={15} aria-hidden /> {loading ? 'در حال خواندن…' : hasCriticalGate ? 'مانع بحرانی راه‌اندازی' : unavailable || (data.availability === 'partial' && data.status === 'nominal') ? 'وضعیت پروژه قابل تأیید نیست' : hd ? VERDICT_FA[hd.status] : STATUS_LABEL_FA[data.status]}</span>
             <HeartbeatBar status={data.status} color={statusColor} />
             {canSee('projectdashboard') && <button type="button" className="rc-btn is-ghost" onClick={() => go('projectdashboard')}><LayoutDashboard size={15} aria-hidden /> داشبورد پروژه</button>}
           </div>
@@ -129,35 +130,35 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
                 <button key={b.key} type="button" className={`rc-brief-i is-${b.tone}`} onClick={() => b.module && go(b.module)} disabled={!b.module || !canSee(b.module)}>
                   <i aria-hidden /><b>{b.title}</b><small>{b.detail}</small>{b.module && canSee(b.module) && <ArrowLeft size={13} aria-hidden />}
                 </button>
-              )) : <span className="rc-brief-i is-ok"><i aria-hidden /><b>همه‌چیز در محدودهٔ برنامه است</b><small>موردی که تصمیم شما را لازم داشته باشد ثبت نشده</small></span>}
+              )) : <span className={`rc-brief-i ${unavailable || data.availability === 'partial' ? 'is-watch' : 'is-ok'}`}><i aria-hidden /><b>{unavailable || data.availability === 'partial' ? 'پوشش داده کامل نیست' : 'موردی برای تصمیم ثبت نشده'}</b></span>}
             </div>
           )}
         </section>
 
         {/* ── pulse: health, progress, SPI, CPI, finish ── */}
         <section className="rc-pulse" aria-label="شاخص‌های اصلی">
-          <Tile i={0} accent={statusColor} label="سلامت پروژه" onClick={canSee('healthcenter') ? () => go('healthcenter') : undefined} extra={<HealthGuideButton health={hd} />}>
+          <Tile i={0} accent={statusColor} label="سلامت پروژه" meta={data.metrics?.health} loading={loading} onClick={canSee('healthcenter') ? () => go('healthcenter') : undefined} extra={<HealthGuideButton health={hd} />}>
             <div className="rc-health">
               <RcHoloRing v={loading ? 0 : k.health} color={statusColor} loading={loading || !hd} />
               <span className="rc-sub" style={{ color: statusColor }}>{hd ? `${VERDICT_FA[hd.status]}${hd.drivenBy ? ` · ${HEALTH_DIMENSION_LABEL_FA[hd.drivenBy]}` : ''}` : '—'}</span>
             </div>
           </Tile>
-          <Tile i={1} accent="#3b82f6" label="پیشرفت کل چرخهٔ عمر" onClick={canSee('stagegate') ? () => go('stagegate') : undefined}>
+          <Tile i={1} accent="#3b82f6" label="پیشرفت کل چرخهٔ عمر" meta={data.metrics?.progress} loading={loading} onClick={canSee('stagegate') ? () => go('stagegate') : undefined}>
             <b className="rc-big">{loading || !data.hasProgress ? '—' : pct(k.progressActual, 0)}</b>
             {data.hasProgress && <Progress actual={k.progressActual} planned={data.hasPlan ? k.progressPlanned : null} />}
             <span className="rc-sub">{data.hasPlan ? `برنامه ${pct(k.progressPlanned, 0)} · ${deltaFa(k.progressActual - k.progressPlanned)}` : 'برنامه ثبت نشده یا در دسترس نیست'}</span>
           </Tile>
-          <Tile i={2} accent="#14b8a6" label="شاخص عملکرد زمانی (SPI)" onClick={canSee('projectdashboard') ? () => go('projectdashboard') : undefined}>
+          <Tile i={2} accent="#14b8a6" label="شاخص عملکرد زمانی (SPI)" meta={data.metrics?.spi} loading={loading} onClick={canSee('projectdashboard') ? () => go('projectdashboard') : undefined}>
             <b className="rc-big" style={{ color: idxColor(k.spi, 'high') }}>{loading || data.scheduleIndex == null ? '—' : fa(data.scheduleIndex, 2)}</b>
-            <Meter v={k.spi || null} />
-            <span className="rc-sub">{!k.spi ? 'برنامه‌ای هنوز صفر است' : k.spi >= 1 ? `${fa((k.spi - 1) * 100)}٪ جلوتر از برنامه` : `${fa((1 - k.spi) * 100)}٪ عقب‌تر از برنامه`}</span>
+            <Meter v={data.scheduleIndex ?? null} />
+            <span className="rc-sub">{data.scheduleIndex == null ? '—' : k.spi >= 1 ? `${fa((k.spi - 1) * 100)}٪ جلوتر از برنامه` : `${fa((1 - k.spi) * 100)}٪ عقب‌تر از برنامه`}</span>
           </Tile>
-          <Tile i={3} accent="#f59e0b" label="شاخص عملکرد هزینه (CPI)" onClick={canSee('projectdashboard') ? () => go('projectdashboard') : undefined}>
+          <Tile i={3} accent="#f59e0b" label="شاخص عملکرد هزینه (CPI)" meta={data.metrics?.cpi} loading={loading} onClick={canSee('projectdashboard') ? () => go('projectdashboard') : undefined}>
             <b className="rc-big" style={{ color: idxColor(k.cpi, 'high') }}>{loading || data.costIndex == null ? '—' : fa(data.costIndex, 2)}</b>
-            <Meter v={k.cpi || null} />
-            <span className="rc-sub">{!k.cpi ? 'کارکرد تأییدشده‌ای ثبت نشده' : `هر ریال هزینه ${fa(k.cpi, 2)} ریال ارزش کسب کرده`}</span>
+            <Meter v={data.costIndex ?? null} />
+            <span className="rc-sub">{data.costIndex == null ? '—' : `هر ریال هزینه ${fa(k.cpi, 2)} ریال ارزش کسب کرده`}</span>
           </Tile>
-          <Tile i={4} accent="#8b5cf6" label="پایان پیش‌بینی‌شده" onClick={canSee('scheduling') ? () => go('scheduling') : undefined}>
+          <Tile i={4} accent="#8b5cf6" label="پایان پیش‌بینی‌شده" meta={data.metrics?.finish} loading={loading} onClick={canSee('scheduling') ? () => go('scheduling') : undefined}>
             <FinishTile data={data} />
           </Tile>
         </section>
@@ -209,7 +210,7 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
 
         {/* ── lifecycle + EPC ── */}
         <section className="rc-card rc-life rc-in" style={{ '--d': '240ms' } as CSSProperties}>
-          <header className="rc-card-head"><b><Route size={16} aria-hidden /> چرخهٔ عمر پروژه</b><small>کل {pct(data.lifecycleOverallPct ?? k.progressActual, 0)} · برنامه {pct(k.progressPlanned, 0)}</small>
+          <header className="rc-card-head"><b><Route size={16} aria-hidden /> چرخهٔ عمر پروژه</b><small>کل {data.hasProgress ? pct(k.progressActual, 0) : '—'} · برنامه {data.hasPlan ? pct(k.progressPlanned, 0) : '—'}</small>
             {canSee('stagegate') && <button type="button" className="rc-link" onClick={() => go('stagegate')}>Stage-Gate <ArrowLeft size={13} aria-hidden /></button>}</header>
           {data.lifecycle.length ? (
             <ol className="rc-rail">
@@ -222,7 +223,8 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
                 </li>
               ))}
             </ol>
-          ) : <p className="rc-empty">{loading ? 'در حال خواندن…' : 'چرخهٔ عمر یا برنامهٔ EPC برای این پروژه ثبت نشده است.'}</p>}
+          ) : <p className="rc-empty">{loading ? 'در حال خواندن…' : data.metrics?.progress?.state === 'error' ? 'خواندن چرخهٔ عمر ناموفق بود.' : 'جزئیات مراحل برای این پروژه ثبت نشده است.'}</p>}
+          <MetricProvenance meta={data.metrics?.epc} loading={loading} />
           {data.epc && (
             <div className="rc-epc">
               {data.epc.map((d) => {
@@ -242,7 +244,8 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
         <section className="rc-row rc-row-3">
           <article className="rc-card rc-in" style={{ '--d': '280ms' } as CSSProperties}>
             <header className="rc-card-head"><b><Flag size={16} aria-hidden /> گیت بعدی</b>{canSee('stagegate') && <button type="button" className="rc-link" onClick={() => go('stagegate')}>جزئیات <ArrowLeft size={13} aria-hidden /></button>}</header>
-            {data.nextGate.prerequisites || data.nextGate.readinessPct ? <>
+            <MetricProvenance meta={data.metrics?.gate} loading={loading} />
+            {data.metrics?.gate?.state === 'ready' ? <>
               <div className="rc-gate">
                 <Ring v={data.nextGate.readinessPct} color={data.nextGate.failed ? '#ef4444' : data.nextGate.readinessPct >= 80 ? '#22c55e' : '#f59e0b'} label={pct(data.nextGate.readinessPct, 0)} />
                 <div><b className="rc-gate-name">{data.nextGate.name}</b><span className="rc-sub">آمادگی برای عبور از گیت</span></div>
@@ -251,26 +254,28 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
                 <span><b>{fa(data.nextGate.prerequisites)}</b>پیش‌نیاز</span><span className="is-ok"><b>{fa(data.nextGate.passed)}</b>تأییدشده</span>
                 <span className="is-warn"><b>{fa(data.nextGate.pending)}</b>در انتظار</span><span className="is-bad"><b>{fa(data.nextGate.failed)}</b>ردشده</span>
               </div>
-            </> : <p className="rc-empty">{loading ? 'در حال خواندن…' : 'گیتی برای این پروژه ثبت نشده است.'}</p>}
+            </> : <p className="rc-empty">{loading ? 'در حال خواندن…' : data.metrics?.gate?.state === 'error' ? 'خواندن گیت ناموفق بود.' : 'گیتی برای این پروژه ثبت نشده است.'}</p>}
           </article>
 
           <article className="rc-card rc-in" style={{ '--d': '320ms' } as CSSProperties}>
             <header className="rc-card-head"><b><Wallet size={16} aria-hidden /> قرارداد اصلی</b>{canSee('finance') && <button type="button" className="rc-link" onClick={() => go('finance')}>مالی <ArrowLeft size={13} aria-hidden /></button>}</header>
-            {data.contract ? <ContractBody c={data.contract} /> : <p className="rc-empty">{loading ? 'در حال خواندن…' : 'قراردادی برای این پروژه در ماژول مالی ثبت نشده است.'}</p>}
+            <MetricProvenance meta={data.metrics?.contract} loading={loading} />
+            {data.contract ? <ContractBody c={data.contract} /> : <p className="rc-empty">{loading ? 'در حال خواندن…' : data.metrics?.contract?.state === 'error' ? 'خواندن قرارداد ناموفق بود.' : 'قراردادی برای این پروژه ثبت نشده است.'}</p>}
           </article>
 
           <article className="rc-card rc-in" style={{ '--d': '360ms' } as CSSProperties}>
             <header className="rc-card-head"><b><Gauge size={16} aria-hidden /> پایش</b></header>
             <div className="rc-watch">
-              <Count icon={ShieldAlert} color="#f43f5e" label="ریسک فعال" v={k.activeRisks} sub={k.activeRisksHigh ? `${fa(k.activeRisksHigh)} بالا یا بحرانی` : undefined} onClick={() => go('risk')} />
-              <Count icon={CircleAlert} color="#a78bfa" label="مسئلهٔ باز" v={k.openIssues} sub={k.openIssuesHigh ? `${fa(k.openIssuesHigh)} بالا یا بحرانی` : undefined} onClick={() => go('taskissue')} />
-              <Count icon={Clock3} color="#f59e0b" label="فعالیت عقب‌افتاده" v={k.delayedActivities} sub={data.schedule?.criticalOverdue ? `${fa(data.schedule.criticalOverdue)} روی مسیر بحرانی` : undefined} onClick={() => go('scheduling')} />
-              <Count icon={RefreshCw} color="#38bdf8" label="تغییر در انتظار تصمیم" v={k.pendingChanges} onClick={() => go('change')} />
+              <Count icon={ShieldAlert} color="#f43f5e" label="ریسک فعال" meta={data.metrics?.risks} loading={loading} v={k.activeRisks} sub={k.activeRisksHigh ? `${fa(k.activeRisksHigh)} بالا یا بحرانی` : undefined} onClick={() => go('risk')} />
+              <Count icon={CircleAlert} color="#a78bfa" label="مسئلهٔ باز" meta={data.metrics?.issues} loading={loading} v={k.openIssues} sub={k.openIssuesHigh ? `${fa(k.openIssuesHigh)} بالا یا بحرانی` : undefined} onClick={() => go('taskissue')} />
+              <Count icon={Clock3} color="#f59e0b" label="فعالیت عقب‌افتاده" meta={data.metrics?.overdue} loading={loading} v={k.delayedActivities} sub={data.schedule?.criticalOverdue ? `${fa(data.schedule.criticalOverdue)} روی مسیر بحرانی` : undefined} onClick={() => go('scheduling')} />
+              <Count icon={RefreshCw} color="#38bdf8" label="تغییر در انتظار تصمیم" meta={data.metrics?.changes} loading={loading} v={k.pendingChanges} onClick={() => go('change')} />
             </div>
             <div className="rc-ms">
-              <span className="rc-ms-head"><CalendarClock size={14} aria-hidden /> نقاط عطف ۳۰ روز آینده <i>{fa(k.upcomingMilestones)}</i></span>
+              <span className="rc-ms-head"><CalendarClock size={14} aria-hidden /> نقاط عطف ۳۰ روز آینده <i>{data.metrics?.milestones?.state === 'ready' ? fa(k.upcomingMilestones) : '—'}</i></span>
               {data.schedule?.milestones?.length ? <ul>{data.schedule.milestones.slice(0, 4).map((m) => <li key={m.code + m.date}><span className={m.critical ? 'is-crit' : ''}>{m.name}</span><small>{jd(m.date)}</small></li>)}</ul>
-                : <small className="rc-sub">{loading ? 'در حال خواندن…' : 'نقطهٔ عطفی در ۳۰ روز آینده نیست.'}</small>}
+                : <small className="rc-sub">{loading ? 'در حال خواندن…' : data.metrics?.milestones?.state === 'ready' ? 'نقطهٔ عطفی در ۳۰ روز آینده نیست.' : '—'}</small>}
+              <MetricProvenance meta={data.metrics?.milestones} loading={loading} />
             </div>
           </article>
         </section>
@@ -285,11 +290,12 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
 }
 
 // ── pieces ──────────────────────────────────────────────────────────────────
-function Tile({ i, accent, label, children, onClick, extra }: { i: number; accent: string; label: string; children: ReactNode; onClick?: () => void; extra?: ReactNode }) {
+function Tile({ i, accent, label, children, onClick, extra, meta, loading }: { i: number; accent: string; label: string; children: ReactNode; onClick?: () => void; extra?: ReactNode; meta?: import('./radarMetric').MetricSource; loading?: boolean }) {
   return (
     <article className={`rc-tile rc-in${onClick ? ' is-link' : ''}`} style={{ '--ac': accent, '--d': `${i * 40}ms` } as CSSProperties}>
       <div className="rc-tile-head"><span>{label}</span>{extra}</div>
       {children}
+      <MetricProvenance meta={meta} loading={loading} />
       {onClick && <button type="button" className="rc-tile-hit" onClick={onClick} aria-label={`باز کردن ${label}`} />}
     </article>
   )
@@ -353,7 +359,7 @@ function Meter({ v }: { v: number | null }) {
 const deltaFa = (d: number) => (Math.abs(d) < 0.5 ? 'طبق برنامه' : d > 0 ? `${fa(d, 1)}٪ جلوتر` : `${fa(-d, 1)}٪ عقب‌تر`)
 function FinishTile({ data }: { data: RadarData }) {
   const s = data.schedule
-  if (!s) return <><b className="rc-big">—</b><span className="rc-sub">{data.live ? 'برنامهٔ زمان‌بندی تأییدشده‌ای ثبت نشده' : 'در حال خواندن…'}</span></>
+  if (!s) return <><b className="rc-big">—</b><span className="rc-sub">{data.live ? '—' : 'در حال خواندن…'}</span></>
   const ref = s.revisedFinish ?? s.contractFinish
   const late = s.contractorDelay ?? (s.baselineSlip ?? 0)
   return (
@@ -381,11 +387,11 @@ function ContractBody({ c }: { c: NonNullable<RadarData['contract']> }) {
     </div>
   )
 }
-function Count({ icon: I, color, label, v, sub, onClick }: { icon: LucideIcon; color: string; label: string; v: number; sub?: string; onClick: () => void }) {
+function Count({ icon: I, color, label, v, sub, onClick, meta, loading }: { meta?: import('./radarMetric').MetricSource; loading?: boolean; icon: LucideIcon; color: string; label: string; v: number; sub?: string; onClick: () => void }) {
   return (
     <button type="button" className="rc-count" style={{ '--cc': color } as CSSProperties} onClick={onClick}>
       <span className="rc-count-ico"><I size={15} aria-hidden /></span>
-      <span className="rc-count-body"><small>{label}</small><b>{fa(v)}</b>{sub && <em>{sub}</em>}</span>
+      <span className="rc-count-body"><small>{label}</small><b>{!loading && meta?.state === 'ready' ? fa(v) : '—'}</b>{!loading && meta?.state === 'ready' && sub && <em>{sub}</em>}<MetricProvenance meta={meta} loading={loading} /></span>
     </button>
   )
 }
