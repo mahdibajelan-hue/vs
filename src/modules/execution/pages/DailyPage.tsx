@@ -49,7 +49,7 @@ export function DailyPage({ projectId, sub, scope = 'execution' }: { projectId: 
   if (isWork && scope === 'execution') return (
     <div style={{ display: 'grid', gap: 14 }}>
       <DayView model={m} canRecord={canRecord} onOpen={setOpen} onCreate={(k, d, f) => void create(k, d, f)} />
-      <details className="im-card" style={{ padding: '10px 14px' }}><summary style={{ cursor: 'pointer', fontWeight: 700 }}>بایگانی گزارش‌های کارکرد روزانه ({fa(rows.length)})</summary>
+      <details className="im-card" style={{ padding: '10px 14px' }}><summary style={{ cursor: 'pointer', fontWeight: 700 }}>بایگانی گزارش‌های وضعیت کارگاه ({fa(rows.length)})</summary>
         <div style={{ marginTop: 10 }}>{rows.length === 0 ? <Empty>گزارشی ثبت نشده است.</Empty> : <DataTable cols={archiveCols} rows={rows} rowKey={(r) => r.id} onRow={(r) => setOpen(r.id)} />}</div>
       </details>
     </div>

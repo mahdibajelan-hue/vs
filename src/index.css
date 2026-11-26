@@ -2218,3 +2218,13 @@ select option {
 @media (min-width: 1024px) and (max-height: 820px) {
   .launchpad-frame.is-authed { padding-top: 0.75rem; padding-bottom: 0.75rem; }
 }
+
+/* Jalali date picker on a phone: a bottom sheet over a dimmed page, with finger-sized days */
+.jdi-backdrop { position: fixed; inset: 0; z-index: 999; background: rgba(2, 6, 23, .55); }
+.jdi-sheet { position: fixed; z-index: 1000; left: 50%; bottom: 0; transform: translateX(-50%); width: min(420px, 100vw); max-height: 85dvh; overflow: auto;
+  border-radius: 18px 18px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); animation: jdi-up .22s cubic-bezier(.23, 1, .32, 1); }
+.jdi-sheet .jdi-day { padding-block: 10px; font-size: 14px; }
+.jdi-sheet button { min-height: 36px; }
+.jdi-close { display: block; width: 100%; margin-top: 10px; padding: 10px; border-radius: 12px; border: 1px solid var(--border, rgba(148, 163, 184, .3)); background: transparent; color: inherit; font: inherit; }
+@keyframes jdi-up { from { transform: translate(-50%, 24px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .jdi-sheet { animation: none; } }

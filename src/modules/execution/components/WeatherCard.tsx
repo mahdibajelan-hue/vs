@@ -23,39 +23,51 @@ const GROUND: Opt[] = [
   { value: 'snow', label: 'برف‌گیر', icon: Layers, color: '#cbd5e1' },
 ]
 
-function Pills({ opts, value, onPick, disabled, label }: { opts: Opt[]; value: string; onPick: (v: string) => void; disabled: boolean; label: string }) {
+function Pills({ opts, value, onPick, disabled, label, size = 18 }: { opts: Opt[]; value: string; onPick: (v: string) => void; disabled: boolean; label: string; size?: number }) {
   return (
     <div className="wx-pills" role="radiogroup" aria-label={label}>
       {opts.map((o) => { const I = o.icon, on = o.value === value; return (
         <button key={o.value} type="button" role="radio" aria-checked={on} disabled={disabled} className={`wx-pill${on ? ' on' : ''}`} style={{ ['--c' as string]: o.color }} onClick={() => onPick(on ? '' : o.value)} title={o.label}>
-          <I size={20} strokeWidth={1.8} /><span>{o.label}</span>
+          <I size={size} strokeWidth={1.8} /><span>{o.label}</span>
         </button>
       ) })}
     </div>
   )
 }
 
-/** Weather and site conditions of the day as big icon buttons: one tap each, numbers only for temperature, humidity and useful hours. */
+/** The day's weather and site condition in three compact boxes: the sky (one tap, drawn as a small scene), the numbers
+ *  (temperature, humidity, useful hours) and the site / ground state. */
 export function WeatherCard({ data, editable, onChange }: { data: Record<string, unknown>; editable: boolean; onChange: (k: string, v: unknown) => void }) {
   const num = (k: string) => Number(data[k]) || 0
+  const w = WEATHER_OPTS.find((x) => x.value === String(data.weather ?? ''))
+  const Big = w?.icon ?? CloudSun
+  const stat = (k: string, label: string, unit: string, I: LucideIcon, c: string) => (
+    <label className="wx-stat" style={{ ['--c' as string]: c }}>
+      <I size={16} aria-hidden /><span>{label}</span>
+      <span className="wx-stat-in"><DecInput value={num(k)} onValue={(n) => editable && onChange(k, n)} label={label} /><em>{unit}</em></span>
+    </label>
+  )
   return (
     <div className="wx-card">
-      <div className="wx-row">
-        <span className="wx-cap">هوا</span>
-        <Pills opts={WEATHER_OPTS} value={String(data.weather ?? '')} onPick={(v) => onChange('weather', v)} disabled={!editable} label="وضعیت هوا" />
-      </div>
-      <div className="wx-nums">
-        <label className="wx-num" style={{ ['--c' as string]: '#f59e0b' }}><ThermometerSun size={18} /><span>بیشینه</span><DecInput value={num('tempMax')} onValue={(n) => editable && onChange('tempMax', n)} label="بیشینهٔ دما" /><em>°C</em></label>
-        <label className="wx-num" style={{ ['--c' as string]: '#38bdf8' }}><ThermometerSnowflake size={18} /><span>کمینه</span><DecInput value={num('tempMin')} onValue={(n) => editable && onChange('tempMin', n)} label="کمینهٔ دما" /><em>°C</em></label>
-        <label className="wx-num" style={{ ['--c' as string]: '#22d3ee' }}><Droplets size={18} /><span>رطوبت</span><DecInput value={num('humidity')} onValue={(n) => editable && onChange('humidity', n)} label="رطوبت" /><em>٪</em></label>
-        <label className="wx-num" style={{ ['--c' as string]: '#a78bfa' }}><Clock size={18} /><span>ساعت کار مفید</span><DecInput value={num('usefulHours')} onValue={(n) => editable && onChange('usefulHours', n)} label="ساعت کار مفید" /><em>h</em></label>
-      </div>
-      <div className="wx-row">
-        <span className="wx-cap">کارگاه</span>
-        <Pills opts={SITE} value={String(data.siteStatus ?? '')} onPick={(v) => onChange('siteStatus', v)} disabled={!editable} label="وضعیت کارگاه" />
-        <span className="wx-cap">زمین</span>
-        <Pills opts={GROUND} value={String(data.groundStatus ?? '')} onPick={(v) => onChange('groundStatus', v)} disabled={!editable} label="وضعیت زمین" />
-      </div>
+      <section className={`wx-sky wx-sky-${w?.value ?? 'none'}`}>
+        <div className="wx-sky-now"><Big size={44} strokeWidth={1.5} aria-hidden /><div><small>وضعیت هوا</small><b>{w?.label ?? 'انتخاب کنید'}</b>{(data.tempMin != null || data.tempMax != null) && <span className="num">{num('tempMin').toLocaleString('fa-IR')}° تا {num('tempMax').toLocaleString('fa-IR')}°</span>}</div></div>
+        <Pills opts={WEATHER_OPTS} value={String(data.weather ?? '')} onPick={(v) => onChange('weather', v)} disabled={!editable} label="وضعیت هوا" size={17} />
+      </section>
+      <section className="wx-box">
+        <h4>دما، رطوبت و ساعت کار</h4>
+        <div className="wx-stats">
+          {stat('tempMin', 'کمینه', '°C', ThermometerSnowflake, '#38bdf8')}
+          {stat('tempMax', 'بیشینه', '°C', ThermometerSun, '#f59e0b')}
+          {stat('humidity', 'رطوبت', '٪', Droplets, '#22d3ee')}
+          {stat('usefulHours', 'کار مفید', 'ساعت', Clock, '#a78bfa')}
+        </div>
+      </section>
+      <section className="wx-box">
+        <h4>کارگاه</h4>
+        <Pills opts={SITE} value={String(data.siteStatus ?? '')} onPick={(v) => onChange('siteStatus', v)} disabled={!editable} label="وضعیت کارگاه" size={15} />
+        <h4>زمین</h4>
+        <Pills opts={GROUND} value={String(data.groundStatus ?? '')} onPick={(v) => onChange('groundStatus', v)} disabled={!editable} label="وضعیت زمین" size={15} />
+      </section>
     </div>
   )
 }

@@ -27,7 +27,7 @@ type Sub = { id: string; label: string }
 const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[]; only?: 'pipeline' | 'station' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
   { id: 'station', label: 'ایستگاه: پایپینگ، تجهیزات، تست‌پک', icon: Factory, color: '#6366f1', only: 'station', subs: [{ id: 'dash', label: 'خلاصهٔ ایستگاه' }, { id: 'lines', label: 'لاین‌ها و اسپول‌ها' }, { id: 'welds', label: 'سرجوش‌ها (اینچ‌قطر)' }, { id: 'equipment', label: 'نصب تجهیزات' }, { id: 'packs', label: 'تست‌پک‌ها' }, { id: 'qc', label: 'کنترل کیفیت (B31.8 / IGS)' }, { id: 'twin', label: 'دوقلوی دیجیتال (پلات‌پلن)' }] },
-  { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'گزارش روز (کارکرد و صورتجلسات)' }, { id: 'forms', label: 'بایگانی صورتجلسات کارگاهی' }, { id: 'designed', label: 'فرم‌های طراحی‌شده' }, { id: 'today', label: 'امروز در کارگاه' }] },
+  { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'گزارش روز (وضعیت کارگاه و صورتجلسات)' }, { id: 'forms', label: 'بایگانی صورتجلسات کارگاهی' }, { id: 'designed', label: 'فرم‌های طراحی‌شده' }, { id: 'today', label: 'امروز در کارگاه' }] },
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
   { id: 'welds', label: 'سرجوش‌ها (پروندهٔ جوش)', icon: Flame, color: '#f43f5e', only: 'pipeline' },
   { id: 'progress', label: 'پیشرفت فیزیکی', icon: TrendingUp, color: '#14b8a6' },

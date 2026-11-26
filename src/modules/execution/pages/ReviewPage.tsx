@@ -69,7 +69,7 @@ export function ReviewPage({ projectId }: { projectId: string }) {
   const cols: Col<Report>[] = [
     ...(canBulk ? [{ key: 'sel', label: '', render: (r: Report) => (clean.has(r.id) ? <input type="checkbox" checked={sel.has(r.id)} onClick={(e) => e.stopPropagation()} onChange={(e) => setSel((x) => { const n = new Set(x); if (e.target.checked) n.add(r.id); else n.delete(r.id); return n })} aria-label={`انتخاب ${r.reportNo}`} /> : <span className="sub" title="ردیفی از این گزارش نیازمند بررسی دقیق است">بررسی دقیق</span>) } as Col<Report>] : []),
     { key: 'n', label: 'شماره', render: (r) => <span className="strong fn-code">{r.reportNo}</span> },
-    { key: 'f', label: 'فرم', render: (r) => (r.formKey === 'work' ? 'کارکرد روزانه' : FORM_BY_KEY[r.formKey]?.title ?? r.formKey) },
+    { key: 'f', label: 'فرم', render: (r) => (r.formKey === 'work' ? 'وضعیت کارگاه' : FORM_BY_KEY[r.formKey]?.title ?? r.formKey) },
     { key: 'd', label: 'تاریخ گزارش', render: (r) => fmtD(r.reportDate), sort: (r) => r.reportDate },
     { key: 'c', label: 'پیمانکار', render: (r) => orgName(r.contractorOrgId) },
     { key: 'fr', label: 'جبهه', render: (r) => r.front || '—' },
@@ -160,7 +160,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
     <div style={{ display: 'grid', gap: 12 }}>
       <div className="mt-filters no-print">
         <button className="im-btn im-btn-sm" onClick={onClose}><ArrowRight size={14} /> بازگشت به کارتابل</button>
-        <b style={{ fontSize: 15 }}>{form ? form.title : 'گزارش کارکرد روزانه'} · <span className="fn-code">{r.reportNo}</span></b>
+        <b style={{ fontSize: 15 }}>{form ? form.title : 'گزارش وضعیت کارگاه'} · <span className="fn-code">{r.reportNo}</span></b>
         <ReportStatusChip status={r.status} />
         <span style={{ marginInlineStart: 'auto', display: 'inline-flex', gap: 6 }}>
           <button className="im-btn im-btn-sm" onClick={() => setPaper(true)}><Printer size={13} /> چاپ</button>

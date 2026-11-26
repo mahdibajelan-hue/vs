@@ -9,6 +9,7 @@ import { useExecutionStore } from '../store/useExecutionStore'
 import { jalaliText, periodOf, type Period } from '../lib/periods'
 import { DOC_STATUS_FA, REPORT_TYPES, SECTION_LABEL, buildReport, renderReportHtml, typeOf, type BuiltReport, type DocMeta, type PayRow, type SectionKey } from '../lib/reportBuilder'
 import { Empty } from '../components/common'
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 
 interface Tpl { id: string; reportType: string; title: string; docPrefix: string; sections: SectionKey[]; headerLines: string[]; footer: string; distribution: string }
 interface Doc { id: string; reportType: string; docNo: string; revision: number; title: string; from: string | null; to: string | null; filters: { front?: string; activityIds?: string[] }; report: BuiltReport; status: string; reason: string; distribution: string
@@ -127,8 +128,8 @@ export function ReportBuilderPage({ projectId }: { projectId: string }) {
       <div className="im-card" style={{ padding: 12, display: 'grid', gap: 10 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <label>نوع گزارش <select value={typeKey} onChange={(e) => { setTypeKey(e.target.value); setTplId('') }}>{REPORT_TYPES.filter((t) => t.key !== 'station_daily' || m.kind !== 'pipeline').map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select></label>
-          {type.period === 'range' ? <><label>از <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label><label>تا <input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label></>
-            : <label>{type.period === 'day' ? 'روز' : type.period === 'week' ? 'هفتهٔ شامل' : 'ماه شامل'} <input type="date" value={anchor} onChange={(e) => setAnchor(e.target.value)} /> <small className="sub">{period.label}</small></label>}
+          {type.period === 'range' ? <><label>از <JalaliDateInput value={from} onChange={setFrom} /></label><label>تا <JalaliDateInput value={to} onChange={setTo} /></label></>
+            : <label>{type.period === 'day' ? 'روز' : type.period === 'week' ? 'هفتهٔ شامل' : 'ماه شامل'} <JalaliDateInput value={anchor} onChange={setAnchor} /> <small className="sub">{period.label}</small></label>}
           <label>جبهه <select value={front} onChange={(e) => setFront(e.target.value)}><option value="">همه</option>{fronts.map((f) => <option key={f} value={f}>{f}</option>)}</select></label>
           <label>فعالیت <select value={actId} onChange={(e) => setActId(e.target.value)} style={{ maxWidth: 260 }}><option value="">همه</option>{m.activities.filter((a) => a.active).map((a) => <option key={a.id} value={a.id}>{a.itemNo} {a.title}</option>)}</select></label>
           <label>قالب <select value={tplId} onChange={(e) => setTplId(e.target.value)}><option value="">پیش‌فرض</option>{tpls.filter((t) => t.reportType === typeKey).map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label>

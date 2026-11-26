@@ -121,7 +121,7 @@ function ReportPaperBody({ c }: { c: PaperCtx }) {
   const { report: r, form } = c
   if (form?.key === 'welding' || form?.key === 'fitup') return <WeldingPaper c={c} />
   if (form && PAPER_FORMS.has(form.key)) return <FormPaper c={c} />
-  const title = form ? form.title : 'گزارش کارکرد روزانه'
+  const title = form ? form.title : 'گزارش وضعیت کارگاه'
   const signers = form ? form.signers : (['project_control', 'site_head', 'supervision', 'employer'] as const)
   const who = (u: string | null) => (u ? c.people.get(u) ?? 'کاربر' : '')
   const when = (iso: string | null) => (iso ? `${fmtD(iso.slice(0, 10))} ${new Date(iso).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}` : '')

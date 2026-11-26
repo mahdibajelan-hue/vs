@@ -49,17 +49,17 @@ export function DayView({ model: m, canRecord, onOpen, onCreate }: { model: Exec
       </div>
 
       <section className="dv-sec">
-        <h3><ClipboardList size={17} aria-hidden /> کارکردهای روزانه</h3>
+        <h3><ClipboardList size={17} aria-hidden /> گزارش وضعیت کارگاه</h3>
         <button type="button" className={`dv-work dv-${work.state}`} onClick={() => act(work)} disabled={!work.report && !canRecord}>
           <span className="dv-ico"><Icon c={work} /></span>
-          <span className="dv-main"><b>گزارش کارکرد روزانه</b><small>وضعیت سایت · نیروی انسانی · ماشین‌آلات · توقف‌ها و HSE · شرح عملیات · برنامهٔ روز آتی</small></span>
+          <span className="dv-main"><b>گزارش وضعیت کارگاه</b><small>وضعیت سایت · نیروی انسانی · ماشین‌آلات · توقف‌ها و HSE · شرح عملیات · برنامهٔ روز آتی</small></span>
           <span className="dv-state">{work.report ? `${work.report.reportNo} · ${REPORT_STATUS_LABEL_FA[work.report.status]}` : STATE_FA[work.state]}</span>
         </button>
       </section>
 
       <section className="dv-sec">
         <h3><Eye size={17} aria-hidden /> صورتجلسات کارگاهی</h3>
-        <p className="im-helper" style={{ margin: 0 }}>کارهای اجراشده فقط در صورتجلسات ثبت می‌شود. هر صورتجلسه برای هر روز و هر جبهه یک‌بار ثبت می‌شود؛ پس از ارسال، کادر آن بسته می‌شود و فقط قابل مشاهده است.</p>
+        <p className="im-helper" style={{ margin: 0 }}>هر صورتجلسه روزی یک‌بار برای هر جبهه؛ پس از ارسال فقط قابل مشاهده است.</p>
         {groups.map(({ g, cells }) => (
           <div key={g} style={{ display: 'grid', gap: 8 }}>
             <div className="dv-group">{FORM_GROUP_LABEL_FA[g]}</div>
@@ -68,7 +68,7 @@ export function DayView({ model: m, canRecord, onOpen, onCreate }: { model: Exec
                 return (
                   <button key={c.formKey} type="button" className={`dv-tile dv-${c.state}`} onClick={() => act(c)} disabled={!c.report && !canRecord} title={closed ? 'ارسال شده — فقط مشاهده' : undefined}>
                     <span className="dv-ico"><Icon c={c} /></span>
-                    <span className="dv-main"><b>{f.title}</b><small>{f.en}</small></span>
+                    <span className="dv-main"><b>{f.title}</b></span>
                     <span className="dv-state">{c.report && c.state !== 'rejected' ? `${c.report.reportNo} · ` : ''}{STATE_FA[c.state]}</span>
                   </button>
                 ) })}

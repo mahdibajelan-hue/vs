@@ -38,7 +38,7 @@ export function detectGaps(c: CompletenessInput): DetectedGap[] {
     const days = workingDays(first, addDays(today, -1), settings.workDays).slice(-45)
     for (const d of days) for (const f of settings.expectedFronts) {
       if (have.has(`${d}|${f}`)) continue
-      out.push({ fingerprint: fp('missing', d, f), kind: 'missing_report', formKey: 'work', periodKey: d, front: f, subject: `گزارش کارکرد روزانه ${jalaliText(d)} — ${f}`, existing: { date: d, front: f }, missing: ['گزارش کارکرد روزانه'], dueDate: due(d) })
+      out.push({ fingerprint: fp('missing', d, f), kind: 'missing_report', formKey: 'work', periodKey: d, front: f, subject: `گزارش وضعیت کارگاه ${jalaliText(d)} — ${f}`, existing: { date: d, front: f }, missing: ['گزارش وضعیت کارگاه'], dueDate: due(d) })
     }
   }
 
@@ -48,7 +48,7 @@ export function detectGaps(c: CompletenessInput): DetectedGap[] {
     const form = r.formKey === 'work' ? null : FORM_BY_KEY[r.formKey]
     if (r.formKey !== 'work' && !form) continue
     const ls = linesBy.get(r.id) ?? []
-    const title = form ? form.title : 'گزارش کارکرد روزانه'
+    const title = form ? form.title : 'گزارش وضعیت کارگاه'
     if (r.status !== 'draft') {
       const miss = missingForReport(r, ls, form, resBy.get(r.id) ?? [])
       if (miss.length) out.push({ fingerprint: fp('inc', r.id), kind: 'incomplete', formKey: r.formKey, periodKey: r.reportDate, front: r.front, subject: `${title} ${r.reportNo} — ${jalaliText(r.reportDate)}`, existing: { reportNo: r.reportNo, status: r.status, lines: ls.length }, missing: miss, dueDate: due(r.reportDate), reportId: r.id })

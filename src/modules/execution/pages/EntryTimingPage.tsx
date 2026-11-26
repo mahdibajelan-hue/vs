@@ -65,7 +65,7 @@ export function EntryTimingPage({ projectId }: { projectId: string }) {
           </div>)}</div>
         </Section>
         <Section title="به تفکیک فرد" flush><DataTable cols={cols('فرد', (k) => ex.people.get(k) ?? 'کاربر')} rows={byUser} rowKey={(g) => g.key} /></Section>
-        <Section title="به تفکیک فرم" flush><DataTable cols={cols('فرم', (k) => (k === 'work' ? 'گزارش کارکرد روزانه' : FORM_BY_KEY[k]?.title ?? k))} rows={byForm} rowKey={(g) => g.key} /></Section>
+        <Section title="به تفکیک فرم" flush><DataTable cols={cols('فرم', (k) => (k === 'work' ? 'گزارش وضعیت کارگاه' : FORM_BY_KEY[k]?.title ?? k))} rows={byForm} rowKey={(g) => g.key} /></Section>
         <Section title="به تفکیک دستگاه" flush><DataTable cols={cols('دستگاه', (k) => DEVICE_FA[k] ?? k)} rows={byDevice} rowKey={(g) => g.key} /></Section>
       </>}
     </div>

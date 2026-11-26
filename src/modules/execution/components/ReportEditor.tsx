@@ -87,6 +87,8 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const sendable = canRecord && EDITABLE.has(r.status)
   const editable = sendable && !signedLock
   const [issues, setIssues] = useState<{ title: string; items: string[] } | null>(null)
+  // the day's site-status report: the general facts (weather, contractor, manpower) of every site minute of the same day and front
+  const siteDay = form ? m.reports.find((x) => x.formKey === 'work' && x.reportDate === r.reportDate && (x.front ?? '') === (r.front ?? '') && x.status !== 'rejected' && !x.completionOf) : undefined
   // entry time on real use (056): only sittings of someone who can enter the report; a report created in the last two minutes counts as new
   const [isNew] = useState(() => Date.now() - new Date(r.createdAt).getTime() < 120_000)
   const meter = useEntryMeter({ enabled: editable, projectId: m.projectId, reportId, formKey: r.formKey, newReport: isNew })
@@ -99,7 +101,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
 
   const acts = useMemo(() => m.activities.filter((a) => a.approval === 'approved' && a.active), [m.activities])
   // the form opens on its approved sheet (exactly as the paper); the table stays one click away
-  const [sheetMode, setSheetMode] = useState(true)
+  const sheetMode = false // site minutes are entered in the table; the approved sheet is used for printing
   const sheetTpl = useEpcStore((x) => (form && GRID_SPECS[form.key] && form.key !== 'welding' ? x.templates.find((t) => t.formKey === form.key && t.status === 'approved') : undefined))
   const exSettings = useExecutionStore((x) => x.settingsByProject.get(m.projectId))
   const ensureRows = (n: number) => { setRows((a) => (a.length >= n ? a : [...a, ...Array.from({ length: n - a.length }, () => ({ key: uid0(), activityId: null, qty: 0, kmFrom: null, kmTo: null, location: '', note: '', detail: {}, status: 'pending' as const, approvedQty: null, reviewNote: '', sourceReportId: null }))])); setDirty(true) }
@@ -201,7 +203,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     setCarried(true); setRes(lastRows); setDirty(true)
   }, [carried, editable, lastRows, res, r.formKey])
   const orgName = (id: string | null) => orgs.find((o) => o.id === id)?.name ?? ''
-  const paperCtx = (): PaperCtx => ({ projectName: project?.officialName ?? '', orgName: orgName(head.contractorOrgId || null), signatures: reportSigs, people: ex.people, report: { ...r, ...head, contractorOrgId: head.contractorOrgId || null, data }, form, lines: asLines(), resources: asRes().filter(resUsed), stoppages: stops.map((s) => ({ id: s.key, reportId, category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, issueRef: null, responsibility: s.responsibility ?? '', critical: !!s.critical, noticeDate: s.noticeDate ?? null, noticeRef: s.noticeRef ?? '', assessNote: s.assessNote ?? '' })) as Stoppage[], acts: m.actById, prev: before, baseOf: (a: Activity) => m.baseOf(a, head.reportDate), metrics })
+  const paperCtx = (): PaperCtx => ({ projectName: project?.officialName ?? '', orgName: orgName(head.contractorOrgId || null), signatures: reportSigs, people: ex.people, report: { ...r, ...head, contractorOrgId: head.contractorOrgId || null, data: form && !data.weather && siteDay?.data.weather ? { ...data, weather: siteDay.data.weather } : data }, form, lines: asLines(), resources: asRes().filter(resUsed), stoppages: stops.map((s) => ({ id: s.key, reportId, category: s.category, hours: s.hours, description: s.description, materialId: s.materialId, issueRef: null, responsibility: s.responsibility ?? '', critical: !!s.critical, noticeDate: s.noticeDate ?? null, noticeRef: s.noticeRef ?? '', assessNote: s.assessNote ?? '' })) as Stoppage[], acts: m.actById, prev: before, baseOf: (a: Activity) => m.baseOf(a, head.reportDate), metrics })
   const saved = new Set(m.stoppages.filter((x) => x.reportId === reportId).map((x) => x.id))
   const raise = async (s: StopRow) => {
     const mat = s.materialId ? mm.materials.find((x) => x.id === s.materialId) : undefined
@@ -320,16 +322,14 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     <div ref={meter.root as React.RefObject<HTMLDivElement>} style={{ display: 'grid', gap: 12 }}>
       <div className="ex-actbar no-print">
         <button className="im-btn im-btn-sm" onClick={() => { if (!dirty || window.confirm('تغییرات ذخیره‌نشده از بین می‌رود. خارج شوید؟')) onClose() }}><ArrowRight size={14} /> بازگشت</button>
-        <span className="ex-actbar-title"><b>{form ? form.title : 'گزارش کارکرد روزانه'}</b><span className="fn-code">{r.reportNo}</span><ReportStatusChip status={r.status} />{dirty && <span className="ex-warn">ذخیره نشده</span>}</span>
+        <span className="ex-actbar-title"><b>{form ? form.title : 'گزارش وضعیت کارگاه'}</b><span className="fn-code">{r.reportNo}</span><ReportStatusChip status={r.status} />{dirty && <span className="ex-warn">ذخیره نشده</span>}</span>
         <span className="ex-actbar-btns">
           <button className="im-btn im-btn-sm" onClick={() => setShowHist((x) => !x)} aria-pressed={showHist}><History size={13} /> سابقه</button>
           <button className="im-btn im-btn-sm" onClick={() => setPaper(true)}><Printer size={13} /> چاپ</button>
           {editable && r.status === 'draft' && reportSigs.length === 0 && <button className="im-btn im-btn-sm im-btn-danger" onClick={() => void remove()}><Trash2 size={13} /> حذف</button>}
-          {editable && <button className="im-btn im-btn-sm" disabled={busy || !dirty} onClick={() => void save()}>ذخیره</button>}
-          {sendable && ex.can(m.projectId, 'submit') && <button className="im-btn im-btn-primary im-btn-sm" disabled={busy} onClick={() => void send()}><Send size={13} /> ارسال برای نظارت{missing.length > 0 && <span className="ex-actbar-badge" title="موارد ناقص">{fa(missing.length)}</span>}</button>}
+          {editable && dirty && <button className="im-btn im-btn-sm" disabled={busy} onClick={() => void save()}>ذخیره</button>}
         </span>
       </div>
-      {sendable && <Steps filled={missing.filter((x) => !unsignedPrep.includes(x)).length === 0} saved={!dirty} signed={unsignedPrep.length === 0} />}
       {signedLock && <div className="im-card ex-lockmsg"><b>امضا شده و قفل است.</b> دفتر فنی و سرپرست کارگاه این گزارش را امضا کرده‌اند؛ محتوای آن دیگر تغییر نمی‌کند. آن را برای دستگاه نظارت ارسال کنید — اگر اصلاحی لازم باشد، نظارت آن را برمی‌گرداند و سابقهٔ هر دو نسخه می‌ماند.</div>}
       {issues && <IssuePanel title={issues.title} items={issues.items} onClose={() => setIssues(null)} />}
 
@@ -339,6 +339,26 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
 
       {form && <><datalist id="ex-hint-welder">{welderList.filter((w) => w.status === 'active').map((w) => <option key={w.id} value={w.raw}>{w.fullName}</option>)}</datalist><datalist id="ex-hint-weld">{[...new Set(weldHints.map((w) => w.weld))].slice(0, 400).map((x) => <option key={x} value={x} />)}</datalist><datalist id="ex-hint-pipe">{pipeHints.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}</datalist></>}
       {!form && <SecTitle n={1} title="وضعیت سایت" hint="تاریخ، جبهه، شیفت و شرایط جوی کارگاه" />}
+      {form ? (
+        <>
+          {/* a site minute asks only its own subject: date and front come from the day page, contractor and weather from the day's site-status report */}
+          <div className="ex-ctx">
+            <span><small>تاریخ</small><b>{fmtD(head.reportDate)}</b></span>
+            <span><small>{terms.front}</small><b>{head.front || '—'}</b></span>
+            <span><small>پیمانکار</small><b dir="auto">{orgName(head.contractorOrgId || null) || '—'}</b></span>
+            <span><small>وضعیت جوی</small><b>{siteDay ? (WEATHER.find((o) => o.value === String(siteDay.data.weather ?? ''))?.label ?? '—') : '—'}</b></span>
+            {!siteDay && <em>گزارش وضعیت کارگاهِ این روز هنوز ثبت نشده؛ وضعیت جوی و نفرات از آن خوانده می‌شود.</em>}
+          </div>
+          {(form.header.length > 0 || editable || head.notes) && (
+            <div className="im-card ex-form-head">
+              <div className="ex-sheet-grid">
+                {form.header.map(headField)}
+                <label className="wide">توضیحات<input disabled={!editable} value={head.notes} onChange={(e) => setH('notes', e.target.value)} dir="auto" /></label>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
       <div className="im-card" style={{ padding: 14 }}>
         <div className="ex-sheet-grid">
           <label>تاریخ گزارش *<JalaliDateInput value={head.reportDate} onChange={(x) => editable && setH('reportDate', x)} /></label>
@@ -348,16 +368,14 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
           <label>{terms.front} *<select disabled={!editable} value={head.front} onChange={(e) => setH('front', e.target.value)}><option value="">—</option>{frontOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
           <label>ایستگاه / محدوده<select disabled={!editable} value={head.station} onChange={(e) => setH('station', e.target.value)}><option value="">—</option>{stationOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
           <label>شیفت<select disabled={!editable} value={head.shift} onChange={(e) => setH('shift', e.target.value)}><option value="day">روز</option><option value="night">شب</option></select></label>
-          {form && <label>وضعیت آب‌وهوا *<select disabled={!editable} value={String(data.weather ?? '')} onChange={(e) => setD('weather', e.target.value)}><option value="">—</option>{WEATHER.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>}
-          {form && form.header.map(headField)}
           <label className="wide">توضیحات<input disabled={!editable} value={head.notes} onChange={(e) => setH('notes', e.target.value)} dir="auto" /></label>
         </div>
       </div>
+      )}
 
       {form && regWarnings.length > 0 && <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: `3px solid ${strictRegs ? 'var(--im-coral)' : 'var(--im-amber)'}` }}><b>{strictRegs ? 'موارد رجیستر که پیش از ارسال باید اصلاح شود' : 'هشدار رجیستر لوله و جوشکار'} ({fa(regWarnings.length)})</b>
         <ul style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>{regWarnings.slice(0, 12).map((w) => <li key={w}>{w}</li>)}{regWarnings.length > 12 && <li>و {fa(regWarnings.length - 12)} مورد دیگر…</li>}</ul>
         <small className="sub">جوشکاران در «ارزیابی شایستگی ← صلاحیت جوشکاران و عایق‌کاران» و لوله‌ها در «کالا ← ورود لوله به کارگاه (MRS)» ثبت می‌شوند؛ شناسهٔ تازه را آنجا ثبت کنید.</small></div>}
-      {form && photosAndSigns}
 
 
       {!form && <WeatherCard data={data} editable={editable} onChange={(k, v) => setD(k, v)} />}
@@ -374,7 +392,6 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
         <div className="mt-filters no-print" style={{ padding: '10px 14px' }}>
           <b>{form ? 'جدول ردیف‌ها' : 'ردیف‌های کارکرد (ثبت‌شده پیش از انتقال کارکرد به صورتجلسات کارگاهی)'}</b>
           {form?.hint && <span className="im-helper" style={{ margin: 0 }}>{form.hint}</span>}
-          {form && sheetTpl && <button className={`im-btn im-btn-sm${sheetMode ? ' im-btn-primary' : ''}`} style={{ marginInlineStart: 'auto' }} onClick={() => setSheetMode((x) => !x)} title="خود فرم مصوب (اکسل) را باز می‌کند تا مقدارها را روی همان سلول‌ها وارد کنید">{sheetMode ? 'ورود جدولی' : 'ورود روی خود فرم'}</button>}
           {editable && form && !sheetMode && <button className="im-btn im-btn-primary im-btn-sm" style={form && sheetTpl ? undefined : { marginInlineStart: 'auto' }} onClick={addBlank}><Plus size={13} /> ردیف جدید</button>}
         </div>
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}>
@@ -457,12 +474,21 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
         </div>
       )}
       {!form && <><SecTitle n={6} title="پیش‌بینی عملیات اجرایی روز آتی" /><NextDayPlan value={asNext(data.nextDay)} editable={editable} onChange={(v) => setD('nextDay', v)} /></>}
-      {!form && photosAndSigns}
+      {photosAndSigns}
 
-      {(missing.length > 0 || incons.length > 0) && editable && (
+      {sendable && (
+        <div className="ex-finish no-print">
+          <Steps filled={missing.filter((x) => !unsignedPrep.includes(x)).length === 0} saved={!dirty} signed={unsignedPrep.length === 0} />
+          <div className="ex-finish-btns">
+            {editable && <button className="im-btn" disabled={busy || !dirty} onClick={() => void save()}>ذخیره</button>}
+            {ex.can(m.projectId, 'submit') && <button className="im-btn im-btn-primary" disabled={busy} onClick={() => void send()}><Send size={14} /> ارسال برای دستگاه نظارت{missing.length > 0 && <span className="ex-actbar-badge" title="موارد ناقص">{fa(missing.length)}</span>}</button>}
+          </div>
+        </div>
+      )}
+
+      {incons.length > 0 && editable && (
         <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: '3px solid var(--im-amber)' }}>
-          {missing.length > 0 && <><b>تا ارسال، این موارد باید تکمیل شود:</b><ul style={{ margin: '4px 0 0', paddingInlineStart: 18 }}>{missing.slice(0, 12).map((x) => <li key={x}>{x}</li>)}{missing.length > 12 && <li>و {fa(missing.length - 12)} مورد دیگر</li>}</ul></>}
-          {incons.length > 0 && <><b style={{ display: 'block', marginTop: 6 }}>ناسازگاری:</b><ul style={{ margin: '4px 0 0', paddingInlineStart: 18 }}>{incons.map((x) => <li key={x} className="ex-bad">{x}</li>)}</ul></>}
+          <b>ناسازگاری:</b><ul style={{ margin: '4px 0 0', paddingInlineStart: 18 }}>{incons.map((x) => <li key={x} className="ex-bad">{x}</li>)}</ul>
         </div>
       )}
       {showHist && <div className="im-card" style={{ padding: 14 }}><b>سابقهٔ ارسال، اصلاح و تأیید</b><div className="ex-hist" style={{ marginTop: 8 }}>{hist.length === 0 ? <span className="im-helper">هنوز سابقه‌ای نیست.</span> : hist.map((h) => <div key={h.id}><b>{h.action.startsWith('review:') ? `بررسی نظارت: ${REPORT_STATUS_LABEL_FA[h.action.slice(7) as keyof typeof REPORT_STATUS_LABEL_FA] ?? h.action.slice(7)}` : h.action === 'submit' ? 'ارسال برای نظارت' : h.action === 'reopen' ? 'بازگشایی' : h.action === 'signatures_cleared' ? 'اصلاح نسخه (امضاهای قبلی ثبت در سابقه)' : h.action === 'unsign' ? 'لغو امضا' : h.action}</b><span>{ex.people.get(h.actor ?? '') ?? 'کاربر'}</span><small>{fmtD(h.at.slice(0, 10))} {new Date(h.at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</small>{h.note && <span>— {h.note}</span>}</div>)}</div></div>}

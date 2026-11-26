@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   JALALI_MONTHS,
@@ -35,6 +36,26 @@ export function JalaliDateInput({ value, onChange, className = '' }: JalaliDateI
   const [viewMonth, setViewMonth] = useState(initial.jm)
   const [yearPageStart, setYearPageStart] = useState(initial.jy - Math.floor(YEARS_PER_PAGE / 2))
   const rootRef = useRef<HTMLDivElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+  // the calendar is drawn on the page itself (portal), so a table or card that scrolls/clips never cuts it: next to the
+  // field on a wide screen (kept inside the viewport), as a bottom sheet with large touch targets on a phone
+  const [pos, setPos] = useState<CSSProperties | null>(null)
+  const [sheet, setSheet] = useState(false)
+  useLayoutEffect(() => {
+    if (!open) return
+    const place = () => {
+      const b = rootRef.current?.getBoundingClientRect(); if (!b) return
+      const vw = window.innerWidth, vh = window.innerHeight, w = 272, h = 330
+      if (vw < 640) { setSheet(true); setPos(null); return }
+      setSheet(false)
+      const left = Math.min(Math.max(8, b.right - w), vw - w - 8)
+      const top = b.bottom + 6 + h > vh && b.top - 6 - h > 0 ? b.top - 6 - h : Math.min(b.bottom + 6, vh - h - 8)
+      setPos({ position: 'fixed', top: Math.max(8, top), left, width: w })
+    }
+    place()
+    window.addEventListener('resize', place); window.addEventListener('scroll', place, true)
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
+  }, [open])
 
   useEffect(() => {
     const j = isoToJalali(value)
@@ -45,14 +66,16 @@ export function JalaliDateInput({ value, onChange, className = '' }: JalaliDateI
   }, [value])
 
   useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+    function onDocClick(e: MouseEvent | TouchEvent) {
+      const t = e.target as Node
+      if (rootRef.current && !rootRef.current.contains(t) && !popRef.current?.contains(t)) {
         setOpen(false)
         setView('days')
       }
     }
-    if (open) document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); setView('days') } }
+    if (open) { document.addEventListener('mousedown', onDocClick); document.addEventListener('touchstart', onDocClick); document.addEventListener('keydown', onKey) }
+    return () => { document.removeEventListener('mousedown', onDocClick); document.removeEventListener('touchstart', onDocClick); document.removeEventListener('keydown', onKey) }
   }, [open])
 
   const selected = isoToJalali(value)
@@ -104,8 +127,9 @@ export function JalaliDateInput({ value, onChange, className = '' }: JalaliDateI
         <CalendarDays size={14} className="text-muted shrink-0" />
       </button>
 
-      {open && (
-        <div className="absolute z-20 mt-1.5 w-64 rounded-xl glass-panel p-3" style={{ background: 'var(--bg-panel-solid)' }}>
+      {open && (sheet || pos) && createPortal(<>
+        {sheet && <div className="jdi-backdrop" aria-hidden onClick={() => { setOpen(false); setView('days') }} />}
+        <div ref={popRef} dir="rtl" role="dialog" aria-label="انتخاب تاریخ" className={`rounded-xl glass-panel p-3 ${sheet ? 'jdi-sheet' : ''}`} style={{ background: 'var(--bg-panel-solid)', zIndex: 1000, ...(sheet ? {} : pos) }}>
           {view === 'days' && (
             <>
               <div className="mb-2 flex items-center justify-between">
@@ -136,7 +160,7 @@ export function JalaliDateInput({ value, onChange, className = '' }: JalaliDateI
                       type="button"
                       key={i}
                       onClick={() => pickDay(jd)}
-                      className={`rounded-lg py-1 text-xs num transition-colors ${
+                      className={`rounded-lg py-1 jdi-day text-xs num transition-colors ${
                         isSelected
                           ? 'bg-brand-500 text-white font-bold'
                           : isToday
@@ -217,8 +241,9 @@ export function JalaliDateInput({ value, onChange, className = '' }: JalaliDateI
               </div>
             </>
           )}
+          {sheet && <button type="button" className="jdi-close" onClick={() => { setOpen(false); setView('days') }}>بستن</button>}
         </div>
-      )}
+      </>, document.body)}
     </div>
   )
 }

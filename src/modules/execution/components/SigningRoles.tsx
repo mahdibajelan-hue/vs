@@ -61,7 +61,7 @@ export function SigningRoles({ projectId, can, people }: { projectId: string; ca
               )}
               <details><summary className="im-helper">فرم‌هایی که این نقش امضا می‌کند: {r.forms.length ? `${r.forms.length} فرم` : 'هیچ'}</summary>
                 {can && <div style={{ display: 'flex', gap: 6, margin: '6px 0' }}><button className="im-btn im-btn-sm" onClick={() => patch(r.key, { forms: techForms })}>همهٔ فرم‌های فنی</button><button className="im-btn im-btn-sm" onClick={() => patch(r.key, { forms: [] })}>هیچ</button></div>}
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{[{ key: 'work', title: 'گزارش کارکرد روزانه' }, ...FORMS].map((f) => <label key={f.key} className="im-helper" style={{ display: 'inline-flex', gap: 4 }}><input type="checkbox" disabled={!can} checked={r.forms.includes(f.key)} onChange={(e) => patch(r.key, { forms: e.target.checked ? [...r.forms, f.key] : r.forms.filter((x) => x !== f.key) })} />{f.title}</label>)}</div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{[{ key: 'work', title: 'گزارش وضعیت کارگاه' }, ...FORMS].map((f) => <label key={f.key} className="im-helper" style={{ display: 'inline-flex', gap: 4 }}><input type="checkbox" disabled={!can} checked={r.forms.includes(f.key)} onChange={(e) => patch(r.key, { forms: e.target.checked ? [...r.forms, f.key] : r.forms.filter((x) => x !== f.key) })} />{f.title}</label>)}</div>
               </details>
             </div>
           ))}

@@ -44,7 +44,8 @@ export function missingForReport(report: Pick<Report, 'formKey' | 'front' | 'con
   const miss: string[] = []
   if (!report.contractorOrgId) miss.push('پیمانکار')
   if (!filled(report.front)) miss.push('جبهه کاری')
-  if (!filled(report.data.weather)) miss.push('وضعیت آب‌وهوا')
+  // the weather is a general fact of the day: asked once, in the site-status report — a site minute reads it from there
+  if (!form && !filled(report.data.weather)) miss.push('وضعیت آب‌وهوا')
   if (!form) {
     // the daily work report carries site condition, manpower, machinery and the narrative; executed quantities are entered only
     // in the site minutes (صورتجلسات کارگاهی). Rows that an older report still has are checked as before.
