@@ -152,9 +152,12 @@ export const COMMON_FIELDS = ['پروژه', 'قرارداد / پیمانکار',
 
 export const STOPPAGE_CATEGORY_FA: Record<string, string> = { material: 'کمبود متریال', drawing: 'نقشه / مدارک', land: 'زمین / حق عبور', permit: 'مجوز', weather: 'شرایط جوی', equipment: 'ماشین‌آلات', manpower: 'نیروی انسانی', hse: 'HSE', other: 'سایر' }
 
-/** Forms issued from the quality-control module (welding, radiography, coating, PQR); the execution module keeps the rest. */
+/** Quality forms by subject (welding, radiography, coating, PQR): read by the quality-control module's dashboards. */
 export const QC_FORM_GROUPS: FormGroup[] = ['weld', 'rt', 'coating']
-export const isQcForm = (key: string) => { const f = FORM_BY_KEY[key]; return !!f && (QC_FORM_GROUPS.includes(f.group) || key === 'pqr') }
+export const isQcRelated = (key: string) => { const f = FORM_BY_KEY[key]; return !!f && (QC_FORM_GROUPS.includes(f.group) || key === 'pqr') }
+/** Forms ENTERED in the quality-control module: only the PQR record. Every daily site minute — welding, repair, tie-in,
+ *  RT request and report, coating, field-joint coating and its test — is entered in the execution module's day page. */
+export const isQcForm = (key: string) => key === 'pqr'
 /** WQT and the welder's card are issued by the competency module's personnel register */
 export const isCompetencyForm = (key: string) => key === 'wqt' || key === 'welder_card'
 export type FormScope = 'execution' | 'qc'

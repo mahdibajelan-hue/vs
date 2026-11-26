@@ -45,10 +45,11 @@ const EDITABLE = new Set(['draft', 'returned', 'incomplete'])
 const WEATHER = [{ value: 'sunny', label: 'آفتابی' }, { value: 'partly', label: 'نیمه‌ابری' }, { value: 'cloudy', label: 'ابری' }, { value: 'rainy', label: 'بارانی' }, { value: 'snowy', label: 'برفی' }, { value: 'stormy', label: 'طوفانی (باد و خاک)' }]
 
 /** One report — the work report on the price-list rows, or any technical form of the catalog — with live cumulative figures, live completeness check, save / send / print. */
-export function ReportEditor(p: { reportId: string; model: ExecutionModel; onClose: () => void }) {
+/** `paperOnly`: open straight on the signed paper (print / PDF / Excel) — the archive's view, no entry tables */
+export function ReportEditor(p: { reportId: string; model: ExecutionModel; onClose: () => void; paperOnly?: boolean }) {
   return p.model.reports.some((x) => x.id === p.reportId) ? <ReportEditorBody {...p} /> : null
 }
-function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; model: ExecutionModel; onClose: () => void }) {
+function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId: string; model: ExecutionModel; onClose: () => void; paperOnly?: boolean }) {
   const ex = useExecutionStore()
   const orgs = useMasterDataStore((s) => s.organizations)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === m.projectId))
@@ -334,10 +335,21 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     </label>
   )
 
+  const finishBar = sendable ? (
+        <div className="ex-finish no-print">
+          <div className="ex-finish-btns">
+            {editable && <button className="im-btn" disabled={busy || !dirty} onClick={() => void save()}>ذخیره</button>}
+            {contractorSlots.length > 0 ? <span className="im-helper" style={{ margin: 0, alignSelf: 'center' }}>ارسال برای نظارت با «امضا و ارسال» سرپرست کارگاه انجام می‌شود.</span>
+              : ex.can(m.projectId, 'submit') && <button className="im-btn im-btn-primary" disabled={busy} onClick={() => void send()}><Send size={14} /> ارسال برای دستگاه نظارت{missing.length > 0 && <span className="ex-actbar-badge" title="موارد ناقص">{fa(missing.length)}</span>}</button>}
+          </div>
+        </div>
+  ) : null
   const photosAndSigns = <>
     <ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />
     <SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} beforeSend={beforeSend} />
   </>
+
+  if (paperOnly) return <PaperModal c={paperCtx()} onClose={onClose} />
 
   return (
     <div ref={meter.root as React.RefObject<HTMLDivElement>} style={{ display: 'grid', gap: 12 }}>
@@ -351,6 +363,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
           {editable && dirty && <button className="im-btn im-btn-sm" disabled={busy} onClick={() => void save()}>ذخیره</button>}
         </span>
       </div>
+      {sendable && <Steps filled={missing.filter((x) => !unsignedPrep.includes(x)).length === 0} saved={!dirty} signed={unsignedPrep.length === 0} />}
       {signedLock && <div className="im-card ex-lockmsg"><b>امضا شده و قفل است.</b> دفتر فنی و سرپرست کارگاه این گزارش را امضا کرده‌اند؛ محتوای آن دیگر تغییر نمی‌کند. آن را برای دستگاه نظارت ارسال کنید — اگر اصلاحی لازم باشد، نظارت آن را برمی‌گرداند و سابقهٔ هر دو نسخه می‌ماند.</div>}
       {issues && <IssuePanel title={issues.title} items={issues.items} onClose={() => setIssues(null)} />}
 
@@ -450,13 +463,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
         </div>
       </div>}
 
-      {form && metrics.length > 0 && (
-        <div className="im-card" style={{ padding: 0 }}>
-          <div className="mt-filters" style={{ padding: '10px 14px' }}><b>جمع‌بندی (همان شمارنده‌های پایین فرم کاغذی)</b><span className="im-helper" style={{ margin: 0 }}>«تا روز قبل» از فرم‌های ثبت‌شدهٔ قبلی همین نوع محاسبه می‌شود.</span></div>
-          <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}><table className="ex-lines"><thead><tr><th>شاخص</th><th>گروه</th><th className="num">تا روز قبل</th><th className="num">امروز</th><th className="num">تا امروز</th></tr></thead>
-            <tbody>{metrics.map((x, i) => <tr key={i}><td>{x.metric.label} ({x.metric.unit})</td><td>{x.group || '—'}</td><td className="num">{fa(x.prior, 2)}</td><td className="num"><b>{fa(x.today, 2)}</b></td><td className="num">{fa(x.total, 2)}</td></tr>)}</tbody></table></div>
-        </div>
-      )}
+      {form && <><SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} beforeSend={beforeSend} />{finishBar}</>}
 
       {form?.resources && <ResourcePanel rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} onCopyLast={copyLastResources} />}
 
@@ -495,18 +502,9 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
         </div>
       )}
       {!form && <><SecTitle n={6} title="پیش‌بینی عملیات اجرایی روز آتی" /><NextDayPlan value={asNext(data.nextDay)} editable={editable} onChange={(v) => setD('nextDay', v)} /></>}
-      {photosAndSigns}
+      {!form && <>{photosAndSigns}{finishBar}</>}
+      {form && <ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />}
 
-      {sendable && (
-        <div className="ex-finish no-print">
-          <Steps filled={missing.filter((x) => !unsignedPrep.includes(x)).length === 0} saved={!dirty} signed={unsignedPrep.length === 0} />
-          <div className="ex-finish-btns">
-            {editable && <button className="im-btn" disabled={busy || !dirty} onClick={() => void save()}>ذخیره</button>}
-            {contractorSlots.length > 0 ? <span className="im-helper" style={{ margin: 0, alignSelf: 'center' }}>ارسال برای نظارت با «امضا و ارسال» سرپرست کارگاه انجام می‌شود.</span>
-              : ex.can(m.projectId, 'submit') && <button className="im-btn im-btn-primary" disabled={busy} onClick={() => void send()}><Send size={14} /> ارسال برای دستگاه نظارت{missing.length > 0 && <span className="ex-actbar-badge" title="موارد ناقص">{fa(missing.length)}</span>}</button>}
-          </div>
-        </div>
-      )}
 
       {incons.length > 0 && editable && (
         <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: '3px solid var(--im-amber)' }}>

@@ -6,7 +6,7 @@ import { useTestingStore } from '../../testing/store/useTestingStore'
 import { coveredKm } from '../../testing/lib/htCore'
 import { useEpcStore } from '../../execution/store/useEpcStore'
 import { useExecutionStore } from '../../execution/store/useExecutionStore'
-import { isQcForm } from '../../execution/lib/formCatalog'
+import { isQcRelated } from '../../execution/lib/formCatalog'
 import { useCapa } from '../lib/useCapa'
 import { ESCALATE_FA } from '../lib/capa'
 import type { QcTab } from '../WeldQcApp'
@@ -42,7 +42,7 @@ export function QcHome({ projectId, onGo }: { projectId: string; onGo: (t: QcTab
     const today = new Date().toISOString().slice(0, 10)
     const late = ncrOpen.filter((n) => n.dueDate && n.dueDate < today).length
     const findOpen = epc.findings.filter((f) => f.projectId === projectId && f.status === 'open').length
-    const forms = ex.reports.filter((r) => r.projectId === projectId && isQcForm(r.formKey) && r.status !== 'rejected')
+    const forms = ex.reports.filter((r) => r.projectId === projectId && isQcRelated(r.formKey) && r.status !== 'rejected')
     const waiting = forms.filter((r) => r.status === 'submitted' || r.status === 'partially_approved').length
     const returned = forms.filter((r) => r.status === 'returned' || r.status === 'incomplete').length
     const cLive = capa.cases.filter((x) => x.c.status !== 'closed' && x.c.status !== 'void'), cLate = cLive.filter((x) => x.late.late)

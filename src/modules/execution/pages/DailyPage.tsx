@@ -11,6 +11,7 @@ import { useProjectContextStore } from '../../../store/useProjectContextStore'
 import { Chip, DataTable, KpiCard, fmtD, type Col } from '../../finance/components/fn'
 import { ReportEditor } from '../components/ReportEditor'
 import { DayView } from './DayView'
+import { ArchiveCalendar } from './ArchiveCalendar'
 import { ReportStatusChip, Empty, fa } from '../components/common'
 import { REPORT_STATUS_LABEL_FA, type Report, type ReportStatus } from '../types'
 
@@ -34,24 +35,17 @@ export function DailyPage({ projectId, sub, scope = 'execution' }: { projectId: 
   const orgName = (id: string | null) => orgs.find((o) => o.id === id)?.name ?? '—'
   const myOrg = ex.roles.find((x) => x.projectId === projectId && x.active && x.organizationId)?.organizationId ?? null
 
-  const archiveCols: Col<Report>[] = [
-    { key: 'n', label: 'شماره', render: (r) => <span className="strong fn-code">{r.reportNo}</span>, sort: (r) => r.reportNo },
-    { key: 'd', label: 'تاریخ', render: (r) => fmtD(r.reportDate), sort: (r) => r.reportDate },
-    { key: 'fr', label: 'جبهه / ایستگاه', render: (r) => [r.front, r.station].filter(Boolean).join(' · ') || '—' },
-    { key: 's', label: 'وضعیت', render: (r) => <><ReportStatusChip status={r.status} />{r.completionOf && <Chip tone="warn">تکمیلی</Chip>}</> },
-  ]
   const create = async (key: string, date = m.today, front = m.settings.expectedFronts[0] ?? '') => {
     const id = await ex.createReport({ projectId, formKey: key, reportDate: date, front, contractorOrgId: projectParties(project, orgs).contractor?.id ?? myOrg })
     if (id) setOpen(id)
   }
   if (open) return <ReportEditor reportId={open} model={m} onClose={() => setOpen(null)} />
   // the execution module's day page: the daily work report and the day's site minutes, one tile each
+  // the archive of the daily reports: a calendar, each report opens on its signed paper
+  if (!isWork && scope === 'execution') return <ArchiveCalendar model={m} />
   if (isWork && scope === 'execution') return (
     <div style={{ display: 'grid', gap: 14 }}>
       <DayView model={m} canRecord={canRecord} onOpen={setOpen} onCreate={(k, d, f) => void create(k, d, f)} />
-      <details className="im-card" style={{ padding: '10px 14px' }}><summary style={{ cursor: 'pointer', fontWeight: 700 }}>بایگانی گزارش‌های وضعیت کارگاه ({fa(rows.length)})</summary>
-        <div style={{ marginTop: 10 }}>{rows.length === 0 ? <Empty>گزارشی ثبت نشده است.</Empty> : <DataTable cols={archiveCols} rows={rows} rowKey={(r) => r.id} onRow={(r) => setOpen(r.id)} />}</div>
-      </details>
     </div>
   )
 
