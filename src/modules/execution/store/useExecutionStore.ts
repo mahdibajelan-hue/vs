@@ -74,6 +74,8 @@ interface State {
   deleteReport: (id: string) => Promise<boolean>
   saveBody: (reportId: string, body: { lines?: LineInput[]; resources?: ResourceInput[]; stoppages?: StoppageInput[] }) => Promise<boolean>
   submitReport: (id: string) => Promise<boolean>
+  /** sends the report; returns the explained error (null when sent) so the editor can show it next to the button */
+  submitReportMsg: (id: string) => Promise<string | null>
   reviewReport: (id: string, decisions: ReviewDecision[], note: string) => Promise<boolean>
   decideWhole: (id: string, decision: 'approved' | 'rejected' | 'returned', note: string) => Promise<boolean>
   reopenReport: (id: string, reason: string) => Promise<boolean>
@@ -389,6 +391,11 @@ export const useExecutionStore = create<State>((set, get) => ({
       if (rows.length) { const { error } = await supabase.from('ex_report_stoppages').insert(rows); if (report('ذخیرهٔ توقف‌ها', error)) return false }
     }
     await get().reloadReports([reportId]); return true
+  },
+  submitReportMsg: async (id) => {
+    const { error } = await supabase.rpc('ex_report_submit', { p_id: id })
+    if (error) return explainExecutionError(error)
+    await get().reloadReports([id]); return null
   },
   submitReport: async (id) => {
     const { error } = await supabase.rpc('ex_report_submit', { p_id: id })

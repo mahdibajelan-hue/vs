@@ -120,7 +120,11 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
   const form = r.formKey === 'work' ? null : FORM_BY_KEY[r.formKey] ?? null
   const lines = m.linesByReport.get(reportId) ?? []
   const canReview = ex.can(m.projectId, 'review') && (r.status === 'submitted' || r.status === 'partially_approved')
-  const canReopen = ex.can(m.projectId, 'reopen') && (r.status === 'approved' || r.status === 'partially_approved' || r.status === 'rejected')
+  // approved with the head of supervision's final signature: final for good (the server refuses any change, 062)
+  const slots = useEpcStoreSig((x) => x.signSlots), sigs = useEpcStoreSig((x) => x.signatures)
+  const finalKey = slots.filter((x) => x.projectId === m.projectId && x.formKey === r.formKey && x.active && x.required && x.party !== 'contractor').sort((a, b) => b.sort - a.sort)[0]?.slotKey
+  const finalSigned = r.status === 'approved' && !!finalKey && sigs.some((g) => g.reportId === reportId && g.slotKey === finalKey)
+  const canReopen = !finalSigned && ex.can(m.projectId, 'reopen') && (r.status === 'approved' || r.status === 'partially_approved' || r.status === 'rejected')
   const before = cumulative(m.reports, m.lines, { before: r.reportDate, excludeReportId: reportId, mode: 'approved' })
   const set = (id: string, p: Partial<Dec>, q: number) => setDec((d) => { const base: Dec = { decision: 'approved', qty: q, note: '' }; return { ...d, [id]: Object.assign(base, d[id], p) } })
   const pending = lines.filter((l) => l.status === 'pending')
@@ -137,7 +141,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
     setBusy(false)
     if (ok) onClose()
   }
-  const canAmend = ex.can(m.projectId, 'reopen') && !form && (r.status === 'approved' || r.status === 'partially_approved')
+  const canAmend = !finalSigned && ex.can(m.projectId, 'reopen') && !form && (r.status === 'approved' || r.status === 'partially_approved')
   const amend = async (lineId: string, cur: number, max: number) => {
     const v = window.prompt(`مقدار تأییدشدهٔ جدید (۰ تا ${fa(max, 3)}):`, String(cur)); if (v == null) return
     const q = Number(v.replace(/[۰-۹]/g, (c) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).replace(/[٬,]/g, ''))

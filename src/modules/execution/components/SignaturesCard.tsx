@@ -21,6 +21,8 @@ export function SignaturesCard({ report, dirty }: { report: Pick<Report, 'id' | 
   if (slots.length === 0) return null
   const draftish = report.status === 'draft' || report.status === 'returned' || report.status === 'incomplete'
   const sent = report.status === 'submitted' || report.status === 'partially_approved'
+  // both contractor signatures on a draft: the draft is locked, a signer cannot take theirs back (only the admin can)
+  const contractorDone = slots.some((x) => x.required && x.party === 'contractor') && slots.filter((x) => x.required && x.party === 'contractor').every((x) => sigs.some((g) => g.slotKey === x.slotKey))
   // the last required supervision-side slot: its signature is the final approval of the report
   const finalKey = [...slots].reverse().find((x) => x.required && x.party !== 'contractor')?.slotKey
   return (
@@ -39,7 +41,7 @@ export function SignaturesCard({ report, dirty }: { report: Pick<Report, 'id' | 
               {sg ? <>
                 <img src={sg.image} alt={`امضای ${sg.userName}`} style={{ maxHeight: 54, maxWidth: '100%', objectFit: 'contain', alignSelf: 'start' }} />
                 <small>{sg.userName} · {fmtD(sg.signedAt.slice(0, 10))} {new Date(sg.signedAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</small>
-                {(sg.userId === me || isAdmin) && draftish && <button className="im-btn im-btn-sm" style={{ justifySelf: 'start' }} onClick={() => void epc.unsignReport(report.id, sl.slotKey)}><Undo2 size={12} /> لغو امضا</button>}
+                {(isAdmin || (sg.userId === me && !contractorDone)) && draftish && <button className="im-btn im-btn-sm" style={{ justifySelf: 'start' }} onClick={() => void epc.unsignReport(report.id, sl.slotKey)}><Undo2 size={12} /> لغو امضا</button>}
               </> : <>
                 <Chip tone="warn">امضا نشده</Chip>
                 {(mine || asAdmin) && sl.party !== 'contractor' && !sent && <small className="im-helper">پس از ارسال گزارش برای نظارت امضا می‌شود</small>}

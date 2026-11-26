@@ -431,3 +431,25 @@
 .ex-sign-row small { color: #4b5563; font-size: 10px; }
 /* the form's own fixed signer boxes give way to the row above when the project defined its signature slots */
 .ex-has-slots .ex-paper-sign, .ex-has-slots .fp-sign, .ex-has-slots .fp-low-sign, .ex-has-slots .wd-sign { display: none !important; }
+
+/* report editor: one action bar, the steps, the floating issue box */
+.ex-actbar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--im-line); background: color-mix(in srgb, var(--im-panel) 92%, transparent); backdrop-filter: blur(10px); }
+.ex-actbar-title { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.ex-actbar-title b { font-size: 15px; }
+.ex-actbar-btns { margin-inline-start: auto; display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.ex-actbar-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; margin-inline-start: 6px; border-radius: 99px; background: #b91c1c; color: #fff; font-size: 11.5px; font-weight: 700; }
+.ex-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.ex-steps li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--im-line); color: var(--im-muted); font-size: 12.5px; }
+.ex-steps li span { width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; border: 1.5px solid currentColor; }
+.ex-steps li.done { color: #10b981; border-color: color-mix(in srgb, #10b981 40%, var(--im-line)); }
+.ex-steps li.cur { color: var(--im-text, inherit); border-color: #0ea5e9; background: color-mix(in srgb, #0ea5e9 10%, transparent); font-weight: 600; }
+.ex-lockmsg { padding: 10px 14px; border-inline-start: 3px solid #8b5cf6; }
+.ex-issues { position: fixed; z-index: 60; inset-inline-end: 24px; bottom: 24px; width: min(440px, calc(100vw - 32px)); max-height: min(60vh, 520px); overflow: auto; display: grid; gap: 8px; padding: 14px 16px; border-radius: 16px;
+  background: var(--im-panel, #fff); border: 1px solid #ef4444; box-shadow: 0 18px 50px -12px rgba(0, 0, 0, .55); animation: ex-issues-in .22s cubic-bezier(.23, 1, .32, 1); }
+.ex-issues-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ex-issues-head b { color: #ef4444; font-size: 14px; }
+.ex-issues ul { margin: 0; padding-inline-start: 18px; display: grid; gap: 4px; font-size: 13px; }
+.ex-issues small { color: var(--im-muted); }
+@keyframes ex-issues-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (max-width: 700px) { .ex-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ex-actbar-btns { margin-inline-start: 0; } }
+@media (prefers-reduced-motion: reduce) { .ex-issues { animation: none; } }

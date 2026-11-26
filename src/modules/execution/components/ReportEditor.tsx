@@ -15,7 +15,7 @@ import { mergeCatalog, resUsed, toRow, type ResRow } from '../lib/resourceCatalo
 import { cumulativeMetrics, inconsistenciesForReport, missingForReport } from '../lib/forms'
 import { cumulative } from '../lib/progress'
 import type { Activity, Report, ReportLine, ReportResource, Stoppage, StoppageCategory } from '../types'
-import { LINE_STATUS_LABEL_FA } from '../types'
+import { LINE_STATUS_LABEL_FA, REPORT_STATUS_LABEL_FA } from '../types'
 import { Chip } from '../../finance/components/fn'
 import { LineStatusChip, ReportStatusChip, fa } from './common'
 import { PaperModal, type PaperCtx } from './ReportPaper'
@@ -78,7 +78,15 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const [dirty, setDirty] = useState(false)
 
   const canRecord = ex.can(m.projectId, 'record')
-  const editable = canRecord && EDITABLE.has(r.status)
+  const slotsAll = useEpcStore((x) => x.signSlots), sigsAll = useEpcStore((x) => x.signatures)
+  const reportSigs = sigsAll.filter((g) => g.reportId === reportId)
+  const contractorSlots = slotsAll.filter((x) => x.projectId === m.projectId && x.formKey === r.formKey && x.active && x.required && x.party === 'contractor')
+  // once the technical office and the site manager have signed, the draft is final on the contractor's side: it is sent as
+  // signed, and a correction goes through the supervision returning it (the server enforces the same)
+  const signedLock = (r.status === 'draft' || r.status === 'incomplete') && contractorSlots.length > 0 && contractorSlots.every((x) => reportSigs.some((g) => g.slotKey === x.slotKey))
+  const sendable = canRecord && EDITABLE.has(r.status)
+  const editable = sendable && !signedLock
+  const [issues, setIssues] = useState<{ title: string; items: string[] } | null>(null)
   // entry time on real use (056): only sittings of someone who can enter the report; a report created in the last two minutes counts as new
   const [isNew] = useState(() => Date.now() - new Date(r.createdAt).getTime() < 120_000)
   const meter = useEntryMeter({ enabled: editable, projectId: m.projectId, reportId, formKey: r.formKey, newReport: isNew })
@@ -104,9 +112,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
   const upToday = useMemo(() => cumulative(m.reports, m.lines, { until: head.reportDate, excludeReportId: reportId, mode: 'registered' }), [m.reports, m.lines, head.reportDate, reportId])
   const asLines = (): ReportLine[] => rows.map((x, i) => ({ id: x.key, reportId, lineNo: i, activityId: x.activityId, qty: x.qty, kmFrom: x.kmFrom, kmTo: x.kmTo, location: x.location, note: x.note, detail: x.detail, status: x.status, approvedQty: x.approvedQty, reviewNote: x.reviewNote, sourceReportId: x.sourceReportId }))
   const asRes = (): ReportResource[] => res.map((x, i) => ({ ...x, id: String(i), reportId }))
-  const slotsAll = useEpcStore((x) => x.signSlots), sigsAll = useEpcStore((x) => x.signatures)
-  const reportSigs = sigsAll.filter((g) => g.reportId === reportId)
-  const unsignedPrep = slotsAll.filter((x) => x.projectId === m.projectId && x.formKey === r.formKey && x.active && x.required && x.party === 'contractor' && !reportSigs.some((g) => g.slotKey === x.slotKey)).map((x) => `امضای «${x.label}»`)
+  const unsignedPrep = contractorSlots.filter((x) => !reportSigs.some((g) => g.slotKey === x.slotKey)).map((x) => `امضای «${x.label}»`)
   // identity registers (welders, pipes received into the warehouse): a name that is not in the register is flagged; with the project flag «strictRegisters» it also blocks sending
   const regWelders = useEpcStore((x) => x.welders), regQuals = useEpcStore((x) => x.quals), regPipes = useEpcStore((x) => x.pipes)
   const strictRegs = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { strictRegisters?: boolean } } | undefined)?.flags?.strictRegisters
@@ -164,7 +170,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     return !!okB && okC
   }
   const send = async () => {
-    if (missing.length) return
+    if (missing.length) { setIssues({ title: 'ارسال انجام نشد — این موارد را کنترل و تکمیل کنید', items: missing }); return }
     // only unsaved edits are written before sending: re-saving an unchanged, signed report must not touch its rows
     if (dirty || crewDirty) {
       if (!(await save())) return
@@ -174,7 +180,8 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     // the report remembers which approved sheet version it was printed on
     const tpl = form ? useEpcStore.getState().templates.find((t) => t.formKey === form.key && t.status === 'approved') : undefined
     if (tpl) await useEpcStore.getState().stampTemplate(reportId, tpl.id)
-    if (await ex.submitReport(reportId)) { meter.mark('submitted', lineCount()); onClose() }
+    const err = await ex.submitReportMsg(reportId)
+    if (!err) { meter.mark('submitted', lineCount()); onClose() } else setIssues({ title: 'ارسال انجام نشد', items: [err] })
   }
   const remove = async () => { if (window.confirm('این پیش‌نویس حذف شود؟')) { if (await ex.deleteReport(reportId)) onClose() } }
 
@@ -311,19 +318,20 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
 
   return (
     <div ref={meter.root as React.RefObject<HTMLDivElement>} style={{ display: 'grid', gap: 12 }}>
-      <div className="mt-filters no-print">
-        <button className="im-btn im-btn-sm" onClick={() => { if (!dirty || window.confirm('تغییرات ذخیره‌نشده از بین می‌رود. خارج شوید؟')) onClose() }}><ArrowRight size={14} /> بازگشت به فهرست</button>
-        <b style={{ fontSize: 15 }}>{form ? form.title : 'گزارش کارکرد روزانه'} · <span className="fn-code">{r.reportNo}</span></b>
-        <ReportStatusChip status={r.status} />
-        {dirty && <span className="ex-warn">ذخیره نشده</span>}
-        <span style={{ marginInlineStart: 'auto', display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
-          <button className="im-btn im-btn-sm" onClick={() => setShowHist((x) => !x)}><History size={13} /> سابقه</button>
+      <div className="ex-actbar no-print">
+        <button className="im-btn im-btn-sm" onClick={() => { if (!dirty || window.confirm('تغییرات ذخیره‌نشده از بین می‌رود. خارج شوید؟')) onClose() }}><ArrowRight size={14} /> بازگشت</button>
+        <span className="ex-actbar-title"><b>{form ? form.title : 'گزارش کارکرد روزانه'}</b><span className="fn-code">{r.reportNo}</span><ReportStatusChip status={r.status} />{dirty && <span className="ex-warn">ذخیره نشده</span>}</span>
+        <span className="ex-actbar-btns">
+          <button className="im-btn im-btn-sm" onClick={() => setShowHist((x) => !x)} aria-pressed={showHist}><History size={13} /> سابقه</button>
           <button className="im-btn im-btn-sm" onClick={() => setPaper(true)}><Printer size={13} /> چاپ</button>
-          {editable && r.status === 'draft' && <button className="im-btn im-btn-sm im-btn-danger" onClick={() => void remove()}><Trash2 size={13} /> حذف پیش‌نویس</button>}
-          {editable && <button className="im-btn im-btn-sm" disabled={busy || !dirty} onClick={() => void save()}>ذخیره پیش‌نویس</button>}
-          {editable && ex.can(m.projectId, 'submit') && <button className="im-btn im-btn-primary im-btn-sm" disabled={busy || missing.length > 0} title={missing.length ? 'ابتدا موارد ناقص را تکمیل کنید' : undefined} onClick={() => void send()}><Send size={13} /> ارسال برای دستگاه نظارت</button>}
+          {editable && r.status === 'draft' && reportSigs.length === 0 && <button className="im-btn im-btn-sm im-btn-danger" onClick={() => void remove()}><Trash2 size={13} /> حذف</button>}
+          {editable && <button className="im-btn im-btn-sm" disabled={busy || !dirty} onClick={() => void save()}>ذخیره</button>}
+          {sendable && ex.can(m.projectId, 'submit') && <button className="im-btn im-btn-primary im-btn-sm" disabled={busy} onClick={() => void send()}><Send size={13} /> ارسال برای نظارت{missing.length > 0 && <span className="ex-actbar-badge" title="موارد ناقص">{fa(missing.length)}</span>}</button>}
         </span>
       </div>
+      {sendable && <Steps filled={missing.filter((x) => !unsignedPrep.includes(x)).length === 0} saved={!dirty} signed={unsignedPrep.length === 0} />}
+      {signedLock && <div className="im-card ex-lockmsg"><b>امضا شده و قفل است.</b> دفتر فنی و سرپرست کارگاه این گزارش را امضا کرده‌اند؛ محتوای آن دیگر تغییر نمی‌کند. آن را برای دستگاه نظارت ارسال کنید — اگر اصلاحی لازم باشد، نظارت آن را برمی‌گرداند و سابقهٔ هر دو نسخه می‌ماند.</div>}
+      {issues && <IssuePanel title={issues.title} items={issues.items} onClose={() => setIssues(null)} />}
 
       {r.status === 'returned' && r.reviewNote && <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: '3px solid var(--im-coral)' }}><b>برگشت برای اصلاح:</b> {r.reviewNote}</div>}
       {r.status === 'incomplete' && <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: '3px solid var(--im-amber)' }}><b>فرم نیازمند تکمیل است.</b> این گزارش از اطلاعات موجود پیش‌پر شده؛ فقط بخش‌های ناقص زیر را کامل کنید:<ul style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>{r.missing.map((x) => <li key={x}>{x}</li>)}</ul></div>}
@@ -351,7 +359,6 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
         <small className="sub">جوشکاران در «ارزیابی شایستگی ← صلاحیت جوشکاران و عایق‌کاران» و لوله‌ها در «کالا ← ورود لوله به کارگاه (MRS)» ثبت می‌شوند؛ شناسهٔ تازه را آنجا ثبت کنید.</small></div>}
       {form && photosAndSigns}
 
-      {form && epcAvailable && <LinkCard reportId={reportId} projectId={m.projectId} date={head.reportDate} front={head.front} model={m} />}
 
       {!form && <WeatherCard data={data} editable={editable} onChange={(k, v) => setD(k, v)} />}
 
@@ -458,41 +465,8 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
           {incons.length > 0 && <><b style={{ display: 'block', marginTop: 6 }}>ناسازگاری:</b><ul style={{ margin: '4px 0 0', paddingInlineStart: 18 }}>{incons.map((x) => <li key={x} className="ex-bad">{x}</li>)}</ul></>}
         </div>
       )}
-      {showHist && <div className="im-card" style={{ padding: 14 }}><b>سابقهٔ ارسال، اصلاح و تأیید</b><div className="ex-hist" style={{ marginTop: 8 }}>{hist.length === 0 ? <span className="im-helper">هنوز سابقه‌ای نیست.</span> : hist.map((h) => <div key={h.id}><b>{h.action.startsWith('review:') ? `بررسی (${h.action.slice(7)})` : h.action === 'submit' ? 'ارسال' : h.action === 'reopen' ? 'بازگشایی' : h.action}</b><span>{ex.people.get(h.actor ?? '') ?? 'کاربر'}</span><small>{fmtD(h.at.slice(0, 10))} {new Date(h.at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</small>{h.note && <span>— {h.note}</span>}</div>)}</div></div>}
+      {showHist && <div className="im-card" style={{ padding: 14 }}><b>سابقهٔ ارسال، اصلاح و تأیید</b><div className="ex-hist" style={{ marginTop: 8 }}>{hist.length === 0 ? <span className="im-helper">هنوز سابقه‌ای نیست.</span> : hist.map((h) => <div key={h.id}><b>{h.action.startsWith('review:') ? `بررسی نظارت: ${REPORT_STATUS_LABEL_FA[h.action.slice(7) as keyof typeof REPORT_STATUS_LABEL_FA] ?? h.action.slice(7)}` : h.action === 'submit' ? 'ارسال برای نظارت' : h.action === 'reopen' ? 'بازگشایی' : h.action === 'signatures_cleared' ? 'اصلاح نسخه (امضاهای قبلی ثبت در سابقه)' : h.action === 'unsign' ? 'لغو امضا' : h.action}</b><span>{ex.people.get(h.actor ?? '') ?? 'کاربر'}</span><small>{fmtD(h.at.slice(0, 10))} {new Date(h.at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</small>{h.note && <span>— {h.note}</span>}</div>)}</div></div>}
       {paper && <PaperModal c={paperCtx()} onClose={() => setPaper(false)} />}
-    </div>
-  )
-}
-
-/** one activity can carry many technical forms: pick the work-report row(s) this form belongs to, nothing is retyped */
-function LinkCard({ reportId, projectId, date, front, model: m }: { reportId: string; projectId: string; date: string; front: string; model: ExecutionModel }) {
-  const links = useEpcStore((x) => x.reportLinks)
-  const mine = useMemo(() => links.filter((l) => l.techReportId === reportId), [links, reportId])
-  const [pick, setPick] = useState('')
-  const lineLabel = (id: string) => {
-    const l = m.lines.find((x) => x.id === id)
-    const a = l?.activityId ? m.actById.get(l.activityId) : undefined
-    const rep = l ? m.reports.find((x) => x.id === l.reportId) : undefined
-    return l ? `${a ? `${a.itemNo} — ${a.title}` : 'ردیف'}${l.location ? ` · ${l.location}` : ''}${rep ? ` (${rep.reportNo})` : ''}` : 'ردیف حذف‌شده'
-  }
-  const options = useMemo(() => {
-    const used = new Set(mine.map((x) => x.lineId))
-    const days = new Set(m.reports.filter((x) => x.formKey === 'work' && x.reportDate === date && (!front || !x.front || x.front === front)).map((x) => x.id))
-    return m.lines.filter((l) => days.has(l.reportId) && !used.has(l.id))
-  }, [m.reports, m.lines, mine, date, front])
-  return (
-    <div className="im-card" style={{ padding: 14, display: 'grid', gap: 8 }}>
-      <b>اتصال به ردیف گزارش کارکرد روزانه</b>
-      <span className="im-helper" style={{ margin: 0 }}>یک فعالیت می‌تواند چند فرم فنی داشته باشد؛ تاریخ و جبهه از همین گزارش خوانده می‌شود و دوباره وارد نمی‌شود.</span>
-      {mine.length === 0 && <span className="im-helper" style={{ margin: 0 }}>هنوز به ردیفی وصل نشده است.</span>}
-      {mine.map((l) => <div key={l.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ flex: 1 }}>{lineLabel(l.lineId)}</span><button className="im-btn im-btn-sm" onClick={() => void useEpcStore.getState().unlinkReport(l.id)}>جداکردن</button></div>)}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="ردیف گزارش کارکرد" style={{ minWidth: 260, maxWidth: 480 }}>
-          <option value="">ردیف گزارش کارکرد همین روز ({fa(options.length)})…</option>
-          {options.map((l) => <option key={l.id} value={l.id}>{lineLabel(l.id)}</option>)}
-        </select>
-        <button className="im-btn im-btn-primary im-btn-sm" disabled={!pick} onClick={async () => { if (await useEpcStore.getState().linkReport(projectId, pick, reportId)) setPick('') }}>اتصال</button>
-      </div>
     </div>
   )
 }
@@ -528,4 +502,27 @@ function LineForms({ lineId, activityId, projectId, reportId, head, model: m, ed
 /** numbered section heading of the daily work report */
 function SecTitle({ n, title, hint }: { n: number; title: string; hint?: string }) {
   return <div className="ex-sec-title"><span>{n.toLocaleString('fa-IR')}</span><b>{title}</b>{hint && <small>{hint}</small>}</div>
+}
+
+/** where the report stands: fill in → save → contractor signatures → send */
+function Steps({ filled, saved, signed }: { filled: boolean; saved: boolean; signed: boolean }) {
+  const steps = [{ t: 'تکمیل فرم', ok: filled }, { t: 'ذخیره', ok: saved && filled }, { t: 'امضای دفتر فنی و سرپرست کارگاه', ok: signed && saved }, { t: 'ارسال برای نظارت', ok: false }]
+  const cur = steps.findIndex((x) => !x.ok)
+  return (
+    <ol className="ex-steps no-print" aria-label="مراحل ثبت گزارش">
+      {steps.map((x, i) => <li key={x.t} className={x.ok ? 'done' : i === cur ? 'cur' : undefined} aria-current={i === cur ? 'step' : undefined}><span>{x.ok ? '✓' : (i + 1).toLocaleString('fa-IR')}</span>{x.t}</li>)}
+    </ol>
+  )
+}
+
+/** floating box with what blocks the action — the user sees why «send» did not go through */
+function IssuePanel({ title, items, onClose }: { title: string; items: string[]; onClose: () => void }) {
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k) }, [onClose])
+  return (
+    <div className="ex-issues no-print" role="alertdialog" aria-labelledby="ex-issues-t">
+      <div className="ex-issues-head"><b id="ex-issues-t">{title}</b><button className="im-btn im-btn-sm" onClick={onClose} aria-label="بستن">بستن</button></div>
+      <ul>{items.slice(0, 20).map((x) => <li key={x}>{x}</li>)}{items.length > 20 && <li>و {(items.length - 20).toLocaleString('fa-IR')} مورد دیگر…</li>}</ul>
+      <small>پس از اصلاح، دوباره «ارسال برای نظارت» را بزنید.</small>
+    </div>
+  )
 }
