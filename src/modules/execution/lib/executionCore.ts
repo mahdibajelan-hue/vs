@@ -2,12 +2,13 @@ import type { useExecutionStore } from '../store/useExecutionStore'
 import type { useEpcStore } from '../store/useEpcStore'
 import { centralKey, overlayDetail } from './weldCentral'
 import { resolveLines } from './workActions'
+import { formWorkRows } from './formProgress'
 import { physicalProgress, plannedOverall } from './progress'
 import { DEFAULT_EX_SETTINGS, type ReportLine } from '../types'
 import { todayTehran } from '../../../lib/today'
 import { inView, type ProjectKind, type ScopeView } from '../../../lib/projectProfile'
 
-type ExState = Pick<ReturnType<typeof useExecutionStore.getState>, 'settingsByProject' | 'activities' | 'baselines' | 'blines' | 'reports' | 'lines'>
+type ExState = Pick<ReturnType<typeof useExecutionStore.getState>, 'settingsByProject' | 'activities' | 'baselines' | 'blines' | 'reports' | 'lines'> & Partial<Pick<ReturnType<typeof useExecutionStore.getState>, 'maps'>>
 type EpcState = Pick<ReturnType<typeof useEpcStore.getState>, 'welds' | 'lineWelds' | 'actionRules' | 'workActions'>
 
 /**
@@ -40,7 +41,9 @@ export function executionCore(st: ExState, epc: EpcState, projectId: string, tod
   const centralOf = (l: Pick<ReportLine, 'id' | 'detail'>) => { const ck = centralKey(l.detail); return (weldById.get(linkOf.get(l.id) ?? '') ?? (ck ? weldByKey.get(ck) : undefined))?.central }
   const res = resolveLines(lines, epc.actionRules.filter((r) => r.projectId === pid), epc.workActions.filter((a) => a.projectId === pid), centralOf)
   lines = res.lines
-  const base = { activities, baselines, blines, reports, lines }
+  // executed quantities live in the site minutes: their counters, mapped to price-list activities, count as work-report rows
+  const fw = formWorkRows(reports, lines, (st.maps ?? []).filter((x) => x.projectId === pid))
+  const base = { activities, baselines, blines, reports: fw.reports.length ? [...reports, ...fw.reports] : reports, lines: fw.lines.length ? [...lines, ...fw.lines] : lines }
   const groupWeights = settings.groupWeights
   const employer = ((settings as unknown as { employerStep?: string }).employerStep === 'binding' ? 'binding' : 'off') as 'binding' | 'off'
   const approved = physicalProgress({ ...base, asOf: today, mode: 'approved', groupWeights, employer })
