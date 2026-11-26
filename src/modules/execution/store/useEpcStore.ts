@@ -402,7 +402,7 @@ export const useEpcStore = create<State>((set, get) => ({
   },
   signReport: async (reportId, slotKey) => {
     const { error } = await supabase.rpc('ex_report_sign', { p_report: reportId, p_slot: slotKey })
-    if (error) { const m = error.message; window.alert(/signature_required/.test(m) ? 'امضای نمونهٔ شما ثبت نشده است؛ ابتدا از پروفایل خود امضا را ثبت کنید.' : /previous_missing/.test(m) ? 'ابتدا امضاهای قبلیِ این فرم (به ترتیب) باید ثبت شود.' : /not_assignee/.test(m) ? 'این جایگاه امضا برای شما تعریف نشده است.' : /already_signed/.test(m) ? 'این جایگاه قبلاً امضا شده است.' : /not_sent_yet/.test(m) ? 'امضای نظارت پس از ارسال گزارش برای دستگاه نظارت ممکن است.' : /bad_state/.test(m) ? 'در این وضعیت گزارش امضا ممکن نیست.' : `امضا ثبت نشد: ${m}`); return false }
+    if (error) { const m = error.message; window.alert(/signature_required/.test(m) ? 'امضای نمونهٔ شما ثبت نشده است؛ ابتدا از پروفایل خود امضا را ثبت کنید.' : /previous_missing/.test(m) ? 'ابتدا امضاهای قبلیِ این فرم (به ترتیب) باید ثبت شود.' : /not_assignee/.test(m) ? 'این جایگاه امضا برای شما تعریف نشده است.' : /already_signed/.test(m) ? 'این جایگاه قبلاً امضا شده است.' : /not_sent_yet/.test(m) ? 'امضای نظارت پس از ارسال گزارش برای دستگاه نظارت ممکن است.' : /bad_state/.test(m) ? 'در این وضعیت گزارش امضا ممکن نیست.' : `امضا و ارسال انجام نشد: ${explainExecutionError(error)}`); return false }
     // the head of the supervision's signature approves the report: refresh its status and rows
     await Promise.all([get().loadSignatures(reportId), useExecutionStore.getState().reloadReports([reportId])]); return true
   },

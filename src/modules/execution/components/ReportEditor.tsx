@@ -185,6 +185,14 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     const err = await ex.submitReportMsg(reportId)
     if (!err) { meter.mark('submitted', lineCount()); onClose() } else setIssues({ title: 'ارسال انجام نشد', items: [err] })
   }
+  // the site manager's signature also sends: check the form first, so nothing is signed that cannot go
+  const beforeSend = async (): Promise<boolean> => {
+    const open = missing.filter((x) => !unsignedPrep.includes(x))
+    if (open.length) { setIssues({ title: 'امضا و ارسال انجام نشد — این موارد را کنترل و تکمیل کنید', items: open }); return false }
+    const tpl = form ? useEpcStore.getState().templates.find((t) => t.formKey === form.key && t.status === 'approved') : undefined
+    if (tpl) await useEpcStore.getState().stampTemplate(reportId, tpl.id)
+    return true
+  }
   const remove = async () => { if (window.confirm('این پیش‌نویس حذف شود؟')) { if (await ex.deleteReport(reportId)) onClose() } }
 
 
@@ -315,7 +323,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
 
   const photosAndSigns = <>
     <ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />
-    <SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} />
+    <SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} beforeSend={beforeSend} />
   </>
 
   return (
@@ -481,7 +489,8 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
           <Steps filled={missing.filter((x) => !unsignedPrep.includes(x)).length === 0} saved={!dirty} signed={unsignedPrep.length === 0} />
           <div className="ex-finish-btns">
             {editable && <button className="im-btn" disabled={busy || !dirty} onClick={() => void save()}>ذخیره</button>}
-            {ex.can(m.projectId, 'submit') && <button className="im-btn im-btn-primary" disabled={busy} onClick={() => void send()}><Send size={14} /> ارسال برای دستگاه نظارت{missing.length > 0 && <span className="ex-actbar-badge" title="موارد ناقص">{fa(missing.length)}</span>}</button>}
+            {contractorSlots.length > 0 ? <span className="im-helper" style={{ margin: 0, alignSelf: 'center' }}>ارسال برای نظارت با «امضا و ارسال» سرپرست کارگاه انجام می‌شود.</span>
+              : ex.can(m.projectId, 'submit') && <button className="im-btn im-btn-primary" disabled={busy} onClick={() => void send()}><Send size={14} /> ارسال برای دستگاه نظارت{missing.length > 0 && <span className="ex-actbar-badge" title="موارد ناقص">{fa(missing.length)}</span>}</button>}
           </div>
         </div>
       )}
