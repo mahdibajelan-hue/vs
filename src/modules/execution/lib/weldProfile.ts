@@ -2,7 +2,7 @@
  *  The profile is DERIVED from the saved rows (latest date wins) — nothing is stored twice and no row is ever rewritten by it. */
 export interface ProfileLine { formKey: string; date: string; detail: Record<string, unknown> }
 export interface Fact { value: string; from: string; date: string }
-export type Profile = Partial<Record<'pipe' | 'size' | 'thk' | 'length' | 'bend', Fact>>
+export type Profile = Partial<Record<'pipe' | 'pipe2' | 'size' | 'thk' | 'length' | 'bend', Fact>>
 const JOINT_FORMS = ['fitup', 'welding', 'tie_in']
 export const SHARED: { attr: keyof Profile; label: string; keys: string[]; forms?: string[] }[] = [
   { attr: 'pipe', label: 'شمارهٔ لوله', keys: ['pipeNo'] },
@@ -11,12 +11,14 @@ export const SHARED: { attr: keyof Profile; label: string; keys: string[]; forms
   { attr: 'length', label: 'طول (m)', keys: ['lengthM'], forms: JOINT_FORMS },
   { attr: 'bend', label: 'زاویه خم', keys: ['bendDeg'], forms: JOINT_FORMS },
 ]
+/** facts kept on the form side only (not in the central weld table): the joint's second pipe — the pipe BEFORE the joint, chosen at fit-up */
+const LOCAL: typeof SHARED = [...SHARED, { attr: 'pipe2', label: 'شمارهٔ لولهٔ قبل', keys: ['pipeNo2'], forms: JOINT_FORMS }]
 const filled = (v: unknown) => v != null && String(v).trim() !== '' && String(v).trim() !== '0'
 
 export function buildProfile(lines: ProfileLine[]): Profile {
   const out: Profile = {}
   const sorted = [...lines].sort((a, b) => a.date.localeCompare(b.date))
-  for (const l of sorted) for (const s of SHARED) {
+  for (const l of sorted) for (const s of LOCAL) {
     if (s.forms && !s.forms.includes(l.formKey)) continue
     const k = s.keys.find((x) => filled(l.detail[x])); if (!k) continue
     out[s.attr] = { value: String(l.detail[k]).trim(), from: l.formKey, date: l.date }
@@ -27,7 +29,7 @@ export function buildProfile(lines: ProfileLine[]): Profile {
 /** What may be filled into a row of `formKey` whose columns are `columns`: only EMPTY fields, only facts the profile knows. */
 export function fillPatch(formKey: string, columns: ReadonlySet<string>, detail: Record<string, unknown>, profile: Profile): Record<string, string> {
   const patch: Record<string, string> = {}
-  for (const s of SHARED) {
+  for (const s of LOCAL) {
     const fact = profile[s.attr]; if (!fact) continue
     if (s.forms && !s.forms.includes(formKey)) continue
     const key = s.keys.find((k) => columns.has(k)); if (!key) continue

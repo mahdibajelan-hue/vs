@@ -6,7 +6,7 @@ export const registerKey = normN1
 /** form fields that hold a welder's stamp / ID (a cell may hold several, e.g. «A12 / B3») */
 export const WELDER_FIELDS = ['stampRoot', 'stampHot', 'stampFill', 'stampCap', 'stampRootC', 'stampHotC', 'stampFillC', 'stampCapC', 'stamp', 'wid1', 'wid2', 'wid3', 'wid4']
 export const isWelderField = (k: string) => WELDER_FIELDS.includes(k)
-export const isPipeField = (k: string) => k === 'pipeNo'
+export const isPipeField = (k: string) => k === 'pipeNo' || k === 'pipeNo2'
 
 export type { PersonSig, Welder, WelderQual } from '../../competency/lib/personnel'
 import type { Welder, WelderQual } from '../../competency/lib/personnel'

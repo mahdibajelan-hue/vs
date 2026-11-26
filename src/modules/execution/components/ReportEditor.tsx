@@ -274,8 +274,21 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
       for (const r of rows) { const k = registerKey(r.detail.pipeNo); if (k) strung.add(k) }
       return pipeList.filter((p) => p.status === 'in_stock' && !strung.has(p.key)).map((p) => ({ value: p.raw, label: label(p) }))
     }
+    if (form?.key === 'fitup') return fitupPicks('pipeNo')
     return [...new Map([...pipeList.map((p) => [p.raw, { value: p.raw, label: label(p) }] as const), ...weldHints.filter((w) => w.pipe).map((w) => [w.pipe, { value: w.pipe, label: '' }] as const)]).values()].slice(0, 800)
   }, [form?.key, pipeList, m.lines, m.reports, reportId, rows]) // eslint-disable-line react-hooks/exhaustive-deps
+  // fit-up joins two strung pipes: the pipe before the joint (pipeNo2) and the pipe after it (pipeNo). A pipe has one joint
+  // at each end, so it is offered again for the other side but never twice for the same side.
+  function fitupPicks(field: 'pipeNo' | 'pipeNo2') {
+    const formOf = new Map(m.reports.map((r) => [r.id, r.formKey]))
+    const strungAt = new Map<string, string>()
+    for (const l of m.lines) if (formOf.get(l.reportId) === 'string' && l.status !== 'rejected') { const k = registerKey(l.detail.pipeNo); if (k) strungAt.set(k, String(l.detail.km ?? '')) }
+    const used = new Set(m.lines.filter((l) => l.reportId !== reportId && formOf.get(l.reportId) === 'fitup' && l.status !== 'rejected').map((l) => registerKey(l.detail[field])).filter(Boolean))
+    for (const r of rows) { const k = registerKey(r.detail[field]); if (k) used.add(k) }
+    return pipeList.filter((p) => strungAt.has(p.key) && !used.has(p.key) && p.status !== 'rejected')
+      .map((p) => ({ value: p.raw, label: [p.lengthM != null ? `${p.lengthM} m` : '', p.wtIn != null ? `${p.wtIn}"` : '', strungAt.get(p.key) ? `ریسه: km ${strungAt.get(p.key)}` : 'ریسه‌شده'].filter(Boolean).join(' · ') }))
+  }
+  const pipeHints2 = useMemo(() => (form?.key === 'fitup' ? fitupPicks('pipeNo2') : []), [form?.key, pipeList, m.lines, m.reports, reportId, rows]) // eslint-disable-line react-hooks/exhaustive-deps
   const cell = (f: FieldDef, l: LRow) => {
     const v = l.detail[f.key]
     const dis = lockedLine(l)
@@ -288,7 +301,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
     if (f.kind === 'num' || f.kind === 'km') return dis ? <span>{fa(Number(v) || 0, 3)}</span> : <DecInput value={Number(v) || 0} onValue={(n) => patchDetail(l.key, f.key, n || '')} label={f.label} />
     if (f.kind === 'date') return dis ? <span>{fmtD(String(v ?? ''))}</span> : <JalaliDateInput value={String(v ?? '')} onChange={(x) => patchDetail(l.key, f.key, x)} />
     if (f.kind === 'time') return <input type="time" disabled={dis} value={String(v ?? '')} onChange={(e) => patchDetail(l.key, f.key, e.target.value)} aria-label={f.label} />
-    const known = f.key === 'weldNo' || f.key === 'jointNo' ? 'weld' : f.key === 'pipeNo' ? 'pipe' : null
+    const known = f.key === 'weldNo' || f.key === 'jointNo' ? 'weld' : f.key === 'pipeNo' ? 'pipe' : f.key === 'pipeNo2' ? 'pipe2' : null
     const onText = (val: string) => {
       patchDetail(l.key, f.key, val)
       // a pipe from the warehouse register brings its size / thickness (and length on pipe-level forms) into the EMPTY fields
@@ -345,7 +358,7 @@ function ReportEditorBody({ reportId, model: m, onClose }: { reportId: string; m
       {r.status === 'incomplete' && <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: '3px solid var(--im-amber)' }}><b>فرم نیازمند تکمیل است.</b> این گزارش از اطلاعات موجود پیش‌پر شده؛ فقط بخش‌های ناقص زیر را کامل کنید:<ul style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>{r.missing.map((x) => <li key={x}>{x}</li>)}</ul></div>}
       {!EDITABLE.has(r.status) && <div className="im-card" style={{ padding: '8px 14px' }}><span className="im-helper" style={{ margin: 0 }}>این گزارش ارسال یا بررسی شده و فقط‌خواندنی است. برای اصلاح، دستگاه نظارت باید آن را برگرداند یا بازگشایی کند.</span></div>}
 
-      {form && <><datalist id="ex-hint-welder">{welderList.filter((w) => w.status === 'active').map((w) => <option key={w.id} value={w.raw}>{w.fullName}</option>)}</datalist><datalist id="ex-hint-weld">{[...new Set(weldHints.map((w) => w.weld))].slice(0, 400).map((x) => <option key={x} value={x} />)}</datalist><datalist id="ex-hint-pipe">{pipeHints.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}</datalist></>}
+      {form && <><datalist id="ex-hint-welder">{welderList.filter((w) => w.status === 'active').map((w) => <option key={w.id} value={w.raw}>{w.fullName}</option>)}</datalist><datalist id="ex-hint-weld">{[...new Set(weldHints.map((w) => w.weld))].slice(0, 400).map((x) => <option key={x} value={x} />)}</datalist><datalist id="ex-hint-pipe">{pipeHints.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}</datalist><datalist id="ex-hint-pipe2">{pipeHints2.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}</datalist></>}
       {!form && <SecTitle n={1} title="وضعیت سایت" hint="تاریخ، جبهه، شیفت و شرایط جوی کارگاه" />}
       {form ? (
         <>

@@ -8,6 +8,7 @@ import { fa } from '../components/common'
 import { EpcGate } from '../components/epc/EpcBanner'
 import type { WeldRow } from '../epcTypes'
 import { buildProfile, SHARED } from '../lib/weldProfile'
+import { WeldPipes } from '../components/WeldPipes'
 import { ATTR_LABEL, type Attr } from '../lib/weldCentral'
 import { FORM_BY_KEY } from '../lib/formCatalog'
 import { WSTATE_FA, type WState } from '../lib/weldLifecycle'
@@ -85,6 +86,7 @@ function Inner({ projectId }: { projectId: string }) {
               <input key={`${w.id}${a}${w.central[a] ?? ''}`} disabled={!can} defaultValue={w.central[a] ?? ''} dir="ltr" style={{ width: 110 }} onBlur={(e) => { const v = e.target.value.trim(); if (v === (w.central[a] ?? '')) return; let note = ''; if (w.central[a]) { note = window.prompt(`دلیل تغییر «${ATTR_LABEL[a]}» از ${w.central[a]} به ${v || '(خالی)'}:`) ?? ''; if (!note.trim()) { e.target.value = w.central[a] ?? ''; return } } void epc.weldSetAttr(w.id, a, v, note) }} /></label>)}</div>
             {epc.weldHistory.filter((h) => h.weldId === w.id).length > 0 && <details style={{ marginTop: 6 }}><summary className="im-helper">تاریخچهٔ تغییر مشخصات</summary><table className="ex-lines"><tbody>{epc.weldHistory.filter((h) => h.weldId === w.id).map((h) => <tr key={h.id}><td>{fmtD(h.at.slice(0, 10))}</td><td>{ATTR_LABEL[h.attr]}</td><td dir="ltr">{h.oldValue ?? '—'} ← {h.newValue ?? '—'}</td><td>{h.source === 'manual' ? 'دستی' : h.source === 'backfill' ? 'انتقال از سوابق' : 'از فرم'}</td><td dir="auto">{h.note}</td></tr>)}</tbody></table></details>}
           </div>
+          <WeldPipes weldId={w.id} />
           {life.get(w.id) && <StageStrip f={life.get(w.id)!} />}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>{SHARED.map((a) => { const f = prof[a.attr]; return <Chip key={a.attr} tone={f ? 'good' : 'neutral'}>{a.label}: {f ? <b dir="ltr">{f.value}</b> : '—'}{f ? ` (از ${FORM_BY_KEY[f.from]?.title ?? f.from})` : ''}</Chip> })}</div>
           <div className="fn-tbl-wrap" style={{ maxHeight: 320 }}><table className="ex-lines"><thead><tr><th>تاریخ</th><th>فرم</th><th>شمارهٔ گزارش</th><th>وضعیت گزارش</th><th>اطلاعات مرحله</th></tr></thead><tbody>
