@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Check, CornerUpLeft, History, Printer, RotateCcw, X } from 'lucide-react'
+import { ArrowRight, Check, CheckCircle2, CornerUpLeft, History, PenLine, Printer, RotateCcw, X } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { DecInput } from '../../material/components/control/DecInput'
 import { useExecutionStore, type ReviewDecision } from '../store/useExecutionStore'
@@ -17,6 +17,9 @@ import { daysBetween } from '../lib/periods'
 import { EmployerPanel } from '../components/epc/EmployerPanel'
 import { VersionsCard } from '../components/epc/VersionsCard'
 import { epcSettings } from '../lib/epcSettings'
+import { ReviewSheet, type FixDraft } from '../components/ReviewSheet'
+import { useFixStore, useReportFixes } from '../store/useFixStore'
+import { byPath, fixItems } from '../lib/reviewFixes'
 
 type Dec = { decision: 'approved' | 'rejected' | 'returned'; qty: number; note: string }
 
@@ -114,6 +117,14 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
   const [busy, setBusy] = useState(false)
   const [paper, setPaper] = useState(false)
   const actions = useEpcStoreSig((x) => x.workActions)
+  // the supervision's decision on the whole report: accept as sent · correct figures, then sign · return to the contractor
+  const [mode, setMode] = useState<'' | 'accept' | 'fix' | 'return'>('')
+  const [draft, setDraft] = useState<FixDraft>({})
+  const [fixNote, setFixNote] = useState('')
+  const [retNote, setRetNote] = useState('')
+  const [msg, setMsg] = useState('')
+  const fixList = useReportFixes(reportId)
+  const fixes = useMemo(() => byPath(fixList), [fixList])
   if (!r) return null
   const epc = epcSettings(m.settings as unknown as Record<string, unknown>)
   const empOn = epc.employerStep !== 'off'
@@ -141,6 +152,26 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
     setBusy(false)
     if (ok) onClose()
   }
+  const supSlots = slots.filter((x) => x.projectId === m.projectId && x.formKey === r.formKey && x.active && x.required && x.party !== 'contractor').sort((a, b) => a.sort - b.sort)
+  const supSigned = sigs.filter((g) => g.reportId === reportId && supSlots.some((x) => x.slotKey === g.slotKey)).length
+  const resOf = m.resources.filter((x) => x.reportId === reportId), stopOf = m.stoppages.filter((x) => x.reportId === reportId)
+  // the figure the report holds now at a path (after earlier corrections)
+  const currentAt = (path: string): unknown => {
+    const a = path.split(':')
+    if (a[0] === 'data') return r.data[a[1]]
+    if (a[0] === 'res') { const x = resOf.find((y) => y.id === a[1]); const f = Object.entries({ total_qty: 'totalQty', active_qty: 'activeQty', idle_qty: 'idleQty', leave_qty: 'leaveQty', stopped_qty: 'stoppedQty', native_qty: 'nativeQty', nonnative_qty: 'nonnativeQty', repair_qty: 'repairQty', hours: 'hours' }).find(([k]) => k === a[2])?.[1]; return x && f ? (x as unknown as Record<string, unknown>)[f] : undefined }
+    if (a[0] === 'stop') return stopOf.find((y) => y.id === a[1])?.hours
+    const l = lines.find((y) => y.id === a[1]); if (!l) return undefined
+    return a[2] === 'qty' ? l.qty : l.detail[a[3]]
+  }
+  const pendingFix = fixItems(draft, currentAt, fixes)
+  const saveFixes = async () => {
+    setBusy(true)
+    const err = await useFixStore.getState().save(reportId, pendingFix.map((x) => ({ ...x, note: fixNote.trim() })))
+    setBusy(false)
+    if (!err) { setDraft({}); setMode('accept'); setMsg(`${fa(pendingFix.length)} اصلاح ثبت شد. اکنون امضا کنید؛ امضای سرپرست دستگاه نظارت، تأیید نهایی با اعداد اصلاح‌شده است.`); document.getElementById('ex-review-signs')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }
+    else setMsg(err)
+  }
   const canAmend = !finalSigned && ex.can(m.projectId, 'reopen') && !form && (r.status === 'approved' || r.status === 'partially_approved')
   const amend = async (lineId: string, cur: number, max: number) => {
     const v = window.prompt(`مقدار تأییدشدهٔ جدید (۰ تا ${fa(max, 3)}):`, String(cur)); if (v == null) return
@@ -167,11 +198,46 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
           {canReopen && <button className="im-btn im-btn-sm" onClick={() => void reopen()}><RotateCcw size={13} /> بازگشایی</button>}
         </span>
       </div>
-      <SignaturesCard report={{ id: reportId, projectId: r.projectId, formKey: r.formKey, status: r.status }} />
       <div className="im-card" style={{ padding: '10px 14px', display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 13 }}>
         <span>تاریخ: <b>{fmtD(r.reportDate)}</b></span><span>پیمانکار: <b>{orgName}</b></span><span>جبهه: <b>{r.front || '—'}</b></span><span>ارسال‌کننده: <b>{ex.people.get(r.submittedBy ?? '') ?? '—'}</b></span><span>ارسال: <b>{fmtD((r.submittedAt ?? '').slice(0, 10))}</b></span>
       </div>
-      <div className="im-card" style={{ padding: 0 }}>
+      {canReview && !finalSigned && (
+        <section className="im-card ex-dec no-print" aria-label="تصمیم دستگاه نظارت">
+          <h3>تصمیم دستگاه نظارت</h3>
+          <div className="ex-dec-opts" role="radiogroup" aria-label="تصمیم">
+            <button type="button" role="radio" aria-checked={mode === 'accept'} className={`ex-dec-opt ok${mode === 'accept' ? ' on' : ''}`} onClick={() => { setMode('accept'); setMsg('') }}><CheckCircle2 size={22} aria-hidden /><b>تأیید بدون تغییر</b><small>اعداد پیمانکار همان‌طور که ارسال شده پذیرفته و امضا می‌شود</small></button>
+            <button type="button" role="radio" aria-checked={mode === 'fix'} className={`ex-dec-opt fix${mode === 'fix' ? ' on' : ''}`} onClick={() => { setMode('fix'); setMsg('') }}><PenLine size={22} aria-hidden /><b>اصلاح مقادیر و امضا</b><small>هر عددی که مغایرت دارد را اصلاح کنید؛ عدد پیمانکار خط‌خورده می‌ماند و عدد نظارت ملاک می‌شود</small></button>
+            <button type="button" role="radio" aria-checked={mode === 'return'} className={`ex-dec-opt back${mode === 'return' ? ' on' : ''}`} onClick={() => { setMode('return'); setMsg('') }}><CornerUpLeft size={22} aria-hidden /><b>برگشت به پیمانکار</b><small>گزارش قابل بررسی نیست؛ پیمانکار آن را اصلاح و دوباره امضا و ارسال می‌کند</small></button>
+          </div>
+          {mode === 'accept' && (supSlots.length > 0
+            ? <p className="ex-dec-note">برای تأیید، امضای خود را در کادر «امضاها» (پایین همین صفحه) بزنید. ترتیب: {supSlots.map((x) => x.label).join(' ← ')}؛ امضای آخر، تأیید نهایی و قفل گزارش است.{fixList.length > 0 && ' اصلاحاتی که قبلاً ثبت شده، در گزارش می‌ماند.'}</p>
+            : <div className="ex-dec-note">امضای نظارت برای این فرم در «تنظیمات ← نقش‌های امضا» تعریف نشده است. <button className="im-btn im-btn-primary im-btn-sm" disabled={busy} onClick={async () => { setBusy(true); const ok = await ex.decideWhole(reportId, 'approved', ''); setBusy(false); if (ok) onClose() }}><Check size={13} /> تأیید گزارش</button></div>)}
+          {mode === 'fix' && (
+            <div className="ex-dec-note">
+              <span>عدد جدید را در خانه‌های جدول زیر بنویسید؛ خانه‌های اصلاح‌شده رنگی می‌شوند و عدد پیمانکار خط‌خورده کنارشان می‌ماند. برای پس گرفتن اصلاح، همان عدد پیمانکار را بنویسید.</span>
+              <label>علت / توضیح اصلاح<input value={fixNote} onChange={(e) => setFixNote(e.target.value)} dir="auto" placeholder="مثلاً: بر اساس بازدید میدانی ساعت ۱۰" /></label>
+              <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button className="im-btn im-btn-primary" disabled={busy || pendingFix.length === 0} onClick={() => void saveFixes()}><PenLine size={14} /> ثبت اصلاحات ({fa(pendingFix.length)})</button>
+                {Object.keys(draft).length > 0 && <button className="im-btn im-btn-sm" onClick={() => setDraft({})}>پاک کردن تغییرات ثبت‌نشده</button>}
+                {supSigned > 0 && <small className="ex-warn">ثبت اصلاحات، امضاهای نظارتِ داده‌شده روی نسخهٔ قبلی را پاک می‌کند تا روی نسخهٔ اصلاح‌شده امضا شود.</small>}
+              </span>
+            </div>
+          )}
+          {mode === 'return' && (
+            <div className="ex-dec-note">
+              <label>علت برگشت (الزامی؛ برای پیمانکار نمایش داده می‌شود)<textarea rows={2} value={retNote} onChange={(e) => setRetNote(e.target.value)} dir="auto" /></label>
+              {fixList.length > 0 && <small className="ex-warn">با برگشت، اصلاحات ثبت‌شدهٔ نظارت کنار گذاشته می‌شود و اعداد خود پیمانکار برمی‌گردد (در سابقه می‌ماند).</small>}
+              <button className="im-btn im-btn-danger" disabled={busy || !retNote.trim()} onClick={async () => { setBusy(true); const ok = await ex.decideWhole(reportId, 'returned', retNote.trim()); setBusy(false); if (ok) { void useFixStore.getState().load(reportId); onClose() } }}><CornerUpLeft size={14} /> برگشت به پیمانکار</button>
+            </div>
+          )}
+          {msg && <p className="ex-dec-msg" role="status">{msg}</p>}
+        </section>
+      )}
+      {fixList.length > 0 && <p className="im-helper no-print" style={{ margin: 0 }}><span className="ex-fixmark"><s>۱۲</s><b>۱۰</b></span> = عدد پیمانکار (خط‌خورده) و عدد اصلاحی دستگاه نظارت (قرمز). {fa(fixList.length)} مقدار اصلاح شده است.</p>}
+      <ReviewSheet report={r} form={form} lines={lines} resources={m.resources.filter((x) => x.reportId === reportId)} stoppages={m.stoppages.filter((x) => x.reportId === reportId)} acts={m.actById} fixes={fixes} editing={mode === 'fix' && canReview && !finalSigned} draft={draft} onDraft={(path, value, label) => setDraft((d) => ({ ...d, [path]: { value, label } }))} />
+      <div id="ex-review-signs"><SignaturesCard report={{ id: reportId, projectId: r.projectId, formKey: r.formKey, status: r.status }} /></div>
+      {lines.length > 0 && <div className="im-card" style={{ padding: 0 }}>
+        <div style={{ padding: '10px 14px' }}><b>ردیف‌ها — تصمیم ردیف‌به‌ردیف (اختیاری)</b> <span className="im-helper">بدون تصمیم ردیف‌به‌ردیف، امضای نهایی همهٔ ردیف‌های در انتظار را تأیید می‌کند.</span></div>
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}>
           <table className="ex-lines">
             <thead><tr><th>#</th><th>{form ? 'ردیف' : 'فعالیت'}</th><th className="num">{form ? '' : 'کارکرد گزارش‌شده'}</th>{!form && <th>تجمعی تأییدشده تا قبل</th>}<th>وضعیت</th><th className="num">بررسی نظارت</th>{empOn && <th className="num">کارفرما</th>}{canReview && <th>تصمیم شما</th>}</tr></thead>
@@ -199,8 +265,8 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
                 </tr>) })}</tbody>
           </table>
         </div>
-      </div>
-      {canReview && (
+      </div>}
+      {canReview && lines.length > 0 && (
         <div className="im-card" style={{ padding: 14, display: 'grid', gap: 8 }}>
           <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--im-muted)' }}>توضیحات بازرس دربارهٔ کل گزارش<input value={note} onChange={(e) => setNote(e.target.value)} dir="auto" /></label>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

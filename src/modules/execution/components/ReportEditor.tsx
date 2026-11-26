@@ -338,16 +338,14 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
   const finishBar = sendable ? (
         <div className="ex-finish no-print">
           <div className="ex-finish-btns">
-            {editable && <button className="im-btn" disabled={busy || !dirty} onClick={() => void save()}>ذخیره</button>}
-            {contractorSlots.length > 0 ? <span className="im-helper" style={{ margin: 0, alignSelf: 'center' }}>ارسال برای نظارت با «امضا و ارسال» سرپرست کارگاه انجام می‌شود.</span>
+            {editable && <button className={`im-btn${dirty ? ' im-btn-primary' : ''}`} disabled={busy || !dirty} onClick={() => void save()}>{busy ? 'در حال ذخیره…' : dirty ? 'ذخیرهٔ اطلاعات' : '✓ اطلاعات ذخیره شده'}</button>}
+            {contractorSlots.length > 0 ? <span className="im-helper" style={{ margin: 0, alignSelf: 'center' }}>{dirty ? 'ابتدا اطلاعات را ذخیره کنید؛ امضاها پس از ذخیره فعال می‌شوند.' : 'اکنون امضا کنید؛ «امضا و ارسال» سرپرست کارگاه گزارش را برای نظارت می‌فرستد.'}</span>
               : ex.can(m.projectId, 'submit') && <button className="im-btn im-btn-primary" disabled={busy} onClick={() => void send()}><Send size={14} /> ارسال برای دستگاه نظارت{missing.length > 0 && <span className="ex-actbar-badge" title="موارد ناقص">{fa(missing.length)}</span>}</button>}
           </div>
         </div>
   ) : null
-  const photosAndSigns = <>
-    <ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />
-    <SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} beforeSend={beforeSend} />
-  </>
+  // order at the bottom of the form: (photos) → save → signatures — a signature is given on saved data only
+  const signs = <SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} beforeSend={beforeSend} />
 
   if (paperOnly) return <PaperModal c={paperCtx()} onClose={onClose} />
 
@@ -463,7 +461,7 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
         </div>
       </div>}
 
-      {form && <><SignaturesCard report={{ id: reportId, projectId: m.projectId, formKey: r.formKey, status: r.status }} dirty={dirty} beforeSend={beforeSend} />{finishBar}</>}
+      {form && <>{finishBar}{signs}</>}
 
       {form?.resources && <ResourcePanel rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} onCopyLast={copyLastResources} />}
 
@@ -502,7 +500,7 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
         </div>
       )}
       {!form && <><SecTitle n={6} title="پیش‌بینی عملیات اجرایی روز آتی" /><NextDayPlan value={asNext(data.nextDay)} editable={editable} onChange={(v) => setD('nextDay', v)} /></>}
-      {!form && <>{photosAndSigns}{finishBar}</>}
+      {!form && <><ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />{finishBar}{signs}</>}
       {form && <ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />}
 
 

@@ -10,12 +10,12 @@ export const WEATHER_OPTS: Opt[] = [
   { value: 'snowy', label: 'برفی', icon: CloudSnow, color: '#7dd3fc' },
   { value: 'stormy', label: 'باد و خاک', icon: Wind, color: '#a78bfa' },
 ]
-const SITE: Opt[] = [
+export const SITE_OPTS: Opt[] = [
   { value: 'active', label: 'فعال', icon: Play, color: '#34d399' },
   { value: 'partial', label: 'محدود', icon: Pause, color: '#f59e0b' },
   { value: 'stopped', label: 'تعطیل', icon: OctagonX, color: '#fb7185' },
 ]
-const GROUND: Opt[] = [
+export const GROUND_OPTS: Opt[] = [
   { value: 'dry', label: 'خشک', icon: Mountain, color: '#d6a35c' },
   { value: 'mud', label: 'گل', icon: Footprints, color: '#a16207' },
   { value: 'wet', label: 'خیس', icon: Droplets, color: '#38bdf8' },
@@ -41,7 +41,7 @@ export function WeatherCard({ data, editable, onChange }: { data: Record<string,
   const num = (k: string) => Number(data[k]) || 0
   const w = WEATHER_OPTS.find((x) => x.value === String(data.weather ?? ''))
   const Big = w?.icon ?? CloudSun
-  const site = SITE.find((x) => x.value === String(data.siteStatus ?? '')), ground = GROUND.find((x) => x.value === String(data.groundStatus ?? ''))
+  const site = SITE_OPTS.find((x) => x.value === String(data.siteStatus ?? '')), ground = GROUND_OPTS.find((x) => x.value === String(data.groundStatus ?? ''))
   const stat = (k: string, label: string, unit: string, I: LucideIcon, signed = false) => (
     <label className="wx-stat">
       <span className="wx-stat-cap"><I size={14} aria-hidden />{label}</span>
@@ -66,12 +66,12 @@ export function WeatherCard({ data, editable, onChange }: { data: Record<string,
           <span className="wx-site-badge" style={{ ['--c' as string]: site?.color ?? '#64748b' }}>{site ? <site.icon size={22} aria-hidden /> : <Play size={22} aria-hidden />}</span>
           <div><h4>وضعیت کارگاه</h4><b>{site?.label ?? 'انتخاب کنید'}</b></div>
         </div>
-        <Pills opts={SITE} value={String(data.siteStatus ?? '')} onPick={(v) => onChange('siteStatus', v)} disabled={!editable} label="وضعیت کارگاه" size={15} />
+        <Pills opts={SITE_OPTS} value={String(data.siteStatus ?? '')} onPick={(v) => onChange('siteStatus', v)} disabled={!editable} label="وضعیت کارگاه" size={15} />
         <div className="wx-site-row">
           <span className="wx-site-badge" style={{ ['--c' as string]: ground?.color ?? '#64748b' }}>{ground ? <ground.icon size={22} aria-hidden /> : <Mountain size={22} aria-hidden />}</span>
           <div><h4>وضعیت زمین</h4><b>{ground?.label ?? 'انتخاب کنید'}</b></div>
         </div>
-        <Pills opts={GROUND} value={String(data.groundStatus ?? '')} onPick={(v) => onChange('groundStatus', v)} disabled={!editable} label="وضعیت زمین" size={15} />
+        <Pills opts={GROUND_OPTS} value={String(data.groundStatus ?? '')} onPick={(v) => onChange('groundStatus', v)} disabled={!editable} label="وضعیت زمین" size={15} />
       </section>
     </div>
   )

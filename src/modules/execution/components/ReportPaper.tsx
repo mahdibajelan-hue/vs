@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useFormSlots } from './useFormSlots'
 import { FileDown, FileSpreadsheet, Printer } from 'lucide-react'
 import { exportPaperPdf, exportReportXlsx } from '../lib/paperExport'
@@ -19,6 +19,9 @@ import { useExecutionStore } from '../store/useExecutionStore'
 import { paperChoice, printModeOf } from '../forms/printMode'
 import type { FormTemplateRow, ReportSignature } from '../epcTypes'
 import { sheetSignCells } from '../forms/signBoxes'
+import { useReportFixes } from '../store/useFixStore'
+import { RES_COL, byPath, fixPath, type ReportFix } from '../lib/reviewFixes'
+import { FixMark } from './ReviewSheet'
 
 export interface PaperCtx {
   projectName: string; orgName: string; people: Map<string, string>
@@ -62,6 +65,7 @@ export function ReportPaper({ c }: { c: PaperCtx }) {
           </div>
         )}
         <TemplatePaper c={c} template={approved} note={experimental ? 'پیش‌نمایش آزمایشی — بایگانی رسمی نیست' : undefined} />
+        <FixesTable reportId={c.report.id} />
         {!sheetCarriesSigns(approved, slotKeys) && <SignatureRow c={c} />}
       </>
     )
@@ -75,7 +79,7 @@ export function ReportPaper({ c }: { c: PaperCtx }) {
       )}
       {letterhead === undefined
         ? <p className="im-helper" role="status" style={{ padding: 16 }}>در حال خواندن سربرگ گزارش…</p>
-        : <PaperFrame projectId={c.report.projectId} letterhead={letterhead}><div className={slotKeys.length ? 'ex-has-slots' : undefined}><ReportPaperBody c={c} /><SignatureRow c={c} /></div></PaperFrame>}
+        : <PaperFrame projectId={c.report.projectId} letterhead={letterhead}><div className={slotKeys.length ? 'ex-has-slots' : undefined}><ReportPaperBody c={c} /><FixesTable reportId={c.report.id} /><SignatureRow c={c} /></div></PaperFrame>}
     </>
   )
 }
@@ -118,19 +122,36 @@ export function SignatureStrip({ signatures }: { signatures?: ReportSignature[] 
     </div>
   )
 }
+/** every correction of the supervision on one table: what the contractor wrote (struck through) and the figure that counts */
+export function FixesTable({ reportId }: { reportId: string }) {
+  const fixes = useReportFixes(reportId)
+  if (!fixes.length) return null
+  const show = (v: unknown) => (v == null || String(v).trim() === '' ? '—' : Number.isFinite(Number(v)) && String(v).trim() !== '' ? fa(Number(v), 3) : String(v))
+  return (
+    <table className="ex-fixes-tbl">
+      <thead><tr><th colSpan={4}>اصلاحات دستگاه نظارت</th></tr><tr><th>مورد</th><th className="num">ثبت پیمانکار</th><th className="num">مقدار نهایی (نظارت)</th><th>اصلاح‌کننده / توضیح</th></tr></thead>
+      <tbody>{fixes.map((f) => <tr key={f.id}><td>{f.label || f.path}</td><td className="num"><s>{show(f.was)}</s></td><td className="num"><b className="ex-fix-red">{show(f.value)}</b></td><td>{f.fixedByName}{f.fixedAt ? ` · ${fmtD(f.fixedAt.slice(0, 10))}` : ''}{f.note ? ` — ${f.note}` : ''}</td></tr>)}</tbody>
+    </table>
+  )
+}
 function ReportPaperBody({ c }: { c: PaperCtx }) {
   const { report: r, form } = c
+  const fixes = byPath(useReportFixes(r.id))
+  const fx = (path: string, node: ReactNode, show: (v: unknown) => ReactNode = (v) => (v == null || v === '' ? '—' : Number.isFinite(Number(v)) ? fa(Number(v), 3) : String(v))) => { const f: ReportFix | undefined = fixes.get(path); return f ? <FixMark fix={f} show={show}>{node}</FixMark> : node }
   if (form?.key === 'welding' || form?.key === 'fitup') return <WeldingPaper c={c} />
   if (form && PAPER_FORMS.has(form.key)) return <FormPaper c={c} />
   const title = form ? form.title : 'گزارش وضعیت کارگاه'
   const signers = form ? form.signers : (['project_control', 'site_head', 'supervision', 'employer'] as const)
   const who = (u: string | null) => (u ? c.people.get(u) ?? 'کاربر' : '')
   const when = (iso: string | null) => (iso ? `${fmtD(iso.slice(0, 10))} ${new Date(iso).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}` : '')
-  const info: [string, string][] = [
+  const SITE_FA: Record<string, string> = { active: 'فعال', partial: 'فعالیت محدود', stopped: 'تعطیل' }, GROUND_FA: Record<string, string> = { dry: 'خشک', mud: 'گل', wet: 'خیس', frozen: 'یخ‌زده', snow: 'برفی' }
+  const lbl = (m: Record<string, string>) => (v: unknown) => m[String(v ?? '')] ?? '—'
+  const n1 = (k: string, unit = '') => (r.data[k] != null && r.data[k] !== '' ? `${fa(Number(r.data[k]), 1)}${unit}` : '—')
+  const info: [string, ReactNode][] = [
     ['تاریخ گزارش', fmtD(r.reportDate)], ['پیمانکار', c.orgName || '—'], ['جبهه کاری', r.front || '—'], ['ایستگاه / محدوده', r.station || '—'],
-    ['شیفت', r.shift === 'night' ? 'شب' : 'روز'], ['آب‌وهوا', WEATHER_FA[String(r.data.weather ?? '')] ?? '—'],
-    ...(!form ? ([['دمای کمینه / بیشینه', r.data.tempMin != null || r.data.tempMax != null ? `${fa(Number(r.data.tempMin) || 0)} / ${fa(Number(r.data.tempMax) || 0)} °C` : '—'], ['رطوبت', r.data.humidity ? `${fa(Number(r.data.humidity))}٪` : '—'], ['وضعیت کارگاه', ({ active: 'فعال', partial: 'فعالیت محدود', stopped: 'تعطیل' } as Record<string, string>)[String(r.data.siteStatus ?? '')] ?? '—'], ['وضعیت زمین', ({ dry: 'خشک', mud: 'گل', wet: 'خیس', frozen: 'یخ‌زده', snow: 'برفی' } as Record<string, string>)[String(r.data.groundStatus ?? '')] ?? '—'], ['ساعت کار مفید', r.data.usefulHours ? fa(Number(r.data.usefulHours), 1) : '—']] as [string, string][]) : []),
-    ...(form ? form.header.filter((h) => r.data[h.key] != null && r.data[h.key] !== '').map((h) => [h.label, optLabel(form, h.key, r.data[h.key])] as [string, string]) : []),
+    ['شیفت', r.shift === 'night' ? 'شب' : 'روز'], ['آب‌وهوا', fx(fixPath.data('weather'), WEATHER_FA[String(r.data.weather ?? '')] ?? '—', lbl(WEATHER_FA))],
+    ...(!form ? ([['دمای کمینه (°C)', fx(fixPath.data('tempMin'), n1('tempMin'))], ['دمای بیشینه (°C)', fx(fixPath.data('tempMax'), n1('tempMax'))], ['رطوبت', fx(fixPath.data('humidity'), n1('humidity', '٪'))], ['وضعیت کارگاه', fx(fixPath.data('siteStatus'), SITE_FA[String(r.data.siteStatus ?? '')] ?? '—', lbl(SITE_FA))], ['وضعیت زمین', fx(fixPath.data('groundStatus'), GROUND_FA[String(r.data.groundStatus ?? '')] ?? '—', lbl(GROUND_FA))], ['ساعت کار مفید', fx(fixPath.data('usefulHours'), n1('usefulHours'))]] as [string, ReactNode][]) : []),
+    ...(form ? form.header.filter((h) => r.data[h.key] != null && r.data[h.key] !== '').map((h) => [h.label, fx(fixPath.data(h.key), optLabel(form, h.key, r.data[h.key]), (v) => optLabel(form, h.key, v))] as [string, ReactNode]) : []),
   ]
   return (
     <div className="ex-paper mt-printable">
@@ -140,17 +161,17 @@ function ReportPaperBody({ c }: { c: PaperCtx }) {
       </header>
       <div className="ex-paper-info">{info.map(([k, v]) => <div key={k}><small>{k}</small><b>{v}</b></div>)}</div>
 
-      {!form ? (
+      {!form ? (c.lines.length > 0 &&
         <table>
           <thead><tr><th>ردیف</th><th>ردیف فهرست‌بها</th><th>شرح فعالیت</th><th>واحد</th><th>محل / کیلومتر</th><th className="num">امروز</th><th className="num">تا روز قبل</th><th className="num">تجمعی جدید</th><th className="num">باقی‌مانده</th><th>وضعیت</th></tr></thead>
           <tbody>{c.lines.map((l, i) => { const a = l.activityId ? c.acts.get(l.activityId) : undefined; const prev = c.prev?.get(l.activityId ?? '') ?? 0; const base = a && c.baseOf ? c.baseOf(a) : 0
             return <tr key={l.id}><td className="num">{fa(i + 1)}</td><td>{a?.itemNo}</td><td>{a?.title ?? (l.detail.actionTitle ? String(l.detail.actionTitle) : undefined)}{l.detail.actionKey ? <small style={{ display: 'block', color: '#6b7280' }}>{Object.entries(l.detail).filter(([k, v]) => !k.startsWith('action') && String(v ?? '').trim()).map(([k, v]) => `${k}: ${v}`).join(' · ')}</small> : null}{l.note ? <small style={{ display: 'block', color: '#6b7280' }}>{l.note}</small> : null}</td><td>{a?.unit ?? (l.detail.actionUnit ? String(l.detail.actionUnit) : undefined)}</td><td>{[l.location, l.kmFrom != null ? `km ${l.kmFrom}${l.kmTo != null ? `–${l.kmTo}` : ''}` : ''].filter(Boolean).join(' · ') || '—'}</td>
-              <td className="num"><b>{fa(l.qty, 2)}</b></td><td className="num">{fa(prev, 2)}</td><td className="num">{fa(prev + l.qty, 2)}</td><td className="num">{base ? fa(Math.max(0, base - prev - l.qty), 2) : '—'}</td><td>{l.status === 'approved' ? `تأیید ${fa(l.approvedQty ?? l.qty, 2)}` : l.status === 'pending' ? 'در انتظار' : l.status === 'rejected' ? 'رد' : 'برگشت'}</td></tr> })}</tbody>
+              <td className="num"><b>{fx(fixPath.qty(l.id), fa(l.qty, 2))}</b></td><td className="num">{fa(prev, 2)}</td><td className="num">{fa(prev + l.qty, 2)}</td><td className="num">{base ? fa(Math.max(0, base - prev - l.qty), 2) : '—'}</td><td>{l.status === 'approved' ? `تأیید ${fa(l.approvedQty ?? l.qty, 2)}` : l.status === 'pending' ? 'در انتظار' : l.status === 'rejected' ? 'رد' : 'برگشت'}</td></tr> })}</tbody>
         </table>
       ) : form.columns.length > 0 && (
         <table>
           <thead><tr><th>ردیف</th>{form.columns.map((col) => <th key={col.key}>{col.label}</th>)}</tr></thead>
-          <tbody>{c.lines.map((l, i) => <tr key={l.id}><td className="num">{fa(i + 1)}</td>{form.columns.map((col) => <td key={col.key} className={col.kind === 'num' || col.kind === 'km' ? 'num' : undefined}>{col.kind === 'date' ? fmtD(String(l.detail[col.key] ?? '')) : (col.kind === 'num' || col.kind === 'km') && l.detail[col.key] !== '' && l.detail[col.key] != null ? fa(Number(l.detail[col.key]), 3) : optLabel(form, col.key, l.detail[col.key])}</td>)}</tr>)}</tbody>
+          <tbody>{c.lines.map((l, i) => <tr key={l.id}><td className="num">{fa(i + 1)}</td>{form.columns.map((col) => <td key={col.key} className={col.kind === 'num' || col.kind === 'km' ? 'num' : undefined}>{col.kind === 'date' ? fmtD(String(l.detail[col.key] ?? '')) : fx(fixPath.cell(l.id, col.key), (col.kind === 'num' || col.kind === 'km') && l.detail[col.key] !== '' && l.detail[col.key] != null ? fa(Number(l.detail[col.key]), 3) : optLabel(form, col.key, l.detail[col.key]), (v) => optLabel(form, col.key, v))}</td>)}</tr>)}</tbody>
         </table>
       )}
 
@@ -180,7 +201,7 @@ function ReportPaperBody({ c }: { c: PaperCtx }) {
             <tbody>
               {sections.map((sec) => { const rows = list.filter((x) => x.section === sec); return [
                 <tr key={'s' + sec} style={{ background: '#f3f4f6' }}><td><b>{sec || '—'}</b></td>{cols.map(([f]) => <td key={f} className="num"><b>{fa(tot(rows, f))}</b></td>)}</tr>,
-                ...rows.map((x) => <tr key={x.id}><td style={{ paddingInlineStart: 16 }}>{x.name}</td>{cols.map(([f]) => <td key={f} className="num">{x[f] ? fa(x[f]) : '·'}</td>)}</tr>),
+                ...rows.map((x) => <tr key={x.id}><td style={{ paddingInlineStart: 16 }}>{x.name}</td>{cols.map(([f]) => <td key={f} className="num">{fx(fixPath.res(x.id, RES_COL[f]), x[f] ? fa(x[f]) : '·')}</td>)}</tr>),
               ] })}
               <tr style={{ borderTop: '2px solid #111' }}><td><b>جمع کل</b></td>{cols.map(([f]) => <td key={f} className="num"><b>{fa(tot(list, f))}</b></td>)}</tr>
             </tbody>
@@ -190,7 +211,7 @@ function ReportPaperBody({ c }: { c: PaperCtx }) {
       {c.stoppages.length > 0 && (
         <table>
           <thead><tr><th>عامل توقف / مشکل</th><th className="num">ساعت</th><th>شرح</th></tr></thead>
-          <tbody>{c.stoppages.map((x) => <tr key={x.id}><td>{STOPPAGE_CATEGORY_FA[x.category]}</td><td className="num">{fa(x.hours, 1)}</td><td>{x.description}</td></tr>)}</tbody>
+          <tbody>{c.stoppages.map((x) => <tr key={x.id}><td>{STOPPAGE_CATEGORY_FA[x.category]}</td><td className="num">{fx(fixPath.stop(x.id), fa(x.hours, 1))}</td><td>{x.description}</td></tr>)}</tbody>
         </table>
       )}
       {!form && (() => { const nd = asNext(r.data.nextDay); return nd.rows.length > 0 ? (
