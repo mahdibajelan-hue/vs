@@ -44,24 +44,26 @@ export function ProjectRadarPage({ onBack }: { onBack: () => void }) {
 
   const selectedProject = useMemo(() => masterProjects.find((p) => p.id === contextProjectId) ?? null, [masterProjects, contextProjectId])
 
-  // Shows the deterministic mock instantly (no loading flicker), then upgrades in place to live
-  // Risk/Issue data once fetchProjectIntelligence resolves — a project with no confirmed module
-  // mapping yet just keeps looking like the mock, same "unmapped" convention Reporting already uses.
-  const [data, setData] = useState<RadarData>(DEFAULT_RADAR_DATA)
+  const [data, setData] = useState<RadarData>(() => blankRadarData(DEFAULT_RADAR_DATA))
   const [reloadKey, setReloadKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   useEffect(() => {
     if (!selectedProject) {
-      setData(DEFAULT_RADAR_DATA)
+      setData(blankRadarData(DEFAULT_RADAR_DATA))
+      setRefreshing(false)
       return
     }
     const projectIdCode = selectedProject.projectIdCode || selectedProject.projectCode
     // nothing until the modules answer: an empty picture, never sample figures
-    setData(blankRadarData(buildMockRadarData(selectedProject.id, selectedProject.officialName, projectIdCode)))
+    const empty = blankRadarData(buildMockRadarData(selectedProject.id, selectedProject.officialName, projectIdCode))
+    setData({ ...empty, reportDateFa: '—', reportDateEn: '—' })
     setRefreshing(true)
     let cancelled = false
     buildRadarData(selectedProject.id, selectedProject.officialName, projectIdCode).then((live) => {
       if (!cancelled) { setData(live); useRadarPeek.getState().put(selectedProject.id, live) }
+    }).catch((error) => {
+      console.warn('[radar] refresh failed', error)
+      if (!cancelled) setData({ ...empty, availability: 'error', reportDateFa: '—', reportDateEn: '—' })
     }).finally(() => { if (!cancelled) setRefreshing(false) })
     return () => {
       cancelled = true

@@ -66,3 +66,9 @@ assert.equal(assessed.length, 6, 'schedule, cost, E, P, C, risk')
 assert.equal(ov.score, Math.round(assessed.reduce((s, d) => s + d.score, 0) / 6))
 assert.equal(ov.status, 'red'); assert.equal(ov.drivenBy, 'construction')
 console.log('projectMetrics/core: all assertions passed')
+
+const missingBaseline = projectMetrics({
+  lc, today, epcAt: () => epc(50, null), epcWindow: null,
+  finance: { epcContractsValue: 1000, epcCertificates: [], byCategory: [] }, risks: [], delays: [],
+})
+assert.equal(missingBaseline.evm.spi, null)

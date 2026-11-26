@@ -29,7 +29,9 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
 }) {
   const k = data.kpi
   // Until the live read lands the numbers are placeholders: show dashes and a reading state, never «عادی ۰ از ۱۰۰».
-  const loading = !data.live
+  const loading = !data.live && data.availability == null
+  const unavailable = data.availability === 'unconfigured' || data.availability === 'error' || data.availability === 'empty'
+  const hasCriticalGate = data.signals.some((signal) => signal.category === 'gate' && signal.severity === 'critical')
   // coming back from a module the window may still be scrolled down
   useEffect(() => { window.scrollTo(0, 0) }, [])
   // colour = the health verdict (worst dimension) when known, so the ring and the status always agree
@@ -60,13 +62,14 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
         <p className="mr-sub">گزارش {data.reportDateFa} · مرحلهٔ جاری: {data.currentStageLabel}</p>
       </section>
 
+      {data.availability === 'partial' && <p className="mr-sub" role="status">خواندن بخشی از منابع ناموفق بود.</p>}
       <section className="mr-hero" style={{ '--st': loading ? 'var(--text-muted, #94a3b8)' : statusColor } as CSSProperties} aria-busy={loading || undefined}>
-        <Ring value={k.health} color={statusColor} loading={loading} />
+        <Ring value={k.health} color={statusColor} loading={loading || !hd0} />
         <div className="mr-hero-body">
           <p className="mr-hero-label">سلامت پروژه <HealthGuideButton health={data.healthDetail} /></p>
-          <p className="mr-hero-status">{!loading && <span className="mr-pulse" aria-hidden />}{loading ? 'در حال خواندن…' : data.healthDetail ? HEALTH_VERDICT_FA[data.healthDetail.status] : STATUS_LABEL_FA[data.status]}</p>
-          <Bar loading={loading} label="پیشرفت واقعی" value={k.progressActual} ref2={k.progressPlanned} ref2Label="برنامه" color={k.progressActual >= k.progressPlanned ? '#22c55e' : '#f59e0b'} />
-          <Bar loading={loading} label="عملکرد هزینه" value={k.costPerformancePct} color={k.costVariancePct >= 0 ? '#22c55e' : '#f59e0b'} />
+          <p className="mr-hero-status">{!loading && <span className="mr-pulse" aria-hidden />}{loading ? 'در حال خواندن…' : unavailable ? 'وضعیت پروژه در دسترس نیست' : hasCriticalGate ? 'مانع بحرانی راه‌اندازی' : data.healthDetail ? HEALTH_VERDICT_FA[data.healthDetail.status] : STATUS_LABEL_FA[data.status]}</p>
+          <Bar loading={loading || !data.hasProgress} label="پیشرفت واقعی" value={k.progressActual} ref2={data.hasPlan ? k.progressPlanned : undefined} ref2Label="برنامه" color={k.progressActual >= k.progressPlanned ? '#22c55e' : '#f59e0b'} />
+          <Bar loading={loading || !hd0} label="عملکرد هزینه" value={k.costPerformancePct} color={k.costVariancePct >= 0 ? '#22c55e' : '#f59e0b'} />
         </div>
       </section>
 
@@ -82,10 +85,10 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
       ) })()}
 
       <section className="mr-kpis" aria-label="شاخص‌های پایش">
-        <Kpi loading={loading} icon={ShieldAlert} label="ریسک فعال" value={k.activeRisks} sub={k.activeRisksHigh ? `${fa(k.activeRisksHigh)} بالا` : undefined} color="#f43f5e" onClick={() => open('risk')} />
-        <Kpi loading={loading} icon={Activity} label="مسئلهٔ باز" value={k.openIssues} sub={k.openIssuesHigh ? `${fa(k.openIssuesHigh)} بالا` : undefined} color="#a78bfa" onClick={() => open('taskissue')} />
-        <Kpi loading={loading} icon={Clock3} label="فعالیت معوق" value={k.delayedActivities} color="#f59e0b" onClick={() => open('scheduling')} />
-        <Kpi loading={loading} icon={RefreshCw} label="تغییر در انتظار" value={k.pendingChanges} color="#38bdf8" onClick={() => open('change')} />
+        <Kpi loading={loading || unavailable || data.availability === 'partial'} icon={ShieldAlert} label="ریسک فعال" value={k.activeRisks} sub={k.activeRisksHigh ? `${fa(k.activeRisksHigh)} بالا` : undefined} color="#f43f5e" onClick={() => open('risk')} />
+        <Kpi loading={loading || unavailable || data.availability === 'partial'} icon={Activity} label="مسئلهٔ باز" value={k.openIssues} sub={k.openIssuesHigh ? `${fa(k.openIssuesHigh)} بالا` : undefined} color="#a78bfa" onClick={() => open('taskissue')} />
+        <Kpi loading={loading || unavailable || data.availability === 'partial'} icon={Clock3} label="فعالیت معوق" value={k.delayedActivities} color="#f59e0b" onClick={() => open('scheduling')} />
+        <Kpi loading={loading || unavailable || data.availability === 'partial'} icon={RefreshCw} label="تغییر در انتظار" value={k.pendingChanges} color="#38bdf8" onClick={() => open('change')} />
       </section>
 
       <div className="mr-photos"><PhotoRotator projectId={project.id} height={200} /></div>

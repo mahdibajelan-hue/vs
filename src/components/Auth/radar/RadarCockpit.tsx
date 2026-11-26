@@ -49,7 +49,9 @@ export interface RadarCockpitProps {
 }
 
 export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOpenSidebar, onBack, onOpen, onRefresh, refreshing, canSee }: RadarCockpitProps) {
-  const loading = !data.live
+  const loading = refreshing
+  const unavailable = data.availability === 'unconfigured' || data.availability === 'error' || data.availability === 'empty'
+  const hasCriticalGate = data.signals.some((signal) => signal.category === 'gate' && signal.severity === 'critical')
   const [cat, setCat] = useState<SignalCategory | 'all'>('all')
   const [picked, setPicked] = useState<string | null>(null)
   const signals = useMemo(() => [...data.signals].sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity]), [data.signals])
@@ -115,7 +117,7 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
             </div>
           </div>
           <div className="rc-hero-status">
-            <span className="rc-status-pill"><HeartPulse size={15} aria-hidden /> {loading ? 'در حال خواندن…' : hd ? VERDICT_FA[hd.status] : STATUS_LABEL_FA[data.status]}</span>
+            <span className="rc-status-pill"><HeartPulse size={15} aria-hidden /> {loading ? 'در حال خواندن…' : unavailable ? 'وضعیت پروژه در دسترس نیست' : hasCriticalGate ? 'مانع بحرانی راه‌اندازی' : hd ? VERDICT_FA[hd.status] : STATUS_LABEL_FA[data.status]}</span>
             <HeartbeatBar status={data.status} color={statusColor} />
             {canSee('projectdashboard') && <button type="button" className="rc-btn is-ghost" onClick={() => go('projectdashboard')}><LayoutDashboard size={15} aria-hidden /> داشبورد پروژه</button>}
           </div>
@@ -136,22 +138,22 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
         <section className="rc-pulse" aria-label="شاخص‌های اصلی">
           <Tile i={0} accent={statusColor} label="سلامت پروژه" onClick={canSee('healthcenter') ? () => go('healthcenter') : undefined} extra={<HealthGuideButton health={hd} />}>
             <div className="rc-health">
-              <RcHoloRing v={loading ? 0 : k.health} color={statusColor} loading={loading} />
+              <RcHoloRing v={loading ? 0 : k.health} color={statusColor} loading={loading || !hd} />
               <span className="rc-sub" style={{ color: statusColor }}>{hd ? `${VERDICT_FA[hd.status]}${hd.drivenBy ? ` · ${HEALTH_DIMENSION_LABEL_FA[hd.drivenBy]}` : ''}` : '—'}</span>
             </div>
           </Tile>
           <Tile i={1} accent="#3b82f6" label="پیشرفت کل چرخهٔ عمر" onClick={canSee('stagegate') ? () => go('stagegate') : undefined}>
-            <b className="rc-big">{loading ? '—' : pct(k.progressActual, 0)}</b>
-            <Progress actual={k.progressActual} planned={k.progressPlanned} />
-            <span className="rc-sub">برنامه {pct(k.progressPlanned, 0)} · {deltaFa(k.progressActual - k.progressPlanned)}</span>
+            <b className="rc-big">{loading || !data.hasProgress ? '—' : pct(k.progressActual, 0)}</b>
+            {data.hasProgress && <Progress actual={k.progressActual} planned={data.hasPlan ? k.progressPlanned : null} />}
+            <span className="rc-sub">{data.hasPlan ? `برنامه ${pct(k.progressPlanned, 0)} · ${deltaFa(k.progressActual - k.progressPlanned)}` : 'برنامه ثبت نشده یا در دسترس نیست'}</span>
           </Tile>
           <Tile i={2} accent="#14b8a6" label="شاخص عملکرد زمانی (SPI)" onClick={canSee('projectdashboard') ? () => go('projectdashboard') : undefined}>
-            <b className="rc-big" style={{ color: idxColor(k.spi, 'high') }}>{loading || !k.spi ? '—' : fa(k.spi, 2)}</b>
+            <b className="rc-big" style={{ color: idxColor(k.spi, 'high') }}>{loading || data.scheduleIndex == null ? '—' : fa(data.scheduleIndex, 2)}</b>
             <Meter v={k.spi || null} />
             <span className="rc-sub">{!k.spi ? 'برنامه‌ای هنوز صفر است' : k.spi >= 1 ? `${fa((k.spi - 1) * 100)}٪ جلوتر از برنامه` : `${fa((1 - k.spi) * 100)}٪ عقب‌تر از برنامه`}</span>
           </Tile>
           <Tile i={3} accent="#f59e0b" label="شاخص عملکرد هزینه (CPI)" onClick={canSee('projectdashboard') ? () => go('projectdashboard') : undefined}>
-            <b className="rc-big" style={{ color: idxColor(k.cpi, 'high') }}>{loading || !k.cpi ? '—' : fa(k.cpi, 2)}</b>
+            <b className="rc-big" style={{ color: idxColor(k.cpi, 'high') }}>{loading || data.costIndex == null ? '—' : fa(data.costIndex, 2)}</b>
             <Meter v={k.cpi || null} />
             <span className="rc-sub">{!k.cpi ? 'کارکرد تأییدشده‌ای ثبت نشده' : `هر ریال هزینه ${fa(k.cpi, 2)} ریال ارزش کسب کرده`}</span>
           </Tile>
@@ -173,7 +175,7 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
           </article>
           <article className="rc-card rc-feed rc-in" style={{ '--d': '200ms' } as CSSProperties}>
             <header className="rc-card-head"><b><Activity size={16} aria-hidden /> نیازمند تصمیم</b><small>{cat === 'all' ? 'همهٔ حوزه‌ها' : SIGNAL_CATEGORY_LABEL_FA[cat]} · {fa(shown.length)} مورد{overdue ? <> · <em className="rc-od-sum">{fa(overdue)} از مهلت گذشته</em></> : null}</small></header>
-            {loading ? <SkeletonList /> : shown.length === 0 ? <p className="rc-empty"><CheckCircle2 size={18} aria-hidden /> سیگنالی در این دسته ثبت نشده است.</p> : (
+            {loading ? <SkeletonList /> : unavailable || data.availability === 'partial' && shown.length === 0 ? <p className="rc-empty">وضعیت سیگنال‌ها قابل تأیید نیست.</p> : shown.length === 0 ? <p className="rc-empty"><CheckCircle2 size={18} aria-hidden /> سیگنالی در این دسته ثبت نشده است.</p> : (
               <ul className="rc-signals">
                 {groups.map((g) => [
                   <li key={`h-${g.sv}`} className="rc-sig-group" style={{ '--sv': SEVERITY_COLOR[g.sv] } as CSSProperties} aria-hidden><i />{SEVERITY_LABEL_FA[g.sv]}<b>{fa(g.items.length)}</b></li>,
@@ -274,7 +276,7 @@ export function RadarCockpit({ data, projectName, projectCode, sidebarOpen, onOp
         </section>
 
         <footer className="rc-foot">
-          <span><span className="rc-live-dot" aria-hidden /> {loading ? 'در حال خواندن از ماژول‌ها…' : 'داده‌ها از ماژول‌ها خوانده شده است'}</span>
+          <span><span className="rc-live-dot" aria-hidden /> {loading ? 'در حال خواندن از ماژول‌ها…' : data.availability === 'partial' ? 'خواندن بخشی از منابع ناموفق بود' : unavailable ? 'دادهٔ قابل نمایش در دسترس نیست' : 'داده‌ها از ماژول‌ها خوانده شده است'}</span>
           <span>منابع: سلامت و EVM از داشبورد پروژه · چرخهٔ عمر از Stage-Gate · EPC از مهندسی، کالا و اجرا · برنامه از کنترل زمان · ریسک، مسائل، تغییرات، مالی و PSSR از ماژول‌های خودشان</span>
         </footer>
       </main>

@@ -54,3 +54,10 @@ p = bulkPreview(acc, 'welding', 'welded')
 assert.equal(p.changed, 2, 'joints 3 and 4'); assert.equal(p.kept, 1, 'joint 1 stays accepted')
 assert.equal(frontOf(acc, 'welding'), 2); assert.equal(frontOf(acc, 'ndt'), 0)
 console.log('pdt/twinCore: all assertions passed')
+
+const unverified = buildJoints(120, 12, [
+  row(1, { welding: 'welded', ndt: 'pending', coating: 'completed', lowering: 'completed', backfill: 'completed' }),
+  row(2, { welding: 'welded', ndt: 'passed', coating: 'failed', lowering: 'completed', backfill: 'completed' }),
+])
+assert.equal(unverified[0].finalStatus, 'in_progress')
+assert.equal(unverified[1].finalStatus, 'ncr')

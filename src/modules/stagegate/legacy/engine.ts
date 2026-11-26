@@ -1174,10 +1174,10 @@ export function createStageGateEngine(env) {
                                 <input type="file" data-lc-field="evidence-file" class="text-[11px]" style="max-width:130px;">
                                 <button type="button" data-lc-action="save-item" class="text-[11px] font-bold px-2 py-1 rounded-lg bg-blue-900 text-white">ذخیره</button>
                             </div>
-                            ${row.evidence_file_url ? `<a href="${esc(row.evidence_file_url)}" target="_blank" rel="noopener" class="text-[11px] text-blue-600 underline mt-1 inline-block">📎 مشاهده فایل ضمیمه</a>` : ''}
+                            ${row.evidence_file_url ? `<button type="button" data-lc-action="open-evidence" data-file="${encodeURIComponent(row.evidence_file_url)}" class="text-[11px] text-blue-600 underline mt-1 inline-block">📎 مشاهده فایل ضمیمه</button>` : ''}
                             ` : `
                             ${row.evidence ? `<p class="text-[11px] text-slate-400 mt-1">مدرک: ${esc(row.evidence)}</p>` : ''}
-                            ${row.evidence_file_url ? `<a href="${esc(row.evidence_file_url)}" target="_blank" rel="noopener" class="text-[11px] text-blue-600 underline mt-1 inline-block">📎 مشاهده فایل ضمیمه</a>` : ''}
+                            ${row.evidence_file_url ? `<button type="button" data-lc-action="open-evidence" data-file="${encodeURIComponent(row.evidence_file_url)}" class="text-[11px] text-blue-600 underline mt-1 inline-block">📎 مشاهده فایل ضمیمه</button>` : ''}
                             `}
                         </div>`;
                     }).join('')}
@@ -3104,16 +3104,14 @@ export function createStageGateEngine(env) {
                 project_name: lcState.projectName, phase_code: phaseCode, kind, item_id: itemId,
                 status, evidence: evidence || null, updated_at: new Date().toISOString(), updated_by: currentUser.email,
             };
-            // «امکان ضمیمه نمودن فایل» — same public-bucket-plus-folder-check
-            // Storage pattern already used for signature uploads, scoped by
-            // project name so lifecycle_evidence's RLS can check it.
             const fileInput = rowEl.querySelector('[data-lc-field="evidence-file"]');
             const file = fileInput?.files?.[0];
             if (file) {
-                const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
-                // storage keys must be ASCII: the item id already identifies project + phase, the project name (Persian) cannot be in the key
-                const path = `${phaseCode}/${kind}/${itemId}/${Date.now()}.${ext.replace(/[^a-z0-9]/g, '').slice(0, 5) || 'bin'}`;
-                const { error: uploadError } = await _supabase.storage.from('lifecycle-evidence').upload(path, file, { upsert: true });
+                const masterProjectId = env.getMasterProjectId?.(lcState.projectName);
+                if (!masterProjectId) { alert('برای بارگذاری مدرک، چرخهٔ عمر را به پروژهٔ مرجع متصل کنید.'); return; }
+                const ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'bin';
+                const path = `${masterProjectId}/${phaseCode}/${kind}/${itemId}/${crypto.randomUUID()}.${ext}`;
+                const { error: uploadError } = await _supabase.storage.from('lifecycle-evidence').upload(path, file, { upsert: false });
                 if (uploadError) { alert('خطا در بارگذاری فایل: ' + uploadError.message); return; }
                 const { data: urlData } = _supabase.storage.from('lifecycle-evidence').getPublicUrl(path);
                 patch.evidence_file_url = urlData.publicUrl;
@@ -3128,6 +3126,26 @@ export function createStageGateEngine(env) {
             lcState.items[phaseCode] = lcState.items[phaseCode] || { objective: {}, output: {}, criterion: {} };
             lcState.items[phaseCode][kind][itemId] = data;
             lcRenderAll();
+        }
+
+        async function lcOpenEvidence(button) {
+            const bucket = _supabase.storage.from('lifecycle-evidence');
+            const prefix = bucket.getPublicUrl('').data.publicUrl.replace(/\/$/, '') + '/';
+            const saved = decodeURIComponent(button.dataset.file || '');
+            if (!saved.startsWith(prefix)) { alert('مسیر فایل ضمیمه نامعتبر است.'); return; }
+            const path = saved.slice(prefix.length);
+            if (!path) return;
+            button.disabled = true;
+            try {
+                const { data, error } = await bucket.createSignedUrl(path, 300, { download: true });
+                if (error || !data?.signedUrl) { alert('دسترسی به فایل ضمیمه ممکن نیست.'); return; }
+                const link = document.createElement('a');
+                link.href = data.signedUrl;
+                link.download = '';
+                link.click();
+            } finally {
+                button.disabled = false;
+            }
         }
 
         async function lcRequestGateReview(phaseCode) {
@@ -3276,6 +3294,7 @@ export function createStageGateEngine(env) {
             root.querySelectorAll('[data-lc-scroll]').forEach(b => b.addEventListener('click', () => document.getElementById(b.dataset.lcScroll)?.scrollIntoView({ behavior: 'smooth', block: 'start' })));
             root.querySelectorAll('[data-lc-action="open-module"]').forEach(b => b.addEventListener('click', () => env.onOpenModule && env.onOpenModule(b.dataset.module)));
             root.querySelectorAll('[data-lc-action="open-guide"]').forEach(b => b.addEventListener('click', () => env.onOpenGuide && env.onOpenGuide(lcState.selectedPhase)));
+            root.querySelectorAll('[data-lc-action="open-evidence"]').forEach(btn => btn.addEventListener('click', () => lcOpenEvidence(btn)));
             root.querySelectorAll('[data-lc-action="save-item"]').forEach(btn => btn.addEventListener('click', () => lcSaveItemFromRow(btn.closest('[data-lc-item-row]'))));
             root.querySelectorAll('[data-lc-action="request-gate"]').forEach(btn => btn.addEventListener('click', () => lcRequestGateReview(btn.dataset.phase)));
             root.querySelectorAll('[data-lc-action="gate-pass"]').forEach(btn => btn.addEventListener('click', () => lcDecideGate(btn.dataset.phase, 'pass')));
