@@ -4,6 +4,8 @@ import { useExecutionStore } from '../store/useExecutionStore'
 import { epcSettings } from '../lib/epcSettings'
 import { usePartyBrand } from './epc/PaperFrame'
 import { partyLogoCells } from '../forms/partyLogos'
+import { sheetSignCells } from '../forms/signBoxes'
+import { useFormSlots } from './useFormSlots'
 import { GridSheet, printPlan } from '../forms/GridTemplate'
 import { ROWS_PER_PAGE, weldingGridPage, type WeldRow } from '../forms/weldingGrid'
 import { WELDING_LOGO_SLOTS } from '../forms/weldingBindings'
@@ -19,8 +21,10 @@ const num = (v: unknown) => { const x = Number(String(v ?? '').replace('٫', '.'
 
 /** The daily welding report printed on the APPROVED sheet (frozen grid of the approved Excel version): same geometry, only the bound cells carry data. */
 /** the template's bindings «sign:<slot>» put that slot's electronic signature in the bound (signature-box) cell */
-export function signMap(template: FormTemplateRow, sigs: PaperCtx['signatures']): Record<string, { image: string; caption: string }> {
+export function signMap(template: FormTemplateRow, sigs: PaperCtx['signatures'], slotKeys: string[] = []): Record<string, { image: string; caption: string }> {
   const out: Record<string, { image: string; caption: string }> = {}
+  // the sheet's own signature boxes (caption + empty box), when every slot of the form has one
+  for (const [cell, key] of Object.entries(sheetSignCells(template.layout, slotKeys))) { const g = sigs?.find((x) => x.slotKey === key); if (g) out[cell] = { image: g.image, caption: `${g.userName} ${new Date(g.signedAt).toLocaleDateString('fa-IR')}` } }
   for (const b of template.bindings) { if (!b.source.startsWith('sign:')) continue; const g = sigs?.find((x) => x.slotKey === b.source.slice(5)); if (g) out[b.cell] = { image: g.image, caption: `${g.userName} ${new Date(g.signedAt).toLocaleDateString('fa-IR')}` } }
   return out
 }
@@ -28,6 +32,7 @@ export function TemplatePaper({ c, template, note }: { c: PaperCtx; template: Fo
   return template.formKey !== 'welding' && GRID_SPECS[template.formKey] ? <SpecPaper c={c} template={template} note={note} /> : <WeldingTemplatePaper c={c} template={template} note={note} />
 }
 function WeldingTemplatePaper({ c, template, note }: { c: PaperCtx; template: FormTemplateRow; note?: string }) {
+  const slotKeys = useFormSlots(c.report.projectId, c.report.formKey).map((x) => x.slotKey)
   const r = c.report
   const settings = useExecutionStore((s) => s.settingsByProject.get(r.projectId))
   const ep = epcSettings(settings as unknown as Record<string, unknown>)
@@ -50,7 +55,7 @@ function WeldingTemplatePaper({ c, template, note }: { c: PaperCtx; template: Fo
         const res = weldingGridPage(template.layout, { header, thk, rows, prior: { len: thk.map((_, i) => pr('len', i)), joints: thk.map((_, i) => pr('joints', i)) } }, p)
         if (r.data.pipeSpec) res.values.A4 = String(r.data.pipeSpec)
         else if (!id.diameterIn) delete res.values.A4 // nothing known yet: the approved text stays
-        return <Fragment key={p}><div className="gt-page" style={{ width: 'fit-content', margin: '0 auto' }}><GridSheet signs={signMap(template, c.signatures)} tpl={template.layout} values={res.values} logos={logos} /></div></Fragment>
+        return <Fragment key={p}><div className="gt-page" style={{ width: 'fit-content', margin: '0 auto' }}><GridSheet signs={signMap(template, c.signatures, slotKeys)} tpl={template.layout} values={res.values} logos={logos} /></div></Fragment>
       })}
       <small className="wd-foot">{r.reportNo} · {template.code ? `${template.code} / ` : ''}نسخهٔ قالب {template.revision || template.version} · نسخهٔ بایگانی</small>
     </div>
@@ -74,6 +79,7 @@ export function specInputOf(r: PaperCtx['report'], lines: { detail: Record<strin
 }
 /** Any other approved sheet that has a declarative cell mapping (gridSpecs.ts). */
 function SpecPaper({ c, template, note }: { c: PaperCtx; template: FormTemplateRow; note?: string }) {
+  const slotKeys = useFormSlots(c.report.projectId, c.report.formKey).map((x) => x.slotKey)
   const r = c.report, spec = GRID_SPECS[template.formKey]
   const settings = useExecutionStore((s) => s.settingsByProject.get(r.projectId))
   const ep = epcSettings(settings as unknown as Record<string, unknown>)
@@ -90,7 +96,7 @@ function SpecPaper({ c, template, note }: { c: PaperCtx; template: FormTemplateR
     <div className="mt-printable gt-paper" dir="ltr">
       {note && <p style={{ margin: '0 0 4px', fontSize: 11, textAlign: 'center' }}>{note}</p>}
       <style>{`${plan.css} @media print { .gt-page { zoom: ${plan.scale}; break-after: page; } .gt-page:last-child { break-after: auto; } }`}</style>
-      {Array.from({ length: pages }, (_, p) => <div key={p} className="gt-page" style={{ width: 'fit-content', margin: '0 auto' }}><GridSheet signs={{ ...logoCells, ...signMap(template, c.signatures) }} tpl={template.layout} values={specPage(spec, template.layout, inp, p).values} logos={logos} /></div>)}
+      {Array.from({ length: pages }, (_, p) => <div key={p} className="gt-page" style={{ width: 'fit-content', margin: '0 auto' }}><GridSheet signs={{ ...logoCells, ...signMap(template, c.signatures, slotKeys) }} tpl={template.layout} values={specPage(spec, template.layout, inp, p).values} logos={logos} /></div>)}
       <small className="wd-foot">{r.reportNo} · نسخهٔ قالب {template.version} · نسخهٔ بایگانی</small>
     </div>
   )

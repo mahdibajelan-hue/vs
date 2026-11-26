@@ -420,3 +420,14 @@
 .ex-sec-title b { font-size: 15px; } .ex-sec-title small { color: var(--im-muted); font-size: 12px; }
 @media (max-width: 560px) { .dv-meter { margin-inline-start: 0; width: 100%; } .dv-work { grid-template-columns: auto 1fr; } .dv-work .dv-state { grid-column: 2; } .dv-bar > label { min-width: 0; flex: 1; } }
 @media (prefers-reduced-motion: reduce) { .dv-tile, .dv-work, .dv-meter i s { transition: none; } }
+
+/* one row of every signature of the form, in signing order (print and screen) */
+.ex-sign-row { display: grid; gap: 0; margin-top: 12px; border: 1px solid #6b7280; break-inside: avoid; background: #fff; color: #111; direction: rtl; }
+.ex-sign-row > div { display: grid; grid-template-rows: auto 1fr auto auto; justify-items: center; gap: 2px; padding: 6px 6px 5px; min-height: 104px; text-align: center; font-size: 11px; border-inline-start: 1px solid #6b7280; }
+.ex-sign-row > div:first-child { border-inline-start: 0; }
+.ex-sign-row b { font-size: 11px; line-height: 1.35; }
+.ex-sign-img { display: flex; align-items: center; justify-content: center; min-height: 48px; width: 100%; }
+.ex-sign-img img { max-height: 48px; max-width: 100%; object-fit: contain; }
+.ex-sign-row small { color: #4b5563; font-size: 10px; }
+/* the form's own fixed signer boxes give way to the row above when the project defined its signature slots */
+.ex-has-slots .ex-paper-sign, .ex-has-slots .fp-sign, .ex-has-slots .fp-low-sign, .ex-has-slots .wd-sign { display: none !important; }

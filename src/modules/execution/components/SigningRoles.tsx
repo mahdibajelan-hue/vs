@@ -23,7 +23,7 @@ export function SigningRoles({ projectId, can, people }: { projectId: string; ca
   // the standard four signatures of the site minutes; people already chosen for a role are kept
   const standard = () => {
     const all = FORMS.map((f) => f.key)
-    return SUGGESTED_ROLES.map((x) => { const old = roles.find((r) => r.key === x.key); return { ...x, userId: old?.userId ?? null, ...(x.specialists ? { specialists: old?.specialists ?? {} } : {}), forms: x.key === 'rev' ? all : [...all, 'work'] } })
+    return SUGGESTED_ROLES.map((x) => { const old = roles.find((r) => r.key === x.key); return { ...x, userId: old?.userId ?? null, ...(x.specialists ? { specialists: old?.specialists ?? {} } : {}), forms: [...all, 'work'] } })
   }
   const patch = (key: string, p: Partial<SignRole>) => void persist(roles.map((r) => (r.key === key ? { ...r, ...p } : r)))
   const techForms = FORMS.map((f) => f.key)
