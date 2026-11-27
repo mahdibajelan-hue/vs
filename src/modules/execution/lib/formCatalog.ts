@@ -60,7 +60,7 @@ export const FORMS: FormDef[] = [
   { key: 'welding', title: 'گزارش روزانه جوشکاری', en: 'DAILY WELDING REPORT', group: 'weld', kind: 'daily', sheet: 'welding', signers: ['consultant', 'contractor'],
     hint: 'هر سرجوش دو سطر مهر جوشکار دارد: R و C (مثل فرم کاغذی). طول لوله زیر ستون ضخامت همان لوله جمع می‌شود.',
     header: [wps, pipeSpec, f('thkSet', 'ضخامت‌های ستون‌های A تا D (in)', 'text', { hint: '0.406, 0.438, 0.688, 0.750' })],
-    columns: [f('sec', 'Sec No.'), f('weldNo', 'WELD No.', 'text', { req: true }), f('pipeNo', 'PIPE No.'), f('lengthM', 'Length (m)', 'num', { unit: 'm' }), f('thkIn', 'Thickness (in)', 'num'), f('sizeIn', 'SIZE (inch)', 'num', { unit: 'in' }), f('bendDeg', 'BEND (DEGREE)', 'num'),
+    columns: [f('sec', 'Sec No.'), f('weldNo', 'WELD No.', 'text', { req: true }), f('pipeNo', 'PIPE No.'), f('km', 'کیلومتر سرجوش', 'num', { unit: 'km' }), f('lengthM', 'Length (m)', 'num', { unit: 'm' }), f('thkIn', 'Thickness (in)', 'num'), f('sizeIn', 'SIZE (inch)', 'num', { unit: 'in' }), f('bendDeg', 'BEND (DEGREE)', 'num'),
       f('stampRoot', 'R · Root'), f('stampHot', 'R · Hot'), f('stampFill', 'R · Fill'), f('stampCap', 'R · CAP'), f('stampRootC', 'C · Root'), f('stampHotC', 'C · Hot'), f('stampFillC', 'C · Fill'), f('stampCapC', 'C · CAP'),
       f('vt', 'VT Result', 'select', { options: [{ value: 'acc', label: 'ACC' }, { value: 'rej', label: 'REJ' }] }), f('remark', 'REMARK', 'text', { wide: true })],
     metrics: [{ key: 'len', label: 'Total length', unit: 'm', op: 'sum', fields: ['lengthM'], groupBy: 'thkIn' }, { key: 'joints', label: 'Total number of joints', unit: 'joint', op: 'count', groupBy: 'thkIn' }, { key: 'vtAcc', label: 'VT پذیرفته', unit: 'سرجوش', op: 'count', where: { field: 'vt', eq: 'acc' } }] },

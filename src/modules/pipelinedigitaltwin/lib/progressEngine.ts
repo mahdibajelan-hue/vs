@@ -20,8 +20,9 @@ export const FINAL_STATUS_LABEL_FA: Record<JointFinalStatus, string> = {
  * the progress engine can never disagree about what "completed" or "ncr" means.
  */
 export function deriveFinalStatus(joint: Pick<Joint, 'weldingStatus' | 'ndtStatus' | 'coatingStatus' | 'loweringStatus' | 'backfillStatus'>): JointFinalStatus {
-  if (joint.ndtStatus === 'failed' || joint.ndtStatus === 'repair_required') return 'ncr'
-  if (joint.backfillStatus === 'completed') return 'completed'
+  if (joint.ndtStatus === 'failed' || joint.ndtStatus === 'repair_required' || joint.coatingStatus === 'failed') return 'ncr'
+  if (joint.weldingStatus !== 'not_started' && joint.ndtStatus === 'passed' && joint.coatingStatus === 'completed'
+      && joint.loweringStatus === 'completed' && joint.backfillStatus === 'completed') return 'completed'
   const started =
     joint.weldingStatus !== 'not_started' ||
     joint.ndtStatus !== 'pending' ||

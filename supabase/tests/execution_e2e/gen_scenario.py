@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test scenario for the Execution module — ONLY for an isolated test database (never the live one).
 
-A 30 km section of a 48" gas transmission line, 37 calendar days that cross a Shamsi month boundary
+A synthetic 30 km section of the 42" Sarakhs–Mashhad gas transmission line, 37 calendar days that cross a Shamsi month boundary
 (1405/06/30 → 1405/08/04, i.e. 2026-09-21 → 2026-10-26), three work fronts, contractor / supervision / consultant /
 employer accounts. Every step runs as the right person (role `authenticated` + that person's JWT claims), through the
 same tables and RPCs the app uses, so row-level security, guards and triggers all apply.
@@ -62,7 +62,7 @@ for r, uid in U.items():
       f"on conflict (id) do update set full_name = excluded.full_name, account_status = 'active';")
 w(f"update profiles set is_admin = true where id = '{U['admin']}';")
 w(f"insert into master_projects (id, project_id_code, project_code, official_name, short_name, project_type, status) values "
-  f"('{P}', 'TEST-EPC-48', 'TEST', 'TEST — خط انتقال گاز ۴۸ اینچ (بخش ۳۰ کیلومتری) — فقط آزمون', 'TEST خط ۴۸\"', 'pipeline', 'executing') on conflict do nothing;")
+  f"('{P}', 'TEST-EPC-42', 'TEST', 'TEST — خط انتقال گاز ۴۲ اینچ سرخس–مشهد (بخش فرضی ۳۰ کیلومتری) — فقط آزمون', 'TEST سرخس–مشهد ۴۲\"', 'pipeline', 'executing') on conflict do nothing;")
 for r in ['contractor', 'site_head', 'supervision', 'consultant', 'employer', 'viewer']:
     w(f"insert into ex_project_roles (project_id, user_id, role) values ('{P}', '{U[r]}', '{r}') on conflict do nothing;")
 w(f"insert into ex_settings (project_id, values_json) values ('{P}', '{json.dumps({'employerStep': 'advisory', 'overBasePct': 0, 'blockOverBase': True, 'weekStart': 0}, ensure_ascii=False)}') "

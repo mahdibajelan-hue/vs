@@ -121,7 +121,8 @@ export function projectMetrics(inp: MetricsInput): ProjectMetrics {
   const ac = costTo(today)
   const earned = epcNow.overall?.actual ?? 0, planned = epcNow.overall?.planned ?? earned
   const ev = (bac * earned) / 100, pv = (bac * planned) / 100
-  const spi = planned > 0 ? earned / planned : null
+  const epcBaseline = epcNow.overall?.planned
+  const spi = epcBaseline != null && epcBaseline > 0 ? earned / epcBaseline : null
   const cpi = ac > 0 && bac > 0 ? ev / ac : null
   const eac = cpi && cpi > 0 ? bac / cpi : null
   const evm: Evm = {

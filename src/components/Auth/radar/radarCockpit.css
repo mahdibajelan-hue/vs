@@ -236,3 +236,6 @@ li.rc-sig-group:not(:first-child) { margin-top: .45rem; }
   .rc-ring-fill, .rc-prog i, .rc-meter b, .rc-tile, .rc-btn { transition: none; }
 }
 @media (max-width: 900px) { .rc-epc { grid-template-columns: minmax(0, 1fr); } .rc-main { padding-inline: 1rem; } .rc-top { padding-inline: 1rem; } }
+
+.rc-metric-source { display: block; line-height: 1.55; overflow-wrap: anywhere; }
+.rc-metric-source[data-state="error"] { color: var(--text-primary); font-weight: 650; }

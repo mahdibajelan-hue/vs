@@ -63,8 +63,8 @@ export function JointFile({ weld, onBack }: { weld: repo.QcWeld; onBack: () => v
   const cover = !placed && round === 0 ? coveredHours(accFilms.map((f) => f.segment)) : null
   const crewLack = crewShort(od ? od / 25.4 : null, Object.fromEntries(PASSES.map((p) => [p, [...new Set([...weld.stampsBy[p], ...row.crew.filter((c) => !c.removed && c.pass === p).map((c) => c.welderKey)])]])) as Record<'root' | 'hot' | 'fill' | 'cap', string[]>, st.crewMin)
   const ht = st.sections ?? []
-  const htSec = weld.tieKm != null ? ht.find((s) => weld.tieKm! >= s.kmFrom && weld.tieKm! <= s.kmTo) : undefined
-  const allTested = ht.length > 0 && ht.every((s) => s.stage === 'accepted' && !s.failed)
+  const matchingSections = weld.tieKm != null ? ht.filter((s) => weld.tieKm! >= s.kmFrom && weld.tieKm! <= s.kmTo) : []
+  const htSec = matchingSections.length === 1 ? matchingSections[0] : undefined
   const aiRuns = films.filter((f) => f.ai)
 
   const coatApplied = !!weld.coat.fj || row.coatings.some((c) => c.kind === 'application')
@@ -80,14 +80,14 @@ export function JointFile({ weld, onBack }: { weld: repo.QcWeld; onBack: () => v
     { id: 'repair', label: `تعمیر (${fa(repairs.length)}/${fa(st.crit.maxRepairs)})`, icon: Wrench, state: !firstEval || (firstEval.overall === 'accept' && !repairs.length) ? 'na' : row.state === 'repair_due' ? 'now' : repairs.length ? 'done' : 'todo', date: repairs.at(-1) ? faDate(repairs.at(-1)!.createdAt) : undefined },
     { id: 'coating', label: 'پوشش سرجوش', icon: PaintRoller, state: coatApplied ? (weld.coat.fj?.result === 'rej' ? 'fail' : 'done') : 'todo', date: weld.coat.fj ? faDate(weld.coat.fj.date) : undefined },
     { id: 'coatinsp', label: 'بازرسی پوشش', icon: ShieldCheck, state: coatInspected ? (coatFailed ? 'fail' : 'done') : 'todo', date: weld.coat.bond ? faDate(weld.coat.bond.date) : undefined },
-    { id: 'final', label: 'آزمون نهایی', icon: Waves, state: allTested || htSec?.stage === 'accepted' ? 'done' : htSec?.failed ? 'fail' : htSec ? 'now' : 'todo', hint: 'آزمون هیدرواستاتیک قطعهٔ شامل این سرجوش' },
+    { id: 'final', label: 'آزمون نهایی', icon: Waves, state: htSec?.failed ? 'fail' : htSec?.stage === 'accepted' ? 'done' : htSec ? 'now' : 'todo', hint: 'آزمون هیدرواستاتیک قطعهٔ شامل این سرجوش' },
     { id: 'closed', label: 'بسته شد', icon: Lock, state: closed ? (joint?.finalStatus === 'cut_out' ? 'fail' : 'done') : 'todo', date: closed ? faDate(joint?.closedAt) : undefined },
   ]
   const project = useMasterDataStore((x) => x.projects.find((p) => p.id === st.projectId))
   const ends = useMemo(() => pipeEnds(st.welds, st.pipes).get(weld.id), [st.welds, st.pipes, weld.id])
   const wps = st.wps.find((x) => x.id === joint?.wpsId)
   const steps = useMemo(() => timeline({ weld, vts, films, evals, repairs, coatings: row.coatings, closedAt: joint?.closedAt ?? null, finalFa: VERDICT_FA[joint?.finalStatus ?? 'accept'], nameOf: q.nameOf }), [weld, vts, films, evals, repairs, row.coatings, joint, q.nameOf]) // eslint-disable-line react-hooks/exhaustive-deps
-  const hydro = allTested ? 'همهٔ قطعه‌های آزمون پذیرفته شده‌اند' : htSec ? `قطعهٔ ${htSec.code}: ${htSec.failed ? 'مردود' : htSec.stage === 'accepted' ? 'پذیرفته' : 'در جریان'}` : ''
+  const hydro = htSec ? `قطعهٔ ${htSec.code}: ${htSec.failed ? 'مردود' : htSec.stage === 'accepted' ? 'پذیرفته' : 'در جریان'}` : ''
   const printSheet = () => { if (!openPassport({ row, projectName: project?.officialName ?? '', projectCode: project?.projectCode ?? '', ends, wps, films, defects, evals, repairs, vts, nameOf: q.nameOf, hydro })) st.run('', async () => { throw new Error('مرورگر پنجرهٔ چاپ را باز نکرد؛ اجازهٔ پنجرهٔ بازشو را بدهید.') }) }
   const [sec, setSec] = useState<Sec>('overview')
   const pick = (id: string) => setSec((id === 'coatinsp' ? 'coating' : id === 'closed' ? 'final' : id) as Sec)
@@ -237,12 +237,13 @@ export function JointFile({ weld, onBack }: { weld: repo.QcWeld; onBack: () => v
               <ul className="wq-final">
                 <li className={closed ? 'is-ok' : ''}><b>رادیوگرافی</b><span>{closed ? `بسته شد — ${VERDICT_FA[joint?.finalStatus ?? 'accept']} (${faDate(joint?.closedAt)})` : QC_STATE_FA[row.state]}</span></li>
                 <li className={coatInspected && !coatFailed ? 'is-ok' : coatFailed ? 'is-bad' : ''}><b>پوشش</b><span>{coatInspected ? (coatFailed ? 'مردود / نیاز به تعمیر' : 'بازرسی و قبول') : coatApplied ? 'اجرا شده، بازرسی ثبت نشده' : 'ثبت نشده'}</span></li>
-                <li className={allTested || htSec?.stage === 'accepted' ? 'is-ok' : htSec?.failed ? 'is-bad' : ''}><b>آزمون هیدرواستاتیک</b><span>{allTested ? 'همهٔ قطعه‌های آزمون خط پذیرفته شده‌اند' : htSec ? `قطعهٔ ${htSec.code}: ${htSec.failed ? 'مردود' : htSec.stage === 'accepted' ? 'پذیرفته' : 'در جریان'}` : weld.tieKm == null ? 'کیلومتر این سرجوش ثبت نشده؛ وضعیت از قطعه‌های آزمون «آزمایش‌ها» پس از پذیرش همهٔ قطعه‌ها به‌روز می‌شود' : 'قطعهٔ آزمون شامل این کیلومتر تعریف نشده'}</span></li>
+                <li className={htSec?.failed ? 'is-bad' : htSec?.stage === 'accepted' ? 'is-ok' : ''}><b>آزمون هیدرواستاتیک</b><span>{hydro || (weld.tieKm == null ? 'کیلومتر این سرجوش ثبت نشده' : 'قطعهٔ آزمون شامل این کیلومتر تعریف نشده')}</span></li>
               </ul>
               <h4 className="wq-sub">تأییدهای شناسنامه</h4>
+              <p className="ps-meta">آزادسازی سرجوش با تأیید سرپرست نظارت، پس از پذیرش امضاشده NDT و پذیرش هیدروتست قطعهٔ همان سرجوش ثبت می‌شود.</p>
               <div className="wq-signs">{SIGN_ROLES.map(([k, label]) => { const g = joint?.signs?.[k], may = k === 'supervision_head' ? can.approve : can.edit; return (
                 <div key={k} className={g ? 'is-done' : ''}><b>{label}</b>{g ? <span>{g.name}<small>{faDate(g.at)}</small></span> : <small>امضا نشده</small>}
-                  {may && <button type="button" className="ps-btn" onClick={() => void st.run(`تأیید «${label}» ثبت شد`, () => repo.passportSign(weld.id, k, st.me()))}>{g ? 'تأیید دوباره' : 'تأیید می‌کنم'}</button>}
+                  {may && <button type="button" className="ps-btn" onClick={() => void st.run(`تأیید «${label}» ثبت شد`, () => repo.passportSign(weld.id, k, st.me()))}>{k === 'supervision_head' ? 'ثبت آزادسازی' : g ? 'تأیید دوباره' : 'تأیید می‌کنم'}</button>}
                   {g && can.configure && <button type="button" className="ps-x" aria-label={`برداشتن تأیید ${label}`} onClick={() => void st.run('تأیید برداشته شد', () => repo.passportSign(weld.id, k, null))}>×</button>}</div>
               ) })}</div>
               <p className="ps-meta">هر تأیید با نام کاربر و تاریخ روی فرم شناسنامه چاپ می‌شود؛ برای نسخهٔ کاغذی، جای امضا و مهر زیر هر نام خالی می‌ماند.</p>

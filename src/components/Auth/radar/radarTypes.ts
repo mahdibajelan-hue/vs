@@ -159,6 +159,12 @@ export interface ContractSummary {
 }
 
 export interface RadarData {
+  metrics?: Partial<Record<import('./radarMetric').MetricKey, import('./radarMetric').MetricSource>>
+  availability?: 'unconfigured' | 'empty' | 'partial' | 'error' | 'ready'
+  hasProgress?: boolean
+  hasPlan?: boolean
+  costIndex?: number | null
+  scheduleIndex?: number | null
   projectName: string
   /** English display name used on this page's English-mode header; falls back to `projectName`
    * when a real (Persian-named) project is selected. */

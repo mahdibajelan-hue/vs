@@ -13,6 +13,7 @@ type Row = Record<string, any> // eslint-disable-line @typescript-eslint/no-expl
  */
 export async function loadScheduleSummary(projectId: string): Promise<ScheduleSummary | null> {
   const vq = await supabase.from('sch_versions').select(BASE_COLS).eq('project_id', projectId).neq('status', 'draft').order('created_at', { ascending: false })
+  if (vq.error) throw vq.error
   const versions = ((vq.data ?? []) as Row[]).map(mapVersion)
   const v = versions.find((x) => x.isCurrent) ?? versions[0]
   if (!v) return null
@@ -23,6 +24,8 @@ export async function loadScheduleSummary(projectId: string): Promise<ScheduleSu
     supabase.from('sch_contract').select('*').eq('project_id', projectId).maybeSingle(),
     supabase.from('sch_delay_events').select('*').eq('project_id', projectId),
   ])
+  const error = c.error ?? ct.error ?? ev.error
+  if (error) throw error
   const acts = a.map(mapAct).sort((x, y) => x.sort - y.sort), cals = ((c.data ?? []) as Row[]).map(mapCal)
   const today = todayTehran()
   return summarize({

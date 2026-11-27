@@ -11,12 +11,13 @@ import type { ProjectHealth } from './projectMetricsLoader'
 const CENTER_DIM: Record<string, HealthDimension> = { schedule: 'schedule', finance: 'cost', execution: 'construction', quality: 'quality', supply: 'procurement', risk: 'risk' }
 const CENTER_STATUS: Record<string, HealthStatus> = { good: 'green', watch: 'yellow', bad: 'red', critical: 'red', none: 'yellow' }
 
-export async function fetchCenterHealth(masterProjectId: string): Promise<ProjectHealth | null> {
-  const { data } = await supabase.from('ph_snapshots')
-    .select('health_index, status, domains, caps')
+export async function fetchCenterHealth(masterProjectId: string): Promise<(ProjectHealth & { asOf: string }) | null> {
+  const { data, error } = await supabase.from('ph_snapshots')
+    .select('health_index, status, domains, caps, snap_date')
     .eq('master_project_id', masterProjectId)
     .order('snap_date', { ascending: false }).limit(1).maybeSingle()
-  const row = data as { health_index: number | null; status: string; domains?: { key: string; score: number }[]; caps?: { reason?: string }[] } | null
+  if (error) throw error
+  const row = data as { snap_date: string; health_index: number | null; status: string; domains?: { key: string; score: number }[]; caps?: { reason?: string }[] } | null
   if (!row || row.health_index == null) return null
   const domains = row.domains ?? []
   const dims: DerivedHealth[] = domains.map((d) => {
@@ -25,6 +26,7 @@ export async function fetchCenterHealth(masterProjectId: string): Promise<Projec
   })
   const weakest = domains.slice().sort((a, b) => a.score - b.score)[0]
   return {
+    asOf: row.snap_date,
     status: CENTER_STATUS[row.status] ?? 'yellow',
     score: Math.round(row.health_index),
     drivenBy: weakest ? (CENTER_DIM[weakest.key] ?? null) : null,

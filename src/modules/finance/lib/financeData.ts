@@ -281,6 +281,7 @@ interface FinPaymentCertificateRow {
   paid_amount_fc: number
   paid_exchange_rate: number
   paid_amount_fc_rial_equivalent: number
+  paid_ledger_fx_rial?: number | null
   status: string
   submitted_date: string | null
   certified_date: string | null
@@ -315,7 +316,7 @@ export function finPaymentCertificateFromRow(r: FinPaymentCertificateRow): FinPa
     payableAmount: Number(r.payable_amount),
     certifiedAmount: r.certified_amount == null ? null : Number(r.certified_amount),
     paidAmount: Number(r.paid_amount),
-    paidFx: fxFromRow(r.paid_amount_fc, r.fc_currency, r.paid_exchange_rate, r.paid_amount_fc_rial_equivalent),
+    paidFx: fxFromRow(r.paid_amount_fc, r.fc_currency, r.paid_exchange_rate, r.paid_ledger_fx_rial ?? r.paid_amount_fc_rial_equivalent),
     status: r.status as FinCertificateStatus,
     submittedDate: r.submitted_date,
     certifiedDate: r.certified_date,

@@ -69,7 +69,7 @@ export async function loadAll(pid: string): Promise<WqData> {
   const lineIds = links.map((l) => l.line_id as string)
   const lines: Row[] = []
   for (let i = 0; i < lineIds.length; i += 150) {
-    const r = chk(await supabase.from('ex_report_lines').select('id, report_id, detail').in('id', lineIds.slice(i, i + 150)))
+    const r = chk(await supabase.from('ex_report_lines').select('id, report_id, detail, status, km_from').in('id', lineIds.slice(i, i + 150)))
     lines.push(...((r.data ?? []) as Row[]))
   }
   const files = buildWeldFiles({
@@ -82,11 +82,11 @@ export async function loadAll(pid: string): Promise<WqData> {
   // the report rows of each weld: who welded which half of each pass, the coating application and its test
   const repById = new Map(reports.map((r) => [r.id as string, r]))
   const lineById = new Map(lines.map((l) => [l.id as string, l]))
-  const rowsOf = new Map<string, { formKey: string; detail: Record<string, unknown>; date: string; reportNo: string; approved: boolean }[]>()
+  const rowsOf = new Map<string, { formKey: string; detail: Record<string, unknown>; date: string; reportNo: string; approved: boolean; acceptedLine: boolean; kmFrom: unknown }[]>()
   for (const k of links) {
     const l = lineById.get(k.line_id), r = l ? repById.get(l.report_id) : undefined
     if (!l || !r || r.status === 'rejected') continue
-    const x = rowsOf.get(k.weld_id) ?? []; x.push({ formKey: s(r.form_key), detail: (l.detail ?? {}) as Record<string, unknown>, date: s(r.report_date), reportNo: s(r.report_no), approved: r.status === 'approved' }); rowsOf.set(k.weld_id, x)
+    const x = rowsOf.get(k.weld_id) ?? []; x.push({ formKey: s(r.form_key), detail: (l.detail ?? {}) as Record<string, unknown>, date: s(r.report_date), reportNo: s(r.report_no), approved: r.status === 'approved', acceptedLine: (r.status === 'approved' || r.status === 'partially_approved') && l.status === 'approved', kmFrom: l.km_from }); rowsOf.set(k.weld_id, x)
   }
   const num = (v: unknown) => { const x = Number(String(v ?? '').replace('٫', '.')); return String(v ?? '').trim() !== '' && Number.isFinite(x) ? x : null }
   const facts = (rows: { formKey: string; detail: Record<string, unknown>; date: string; reportNo: string; approved: boolean }[]) => {
@@ -102,7 +102,12 @@ export async function loadAll(pid: string): Promise<WqData> {
     welds: files.map((f) => {
       const rows = rowsOf.get(f.id) ?? []
       const weldRow = rows.find((r) => r.formKey === 'welding' || r.formKey === 'tie_in')
-      return { ...f, weldDate: f.welding?.date ?? '', stampsBy: { root: splitStamps(f.welding?.stamps.root), hot: splitStamps(f.welding?.stamps.hot), fill: splitStamps(f.welding?.stamps.fill), cap: splitStamps(f.welding?.stamps.cap) }, sides: sidesFromRows(rows, splitStamps), lengthM: num(f.central.length ?? weldRow?.detail.lengthM), tieKm: num(rows.find((r) => r.formKey === 'tie_in')?.detail.km), coat: facts(rows), vtReport: s(weldRow?.detail.vt) }
+      const visibleKm = new Set(rows.filter((r) => r.acceptedLine && (r.formKey === 'tie_in' || r.formKey === 'welding')).flatMap((r) => {
+        const km = String(r.detail.km ?? '').trim().replace(/[۰-۹٠-٩]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩'.indexOf(d) % 10))
+        const value = num(km) ?? num(r.kmFrom)
+        return value != null && value >= 0 ? [value] : []
+      }))
+      return { ...f, weldDate: f.welding?.date ?? '', stampsBy: { root: splitStamps(f.welding?.stamps.root), hot: splitStamps(f.welding?.stamps.hot), fill: splitStamps(f.welding?.stamps.fill), cap: splitStamps(f.welding?.stamps.cap) }, sides: sidesFromRows(rows, splitStamps), lengthM: num(f.central.length ?? weldRow?.detail.lengthM), tieKm: visibleKm.size === 1 ? [...visibleKm][0] : null, coat: facts(rows), vtReport: s(weldRow?.detail.vt) }
     }),
     welders: welders.map((w) => ({ id: w.id, key: s(w.welder_key), raw: s(w.welder_raw), name: s(w.full_name), status: s(w.status), kind: s(w.kind) || 'welder', hasPhoto: !!w.has_photo, cardNo: s(w.card_no), cardStatus: s(w.card_status), nationalId: s(w.national_id) })),
     quals: quals.map((q) => ({ id: q.id, welderId: q.welder_id, wqtNo: s(q.wqt_no), process: s(q.process), position: s(q.position), materialGroup: s(q.material_group), thkMin: n(q.thk_min), thkMax: n(q.thk_max), diaMin: n(q.dia_min), diaMax: n(q.dia_max), issueDate: q.issue_date ?? null, expiryDate: q.expiry_date ?? null, status: s(q.status) })),
@@ -212,7 +217,14 @@ export async function saveWps(pid: string, w: Partial<Wps> & { wpsNo: string }, 
 export async function removeWps(id: string) { chk(await supabase.from('wq_wps').update({ removed_at: new Date().toISOString() }).eq('id', id)) }
 export async function setWps(weldId: string, wpsId: string | null) { chk(await supabase.rpc('wq_set_wps', { p_weld: weldId, p_wps: wpsId })) }
 export async function repairZone(weldId: string, round: number, from: number | null, to: number | null, wpsId: string | null) { chk(await supabase.rpc('wq_repair_zone', { p_weld: weldId, p_round: round, p_from: from, p_to: to, p_wps: wpsId })) }
-export async function passportSign(weldId: string, role: string, name: string | null) { chk(await supabase.rpc('wq_passport_sign', { p_weld: weldId, p_role: role, p_name: name })) }
+export async function passportSign(weldId: string, role: string, name: string | null) {
+  const response = await supabase.rpc('wq_passport_sign', { p_weld: weldId, p_role: role, p_name: name })
+  const reason = response.error?.message
+  if (reason === 'release_requires_ndt') throw new Error('نتیجهٔ پذیرش NDT همین سرجوش باید امضا شده باشد.')
+  if (reason === 'release_requires_chainage') throw new Error('کیلومتر یکتای سرجوش باید در گزارش تأییدشده ثبت شود.')
+  if (reason === 'release_requires_hydrotest') throw new Error('یک قطعهٔ هیدروتست پذیرفته‌شده باید این سرجوش را پوشش دهد.')
+  chk(response)
+}
 
 // ── pipes as strung (the stringing reports): number, length, wall — in the order they were laid out
 export interface StrungPipe { pipeNo: string; lengthM: number | null; thkIn: number | null; origin: string; date: string; reportNo: string; front: string; order: number }

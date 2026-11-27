@@ -35,23 +35,6 @@ export function BillingManage({ masterProjectId, view, approverHost }: { masterP
   const shown = contractId ? certs.filter((c) => c.contractId === contractId) : certs
   const today = todayIso()
 
-  /** Paid fields of a certificate = sum of its payments; status follows. */
-  const syncPaid = async (certId: string) => {
-    const st = useFinanceStore.getState()
-    const cert = st.certificates.find((c) => c.id === certId)
-    if (!cert) return
-    const mine = st.payments.filter((p) => p.certificateId === certId)
-    const paid = mine.reduce((s, p) => s + p.amount, 0)
-    const fcRial = mine.reduce((s, p) => s + p.fx.fcRialEquivalent, 0)
-    const last = mine.map((p) => p.paymentDate).sort().at(-1) ?? null
-    const owed = cert.certifiedAmount ?? cert.payableAmount
-    const total = paid + fcRial
-    let status: FinCertificateStatus = cert.status
-    if (total > 0) status = total >= owed - 1 ? 'paid' : 'partially_paid'
-    else if (cert.status === 'paid' || cert.status === 'partially_paid') status = cert.certifiedAmount != null ? 'certified' : 'submitted'
-    if (paid !== cert.paidAmount || last !== cert.paidDate || status !== cert.status) await updateCertificate(certId, { paidAmount: paid, paidDate: last, status })
-  }
-
   // ---- KPI strip
   const gross = shown.reduce((s, c) => s + certificateGrossTotal(c), 0)
   const certified = shown.reduce((s, c) => s + (c.certifiedAmount ?? 0), 0)
@@ -113,7 +96,7 @@ export function BillingManage({ masterProjectId, view, approverHost }: { masterP
     { key: 'c', label: 'صورت‌وضعیت', render: (p) => { const c = allCerts.find((x) => x.id === p.certificateId); return c ? label(c) : '—' } },
     { key: 'm', label: 'روش / مرجع', render: (p) => <>{p.method || '—'}<span className="sub">{p.referenceNumber}</span></> },
     { key: 'a', label: 'مبلغ (میلیارد)', num: true, render: (p) => fmtBn(p.amount + p.fx.fcRialEquivalent), sort: (p) => p.amount + p.fx.fcRialEquivalent },
-    { key: 'x', label: '', render: (p) => <span className="fn-row-actions no-print"><button title="ویرایش" aria-label="ویرایش" onClick={() => setPayFor({ cert: allCerts.find((c) => c.id === p.certificateId) ?? null, pay: p })}><Pencil size={14} /></button><button title="حذف" aria-label="حذف" className="danger" onClick={async () => { if (window.confirm('این پرداخت حذف شود؟')) { await deletePayment(p.id); await syncPaid(p.certificateId) } }}><Trash2 size={14} /></button></span> },
+    { key: 'x', label: '', render: (p) => <span className="fn-row-actions no-print"><button title="ویرایش" aria-label="ویرایش" onClick={() => setPayFor({ cert: allCerts.find((c) => c.id === p.certificateId) ?? null, pay: p })}><Pencil size={14} /></button><button title="حذف" aria-label="حذف" className="danger" onClick={async () => { if (window.confirm('این پرداخت از دفتر حذف و مانده دوباره محاسبه شود؟')) { await deletePayment(p.id) } }}><Trash2 size={14} /></button></span> },
   ]
 
   const target = edit === 'new' ? null : edit
@@ -148,7 +131,7 @@ export function BillingManage({ masterProjectId, view, approverHost }: { masterP
       {payFor && <FormModal key={payFor.pay?.id ?? payCert?.id ?? 'new-pay'} title={payFor.pay ? 'ویرایش پرداخت' : 'ثبت پرداخت'} subtitle={payCert ? `${label(payCert)} · مانده ${fmtBn(certificateOutstanding(payCert))} میلیارد ریال` : 'پرداخت به صورت‌وضعیت‌ها نسبت داده می‌شود.'}
         fields={[
           { key: 'certificateId', label: 'صورت‌وضعیت', kind: 'select', required: true, disabled: !!payFor.pay, options: certs.filter((c) => c.certifiedBy || c.id === payCert?.id).map((c) => ({ value: c.id, label: `${label(c)} · مانده ${fmtBn(certificateOutstanding(c))}` })), span: 2 },
-          { key: 'paymentDate', label: 'تاریخ پرداخت', kind: 'date', required: true }, { key: 'amount', label: 'مبلغ ریالی (ریال)', kind: 'money' },
+          { key: 'paymentDate', label: 'تاریخ پرداخت', kind: 'date', required: true }, { key: 'amount', label: 'مبلغ ریالی (ریال)', kind: 'money', allowNegative: true },
           { key: 'method', label: 'روش پرداخت', kind: 'text' }, { key: 'referenceNumber', label: 'شمارهٔ مرجع / سند', kind: 'text' },
           { key: 'fcAmount', label: 'مبلغ ارزی', kind: 'num' }, { key: 'fcCurrency', label: 'ارز', kind: 'text' }, { key: 'exchangeRate', label: 'نرخ تبدیل', kind: 'num' },
           { key: 'notes', label: 'یادداشت', kind: 'text', span: 2 }]}
@@ -158,7 +141,6 @@ export function BillingManage({ masterProjectId, view, approverHost }: { masterP
           const data: Partial<FinPayment> = { paymentDate: String(v.paymentDate), amount: num(v.amount), method: String(v.method ?? ''), referenceNumber: String(v.referenceNumber ?? ''), notes: String(v.notes ?? ''), fx: { fcAmount: num(v.fcAmount), fcCurrency: String(v.fcCurrency ?? ''), exchangeRate: num(v.exchangeRate), fcRialEquivalent: 0, rateDate: null } }
           const certId = String(v.certificateId)
           if (payFor.pay) await updatePayment(payFor.pay.id, data); else await createPayment(certId, data)
-          await syncPaid(certId)
         }} onClose={() => setPayFor(null)}
         extra={payCert ? <Section title="پرداخت‌های قبلی این صورت‌وضعیت" flush><DataTable rows={pays.filter((p) => p.certificateId === payCert.id)} rowKey={(p) => p.id} empty="هنوز پرداختی نیست." cols={[{ key: 'd', label: 'تاریخ', render: (p) => fmtD(p.paymentDate) }, { key: 'a', label: 'مبلغ (میلیارد)', num: true, render: (p) => fmtBn(p.amount + p.fx.fcRialEquivalent) }]} /></Section> : undefined} />}
     </div>

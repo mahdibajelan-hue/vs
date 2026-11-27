@@ -42,6 +42,7 @@ export function StageGateApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
       currentProfile: { role: profile.isAdmin ? 'admin' : 'manager' },
       myProjectAccess: projects.map((p) => ({ project_name: p.name })),
       onOpenGuide: (phase: string | null) => setGuide({ phase }),
+      getMasterProjectId: (name: string) => projects.find((p) => p.name === name)?.masterProjectId ?? null,
       getPssr: (name: string) => pssrRef.current.get(name) ?? null,
       onOpenModule: (key: 'engineering' | 'material' | 'execution' | 'pssr') => useModuleStore.getState().enterModule(key, contextProjectId ? 'project' : undefined),
       // the EPC phase reads the engineering / material / execution modules (once their stores are loaded)

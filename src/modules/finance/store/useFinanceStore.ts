@@ -319,7 +319,7 @@ export const useFinanceStore = create<FinanceState>()((set, get) => ({
   deletePayment: async (id) => {
     const { error } = await supabase.from('fin_payments').delete().eq('id', id)
     if (reportError('حذف پرداخت', error)) return
-    set((s) => ({ payments: s.payments.filter((p) => p.id !== id) }))
+    await get().fetchAll()
   },
 
   createClaim: async (contractId, data) => {

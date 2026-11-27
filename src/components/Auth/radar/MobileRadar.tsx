@@ -1,3 +1,4 @@
+import { MetricProvenance } from './MetricProvenance'
 import { PhotoRotator } from '../../../modules/execution/photos/PhotoParts'
 import { HEALTH_VERDICT_FA, HealthGuideButton, healthColor as healthColorOf } from '../../../modules/projectMetrics/HealthGuide'
 import { HEALTH_COLOR, statusFromScore } from '../../../modules/lifecycle/lib/health'
@@ -29,7 +30,9 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
 }) {
   const k = data.kpi
   // Until the live read lands the numbers are placeholders: show dashes and a reading state, never «عادی ۰ از ۱۰۰».
-  const loading = !data.live
+  const loading = !data.live && data.availability == null
+  const unavailable = data.availability === 'unconfigured' || data.availability === 'error' || data.availability === 'empty'
+  const hasCriticalGate = data.signals.some((signal) => signal.category === 'gate' && signal.severity === 'critical')
   // coming back from a module the window may still be scrolled down
   useEffect(() => { window.scrollTo(0, 0) }, [])
   // colour = the health verdict (worst dimension) when known, so the ring and the status always agree
@@ -60,13 +63,17 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
         <p className="mr-sub">گزارش {data.reportDateFa} · مرحلهٔ جاری: {data.currentStageLabel}</p>
       </section>
 
+      {data.availability === 'partial' && <p className="mr-sub" role="status">خواندن بخشی از منابع ناموفق بود.</p>}
       <section className="mr-hero" style={{ '--st': loading ? 'var(--text-muted, #94a3b8)' : statusColor } as CSSProperties} aria-busy={loading || undefined}>
-        <Ring value={k.health} color={statusColor} loading={loading} />
+        <Ring value={k.health} color={statusColor} loading={loading || !hd0} />
         <div className="mr-hero-body">
           <p className="mr-hero-label">سلامت پروژه <HealthGuideButton health={data.healthDetail} /></p>
-          <p className="mr-hero-status">{!loading && <span className="mr-pulse" aria-hidden />}{loading ? 'در حال خواندن…' : data.healthDetail ? HEALTH_VERDICT_FA[data.healthDetail.status] : STATUS_LABEL_FA[data.status]}</p>
-          <Bar loading={loading} label="پیشرفت واقعی" value={k.progressActual} ref2={k.progressPlanned} ref2Label="برنامه" color={k.progressActual >= k.progressPlanned ? '#22c55e' : '#f59e0b'} />
-          <Bar loading={loading} label="عملکرد هزینه" value={k.costPerformancePct} color={k.costVariancePct >= 0 ? '#22c55e' : '#f59e0b'} />
+          <p className="mr-hero-status">{!loading && <span className="mr-pulse" aria-hidden />}{loading ? 'در حال خواندن…' : hasCriticalGate ? 'مانع بحرانی راه‌اندازی' : unavailable || (data.availability === 'partial' && data.status === 'nominal') ? 'وضعیت پروژه قابل تأیید نیست' : data.healthDetail ? HEALTH_VERDICT_FA[data.healthDetail.status] : STATUS_LABEL_FA[data.status]}</p>
+          <MetricProvenance meta={data.metrics?.health} loading={loading} />
+          <Bar loading={loading || data.metrics?.progress?.state !== 'ready'} label="پیشرفت واقعی" value={k.progressActual} ref2={data.hasPlan ? k.progressPlanned : undefined} ref2Label="برنامه" color={k.progressActual >= k.progressPlanned ? '#22c55e' : '#f59e0b'} />
+          <MetricProvenance meta={data.metrics?.progress} loading={loading} />
+          <Bar loading={loading || data.metrics?.cost?.state !== 'ready'} label="عملکرد هزینه" value={k.costPerformancePct} color={k.costVariancePct >= 0 ? '#22c55e' : '#f59e0b'} />
+          <MetricProvenance meta={data.metrics?.cost} loading={loading} />
         </div>
       </section>
 
@@ -82,10 +89,10 @@ export function MobileRadar({ project, data, canSee, badgeFor, onItem, onSwitch,
       ) })()}
 
       <section className="mr-kpis" aria-label="شاخص‌های پایش">
-        <Kpi loading={loading} icon={ShieldAlert} label="ریسک فعال" value={k.activeRisks} sub={k.activeRisksHigh ? `${fa(k.activeRisksHigh)} بالا` : undefined} color="#f43f5e" onClick={() => open('risk')} />
-        <Kpi loading={loading} icon={Activity} label="مسئلهٔ باز" value={k.openIssues} sub={k.openIssuesHigh ? `${fa(k.openIssuesHigh)} بالا` : undefined} color="#a78bfa" onClick={() => open('taskissue')} />
-        <Kpi loading={loading} icon={Clock3} label="فعالیت معوق" value={k.delayedActivities} color="#f59e0b" onClick={() => open('scheduling')} />
-        <Kpi loading={loading} icon={RefreshCw} label="تغییر در انتظار" value={k.pendingChanges} color="#38bdf8" onClick={() => open('change')} />
+        <Kpi loading={loading} meta={data.metrics?.risks} icon={ShieldAlert} label="ریسک فعال" value={k.activeRisks} sub={k.activeRisksHigh ? `${fa(k.activeRisksHigh)} بالا` : undefined} color="#f43f5e" onClick={() => open('risk')} />
+        <Kpi loading={loading} meta={data.metrics?.issues} icon={Activity} label="مسئلهٔ باز" value={k.openIssues} sub={k.openIssuesHigh ? `${fa(k.openIssuesHigh)} بالا` : undefined} color="#a78bfa" onClick={() => open('taskissue')} />
+        <Kpi loading={loading} meta={data.metrics?.overdue} icon={Clock3} label="فعالیت معوق" value={k.delayedActivities} color="#f59e0b" onClick={() => open('scheduling')} />
+        <Kpi loading={loading} meta={data.metrics?.changes} icon={RefreshCw} label="تغییر در انتظار" value={k.pendingChanges} color="#38bdf8" onClick={() => open('change')} />
       </section>
 
       <div className="mr-photos"><PhotoRotator projectId={project.id} height={200} /></div>
@@ -160,13 +167,14 @@ function Bar({ label, value, color, ref2, ref2Label, loading }: { label: string;
   )
 }
 
-function Kpi({ icon: Icon, label, value, sub, color, onClick, loading }: { icon: LucideIcon; label: string; value: number; sub?: string; color: string; onClick: () => void; loading?: boolean }) {
+function Kpi({ icon: Icon, label, value, sub, color, onClick, loading, meta }: { meta?: import('./radarMetric').MetricSource; icon: LucideIcon; label: string; value: number; sub?: string; color: string; onClick: () => void; loading?: boolean }) {
   return (
     <button type="button" className="mr-kpi" style={{ '--c': color } as CSSProperties} onClick={onClick}>
       <span className="mr-kpi-ico"><Icon size={15} aria-hidden /></span>
-      <span className="mr-kpi-val">{loading ? '—' : fa(value)}</span>
+      <span className="mr-kpi-val">{loading || meta?.state !== 'ready' ? '—' : fa(value)}</span>
       <span className="mr-kpi-label">{label}</span>
-      {!loading && sub && <span className="mr-kpi-sub">{sub}</span>}
+      {!loading && meta?.state === 'ready' && sub && <span className="mr-kpi-sub">{sub}</span>}
+      <MetricProvenance meta={meta} loading={loading} />
     </button>
   )
 }
