@@ -110,6 +110,9 @@ export function ReviewPage({ projectId }: { projectId: string }) {
   )
 }
 
+/** after corrections are recorded: the form goes round its signature chain again, from the contractor */
+const restartMsg = (n: number) => `${fa(n)} اصلاح ثبت شد. گزارش نسخهٔ تازه دارد و همهٔ امضاهای قبلی پاک شد (در سابقه می‌ماند). گردش امضا از ابتدا: اول پیمانکار نسخهٔ اصلاح‌شده را امضا می‌کند، سپس نظارت به ترتیب؛ امضای آخر تأیید نهایی است.`
+
 function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model: ExecutionModel; onClose: () => void }) {
   const ex = useExecutionStore()
   const orgs = useMasterDataStore((s) => s.organizations)
@@ -181,7 +184,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
     setBusy(true)
     const err = await useFixStore.getState().save(reportId, pendingFix.map((x) => ({ ...x, note: fixNote.trim() })))
     setBusy(false)
-    if (!err) { setDraft({}); setMode('accept'); setMsg(`${fa(pendingFix.length)} اصلاح ثبت شد. اکنون امضا کنید؛ امضای سرپرست دستگاه نظارت، تأیید نهایی با اعداد اصلاح‌شده است.`); document.getElementById('ex-review-signs')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }
+    if (!err) { setDraft({}); setMode('accept'); setMsg(restartMsg(pendingFix.length)); void useEpcStoreSig.getState().loadSignatures(reportId); document.getElementById('ex-review-signs')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }
     else setMsg(err)
   }
   const canAmend = !finalSigned && ex.can(m.projectId, 'reopen') && !form && (r.status === 'approved' || r.status === 'partially_approved')
@@ -238,7 +241,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
       {canReview && !finalSigned && (
         <section className={`im-card ex-dec no-print${openAm ? ' ex-dec-am' : ''}`} aria-label="تصمیم دستگاه نظارت">
           <h3>{openAm ? `اصلاحیهٔ ${fa(openAm.no)} — ${openAm.reason}` : 'تصمیم دستگاه نظارت'}</h3>
-          {openAm && <p className="ex-dec-note" style={{ margin: 0 }}>مقادیر را در «اصلاح مقادیر» تغییر دهید و ثبت کنید؛ سپس امضای «تأیید نهایی» شما اصلاحیه را ثبت و گزارش را دوباره قفل می‌کند. <button className="im-btn im-btn-sm im-btn-danger" disabled={busy} onClick={() => void cancelAmend()}>لغو اصلاحیه</button></p>}
+          {openAm && <p className="ex-dec-note" style={{ margin: 0 }}>مقادیر را در «اصلاح مقادیر» تغییر دهید و ثبت کنید؛ گزارش مثل یک فرم تازه دوباره به امضای پیمانکار و سپس نظارت می‌رسد و امضای «تأیید نهایی» شما در پایان، اصلاحیه را ثبت و گزارش را دوباره قفل می‌کند. با لغو اصلاحیه، اعداد و همهٔ امضاهای قبلی برمی‌گردد. <button className="im-btn im-btn-sm im-btn-danger" disabled={busy} onClick={() => void cancelAmend()}>لغو اصلاحیه</button></p>}
           <div className="ex-dec-opts" role="radiogroup" aria-label="تصمیم">
             <button type="button" role="radio" aria-checked={mode === 'accept'} className={`ex-dec-opt ok${mode === 'accept' ? ' on' : ''}`} onClick={() => { setMode('accept'); setMsg('') }}><CheckCircle2 size={22} aria-hidden /><b>تأیید بدون تغییر</b><small>اعداد پیمانکار همان‌طور که ارسال شده پذیرفته و امضا می‌شود</small></button>
             <button type="button" role="radio" aria-checked={mode === 'fix'} className={`ex-dec-opt fix${mode === 'fix' ? ' on' : ''}`} onClick={() => { setMode('fix'); setMsg('') }}><PenLine size={22} aria-hidden /><b>اصلاح مقادیر و امضا</b><small>هر عددی که مغایرت دارد را اصلاح کنید؛ عدد پیمانکار خط‌خورده می‌ماند و عدد نظارت ملاک می‌شود</small></button>
@@ -254,7 +257,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
               <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <button className="im-btn im-btn-primary" disabled={busy || pendingFix.length === 0} onClick={() => void saveFixes()}><PenLine size={14} /> ثبت اصلاحات ({fa(pendingFix.length)})</button>
                 {Object.keys(draft).length > 0 && <button className="im-btn im-btn-sm" onClick={() => setDraft({})}>پاک کردن تغییرات ثبت‌نشده</button>}
-                {supSigned > 0 && <small className="ex-warn">ثبت اصلاحات، امضاهای نظارتِ داده‌شده روی نسخهٔ قبلی را پاک می‌کند تا روی نسخهٔ اصلاح‌شده امضا شود.</small>}
+                <small className="ex-warn">ثبت اصلاحات، نسخهٔ تازه‌ای از گزارش می‌سازد: همهٔ امضاها (پیمانکار و نظارت) پاک می‌شود و گردش امضا از ابتدا شروع می‌شود — اول پیمانکار نسخهٔ اصلاح‌شده را امضا می‌کند، سپس نظارت به ترتیب.{supSigned > 0 ? ` امضاهای قبلی در سابقهٔ گزارش می‌ماند.` : ''}</small>
               </span>
             </div>
           )}
@@ -270,11 +273,12 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
       )}
       {fixList.length > 0 && <p className="im-helper no-print" style={{ margin: 0 }}><span className="ex-fixmark"><s>۱۲</s><b>۱۰</b></span> = عدد پیمانکار (خط‌خورده) و عدد اصلاحی دستگاه نظارت (قرمز). {fa(fixList.length)} مقدار اصلاح شده است.</p>}
       <ReviewSheet report={r} form={form} lines={lines} resources={m.resources.filter((x) => x.reportId === reportId)} stoppages={m.stoppages.filter((x) => x.reportId === reportId)} acts={m.actById} fixes={fixes} editing={mode === 'fix' && canReview && !finalSigned} draft={draft} onDraft={(path, value, label) => setDraft((d) => ({ ...d, [path]: { value, label } }))} />
-      <div id="ex-review-signs">{pendingFix.length > 0 && <p className="ex-dec-msg no-print" style={{ background: 'rgba(217,119,6,.12)' }}>{fa(pendingFix.length)} اصلاح هنوز ثبت نشده است؛ با زدن امضا، ابتدا همین اصلاحات ثبت و سپس امضا می‌شود.</p>}<SignaturesCard report={{ id: reportId, projectId: r.projectId, formKey: r.formKey, status: r.status }} beforeSign={async () => {
+      <div id="ex-review-signs">{pendingFix.length > 0 && <p className="ex-dec-msg no-print" style={{ background: 'rgba(217,119,6,.12)' }}>{fa(pendingFix.length)} اصلاح هنوز ثبت نشده است؛ با زدن امضا، ابتدا همین اصلاحات ثبت می‌شود و گردش امضا از ابتدا (امضای پیمانکار) شروع می‌شود.</p>}<SignaturesCard report={{ id: reportId, projectId: r.projectId, formKey: r.formKey, status: r.status }} beforeSign={async () => {
         if (!pendingFix.length) return true
         setBusy(true); const err = await useFixStore.getState().save(reportId, pendingFix.map((x) => ({ ...x, note: fixNote.trim() }))); setBusy(false)
         if (err) { setMsg(err); return false }
-        setDraft({}); return true
+        // the corrections took every signature off: the chain starts again at the contractor, so this signature waits its turn
+        setDraft({}); setMode('accept'); setMsg(restartMsg(pendingFix.length)); void useEpcStoreSig.getState().loadSignatures(reportId); return false
       }} /></div>
       {lines.length > 0 && <div className="im-card" style={{ padding: 0 }}>
         <div style={{ padding: '10px 14px' }}><b>ردیف‌ها — تصمیم ردیف‌به‌ردیف (اختیاری)</b> <span className="im-helper">بدون تصمیم ردیف‌به‌ردیف، امضای نهایی همهٔ ردیف‌های در انتظار را تأیید می‌کند.</span></div>
