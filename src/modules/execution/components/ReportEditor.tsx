@@ -17,7 +17,7 @@ import { cumulative } from '../lib/progress'
 import type { Activity, Report, ReportLine, ReportResource, Stoppage, StoppageCategory } from '../types'
 import { LINE_STATUS_LABEL_FA, REPORT_STATUS_LABEL_FA } from '../types'
 import { Chip } from '../../finance/components/fn'
-import { Warehouse } from 'lucide-react'
+import { GitCommitHorizontal, Warehouse } from 'lucide-react'
 import { LineStatusChip, ReportStatusChip, fa } from './common'
 import { PaperModal, type PaperCtx } from './ReportPaper'
 import { ActionLines } from './ActionLines'
@@ -35,6 +35,8 @@ import { KmInput } from './KmInput'
 import { PipePick } from './PipePick'
 import { PipeYard } from './PipeYard'
 import { BendDir } from './BendDir'
+import { SectionBoard } from './SectionBoard'
+import { DEFAULT_SECTION_PLAN, lineSections, nextJointNos, sectionOf, sectionOfJoint, type JointRec, type SectionPlan, type StrungPipe } from '../lib/sections'
 import { yardPipes } from '../lib/pipeYard'
 import { ResourceSheet } from './ResourceSheet'
 import { chainText } from '../lib/chainage'
@@ -290,6 +292,46 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
     for (const l of m.lines) if (formOf.get(l.reportId) === 'string' && l.status !== 'rejected') { const k = registerKey(l.detail.pipeNo); if (k) out.set(k, l.detail.km ?? '') }
     return out
   }, [m.lines, m.reports])
+  // ── sections (سکشن) and joints: the strung line, the fit-ups made, and the state of each joint ──────────────
+  const plan: SectionPlan = useMemo(() => ({ ...DEFAULT_SECTION_PLAN, ...(m.settings.sectionPlan ?? {}) }), [m.settings.sectionPlan])
+  const jointRecs = useMemo(() => {
+    const formOf = new Map(m.reports.map((r) => [r.id, r.formKey]))
+    const live = m.lines.filter((l) => l.status !== 'rejected')
+    const keyOf = (sec: unknown, no: unknown) => `${registerKey(sec)}|${registerKey(no)}`
+    const welded = new Set<string>(), rtOk = new Set<string>(), rtRep = new Set<string>(), coated = new Set<string>()
+    for (const l of live) {
+      const f = formOf.get(l.reportId), d = l.detail, k = keyOf(d.sec, d.weldNo ?? d.jointNo)
+      if (f === 'welding') welded.add(k)
+      else if (f === 'rt_report') (d.result === 'acc' ? rtOk : rtRep).add(k)
+      else if (f === 'fj_coating' && d.result !== 'rej') coated.add(k)
+    }
+    const rec = (d: Record<string, unknown>, mine: boolean): JointRec => { const k = keyOf(d.sec, d.jointNo); return { before: registerKey(d.pipeNo2), after: registerKey(d.pipeNo), sec: String(d.sec ?? ''), no: String(d.jointNo ?? ''), mine, welded: welded.has(k), rtOk: rtOk.has(k), rtRep: rtRep.has(k) && !rtOk.has(k), coated: coated.has(k) } }
+    const out: JointRec[] = live.filter((l) => l.reportId !== reportId && formOf.get(l.reportId) === 'fitup').map((l) => rec(l.detail, false))
+    if (form?.key === 'fitup') for (const r of rows) if (r.detail.jointNo || r.detail.pipeNo) out.push(rec(r.detail, true))
+    return out
+  }, [m.lines, m.reports, reportId, rows, form?.key])
+  const [boardOpen, setBoardOpen] = useState(false)
+  const boardSections = useMemo(() => {
+    if (!boardOpen) return []
+    const formOf = new Map(m.reports.map((r) => [r.id, r.formKey])), byKey = new Map<string, StrungPipe>()
+    for (const l of m.lines) {
+      if (formOf.get(l.reportId) !== 'string' || l.status === 'rejected') continue
+      const key = registerKey(l.detail.pipeNo), km = Number(l.detail.km)
+      if (!key || !Number.isFinite(km) || km <= 0) continue
+      const reg = pipeList.find((p) => p.key === key)
+      byKey.set(key, { key, raw: reg?.raw ?? String(l.detail.pipeNo), km, lengthM: Number(l.detail.lengthM) || reg?.lengthM || 12, thkIn: reg?.wtIn ?? (Number(l.detail.thkIn) || null), odIn: reg?.odIn ?? null })
+    }
+    return lineSections([...byKey.values()], jointRecs.filter((j) => j.before && j.after), plan)
+  }, [boardOpen, m.lines, m.reports, pipeList, jointRecs, plan])
+  const addJoints = (picked: Record<string, unknown>[]) => {
+    setRows((a) => {
+      const out = [...a]; let i = 0
+      for (let j = 0; j < out.length && i < picked.length; j++) { const r = out[j]; if (!lockedLine(r) && !String(r.detail.jointNo ?? '').trim() && !String(r.detail.pipeNo ?? '').trim()) out[j] = { ...r, detail: { ...r.detail, ...picked[i++] } } }
+      for (; i < picked.length; i++) out.push({ key: uid0(), activityId: null, qty: 0, kmFrom: null, kmTo: null, location: '', note: '', detail: picked[i], status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null })
+      return out
+    })
+    setDirty(true); setBoardOpen(false)
+  }
   const pipeHints = useMemo(() => {
     const lineStatus = new Map(m.lines.map((l) => [l.id, l.status]))
     const label = (p: (typeof pipeList)[number]) => [p.lengthM != null ? `${p.lengthM} m` : '', p.wtIn != null ? `${p.wtIn}"` : '', p.entryLineId && lineStatus.get(p.entryLineId) === 'pending' ? 'در انتظار تأیید ناظر' : ''].filter(Boolean).join(' · ')
@@ -378,9 +420,26 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
         if (pp) { const patch = pipeFillPatch(form.key, colKeys, base, pp, prev && prev.key !== pp.key ? prev : undefined); for (const [kk, vv] of Object.entries(patch)) patchDetail(l.key, kk, vv); if (Object.keys(patch).length) setAutoFilled((a) => ({ ...a, [l.key]: [...new Set([...(a[l.key] ?? []), ...Object.keys(patch)])] })) }
       }
       setAutoFilled((a) => (a[l.key]?.includes(f.key) ? { ...a, [l.key]: a[l.key].filter((x) => x !== f.key) } : a)) // typing over a filled value makes it the person's own
+      // fit-up with both pipes chosen: the joint gets its section (from where the pipe after it was strung) and the
+      // section's next joint number — when the row does not have them yet
+      if (form?.key === 'fitup' && (f.key === 'pipeNo' || f.key === 'pipeNo2')) {
+        const after = f.key === 'pipeNo' ? val : l.detail.pipeNo, before = f.key === 'pipeNo2' ? val : l.detail.pipeNo2
+        const km = Number(strungKm.get(registerKey(after)))
+        if (registerKey(after) && registerKey(before) && Number.isFinite(km) && km > 0) {
+          const sec = String(l.detail.sec ?? '').trim() || String(sectionOf(km, plan))
+          if (!String(l.detail.sec ?? '').trim()) patchDetail(l.key, 'sec', sec)
+          if (!String(l.detail.jointNo ?? '').trim()) patchDetail(l.key, 'jointNo', nextJointNos(sec, 1, jointRecs.filter((j) => !(j.mine && j.no === '')))[0])
+        }
+      }
+      // later forms (welding, radiography, coating, lowering …): a joint number brings its section from the fit-up records
+      if (form && ['weldNo', 'jointNo', 'weldFrom', 'jointFrom'].includes(f.key) && form.key !== 'fitup') {
+        const secKey = colKeys.has('sec') ? 'sec' : colKeys.has('lineSec') ? 'lineSec' : null
+        const found = secKey && !String(l.detail[secKey] ?? '').trim() ? sectionOfJoint(val, jointRecs) : null
+        if (secKey && found) patchDetail(l.key, secKey, found)
+      }
       // a known weld brings its facts along (pipe, size, thickness …) into the EMPTY fields of this row — a suggestion the person can overwrite
       if (form && (f.key === 'sec' || f.key === 'weldNo' || f.key === 'jointNo')) {
-        const sec = f.key === 'sec' ? val : l.detail.sec, wd = f.key === 'sec' ? (l.detail.weldNo ?? l.detail.jointNo) : val
+        const sec = f.key === 'sec' ? val : (String(l.detail.sec ?? '').trim() ? l.detail.sec : sectionOfJoint(val, jointRecs) ?? l.detail.sec), wd = f.key === 'sec' ? (l.detail.weldNo ?? l.detail.jointNo) : val
         const k = weldKey(sec, wd), prof = k ? profiles.get(k) : undefined
         if (prof) {
           const patch = fillPatch(form.key, colKeys, { ...l.detail, [f.key]: val }, prof)
@@ -493,7 +552,8 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
           <b>{form ? 'جدول ردیف‌ها' : 'ردیف‌های کارکرد (ثبت‌شده پیش از انتقال کارکرد به صورتجلسات کارگاهی)'}</b>
           {form?.hint && <span className="im-helper" style={{ margin: 0 }}>{form.hint}</span>}
           {editable && form?.key === 'string' && !sheetMode && <button className="im-btn im-btn-primary im-btn-sm" style={sheetTpl ? undefined : { marginInlineStart: 'auto' }} onClick={() => setYardOpen(true)}><Warehouse size={13} /> انتخاب لوله از دپو</button>}
-          {editable && form && !sheetMode && <button className={`im-btn im-btn-sm${form.key === 'string' ? '' : ' im-btn-primary'}`} style={form && (sheetTpl || form.key === 'string') ? undefined : { marginInlineStart: 'auto' }} onClick={addBlank}><Plus size={13} /> ردیف جدید</button>}
+          {editable && form?.key === 'fitup' && !sheetMode && <button className="im-btn im-btn-primary im-btn-sm" style={sheetTpl ? undefined : { marginInlineStart: 'auto' }} onClick={() => setBoardOpen(true)}><GitCommitHorizontal size={13} /> سرجوش‌گذاری روی خط</button>}
+          {editable && form && !sheetMode && <button className={`im-btn im-btn-sm${form.key === 'string' || form.key === 'fitup' ? '' : ' im-btn-primary'}`} style={form && (sheetTpl || form.key === 'string' || form.key === 'fitup') ? undefined : { marginInlineStart: 'auto' }} onClick={addBlank}><Plus size={13} /> ردیف جدید</button>}
         </div>
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}>
           {!form && actionOn ? (
@@ -532,6 +592,7 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
 
       {/* every entry of a site minute (rows, manpower, photos) comes before «save»; the signatures come after it */}
       {form?.resources && <ResourcePanel rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} onCopyLast={copyLastResources} />}
+      {boardOpen && <SectionBoard sections={boardSections} plan={plan} joints={jointRecs} canPlan={ex.can(m.projectId, 'configure')} onPlan={(p) => ex.saveSettings(m.projectId, { sectionPlan: p })} onAdd={addJoints} onClose={() => setBoardOpen(false)} />}
       {yardOpen && <PipeYard pipes={yard} startKm={nextKm} onAdd={addFromYard} onClose={() => setYardOpen(false)} />}
       {form && <><ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />{finishBar}{signs}</>}
 

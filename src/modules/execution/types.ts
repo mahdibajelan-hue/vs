@@ -96,6 +96,8 @@ export interface ExSettings {
   activityCrew?: Record<string, string>
   /** output forecast: work sections whose machines are analysed per machine-hour (route making, trenching …); empty = detected from the names */
   civilSections?: string[]
+  /** pipeline sections (سکشن): the chainage grid fit-up, welding, radiography, coating and lowering are organised by (lib/sections.ts) */
+  sectionPlan?: { startKm: number; lengthM: number; maxJoints: number }
 }
 export const DEFAULT_EX_SETTINGS: ExSettings = { weekStart: 0, workDays: [0, 1, 2, 3, 4, 5], overBasePct: 0, blockOverBase: true, reviewDays: 2, gapDueDays: 2, delayNoticeDays: 14, expectedFronts: [], projectStart: '', enabledForms: [] }
 export const WEEKDAY_FA = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']
