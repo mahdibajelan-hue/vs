@@ -34,6 +34,7 @@ import { WeatherCard } from './WeatherCard'
 import { KmInput } from './KmInput'
 import { PipePick } from './PipePick'
 import { PipeYard } from './PipeYard'
+import { BendDir } from './BendDir'
 import { yardPipes } from '../lib/pipeYard'
 import { ResourceSheet } from './ResourceSheet'
 import { chainText } from '../lib/chainage'
@@ -46,6 +47,11 @@ import { useEntryMeter } from '../lib/useEntryMeter'
 
 /** a stoppage row; the delay-register fields ride along so saving the report never drops an assessment or notice */
 interface StopRow { key: string; category: StoppageCategory; hours: number; description: string; materialId: string | null; responsibility?: Stoppage['responsibility']; critical?: boolean; noticeDate?: string | null; noticeRef?: string; assessNote?: string }
+/** per form: the columns that are a registered pipe's own facts (read-only once the pipe number is in the register) */
+const PIPE_SPEC_FIELDS: Record<string, string[]> = { string: ['lengthM', 'thkIn'], bend: ['diaIn', 'lengthM', 'wtMm'] }
+/** per form: bend-direction columns, entered as direction + angle (BendDir) */
+const BEND_FIELDS: Record<string, Record<string, 'plan' | 'profile' | 'any'>> = { bend: { dirLR: 'plan', dirSO: 'profile' }, fitup: { bendDeg: 'any' }, welding: {} }
+
 interface LRow { key: string; id?: string; activityId: string | null; qty: number; kmFrom: number | null; kmTo: number | null; location: string; note: string; detail: Record<string, unknown>; status: ReportLine['status']; approvedQty: number | null; reviewNote: string; sourceReportId: string | null }
 const uid0 = () => Math.random().toString(36).slice(2, 9)
 const EDITABLE = new Set(['draft', 'returned', 'incomplete'])
@@ -129,6 +135,8 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
   const strictRegs = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { strictRegisters?: boolean } } | undefined)?.flags?.strictRegisters
   const welderList = useMemo(() => regWelders.filter((w) => w.projectId === m.projectId && w.kind === 'welder' && w.cardStatus === 'issued'), [regWelders, m.projectId])
   const pipeList = useMemo(() => regPipes.filter((p) => p.projectId === m.projectId), [regPipes, m.projectId])
+  /** the small read-only line under a picked pipe number: size · length · wall */
+  const pipeSpec = (v: unknown): string => { const p = pipeList.find((x) => x.key === registerKey(v)); return p ? [p.odIn != null ? `${fa(p.odIn)}″` : '', p.lengthM != null ? `${fa(p.lengthM, 2)} متر` : '', p.wtIn != null ? `ضخامت ${fa(p.wtIn, 3)}″` : ''].filter(Boolean).join(' · ') : '' }
   // pipes registered by a delivery record sent a moment ago are offered at once
   useEffect(() => { if (form?.key === 'string' || form?.key === 'fitup') void useEpcStore.getState().refreshRegisters(m.projectId) }, [form?.key, m.projectId])
   const regWarnings = useMemo(() => {
@@ -276,6 +284,12 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
   const weldHints = useMemo(() => welds.filter((w) => w.projectId === m.projectId && w.status !== 'merged').map((w) => ({ weld: w.weldRaw, sec: w.sectionRaw, pipe: w.pipeNo ?? '' })), [welds, m.projectId])
   // pipe numbers offered in the row: on the stringing record only pipes registered by a delivery record, not rejected,
   // and not strung yet (in another record or another row of this one); elsewhere every registered pipe
+  // where each strung pipe lies (its stringing row's chainage): a bend is made where the pipe was strung
+  const strungKm = useMemo(() => {
+    const formOf = new Map(m.reports.map((r) => [r.id, r.formKey])), out = new Map<string, unknown>()
+    for (const l of m.lines) if (formOf.get(l.reportId) === 'string' && l.status !== 'rejected') { const k = registerKey(l.detail.pipeNo); if (k) out.set(k, l.detail.km ?? '') }
+    return out
+  }, [m.lines, m.reports])
   const pipeHints = useMemo(() => {
     const lineStatus = new Map(m.lines.map((l) => [l.id, l.status]))
     const label = (p: (typeof pipeList)[number]) => [p.lengthM != null ? `${p.lengthM} m` : '', p.wtIn != null ? `${p.wtIn}"` : '', p.entryLineId && lineStatus.get(p.entryLineId) === 'pending' ? 'در انتظار تأیید ناظر' : ''].filter(Boolean).join(' · ')
@@ -286,8 +300,15 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
       return pipeList.filter((p) => p.status === 'in_stock' && !strung.has(p.key)).map((p) => ({ value: p.raw, label: label(p) }))
     }
     if (form?.key === 'fitup') return fitupPicks('pipeNo')
+    if (form?.key === 'bend') {
+      const formOf = new Map(m.reports.map((r) => [r.id, r.formKey]))
+      const bent = new Set(m.lines.filter((l) => l.reportId !== reportId && formOf.get(l.reportId) === 'bend' && l.status !== 'rejected').map((l) => registerKey(l.detail.pipeNo)).filter(Boolean))
+      for (const r of rows) { const k = registerKey(r.detail.pipeNo); if (k) bent.add(k) }
+      return pipeList.filter((p) => strungKm.has(p.key) && !bent.has(p.key) && p.status !== 'rejected')
+        .map((p) => ({ value: p.raw, label: [label(p), strungKm.get(p.key) ? `km ${chainText(strungKm.get(p.key))}` : ''].filter(Boolean).join(' · ') }))
+    }
     return [...new Map([...pipeList.map((p) => [p.raw, { value: p.raw, label: label(p) }] as const), ...weldHints.filter((w) => w.pipe).map((w) => [w.pipe, { value: w.pipe, label: '' }] as const)]).values()].slice(0, 800)
-  }, [form?.key, pipeList, m.lines, m.reports, reportId, rows]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [form?.key, pipeList, m.lines, m.reports, reportId, rows, strungKm]) // eslint-disable-line react-hooks/exhaustive-deps
   // fit-up joins two strung pipes: the pipe before the joint (pipeNo2) and the pipe after it (pipeNo). A pipe has one joint
   // at each end, so it is offered again for the other side but never twice for the same side.
   function fitupPicks(field: 'pipeNo' | 'pipeNo2') {
@@ -330,6 +351,14 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
     const ck = cattr ? centralKey(l.detail) : null
     const cval = cattr && ck ? centralByKey.get(ck)?.central[cattr] : undefined
     if (cval) return <span dir="ltr" className="ex-central" title="از جدول مرکزی سرجوش — برای تغییر، «کارت سرجوش» را باز کنید" style={{ background: 'rgba(14,165,233,.12)', padding: '2px 6px', borderRadius: 6, display: 'inline-block' }}>{cval}</span>
+    // a registered pipe's own facts (size, wall, length) are not typed: they follow the pipe number, shown read-only
+    const specOf = form ? PIPE_SPEC_FIELDS[form.key] : undefined
+    if (specOf?.includes(f.key)) {
+      const pp = pipeList.find((x) => x.key === registerKey(l.detail.pipeNo))
+      if (pp) { const shown = v !== '' && v != null ? v : f.key === 'wtMm' ? (pp.wtIn != null ? Math.round(pp.wtIn * 2540) / 100 : '') : f.key === 'lengthM' ? pp.lengthM : f.key === 'thkIn' ? pp.wtIn : pp.odIn
+        return <span className="ex-spec-ro" dir="ltr" title="از شناسنامهٔ لوله (صورتجلسهٔ ورود) — با تغییر شمارهٔ لوله عوض می‌شود">{shown === '' || shown == null ? '—' : fa(Number(shown), 3)}</span> }
+    }
+    if (form && BEND_FIELDS[form.key]?.[f.key]) return <BendDir value={v} onValue={(x) => patchDetail(l.key, f.key, x)} which={BEND_FIELDS[form.key][f.key]} label={f.label} disabled={dis} />
     if (f.kind === 'select') return <select disabled={dis} value={String(v ?? '')} onChange={(e) => patchDetail(l.key, f.key, e.target.value)} aria-label={f.label}><option value="">—</option>{f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
     if (f.kind === 'km') return dis ? <span dir="ltr">{chainText(v) || '—'}</span> : <KmInput value={v} onValue={(n) => patchDetail(l.key, f.key, n ?? '')} label={f.label} />
     if (f.kind === 'num') return dis ? <span>{fa(Number(v) || 0, 3)}</span> : <DecInput value={Number(v) || 0} onValue={(n) => patchDetail(l.key, f.key, n || '')} label={f.label} />
@@ -343,7 +372,10 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
       if (form && isPipeField(f.key)) {
         const pp = pipeList.find((x) => x.key === registerKey(val))
         const prev = pipeList.find((x) => x.key === registerKey(l.detail[f.key]))
-        if (pp) { const patch = pipeFillPatch(form.key, colKeys, { ...l.detail, [f.key]: val }, pp, prev && prev.key !== pp.key ? prev : undefined); for (const [kk, vv] of Object.entries(patch)) patchDetail(l.key, kk, vv); if (Object.keys(patch).length) setAutoFilled((a) => ({ ...a, [l.key]: [...new Set([...(a[l.key] ?? []), ...Object.keys(patch)])] })) }
+        if (pp && form.key === 'bend' && strungKm.get(pp.key) !== undefined && (l.detail.km == null || l.detail.km === '' || (prev && l.detail.km === strungKm.get(prev.key)))) patchDetail(l.key, 'km', strungKm.get(pp.key))
+        // columns that are the pipe's own facts are read-only here: the register's value always replaces them
+        const base: Record<string, unknown> = { ...l.detail, [f.key]: val }; if (f.key === 'pipeNo') for (const k of PIPE_SPEC_FIELDS[form.key] ?? []) base[k] = ''
+        if (pp) { const patch = pipeFillPatch(form.key, colKeys, base, pp, prev && prev.key !== pp.key ? prev : undefined); for (const [kk, vv] of Object.entries(patch)) patchDetail(l.key, kk, vv); if (Object.keys(patch).length) setAutoFilled((a) => ({ ...a, [l.key]: [...new Set([...(a[l.key] ?? []), ...Object.keys(patch)])] })) }
       }
       setAutoFilled((a) => (a[l.key]?.includes(f.key) ? { ...a, [l.key]: a[l.key].filter((x) => x !== f.key) } : a)) // typing over a filled value makes it the person's own
       // a known weld brings its facts along (pipe, size, thickness …) into the EMPTY fields of this row — a suggestion the person can overwrite
@@ -358,7 +390,7 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
       }
     }
     const auto = autoFilled[l.key]?.includes(f.key)
-    if (form && (form.key === 'string' || form.key === 'fitup') && (f.key === 'pipeNo' || f.key === 'pipeNo2')) return <PipePick value={String(v ?? '')} options={f.key === 'pipeNo2' ? pipeHints2 : pipeHints} onText={onText} label={f.label} disabled={dis} empty={form.key === 'string' ? 'لولهٔ ریسه‌نشده‌ای در رجیستر نیست؛ ابتدا صورتجلسهٔ ورود لوله را ثبت و ارسال کنید.' : 'لولهٔ ریسه‌شدهٔ آزادی برای این سمت اتصال نیست.'} />
+    if (form && (form.key === 'string' || form.key === 'fitup' || form.key === 'bend') && (f.key === 'pipeNo' || f.key === 'pipeNo2')) return <PipePick spec={pipeSpec(v)} value={String(v ?? '')} options={f.key === 'pipeNo2' ? pipeHints2 : pipeHints} onText={onText} label={f.label} disabled={dis} empty={form.key === 'bend' ? 'لولهٔ ریسه‌شدهٔ خم‌نشده‌ای نیست.' : form.key === 'string' ? 'لولهٔ ریسه‌نشده‌ای در رجیستر نیست؛ ابتدا صورتجلسهٔ ورود لوله را ثبت و ارسال کنید.' : 'لولهٔ ریسه‌شدهٔ آزادی برای این سمت اتصال نیست.'} />
     const badReg = isWelderField(f.key) ? (welderList.length ? (() => { const c = checkWelderCell(v, welderList); return c.unknown.length || c.blocked.length })() : 0) : isPipeField(f.key) && pipeList.length && form?.key !== 'pipe_entry' ? (() => { const c = checkPipeCell(v, pipeList); return c.unknown || c.bad ? 1 : 0 })() : 0
     return <input disabled={dis} value={String(v ?? '')} onChange={(e) => onText(e.target.value)} onKeyDown={isWelderField(f.key) ? (e) => { if (e.key === 'Enter') { const x = fromScan(e.currentTarget.value); if (x !== e.currentTarget.value) { e.preventDefault(); onText(x) } } } : undefined} onBlur={isWelderField(f.key) ? (e) => { const x = fromScan(e.currentTarget.value); if (x !== e.currentTarget.value) onText(x) } : undefined} aria-label={f.label} dir="auto" list={known ? `ex-hint-${known}` : isWelderField(f.key) ? 'ex-hint-welder' : undefined} title={badReg ? 'در رجیستر ثبت نشده یا فعال نیست' : auto ? 'از اطلاعات ثبت‌شدهٔ همین سرجوش پر شد' : undefined} style={badReg ? { outline: '2px solid #ef4444', outlineOffset: -1 } : auto ? { background: 'rgba(14,165,233,.12)' } : undefined} />
   }

@@ -58,7 +58,9 @@ export function pipeFillPatch(formKey: string, columns: ReadonlySet<string>, det
   const out: Record<string, string> = {}
   const put = (keys: string[], v: number | null, pv?: number | null) => { if (v == null) return; const k = keys.find((x) => columns.has(x)); if (k && (empty(k) || was(k, pv)) && String(detail[k]) !== String(v)) out[k] = String(v) }
   put(['sizeIn', 'odIn', 'diaIn'], pipe.odIn, prev?.odIn); put(['thkIn'], pipe.wtIn, prev?.wtIn)
-  if (['string', 'bend'].includes(formKey)) put(['lengthM'], pipe.lengthM, prev?.lengthM) // pipe-level forms only: on joint forms «lengthM» is a joint fact kept by the weld record
+  if (['string', 'bend'].includes(formKey)) put(['lengthM'], pipe.lengthM, prev?.lengthM)
+  const mm = (v: number | null | undefined) => (v == null ? null : Math.round(v * 25.4 * 100) / 100)
+  put(['wtMm'], mm(pipe.wtIn), mm(prev?.wtIn)) // the bend sheet keeps the wall in millimetres // pipe-level forms only: on joint forms «lengthM» is a joint fact kept by the weld record
   return out
 }
 

@@ -56,3 +56,5 @@ assert.equal(findByCode('146-122037-8', people).key, 'A12')
 assert.equal(findByCode('a12', people).key, 'A12'); assert.equal(findByCode('wld-0001', people).key, 'A12'); assert.equal(findByCode('Z1', people), undefined); assert.equal(findByCode('  ', people), undefined)
 assert.equal(cardPayload('WLD-0001', '35'), 'RASTA|WC|WLD-0001|35'); assert.deepEqual(scanTokens('RASTA|WC|WLD-0001|35'), ['35', 'WLD-0001']); assert.equal(fromScan('RASTA|WC|WLD-0001|35'), '35'); assert.equal(fromScan('A12'), 'A12')
 console.log('registers + weld lifecycle: all assertions passed')
+// the bend sheet's wall thickness in mm comes from the register's inches
+assert.deepEqual(pipeFillPatch('bend', new Set(['diaIn', 'lengthM', 'wtMm']), {}, P), { diaIn: '30', lengthM: '12.1', wtMm: '11.13' })

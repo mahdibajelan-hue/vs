@@ -187,7 +187,9 @@ export function openPlace(x: Loc) {
 export function installUrlState(s: Shell) {
   if (shell) return
   shell = s
-  const mark = () => { inputAt = performance.now(); fresh = false }
+  // a click inside a dialog or popup (closing a tips card while the page loads) does not move the screen: the address
+  // keeps describing it, so a record named there still opens once its page has its data
+  const mark = (e: Event) => { inputAt = performance.now(); const t = e.target as Element | null; if (!t?.closest?.('[role="dialog"], [role="alertdialog"], [aria-modal="true"], .im-overlay')) fresh = false }
   window.addEventListener('pointerdown', mark, true)
   window.addEventListener('keydown', mark, true)
   window.addEventListener('popstate', onPop)

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useFormSlots } from './useFormSlots'
 import { FileDown, FileSpreadsheet, Printer } from 'lucide-react'
-import { exportPaperPdf, exportReportXlsx } from '../lib/paperExport'
+import { exportPaperPdf, exportReportXlsx, printPaper } from '../lib/paperExport'
 import { ModalPortal } from '../../../components/common/ModalPortal'
 import { fmtD } from '../../finance/components/fn'
 import { FORM_BY_KEY, SIGNER_LABEL_FA, STOPPAGE_CATEGORY_FA, type FormDef } from '../lib/formCatalog'
@@ -248,11 +248,12 @@ function ReportPaperBody({ c }: { c: PaperCtx }) {
 }
 
 export function PaperModal({ c, onClose }: { c: PaperCtx; onClose: () => void }) {
-  const print = () => { document.body.classList.add('mt-printing'); const off = () => { document.body.classList.remove('mt-printing'); window.removeEventListener('afterprint', off) }; window.addEventListener('afterprint', off); window.print() }
   const ref = useRef<HTMLDivElement>(null)
-  const [busy, setBusy] = useState<'' | 'pdf' | 'xlsx'>('')
+  const [busy, setBusy] = useState<'' | 'pdf' | 'xlsx' | 'print'>('')
   const title = c.form ? c.form.title : 'گزارش وضعیت کارگاه'
   const savePdf = async () => { if (!ref.current) return; setBusy('pdf'); try { await exportPaperPdf(ref.current, `${c.report.reportNo} ${title}`) } finally { setBusy('') } }
+  // printing goes through its own page (printPaper): the module's screen never reaches the printer, so no blank sheet
+  const print = async () => { if (!ref.current) return; setBusy('print'); try { await printPaper(ref.current) } finally { setBusy('') } }
   const saveXlsx = async () => { setBusy('xlsx'); try { await exportReportXlsx({ title, projectName: c.projectName, orgName: c.orgName, report: c.report, form: c.form, lines: c.lines, resources: c.resources }) } finally { setBusy('') } }
   return (
     <ModalPortal>
@@ -261,7 +262,7 @@ export function PaperModal({ c, onClose }: { c: PaperCtx; onClose: () => void })
           <div className="im-modal-head"><div><h3 className="im-modal-title">{title} — {c.report.reportNo}</h3></div><button className="im-modal-close" onClick={onClose} aria-label="بستن">✕</button></div>
           <div style={{ padding: '0 18px 8px', overflow: 'auto', maxHeight: '72vh' }}><div ref={ref} style={{ background: '#fff' }}><ReportPaper c={c} /></div></div>
           <div className="fn-form-foot no-print">
-            <button className="im-btn im-btn-primary" onClick={print}><Printer size={14} /> چاپ</button>
+            <button className="im-btn im-btn-primary" disabled={!!busy} onClick={() => void print()}><Printer size={14} /> {busy === 'print' ? 'آماده‌سازی چاپ…' : 'چاپ'}</button>
             <button className="im-btn" disabled={!!busy} onClick={() => void savePdf()}><FileDown size={14} /> {busy === 'pdf' ? 'در حال ساخت PDF…' : 'ذخیرهٔ PDF'}</button>
             <button className="im-btn" disabled={!!busy} onClick={() => void saveXlsx()} title="فقط داده‌ها، بدون امضا"><FileSpreadsheet size={14} /> {busy === 'xlsx' ? 'در حال ساخت…' : 'ذخیرهٔ اکسل'}</button>
             <button className="im-btn" onClick={onClose}>بستن</button>
