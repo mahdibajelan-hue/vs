@@ -54,7 +54,8 @@ begin
           'loadDate', to_char(d - 2, 'YYYY-MM-DD'), 'unloadDate', to_char(d, 'YYYY-MM-DD'), 'status', case when random() < 0.04 then 'آسیب جزئی پوشش — تعمیر در دپو' else 'سالم' end);
       end loop;
     end loop;
-    perform pg_temp.seed_rep('pipe_entry', d, '{"loadType":"truck","origin":"کارخانهٔ لوله‌سازی اهواز","thkSet":"0.562, 0.688, 0.750"}', lines, case when d = last_entry then 'submitted' else 'approved' end);
+    perform pg_temp.seed_rep('pipe_entry', d, '{"loadType":"truck","origin":"کارخانهٔ لوله‌سازی اهواز","thkSet":"0.562, 0.688, 0.750"}'::jsonb
+      || jsonb_build_object('depot', case when k < 7 then 'دپوی کیلومتر ۴۰' when k < 14 then 'دپوی کیلومتر ۴۶' else 'انبار مرکزی سرخس' end), lines, case when d = last_entry then 'submitted' else 'approved' end);
   end loop;
 
   -- 2) stringing from the stock (pipes entered at least a day before), km running from 40+000; a few bends the next day

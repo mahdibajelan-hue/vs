@@ -47,12 +47,18 @@ export function welderQualified(quals: WelderQual[], ctx: Parameters<typeof qual
 }
 
 /** facts of the pipe register that a form row of `formKey` may be offered (only EMPTY fields are filled; the register stays the source) */
-export function pipeFillPatch(formKey: string, columns: ReadonlySet<string>, detail: Record<string, unknown>, pipe: Pipe): Record<string, string> {
+/**
+ * The facts a picked pipe brings into its row. Empty fields are filled; when the row held another pipe before (`prev`),
+ * a field still showing that pipe's value is replaced too — changing the pipe number changes its length and thickness —
+ * while a value the person typed differently stays.
+ */
+export function pipeFillPatch(formKey: string, columns: ReadonlySet<string>, detail: Record<string, unknown>, pipe: Pipe, prev?: Pipe): Record<string, string> {
   const empty = (k: string) => { const v = detail[k]; return v == null || String(v).trim() === '' || String(v).trim() === '0' }
+  const was = (k: string, pv: number | null | undefined) => pv != null && Number(detail[k]) === pv
   const out: Record<string, string> = {}
-  const put = (keys: string[], v: number | null) => { if (v == null) return; const k = keys.find((x) => columns.has(x)); if (k && empty(k)) out[k] = String(v) }
-  put(['sizeIn', 'odIn', 'diaIn'], pipe.odIn); put(['thkIn'], pipe.wtIn)
-  if (['string', 'bend'].includes(formKey)) put(['lengthM'], pipe.lengthM) // pipe-level forms only: on joint forms «lengthM» is a joint fact kept by the weld record
+  const put = (keys: string[], v: number | null, pv?: number | null) => { if (v == null) return; const k = keys.find((x) => columns.has(x)); if (k && (empty(k) || was(k, pv)) && String(detail[k]) !== String(v)) out[k] = String(v) }
+  put(['sizeIn', 'odIn', 'diaIn'], pipe.odIn, prev?.odIn); put(['thkIn'], pipe.wtIn, prev?.wtIn)
+  if (['string', 'bend'].includes(formKey)) put(['lengthM'], pipe.lengthM, prev?.lengthM) // pipe-level forms only: on joint forms «lengthM» is a joint fact kept by the weld record
   return out
 }
 

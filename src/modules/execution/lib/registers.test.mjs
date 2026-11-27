@@ -13,6 +13,11 @@ assert.equal(checkPipeCell('P-1001', [{ ...P, status: 'rejected' }]).bad, true)
 // fill only empty fields; length only on pipe-level forms
 assert.deepEqual(pipeFillPatch('string', new Set(['pipeNo', 'lengthM', 'thkIn', 'diaIn']), { thkIn: '' }, P), { diaIn: '30', thkIn: '0.438', lengthM: '12.1' })
 assert.deepEqual(pipeFillPatch('fitup', new Set(['lengthM', 'thkIn', 'sizeIn']), { thkIn: '0.5' }, P), { sizeIn: '30' })
+// changing the pipe of a row: the previous pipe's facts follow the new pipe, a value typed by hand stays
+const Q2 = { ...P, key: 'P-1002', raw: 'P-1002', wtIn: 0.562, lengthM: 11.8 }
+assert.deepEqual(pipeFillPatch('string', new Set(['lengthM', 'thkIn', 'diaIn']), { pipeNo: 'P-1002', thkIn: '0.438', lengthM: '12.1', diaIn: '30' }, Q2, P), { thkIn: '0.562', lengthM: '11.8' })
+assert.deepEqual(pipeFillPatch('string', new Set(['lengthM', 'thkIn']), { pipeNo: 'P-1002', thkIn: '0.438', lengthM: '12.4' }, Q2, P), { thkIn: '0.562' })
+assert.deepEqual(pipeFillPatch('string', new Set(['lengthM', 'thkIn']), { pipeNo: 'P-1002', thkIn: '0.438', lengthM: '12.1' }, Q2), {})
 
 const Q = { id: 'q', projectId: 'p', welderId: 'W1', wqtNo: '1', process: 'SMAW/GTAW', position: '', materialGroup: '', thkMin: 0.2, thkMax: 0.8, diaMin: null, diaMax: null, issueDate: '2026-01-01', expiryDate: '2026-06-30', wqtReportId: null, status: 'valid', note: '', wqt: {}, wqtStatus: 'draft', wqtConfirmedBy: null, wqtConfirmedAt: null, createdBy: null, wqtSignA: null, wqtSignB: null }
 assert.deepEqual(qualProblems(Q, { date: '2026-03-01', thk: 0.438, process: 'smaw' }), [])

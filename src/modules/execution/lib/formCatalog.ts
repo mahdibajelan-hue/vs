@@ -36,7 +36,7 @@ const size = f('sizeIn', 'قطر (in)', 'num', { unit: 'in' })
 
 export const FORMS: FormDef[] = [
   { key: 'pipe_entry', title: 'صورتجلسه ورود لوله‌های ۳۰ اینچ به کارگاه', en: 'Pipe delivery record', group: 'pipeline', kind: 'daily', sheet: 'Pipe inter', signers: ['supervision', 'contractor'],
-    header: [f('loadType', 'نوع بارگیری', 'text', { hint: 'زمینی' }), f('origin', 'مبداء بارگیری', 'text', { wide: true }), f('thkSet', 'ضخامت‌های جدول جمع‌بندی (in)', 'text', { hint: '0.406, 0.438, 0.688, 0.750' })],
+    header: [f('loadType', 'نوع بارگیری', 'text', { hint: 'زمینی' }), f('origin', 'مبداء بارگیری', 'text', { wide: true }), f('depot', 'محل دپو / انبار تخلیه', 'text', { hint: 'مثلاً دپوی کیلومتر ۴۰ — در انتخاب لوله برای ریسه فیلتر می‌شود' }), f('thkSet', 'ضخامت‌های جدول جمع‌بندی (in)', 'text', { hint: '0.406, 0.438, 0.688, 0.750' })],
     columns: [f('wayBill', 'شماره WAY BILL'), pipeNo, f('lengthM', 'طول بارنامه (m)', 'num', { req: true, unit: 'm' }), f('thkIn', 'ضخامت (in)', 'num', { req: true, unit: 'in' }), size, f('billNo', 'شماره بارنامه'), f('truckNo', 'شماره کامیون'), f('loadDate', 'تاریخ بارگیری', 'date'), f('unloadDate', 'تاریخ تخلیه', 'date'), f('status', 'وضعیت')],
     metrics: [{ key: 'joints', label: 'تعداد شاخه', unit: 'شاخه', op: 'count', groupBy: 'thkIn' }, { key: 'length', label: 'متراژ لوله', unit: 'm', op: 'sum', fields: ['lengthM'], groupBy: 'thkIn' }] },
   { key: 'pipe_permit', title: 'فرم مجوز خروج لوله‌های فولادی پوشش سه‌لایه پلی‌اتیلن', en: 'Pipe factory release permit', group: 'pipeline', kind: 'daily', sheet: 'Pipe release', signers: ['supervision', 'contractor'],

@@ -17,6 +17,7 @@ import { cumulative } from '../lib/progress'
 import type { Activity, Report, ReportLine, ReportResource, Stoppage, StoppageCategory } from '../types'
 import { LINE_STATUS_LABEL_FA, REPORT_STATUS_LABEL_FA } from '../types'
 import { Chip } from '../../finance/components/fn'
+import { Warehouse } from 'lucide-react'
 import { LineStatusChip, ReportStatusChip, fa } from './common'
 import { PaperModal, type PaperCtx } from './ReportPaper'
 import { ActionLines } from './ActionLines'
@@ -32,6 +33,8 @@ import { buildProfile, fillPatch, type Profile } from '../lib/weldProfile'
 import { WeatherCard } from './WeatherCard'
 import { KmInput } from './KmInput'
 import { PipePick } from './PipePick'
+import { PipeYard } from './PipeYard'
+import { yardPipes } from '../lib/pipeYard'
 import { ResourceSheet } from './ResourceSheet'
 import { chainText } from '../lib/chainage'
 import { SheetEntry } from './SheetEntry'
@@ -296,6 +299,28 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
     return pipeList.filter((p) => strungAt.has(p.key) && !used.has(p.key) && p.status !== 'rejected')
       .map((p) => ({ value: p.raw, label: [p.lengthM != null ? `${p.lengthM} m` : '', p.wtIn != null ? `${p.wtIn}"` : '', strungAt.get(p.key) ? `ریسه: km ${strungAt.get(p.key)}` : 'ریسه‌شده'].filter(Boolean).join(' · ') }))
   }
+  // «انتخاب لوله از دپو» (stringing): the yard without the strung pipes, and where today's stringing goes on from
+  const [yardOpen, setYardOpen] = useState(false)
+  const yard = useMemo(() => (form?.key === 'string' && yardOpen ? yardPipes(pipeList, m.lines, m.reports, reportId, rows.map((r) => r.detail.pipeNo)) : []), [form?.key, yardOpen, pipeList, m.lines, m.reports, reportId, rows])
+  const nextKm = useMemo(() => {
+    if (form?.key !== 'string') return null
+    const formOf = new Map(m.reports.map((r) => [r.id, r.formKey]))
+    let end: number | null = null
+    const see = (d: Record<string, unknown>) => { const k = Number(d.km); if (d.km !== '' && d.km != null && Number.isFinite(k) && k > 0) { const e = k + (Number(d.lengthM) || 0) / 1000; if (end == null || e > end) end = e } }
+    for (const l of m.lines) if (l.reportId !== reportId && formOf.get(l.reportId) === 'string' && l.status !== 'rejected') see(l.detail)
+    for (const r of rows) see(r.detail)
+    return end == null ? null : Math.round((end as number) * 1000) / 1000
+  }, [form?.key, m.lines, m.reports, reportId, rows])
+  const addFromYard = (picked: Record<string, unknown>[]) => {
+    setRows((a) => {
+      const out = [...a]; let i = 0
+      // empty rows (no pipe typed yet) are filled first, then new rows follow
+      for (let j = 0; j < out.length && i < picked.length; j++) { const r = out[j]; if (!lockedLine(r) && !String(r.detail.pipeNo ?? '').trim()) out[j] = { ...r, detail: { ...r.detail, ...picked[i++] } } }
+      for (; i < picked.length; i++) out.push({ key: uid0(), activityId: null, qty: 0, kmFrom: null, kmTo: null, location: '', note: '', detail: picked[i], status: 'pending', approvedQty: null, reviewNote: '', sourceReportId: null })
+      return out
+    })
+    setDirty(true); setYardOpen(false)
+  }
   const pipeHints2 = useMemo(() => (form?.key === 'fitup' ? fitupPicks('pipeNo2') : []), [form?.key, pipeList, m.lines, m.reports, reportId, rows]) // eslint-disable-line react-hooks/exhaustive-deps
   const cell = (f: FieldDef, l: LRow) => {
     const v = l.detail[f.key]
@@ -317,7 +342,8 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
       // a pipe from the warehouse register brings its size / thickness (and length on pipe-level forms) into the EMPTY fields
       if (form && isPipeField(f.key)) {
         const pp = pipeList.find((x) => x.key === registerKey(val))
-        if (pp) { const patch = pipeFillPatch(form.key, colKeys, { ...l.detail, [f.key]: val }, pp); for (const [kk, vv] of Object.entries(patch)) patchDetail(l.key, kk, vv); if (Object.keys(patch).length) setAutoFilled((a) => ({ ...a, [l.key]: [...new Set([...(a[l.key] ?? []), ...Object.keys(patch)])] })) }
+        const prev = pipeList.find((x) => x.key === registerKey(l.detail[f.key]))
+        if (pp) { const patch = pipeFillPatch(form.key, colKeys, { ...l.detail, [f.key]: val }, pp, prev && prev.key !== pp.key ? prev : undefined); for (const [kk, vv] of Object.entries(patch)) patchDetail(l.key, kk, vv); if (Object.keys(patch).length) setAutoFilled((a) => ({ ...a, [l.key]: [...new Set([...(a[l.key] ?? []), ...Object.keys(patch)])] })) }
       }
       setAutoFilled((a) => (a[l.key]?.includes(f.key) ? { ...a, [l.key]: a[l.key].filter((x) => x !== f.key) } : a)) // typing over a filled value makes it the person's own
       // a known weld brings its facts along (pipe, size, thickness …) into the EMPTY fields of this row — a suggestion the person can overwrite
@@ -434,7 +460,8 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
         <div className="mt-filters no-print" style={{ padding: '10px 14px' }}>
           <b>{form ? 'جدول ردیف‌ها' : 'ردیف‌های کارکرد (ثبت‌شده پیش از انتقال کارکرد به صورتجلسات کارگاهی)'}</b>
           {form?.hint && <span className="im-helper" style={{ margin: 0 }}>{form.hint}</span>}
-          {editable && form && !sheetMode && <button className="im-btn im-btn-primary im-btn-sm" style={form && sheetTpl ? undefined : { marginInlineStart: 'auto' }} onClick={addBlank}><Plus size={13} /> ردیف جدید</button>}
+          {editable && form?.key === 'string' && !sheetMode && <button className="im-btn im-btn-primary im-btn-sm" style={sheetTpl ? undefined : { marginInlineStart: 'auto' }} onClick={() => setYardOpen(true)}><Warehouse size={13} /> انتخاب لوله از دپو</button>}
+          {editable && form && !sheetMode && <button className={`im-btn im-btn-sm${form.key === 'string' ? '' : ' im-btn-primary'}`} style={form && (sheetTpl || form.key === 'string') ? undefined : { marginInlineStart: 'auto' }} onClick={addBlank}><Plus size={13} /> ردیف جدید</button>}
         </div>
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}>
           {!form && actionOn ? (
@@ -473,6 +500,7 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
 
       {/* every entry of a site minute (rows, manpower, photos) comes before «save»; the signatures come after it */}
       {form?.resources && <ResourcePanel rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} onCopyLast={copyLastResources} />}
+      {yardOpen && <PipeYard pipes={yard} startKm={nextKm} onAdd={addFromYard} onClose={() => setYardOpen(false)} />}
       {form && <><ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />{finishBar}{signs}</>}
 
       {!form && (
