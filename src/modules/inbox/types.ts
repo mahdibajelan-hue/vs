@@ -2,7 +2,7 @@ import type { ModuleKey } from '../../store/useModuleStore'
 
 export type InboxSource = 'execution' | 'material' | 'issues' | 'risk' | 'change' | 'missions' | 'finance' | 'scheduling' | 'statements' | 'pssr' | 'testing' | 'stakeholders'
 export type InboxKind =
-  | 'review' | 'fix' | 'gap' | 'delay_assess' | 'delay_notice'
+  | 'review' | 'fix' | 'ex_sign' | 'gap' | 'delay_assess' | 'delay_notice'
   | 'sign' | 'discrepancy' | 'change' | 'txn' | 'stage' | 'stage_fix'
   | 'verify' | 'extension' | 'task'
   | 'risk_action' | 'acceptance'
@@ -53,6 +53,7 @@ export interface ActionDef {
 export const KIND_META: Record<InboxKind, { label: string; group: InboxGroup }> = {
   review: { label: 'بررسی گزارش اجرا', group: 'decide' },
   fix: { label: 'گزارش برگشتی', group: 'fix' },
+  ex_sign: { label: 'نوبت امضای گزارش اجرا', group: 'do' },
   gap: { label: 'کسری گزارش', group: 'do' },
   delay_assess: { label: 'ارزیابی مسئولیت تأخیر', group: 'decide' },
   delay_notice: { label: 'اخطار کتبی تأخیر', group: 'do' },

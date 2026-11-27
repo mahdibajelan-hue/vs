@@ -40,6 +40,8 @@ export const KINDS: Record<InboxKind, KindDef> = {
     A('returned', 'برگرداندن برای اصلاح', 'warn', 'req', (i, x) => rpc('ex_report_decide_whole', { p_id: i.refId, p_decision: 'returned', p_note: x.note })),
     A('rejected', 'رد گزارش', 'bad', 'req', (i, x) => rpc('ex_report_decide_whole', { p_id: i.refId, p_decision: 'rejected', p_note: x.note })),
   ] },
+  // 069: the report's signature chain waits for you — after a supervision correction it starts again at the contractor
+  ex_sign: { ...M.ex_sign, ask: 'نوبت امضای شما در گردش امضای این گزارش رسیده است. اگر نظارت اعداد را اصلاح کرده باشد، همهٔ امضاهای قبلی پاک شده و گزارش باید از ابتدا امضا شود: اعداد اصلاح‌شده (خط‌خورده و قرمز) را ببینید و در ماژول مدیریت اجرا امضا کنید.', actions: () => [] },
   fix: { ...M.fix, ask: 'این گزارش برای اصلاح یا تکمیل به شما برگشته است. اصلاح آن در ماژول مدیریت اجرا انجام می‌شود.', actions: () => [] },
   gap: { ...M.gap, ask: 'مسئول رفع این کسری شمایید. وضعیت پیگیری را ثبت کنید.', actions: (i) => [
     ...(i.extra.status === 'open' ? [A('progress', 'شروع پیگیری', 'plain', 'opt', (it, x) => upd('ex_gap_items', it.refId, { status: 'in_progress', note: x.note, updated_at: new Date().toISOString() }))] : []),

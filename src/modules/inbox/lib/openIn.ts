@@ -13,6 +13,8 @@ export function openInModule(item: InboxItem): void {
   if (item.source === 'execution') {
     if (item.kind === 'review') useExecutionStore.getState().setFocus(item.refId, 'review')
     else if (item.kind === 'fix') useExecutionStore.getState().setFocus(item.refId, 'daily')
+    // the contractor signs in the report itself (daily page), a supervision signer on the review page
+    else if (item.kind === 'ex_sign') useExecutionStore.getState().setFocus(item.refId, item.extra.party === 'contractor' ? 'daily' : 'review')
     else if (item.kind === 'delay_assess' || item.kind === 'delay_notice') useExecutionStore.getState().setFocus(item.refId, 'delays')
   } else if (item.source === 'issues') {
     const id = item.kind === 'extension' || item.kind === 'verify' || item.kind === 'task' ? idOf(e.issueId) : ''
