@@ -18,7 +18,8 @@ import { EmployerPanel } from '../components/epc/EmployerPanel'
 import { VersionsCard } from '../components/epc/VersionsCard'
 import { epcSettings } from '../lib/epcSettings'
 import { ReviewSheet, type FixDraft } from '../components/ReviewSheet'
-import { useFixStore, useReportFixes } from '../store/useFixStore'
+import { useAmendments, useFixStore, useReportFixes } from '../store/useFixStore'
+import { useAuthStore } from '../../../store/useAuthStore'
 import { byPath, fixItems } from '../lib/reviewFixes'
 
 type Dec = { decision: 'approved' | 'rejected' | 'returned'; qty: number; note: string }
@@ -125,15 +126,22 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
   const [msg, setMsg] = useState('')
   const fixList = useReportFixes(reportId)
   const fixes = useMemo(() => byPath(fixList), [fixList])
+  const amends = useAmendments(reportId)
+  const me = useAuthStore((x) => x.session?.user.id), isAdmin = useAuthStore((x) => Boolean(x.profile?.isAdmin))
+  const [amReason, setAmReason] = useState(''), [amOpenForm, setAmOpenForm] = useState(false)
   if (!r) return null
   const epc = epcSettings(m.settings as unknown as Record<string, unknown>)
   const empOn = epc.employerStep !== 'off'
   const form = r.formKey === 'work' ? null : FORM_BY_KEY[r.formKey] ?? null
   const lines = m.linesByReport.get(reportId) ?? []
-  const canReview = ex.can(m.projectId, 'review') && (r.status === 'submitted' || r.status === 'partially_approved')
-  // approved with the head of supervision's final signature: final for good (the server refuses any change, 062)
+  // approved with the head of supervision's final signature: final for good (the server refuses any change, 062) — only an amendment (067) by the head reopens it
   const slots = useEpcStoreSig((x) => x.signSlots), sigs = useEpcStoreSig((x) => x.signatures)
-  const finalKey = slots.filter((x) => x.projectId === m.projectId && x.formKey === r.formKey && x.active && x.required && x.party !== 'contractor').sort((a, b) => b.sort - a.sort)[0]?.slotKey
+  const finalSlot = slots.filter((x) => x.projectId === m.projectId && x.formKey === r.formKey && x.active && x.required && x.party !== 'contractor').sort((a, b) => b.sort - a.sort)[0]
+  const finalKey = finalSlot?.slotKey
+  const isHead = isAdmin || (!!finalSlot && finalSlot.userId === me)
+  const openAm = amends.find((a) => a.status === 'open')
+  const sentState = r.status === 'submitted' || r.status === 'partially_approved'
+  const canReview = sentState && (openAm ? isHead : ex.can(m.projectId, 'review'))
   const finalSigned = r.status === 'approved' && !!finalKey && sigs.some((g) => g.reportId === reportId && g.slotKey === finalKey)
   const canReopen = !finalSigned && ex.can(m.projectId, 'reopen') && (r.status === 'approved' || r.status === 'partially_approved' || r.status === 'rejected')
   const before = cumulative(m.reports, m.lines, { before: r.reportDate, excludeReportId: reportId, mode: 'approved' })
@@ -180,6 +188,8 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
     const why = window.prompt('علت اصلاح (الزامی؛ در سابقهٔ گزارش ثبت می‌شود):'); if (!why?.trim()) return
     await ex.amendLine(r.id, lineId, q, why.trim())
   }
+  const openAmend = async () => { setBusy(true); const err = await useFixStore.getState().openAmend(reportId, amReason.trim()); setBusy(false); if (!err) { setAmOpenForm(false); setAmReason(''); setMode('fix'); setMsg('اصلاحیه باز شد. مقادیر را اصلاح و «ثبت اصلاحات» را بزنید، سپس با امضای تأیید نهایی، اصلاحیه ثبت می‌شود.') } else setMsg(err) }
+  const cancelAmend = async () => { const why = window.prompt('علت لغو اصلاحیه (اختیاری):'); if (why === null) return; setBusy(true); const err = await useFixStore.getState().cancelAmend(reportId, why.trim()); setBusy(false); if (!err) { setMode(''); setDraft({}); setMsg('اصلاحیه لغو شد و گزارش به همان صورت تأییدشدهٔ قبلی برگشت.') } else setMsg(err) }
   const reopen = async () => { const why = window.prompt('علت بازگشایی گزارش تأییدشده (الزامی):'); if (why?.trim() && (await ex.reopenReport(reportId, why.trim()))) onClose() }
   const orgName = orgs.find((o) => o.id === r.contractorOrgId)?.name ?? '—'
   const hist = m.history.filter((h) => h.reportId === reportId)
@@ -201,13 +211,34 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
       <div className="im-card" style={{ padding: '10px 14px', display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 13 }}>
         <span>تاریخ: <b>{fmtD(r.reportDate)}</b></span><span>پیمانکار: <b>{orgName}</b></span><span>جبهه: <b>{r.front || '—'}</b></span><span>ارسال‌کننده: <b>{ex.people.get(r.submittedBy ?? '') ?? '—'}</b></span><span>ارسال: <b>{fmtD((r.submittedAt ?? '').slice(0, 10))}</b></span>
       </div>
+      {amends.some((a) => a.status !== 'cancelled') && (
+        <div className="im-card ex-amends">
+          <b>اصلاحیه‌ها</b>
+          <ul>{amends.filter((a) => a.status !== 'cancelled').map((a) => <li key={a.id} className={a.status}><span className="ex-am-no">اصلاحیهٔ {fa(a.no)}</span><span>{a.reason}</span><small>{a.openedByName} · {fmtD(a.openedAt.slice(0, 10))} · {a.status === 'open' ? 'در جریان' : 'ثبت و تأیید شده'}</small></li>)}</ul>
+        </div>
+      )}
+      {finalSigned && isHead && !openAm && (
+        <section className="im-card ex-dec ex-dec-am no-print" aria-label="ثبت اصلاحیه">
+          <h3>ثبت اصلاحیه</h3>
+          <p className="ex-dec-note" style={{ margin: 0 }}>این گزارش با امضای سرپرست دستگاه نظارت تأیید نهایی شده و قفل است. برای اصلاح، اصلاحیه ثبت کنید: مقدار قبلی خط‌خورده می‌ماند، مقدار جدید قرمز نمایش داده می‌شود و با امضای دوبارهٔ شما اصلاحیه ثبت و گزارش دوباره قفل می‌شود. سابقهٔ کامل می‌ماند.</p>
+          {!amOpenForm ? <button className="im-btn im-btn-primary" style={{ justifySelf: 'start' }} onClick={() => setAmOpenForm(true)}><PenLine size={14} /> ثبت اصلاحیه</button> : (
+            <div className="ex-dec-note">
+              <label>علت اصلاحیه (الزامی؛ روی برگهٔ چاپی و در سابقه می‌آید)<textarea rows={2} value={amReason} onChange={(e) => setAmReason(e.target.value)} dir="auto" /></label>
+              <span style={{ display: 'flex', gap: 8 }}><button className="im-btn im-btn-primary" disabled={busy || !amReason.trim()} onClick={() => void openAmend()}>باز کردن اصلاحیه</button><button className="im-btn" onClick={() => setAmOpenForm(false)}>انصراف</button></span>
+            </div>
+          )}
+          {msg && <p className="ex-dec-msg" role="status">{msg}</p>}
+        </section>
+      )}
+      {openAm && !isHead && <div className="im-card" style={{ padding: '10px 14px', borderInlineStart: '3px solid #d97706' }}><b>اصلاحیهٔ {fa(openAm.no)} در جریان است.</b> فقط سرپرست دستگاه نظارت آن را اصلاح و ثبت می‌کند.</div>}
       {canReview && !finalSigned && (
-        <section className="im-card ex-dec no-print" aria-label="تصمیم دستگاه نظارت">
-          <h3>تصمیم دستگاه نظارت</h3>
+        <section className={`im-card ex-dec no-print${openAm ? ' ex-dec-am' : ''}`} aria-label="تصمیم دستگاه نظارت">
+          <h3>{openAm ? `اصلاحیهٔ ${fa(openAm.no)} — ${openAm.reason}` : 'تصمیم دستگاه نظارت'}</h3>
+          {openAm && <p className="ex-dec-note" style={{ margin: 0 }}>مقادیر را در «اصلاح مقادیر» تغییر دهید و ثبت کنید؛ سپس امضای «تأیید نهایی» شما اصلاحیه را ثبت و گزارش را دوباره قفل می‌کند. <button className="im-btn im-btn-sm im-btn-danger" disabled={busy} onClick={() => void cancelAmend()}>لغو اصلاحیه</button></p>}
           <div className="ex-dec-opts" role="radiogroup" aria-label="تصمیم">
             <button type="button" role="radio" aria-checked={mode === 'accept'} className={`ex-dec-opt ok${mode === 'accept' ? ' on' : ''}`} onClick={() => { setMode('accept'); setMsg('') }}><CheckCircle2 size={22} aria-hidden /><b>تأیید بدون تغییر</b><small>اعداد پیمانکار همان‌طور که ارسال شده پذیرفته و امضا می‌شود</small></button>
             <button type="button" role="radio" aria-checked={mode === 'fix'} className={`ex-dec-opt fix${mode === 'fix' ? ' on' : ''}`} onClick={() => { setMode('fix'); setMsg('') }}><PenLine size={22} aria-hidden /><b>اصلاح مقادیر و امضا</b><small>هر عددی که مغایرت دارد را اصلاح کنید؛ عدد پیمانکار خط‌خورده می‌ماند و عدد نظارت ملاک می‌شود</small></button>
-            <button type="button" role="radio" aria-checked={mode === 'return'} className={`ex-dec-opt back${mode === 'return' ? ' on' : ''}`} onClick={() => { setMode('return'); setMsg('') }}><CornerUpLeft size={22} aria-hidden /><b>برگشت به پیمانکار</b><small>گزارش قابل بررسی نیست؛ پیمانکار آن را اصلاح و دوباره امضا و ارسال می‌کند</small></button>
+            {!openAm && <button type="button" role="radio" aria-checked={mode === 'return'} className={`ex-dec-opt back${mode === 'return' ? ' on' : ''}`} onClick={() => { setMode('return'); setMsg('') }}><CornerUpLeft size={22} aria-hidden /><b>برگشت به پیمانکار</b><small>گزارش قابل بررسی نیست؛ پیمانکار آن را اصلاح و دوباره امضا و ارسال می‌کند</small></button>}
           </div>
           {mode === 'accept' && (supSlots.length > 0
             ? <p className="ex-dec-note">برای تأیید، امضای خود را در کادر «امضاها» (پایین همین صفحه) بزنید. ترتیب: {supSlots.map((x) => x.label).join(' ← ')}؛ امضای آخر، تأیید نهایی و قفل گزارش است.{fixList.length > 0 && ' اصلاحاتی که قبلاً ثبت شده، در گزارش می‌ماند.'}</p>

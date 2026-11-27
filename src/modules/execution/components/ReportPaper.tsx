@@ -19,7 +19,7 @@ import { useExecutionStore } from '../store/useExecutionStore'
 import { paperChoice, printModeOf } from '../forms/printMode'
 import type { FormTemplateRow, ReportSignature } from '../epcTypes'
 import { sheetSignCells } from '../forms/signBoxes'
-import { useReportFixes } from '../store/useFixStore'
+import { useAmendments, useReportFixes } from '../store/useFixStore'
 import { RES_COL, byPath, fixPath, type ReportFix } from '../lib/reviewFixes'
 import { FixMark } from './ReviewSheet'
 import { chainText } from '../lib/chainage'
@@ -126,13 +126,17 @@ export function SignatureStrip({ signatures }: { signatures?: ReportSignature[] 
 /** every correction of the supervision on one table: what the contractor wrote (struck through) and the figure that counts */
 export function FixesTable({ reportId }: { reportId: string }) {
   const fixes = useReportFixes(reportId)
-  if (!fixes.length) return null
+  const amends = useAmendments(reportId).filter((x) => x.status !== 'cancelled')
+  if (!fixes.length && !amends.length) return null
   const show = (v: unknown) => (v == null || String(v).trim() === '' ? '—' : Number.isFinite(Number(v)) && String(v).trim() !== '' ? fa(Number(v), 3) : String(v))
   return (
-    <table className="ex-fixes-tbl">
+    <>
+    {amends.length > 0 && <div className="ex-am-band">{amends.map((x) => <span key={x.id}><b>اصلاحیهٔ {fa(x.no)}</b> — {x.reason} <small>({x.openedByName}، {fmtD(x.openedAt.slice(0, 10))}{x.status === 'open' ? '، در جریان' : ''})</small></span>)}</div>}
+    {fixes.length > 0 && <table className="ex-fixes-tbl">
       <thead><tr><th colSpan={4}>اصلاحات دستگاه نظارت</th></tr><tr><th>مورد</th><th className="num">ثبت پیمانکار</th><th className="num">مقدار نهایی (نظارت)</th><th>اصلاح‌کننده / توضیح</th></tr></thead>
       <tbody>{fixes.map((f) => <tr key={f.id}><td>{f.label || f.path}</td><td className="num"><s>{show(f.was)}</s></td><td className="num"><b className="ex-fix-red">{show(f.value)}</b></td><td>{f.fixedByName}{f.fixedAt ? ` · ${fmtD(f.fixedAt.slice(0, 10))}` : ''}{f.note ? ` — ${f.note}` : ''}</td></tr>)}</tbody>
-    </table>
+    </table>}
+    </>
   )
 }
 function ReportPaperBody({ c }: { c: PaperCtx }) {

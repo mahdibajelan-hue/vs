@@ -690,3 +690,15 @@
 .dv-buckets button.dv-b-todo { --b: #64748b; } .dv-buckets button.dv-b-mid { --b: #d97706; } .dv-buckets button.dv-b-done { --b: #059669; }
 .dv-bucket .dv-state { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .wx-sky-now { width: 100%; }
+
+/* amendments (067) */
+.ex-dec-am { border-inline-start-color: #d97706; }
+.ex-amends { padding: 10px 14px; display: grid; gap: 6px; border-inline-start: 3px solid #d97706; }
+.ex-amends ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.ex-amends li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 13px; }
+.ex-amends li small { color: var(--im-muted); }
+.ex-am-no { font-weight: 800; color: #b45309; padding: 1px 8px; border-radius: 99px; background: rgba(217, 119, 6, .12); }
+.ex-amends li.open .ex-am-no { animation: ex-step-blink 1.6s ease-in-out infinite; }
+.ex-am-band { margin-top: 10px; padding: 6px 9px; border: 1.5px solid #b45309; background: #fffbeb; color: #111; font-size: 11.5px; display: grid; gap: 3px; break-inside: avoid; }
+.ex-am-band b { color: #b45309; }
+@media (prefers-reduced-motion: reduce) { .ex-amends li.open .ex-am-no { animation: none; } }
