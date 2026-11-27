@@ -52,7 +52,7 @@ export function WeatherCard({ data, editable, onChange }: { data: Record<string,
     <div className="wx-card">
       <section className={`wx-sky wx-sky-${w?.value ?? 'none'}`}>
         <div className="wx-fx" aria-hidden><i className="wx-fx-a" /><i className="wx-fx-b" /><i className="wx-fx-c" /></div>
-        <div className="wx-sky-now"><Big size={46} strokeWidth={1.5} aria-hidden /><div><small>وضعیت هوا</small><b>{w?.label ?? 'انتخاب کنید'}</b>{(data.tempMin != null || data.tempMax != null) && <span className="num">{num('tempMin').toLocaleString('fa-IR')}° تا {num('tempMax').toLocaleString('fa-IR')}°</span>}</div></div>
+        <div className="wx-sky-now"><Big size={46} strokeWidth={1.5} aria-hidden /><div><small>وضعیت هوا</small><b>{w?.label ?? 'انتخاب کنید'}</b></div>{(data.tempMin != null || data.tempMax != null) && <div className="wx-big" aria-label={`دما از ${num('tempMin')} تا ${num('tempMax')} درجه`}><em>{num('tempMin').toLocaleString('fa-IR')}°</em><i>/</i><b>{num('tempMax').toLocaleString('fa-IR')}°</b></div>}</div>
         <Pills opts={WEATHER_OPTS} value={String(data.weather ?? '')} onPick={(v) => onChange('weather', v)} disabled={!editable} label="وضعیت هوا" size={16} />
         <div className="wx-stats">
           {stat('tempMin', 'کمینهٔ دما', '°C', ThermometerSnowflake, true)}

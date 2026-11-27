@@ -1,3 +1,4 @@
+import { KmInput } from './KmInput'
 import { Plus, Trash2 } from 'lucide-react'
 import { DecInput } from '../../material/components/control/DecInput'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
@@ -45,8 +46,8 @@ export function NextDayPlan({ value, editable, onChange }: { value: NextDay; edi
               {value.rows.map((r, i) => (
                 <tr key={i}>
                   <td style={{ minWidth: 170 }}><input disabled={!editable} list="ex-next-ops" value={r.op} onChange={(e) => patch(i, { op: e.target.value })} dir="auto" aria-label="نوع عملیات" /></td>
-                  <td style={{ width: 90 }}><DecInput value={r.kmFrom} onValue={(n) => editable && patch(i, { kmFrom: n })} label="کیلومتر از" /></td>
-                  <td style={{ width: 90 }}><DecInput value={r.kmTo} onValue={(n) => editable && patch(i, { kmTo: n })} label="کیلومتر تا" /></td>
+                  <td style={{ width: 90 }}><KmInput value={r.kmFrom || ""} disabled={!editable} onValue={(n) => patch(i, { kmFrom: n ?? 0 })} label="کیلومتر از" /></td>
+                  <td style={{ width: 90 }}><KmInput value={r.kmTo || ""} disabled={!editable} onValue={(n) => patch(i, { kmTo: n ?? 0 })} label="کیلومتر تا" /></td>
                   <td style={{ width: 80 }}><input disabled={!editable} value={r.unit} onChange={(e) => patch(i, { unit: e.target.value })} aria-label="واحد" dir="auto" /></td>
                   <td className="num" style={{ width: 100 }}><DecInput value={r.qty} onValue={(n) => editable && patch(i, { qty: n })} label="مقدار" /></td>
                   <td style={{ minWidth: 120 }}><input disabled={!editable} value={r.crew} onChange={(e) => patch(i, { crew: e.target.value })} aria-label="اکیپ" dir="auto" /></td>

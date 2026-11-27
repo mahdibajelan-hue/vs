@@ -30,6 +30,9 @@ import { weldKey } from '../lib/welds'
 import { attrOfKey, centralKey } from '../lib/weldCentral'
 import { buildProfile, fillPatch, type Profile } from '../lib/weldProfile'
 import { WeatherCard } from './WeatherCard'
+import { KmInput } from './KmInput'
+import { PipePick } from './PipePick'
+import { chainText } from '../lib/chainage'
 import { SheetEntry } from './SheetEntry'
 import { WELDER_FIELDS, fromScan, checkPipeCell, checkWelderCell, isPipeField, isWelderField, pipeFillPatch, registerKey, splitStamps, welderQualified } from '../lib/registers'
 import { epcSettings } from '../lib/epcSettings'
@@ -121,6 +124,8 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
   const strictRegs = !!(useExecutionStore((x) => x.settingsByProject.get(m.projectId)) as unknown as { flags?: { strictRegisters?: boolean } } | undefined)?.flags?.strictRegisters
   const welderList = useMemo(() => regWelders.filter((w) => w.projectId === m.projectId && w.kind === 'welder' && w.cardStatus === 'issued'), [regWelders, m.projectId])
   const pipeList = useMemo(() => regPipes.filter((p) => p.projectId === m.projectId), [regPipes, m.projectId])
+  // pipes registered by a delivery record sent a moment ago are offered at once
+  useEffect(() => { if (form?.key === 'string' || form?.key === 'fitup') void useEpcStore.getState().refreshRegisters(m.projectId) }, [form?.key, m.projectId])
   const regWarnings = useMemo(() => {
     if (!form) return []
     const out: string[] = [], toNum = (v: unknown) => { const n = Number(String(v ?? '').replace('٫', '.')); return String(v ?? '').trim() !== '' && Number.isFinite(n) ? n : null }
@@ -299,10 +304,12 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
     const cval = cattr && ck ? centralByKey.get(ck)?.central[cattr] : undefined
     if (cval) return <span dir="ltr" className="ex-central" title="از جدول مرکزی سرجوش — برای تغییر، «کارت سرجوش» را باز کنید" style={{ background: 'rgba(14,165,233,.12)', padding: '2px 6px', borderRadius: 6, display: 'inline-block' }}>{cval}</span>
     if (f.kind === 'select') return <select disabled={dis} value={String(v ?? '')} onChange={(e) => patchDetail(l.key, f.key, e.target.value)} aria-label={f.label}><option value="">—</option>{f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
-    if (f.kind === 'num' || f.kind === 'km') return dis ? <span>{fa(Number(v) || 0, 3)}</span> : <DecInput value={Number(v) || 0} onValue={(n) => patchDetail(l.key, f.key, n || '')} label={f.label} />
+    if (f.kind === 'km') return dis ? <span dir="ltr">{chainText(v) || '—'}</span> : <KmInput value={v} onValue={(n) => patchDetail(l.key, f.key, n ?? '')} label={f.label} />
+    if (f.kind === 'num') return dis ? <span>{fa(Number(v) || 0, 3)}</span> : <DecInput value={Number(v) || 0} onValue={(n) => patchDetail(l.key, f.key, n || '')} label={f.label} />
     if (f.kind === 'date') return dis ? <span>{fmtD(String(v ?? ''))}</span> : <JalaliDateInput value={String(v ?? '')} onChange={(x) => patchDetail(l.key, f.key, x)} />
     if (f.kind === 'time') return <input type="time" disabled={dis} value={String(v ?? '')} onChange={(e) => patchDetail(l.key, f.key, e.target.value)} aria-label={f.label} />
-    const known = f.key === 'weldNo' || f.key === 'jointNo' ? 'weld' : f.key === 'pipeNo' ? 'pipe' : f.key === 'pipeNo2' ? 'pipe2' : null
+    // the delivery record DEFINES pipe numbers: no list there; stringing and fit-up PICK them from the register
+    const known = f.key === 'weldNo' || f.key === 'jointNo' ? 'weld' : f.key === 'pipeNo' && form?.key !== 'pipe_entry' ? 'pipe' : f.key === 'pipeNo2' ? 'pipe2' : null
     const onText = (val: string) => {
       patchDetail(l.key, f.key, val)
       // a pipe from the warehouse register brings its size / thickness (and length on pipe-level forms) into the EMPTY fields
@@ -323,6 +330,7 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
       }
     }
     const auto = autoFilled[l.key]?.includes(f.key)
+    if (form && (form.key === 'string' || form.key === 'fitup') && (f.key === 'pipeNo' || f.key === 'pipeNo2')) return <PipePick value={String(v ?? '')} options={f.key === 'pipeNo2' ? pipeHints2 : pipeHints} onText={onText} label={f.label} disabled={dis} empty={form.key === 'string' ? 'لولهٔ ریسه‌نشده‌ای در رجیستر نیست؛ ابتدا صورتجلسهٔ ورود لوله را ثبت و ارسال کنید.' : 'لولهٔ ریسه‌شدهٔ آزادی برای این سمت اتصال نیست.'} />
     const badReg = isWelderField(f.key) ? (welderList.length ? (() => { const c = checkWelderCell(v, welderList); return c.unknown.length || c.blocked.length })() : 0) : isPipeField(f.key) && pipeList.length && form?.key !== 'pipe_entry' ? (() => { const c = checkPipeCell(v, pipeList); return c.unknown || c.bad ? 1 : 0 })() : 0
     return <input disabled={dis} value={String(v ?? '')} onChange={(e) => onText(e.target.value)} onKeyDown={isWelderField(f.key) ? (e) => { if (e.key === 'Enter') { const x = fromScan(e.currentTarget.value); if (x !== e.currentTarget.value) { e.preventDefault(); onText(x) } } } : undefined} onBlur={isWelderField(f.key) ? (e) => { const x = fromScan(e.currentTarget.value); if (x !== e.currentTarget.value) onText(x) } : undefined} aria-label={f.label} dir="auto" list={known ? `ex-hint-${known}` : isWelderField(f.key) ? 'ex-hint-welder' : undefined} title={badReg ? 'در رجیستر ثبت نشده یا فعال نیست' : auto ? 'از اطلاعات ثبت‌شدهٔ همین سرجوش پر شد' : undefined} style={badReg ? { outline: '2px solid #ef4444', outlineOffset: -1 } : auto ? { background: 'rgba(14,165,233,.12)' } : undefined} />
   }
@@ -358,7 +366,6 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
           <button className="im-btn im-btn-sm" onClick={() => setShowHist((x) => !x)} aria-pressed={showHist}><History size={13} /> سابقه</button>
           <button className="im-btn im-btn-sm" onClick={() => setPaper(true)}><Printer size={13} /> چاپ</button>
           {editable && r.status === 'draft' && reportSigs.length === 0 && <button className="im-btn im-btn-sm im-btn-danger" onClick={() => void remove()}><Trash2 size={13} /> حذف</button>}
-          {editable && dirty && <button className="im-btn im-btn-sm" disabled={busy} onClick={() => void save()}>ذخیره</button>}
         </span>
       </div>
       {sendable && <Steps filled={missing.filter((x) => !unsignedPrep.includes(x)).length === 0} saved={!dirty} signed={unsignedPrep.length === 0} />}
@@ -437,7 +444,7 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
                   <tr key={l.key} className={lockedLine(l) ? 'locked' : undefined}>
                     <td>{fa(i + 1)}</td>
                     <td style={{ minWidth: 220 }}>{a ? <><b>{a.title}</b><span className="sub fn-code">{a.rowNo ? `ردیف ${a.rowNo} · ` : ''}{a.itemNo} · {a.unit}{a.kind !== 'standard' ? ' · ★' : ''}{a.parentActivityId ? ' · اضافه‌بها' : ''}</span></> : <span className="ex-bad">فعالیت انتخاب نشده</span>}{l.id && a && epcAvailable && <LineForms lineId={l.id} activityId={a.id} projectId={m.projectId} reportId={reportId} head={head} model={m} editable={editable} />}</td>
-                    <td style={{ minWidth: 190 }}><div style={{ display: 'grid', gap: 3 }}><input disabled={lockedLine(l)} placeholder="محل دقیق" value={l.location} onChange={(e) => patchRow(l.key, { location: e.target.value })} dir="auto" aria-label="محل" />{a?.unitCount ? <DecInput className="" value={Number(l.detail.count ?? 0)} onValue={(n) => !lockedLine(l) && patchDetail(l.key, 'count', n || null)} label={`تعداد تکمیل‌شده امروز (از ${a.unitCount.toLocaleString('fa-IR')})`} placeholder="تعداد" /> : null}{terms.km && <span style={{ display: 'flex', gap: 3 }}><DecInput className="" value={l.kmFrom ?? 0} onValue={(n) => !lockedLine(l) && patchRow(l.key, { kmFrom: n || null })} label="کیلومتر از" placeholder="km از" /><DecInput className="" value={l.kmTo ?? 0} onValue={(n) => !lockedLine(l) && patchRow(l.key, { kmTo: n || null })} label="کیلومتر تا" placeholder="km تا" /></span>}</div></td>
+                    <td style={{ minWidth: 190 }}><div style={{ display: 'grid', gap: 3 }}><input disabled={lockedLine(l)} placeholder="محل دقیق" value={l.location} onChange={(e) => patchRow(l.key, { location: e.target.value })} dir="auto" aria-label="محل" />{a?.unitCount ? <DecInput className="" value={Number(l.detail.count ?? 0)} onValue={(n) => !lockedLine(l) && patchDetail(l.key, 'count', n || null)} label={`تعداد تکمیل‌شده امروز (از ${a.unitCount.toLocaleString('fa-IR')})`} placeholder="تعداد" /> : null}{terms.km && <span style={{ display: 'flex', gap: 3 }}><KmInput value={l.kmFrom} disabled={lockedLine(l)} onValue={(n) => patchRow(l.key, { kmFrom: n })} label="کیلومتر از" placeholder="km از" /><KmInput value={l.kmTo} disabled={lockedLine(l)} onValue={(n) => patchRow(l.key, { kmTo: n })} label="کیلومتر تا" placeholder="km تا" /></span>}</div></td>
                     <td className="num" style={{ minWidth: 100 }}>{lockedLine(l) ? <b>{fa(l.qty, 3)}</b> : <DecInput value={l.qty} onValue={(n) => patchRow(l.key, { qty: n })} label="کارکرد امروز" />}{l.status === 'approved' && l.approvedQty != null && l.approvedQty !== l.qty && <small className="ex-warn" style={{ display: 'block' }}>تأییدشده: {fa(l.approvedQty, 3)}</small>}</td>
                     <td style={{ minWidth: 150 }}><div className="ex-cum"><span>تا روز قبل: <b>{fa(prev, 2)}</b></span><span>تجمعی جدید: <b>{fa(total, 2)}</b></span><span>باقی‌مانده: <b className={overRows.has(l.key) ? 'ex-bad' : undefined}>{base ? fa(base - total, 2) : '—'}</b> {a?.unit}</span>{overRows.has(l.key) && <span className="ex-bad">بیش از مقدار مبنا ({fa(base, 2)})</span>}</div></td>
                     <td style={{ minWidth: 140 }}><input disabled={lockedLine(l)} value={l.note} onChange={(e) => patchRow(l.key, { note: e.target.value })} dir="auto" aria-label="توضیح" />{l.sourceReportId && <small className="sub">پیش‌پر از فرم فنی</small>}</td>

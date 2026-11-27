@@ -22,6 +22,7 @@ import { sheetSignCells } from '../forms/signBoxes'
 import { useReportFixes } from '../store/useFixStore'
 import { RES_COL, byPath, fixPath, type ReportFix } from '../lib/reviewFixes'
 import { FixMark } from './ReviewSheet'
+import { chainText } from '../lib/chainage'
 
 export interface PaperCtx {
   projectName: string; orgName: string; people: Map<string, string>
@@ -165,13 +166,13 @@ function ReportPaperBody({ c }: { c: PaperCtx }) {
         <table>
           <thead><tr><th>ردیف</th><th>ردیف فهرست‌بها</th><th>شرح فعالیت</th><th>واحد</th><th>محل / کیلومتر</th><th className="num">امروز</th><th className="num">تا روز قبل</th><th className="num">تجمعی جدید</th><th className="num">باقی‌مانده</th><th>وضعیت</th></tr></thead>
           <tbody>{c.lines.map((l, i) => { const a = l.activityId ? c.acts.get(l.activityId) : undefined; const prev = c.prev?.get(l.activityId ?? '') ?? 0; const base = a && c.baseOf ? c.baseOf(a) : 0
-            return <tr key={l.id}><td className="num">{fa(i + 1)}</td><td>{a?.itemNo}</td><td>{a?.title ?? (l.detail.actionTitle ? String(l.detail.actionTitle) : undefined)}{l.detail.actionKey ? <small style={{ display: 'block', color: '#6b7280' }}>{Object.entries(l.detail).filter(([k, v]) => !k.startsWith('action') && String(v ?? '').trim()).map(([k, v]) => `${k}: ${v}`).join(' · ')}</small> : null}{l.note ? <small style={{ display: 'block', color: '#6b7280' }}>{l.note}</small> : null}</td><td>{a?.unit ?? (l.detail.actionUnit ? String(l.detail.actionUnit) : undefined)}</td><td>{[l.location, l.kmFrom != null ? `km ${l.kmFrom}${l.kmTo != null ? `–${l.kmTo}` : ''}` : ''].filter(Boolean).join(' · ') || '—'}</td>
+            return <tr key={l.id}><td className="num">{fa(i + 1)}</td><td>{a?.itemNo}</td><td>{a?.title ?? (l.detail.actionTitle ? String(l.detail.actionTitle) : undefined)}{l.detail.actionKey ? <small style={{ display: 'block', color: '#6b7280' }}>{Object.entries(l.detail).filter(([k, v]) => !k.startsWith('action') && String(v ?? '').trim()).map(([k, v]) => `${k}: ${v}`).join(' · ')}</small> : null}{l.note ? <small style={{ display: 'block', color: '#6b7280' }}>{l.note}</small> : null}</td><td>{a?.unit ?? (l.detail.actionUnit ? String(l.detail.actionUnit) : undefined)}</td><td>{[l.location, l.kmFrom != null ? `km ${chainText(l.kmFrom)}${l.kmTo != null ? `–${chainText(l.kmTo)}` : ''}` : ''].filter(Boolean).join(' · ') || '—'}</td>
               <td className="num"><b>{fx(fixPath.qty(l.id), fa(l.qty, 2))}</b></td><td className="num">{fa(prev, 2)}</td><td className="num">{fa(prev + l.qty, 2)}</td><td className="num">{base ? fa(Math.max(0, base - prev - l.qty), 2) : '—'}</td><td>{l.status === 'approved' ? `تأیید ${fa(l.approvedQty ?? l.qty, 2)}` : l.status === 'pending' ? 'در انتظار' : l.status === 'rejected' ? 'رد' : 'برگشت'}</td></tr> })}</tbody>
         </table>
       ) : form.columns.length > 0 && (
         <table>
           <thead><tr><th>ردیف</th>{form.columns.map((col) => <th key={col.key}>{col.label}</th>)}</tr></thead>
-          <tbody>{c.lines.map((l, i) => <tr key={l.id}><td className="num">{fa(i + 1)}</td>{form.columns.map((col) => <td key={col.key} className={col.kind === 'num' || col.kind === 'km' ? 'num' : undefined}>{col.kind === 'date' ? fmtD(String(l.detail[col.key] ?? '')) : fx(fixPath.cell(l.id, col.key), (col.kind === 'num' || col.kind === 'km') && l.detail[col.key] !== '' && l.detail[col.key] != null ? fa(Number(l.detail[col.key]), 3) : optLabel(form, col.key, l.detail[col.key]), (v) => optLabel(form, col.key, v))}</td>)}</tr>)}</tbody>
+          <tbody>{c.lines.map((l, i) => <tr key={l.id}><td className="num">{fa(i + 1)}</td>{form.columns.map((col) => <td key={col.key} className={col.kind === 'num' || col.kind === 'km' ? 'num' : undefined}>{col.kind === 'date' ? fmtD(String(l.detail[col.key] ?? '')) : col.kind === 'km' ? fx(fixPath.cell(l.id, col.key), chainText(l.detail[col.key]), chainText) : fx(fixPath.cell(l.id, col.key), col.kind === 'num' && l.detail[col.key] !== '' && l.detail[col.key] != null ? fa(Number(l.detail[col.key]), 3) : optLabel(form, col.key, l.detail[col.key]), (v) => optLabel(form, col.key, v))}</td>)}</tr>)}</tbody>
         </table>
       )}
 

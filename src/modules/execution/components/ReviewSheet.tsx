@@ -7,6 +7,8 @@ import { RES_COL, fixPath, sameValue, type ReportFix } from '../lib/reviewFixes'
 import type { Activity, Report, ReportLine, ReportResource, Stoppage } from '../types'
 import { GROUND_OPTS, SITE_OPTS, WEATHER_OPTS } from './WeatherCard'
 import { fa } from './common'
+import { KmInput } from './KmInput'
+import { chainText } from '../lib/chainage'
 
 type Opt = { value: string; label: string }
 export type FixDraft = Record<string, { value: unknown; label: string }>
@@ -33,8 +35,8 @@ export function ReviewSheet(p: {
   fixes: Map<string, ReportFix>; editing: boolean; draft: FixDraft; onDraft: (path: string, value: unknown, label: string) => void
 }) {
   const { report: r, form, fixes, editing, draft } = p
-  const cell = (path: string, label: string, current: unknown, kind: 'num' | 'signed' | 'text' | 'select', opts?: Opt[], d = 3) => {
-    const show = kind === 'select' ? optShow(opts) : kind === 'text' ? (v: unknown) => (v == null || v === '' ? '—' : String(v)) : numShow(d)
+  const cell = (path: string, label: string, current: unknown, kind: 'num' | 'signed' | 'text' | 'select' | 'km', opts?: Opt[], d = 3) => {
+    const show = kind === 'km' ? (v: unknown) => chainText(v) || '—' : kind === 'select' ? optShow(opts) : kind === 'text' ? (v: unknown) => (v == null || v === '' ? '—' : String(v)) : numShow(d)
     const fix = fixes.get(path)
     if (!editing) return <FixMark fix={fix} show={show}>{show(current)}</FixMark>
     const v = path in draft ? draft[path].value : current
@@ -45,6 +47,7 @@ export function ReviewSheet(p: {
       <span className={`ex-fixcell${changed ? ' on' : ''}`}>
         {changed && <s className="ex-fixwas" title="مقدار پیمانکار">{show(original)}</s>}
         {kind === 'select' ? <select value={String(v ?? '')} onChange={(e) => set(e.target.value)} aria-label={label}><option value="">—</option>{opts?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+          : kind === 'km' ? <KmInput value={v} onValue={(n) => set(n)} label={label} />
           : kind === 'text' ? <input value={String(v ?? '')} onChange={(e) => set(e.target.value)} aria-label={label} dir="auto" />
           : <DecInput value={Number(v) || 0} onValue={(n) => set(n)} label={label} signed={kind === 'signed'} />}
       </span>
@@ -53,7 +56,7 @@ export function ReviewSheet(p: {
   const D = (key: string) => r.data[key]
 
   if (form) {
-    const fcell = (f: FieldDef, path: string, cur: unknown, label: string) => cell(path, label, cur, f.kind === 'num' || f.kind === 'km' ? 'num' : f.kind === 'select' ? 'select' : 'text', f.options)
+    const fcell = (f: FieldDef, path: string, cur: unknown, label: string) => cell(path, label, cur, f.kind === 'km' ? 'km' : f.kind === 'num' ? 'num' : f.kind === 'select' ? 'select' : 'text', f.options)
     return (
       <div className="im-card ex-rv">
         <h4>اطلاعات ثبت‌شدهٔ پیمانکار</h4>

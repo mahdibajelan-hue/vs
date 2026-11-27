@@ -1,8 +1,11 @@
+import { chainText } from '../lib/chainage'
 import type { ReactNode } from 'react'
 import { fmtD } from '../../finance/components/fn'
 import { thicknessSet } from './WeldingPaper'
 import { fa } from './common'
 import type { PaperCtx } from './ReportPaper'
+import { mk, usePaperFixes } from './paperFix'
+import { useReportFixes } from '../store/useFixStore'
 import type { ReportLine } from '../types'
 
 /** Paper layouts of the technical forms that are drawn exactly like the contractor's printed sheets. */
@@ -12,7 +15,7 @@ const d = (l: ReportLine | undefined, k: string) => (!l || l.detail[k] == null ?
 const jd = (iso: string) => fmtD(iso).replace(/[۰-۹]/g, (c) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).replace(/\//g, '.')
 const f2 = (x: number) => x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 /** 21.683 → 21+683 (kilometre stationing as printed on the sheets) */
-const kmTxt = (v: unknown) => { const x = Number(v); if (v === '' || v == null || !Number.isFinite(x)) return ''; const km = Math.floor(x + 1e-9), m = Math.round((x - km) * 1000); return `${km}+${String(m).padStart(3, '0')}` }
+const kmTxt = (v: unknown) => chainText(v)
 const tick = (on: boolean) => (on ? '✓' : '')
 const pad = <T,>(n: number, list: T[]): (T | undefined)[] => Array.from({ length: n }, (_, i) => list[i])
 
@@ -44,7 +47,7 @@ function JointKm({ c, title }: { c: PaperCtx; title: string }) {
           <tr><th rowSpan={2}>NO</th><th rowSpan={2}>Sec.No.</th><th colSpan={2}>Joint</th><th colSpan={2}>Km</th><th colSpan={2}>Result</th><th rowSpan={2} className="fp-wide">Remark</th></tr>
           <tr><th>From</th><th>To</th><th>From</th><th>TO</th><th>Acc</th><th>Rej</th></tr>
         </thead>
-        <tbody>{rows.map((l, i) => <tr key={i} className={i === c.lines.length && c.lines.length > 0 ? 'fp-strike' : undefined}><td>{i + 1}</td><td>{d(l, 'sec')}</td><td>{d(l, 'jointFrom')}</td><td>{d(l, 'jointTo')}</td><td>{kmTxt(l?.detail.kmFrom)}</td><td>{kmTxt(l?.detail.kmTo)}</td><td className="fp-tick">{tick(d(l, 'result') === 'acc')}</td><td className="fp-tick">{tick(d(l, 'result') === 'rej')}</td><td>{d(l, 'remark')}</td></tr>)}</tbody>
+        <tbody>{rows.map((l, i) => <tr key={i} className={i === c.lines.length && c.lines.length > 0 ? 'fp-strike' : undefined}><td>{i + 1}</td><td>{mk(l, 'sec', d(l, 'sec'))}</td><td>{mk(l, 'jointFrom', d(l, 'jointFrom'))}</td><td>{mk(l, 'jointTo', d(l, 'jointTo'))}</td><td>{mk(l, 'kmFrom', kmTxt(l?.detail.kmFrom), kmTxt)}</td><td>{mk(l, 'kmTo', kmTxt(l?.detail.kmTo), kmTxt)}</td><td className="fp-tick">{tick(d(l, 'result') === 'acc')}</td><td className="fp-tick">{tick(d(l, 'result') === 'rej')}</td><td>{mk(l, 'remark', d(l, 'remark'))}</td></tr>)}</tbody>
       </table>
       <div className="fp-band">آمار تجمیعی</div>
       <table className="fp-tbl fp-stat" dir="rtl">
@@ -71,7 +74,7 @@ function Bend({ c }: { c: PaperCtx }) {
           <tr><th rowSpan={2}>REJ.</th><th rowSpan={2}>ACC.</th><th rowSpan={2}>%</th><th rowSpan={2}>mm</th><th colSpan={2}>DIRECT.</th><th rowSpan={2}>DIA<br />(in)</th><th rowSpan={2}>LENGTH<br />(m)</th><th rowSpan={2}>W.T<br />(mm)</th><th rowSpan={2}>Pipe<br />No.</th><th rowSpan={2}>Km</th></tr>
           <tr><th>Left/Right</th><th>Sag/Over</th></tr>
         </thead>
-        <tbody>{rows.map((l, i) => <tr key={i}><td>{d(l, 'result') === 'rej' ? 'REJ.' : ''}</td><td>{d(l, 'result') === 'acc' ? 'ACC.' : ''}</td><td>{d(l, 'ovalPct')}</td><td>{d(l, 'ovalMm')}</td><td>{d(l, 'dirLR')}</td><td>{d(l, 'dirSO')}</td><td>{d(l, 'diaIn')}</td><td>{d(l, 'lengthM')}</td><td>{d(l, 'wtMm')}</td><td>{d(l, 'pipeNo')}</td><td>{kmTxt(l?.detail.km)}</td><td>{i + 1}</td></tr>)}</tbody>
+        <tbody>{rows.map((l, i) => <tr key={i}><td>{d(l, 'result') === 'rej' ? 'REJ.' : ''}</td><td>{d(l, 'result') === 'acc' ? 'ACC.' : ''}</td><td>{mk(l, 'ovalPct', d(l, 'ovalPct'))}</td><td>{mk(l, 'ovalMm', d(l, 'ovalMm'))}</td><td>{mk(l, 'dirLR', d(l, 'dirLR'))}</td><td>{mk(l, 'dirSO', d(l, 'dirSO'))}</td><td>{mk(l, 'diaIn', d(l, 'diaIn'))}</td><td>{mk(l, 'lengthM', d(l, 'lengthM'))}</td><td>{mk(l, 'wtMm', d(l, 'wtMm'))}</td><td>{mk(l, 'pipeNo', d(l, 'pipeNo'))}</td><td>{mk(l, 'km', kmTxt(l?.detail.km), kmTxt)}</td><td>{i + 1}</td></tr>)}</tbody>
       </table>
       <Notes c={c} />
       <Sign c={c} left="نماینده پیمانکار" right="نماینده دستگاه نظارت" />
@@ -92,7 +95,7 @@ function WeldRepair({ c }: { c: PaperCtx }) {
           <tr><th rowSpan={2}>Row</th><th rowSpan={2}>Sec.</th><th rowSpan={2}>Weld no.</th><th rowSpan={2}>STAMP<br />No.</th><th colSpan={2}>Defect Type and Location og Defect</th><th colSpan={2}>Repair Status</th><th rowSpan={2}>VT CHEEK</th><th rowSpan={2}>RT Report<br />No.</th><th rowSpan={2}>RT Request<br />No.</th></tr>
           <tr><th>Type</th><th>Location</th><th>Not Done</th><th>Done</th></tr>
         </thead>
-        <tbody>{rows.map((l, i) => <tr key={i}><td>{i + 1}</td><td>{d(l, 'sec')}</td><td>{d(l, 'weldNo')}</td><td>{d(l, 'stamp')}</td><td>{d(l, 'defectType')}</td><td>{d(l, 'defectLoc')}</td><td className="fp-tick">{tick(d(l, 'repairDone') === 'notdone')}</td><td className="fp-tick">{tick(d(l, 'repairDone') === 'done')}</td><td>{({ acc: 'ACC', rej: 'REJ' } as Record<string, string>)[d(l, 'vtCheck')] ?? d(l, 'vtCheck')}</td><td>{d(l, 'rtReportNo')}</td><td>{d(l, 'rtReqNo')}</td></tr>)}</tbody>
+        <tbody>{rows.map((l, i) => <tr key={i}><td>{i + 1}</td><td>{mk(l, 'sec', d(l, 'sec'))}</td><td>{mk(l, 'weldNo', d(l, 'weldNo'))}</td><td>{mk(l, 'stamp', d(l, 'stamp'))}</td><td>{mk(l, 'defectType', d(l, 'defectType'))}</td><td>{mk(l, 'defectLoc', d(l, 'defectLoc'))}</td><td className="fp-tick">{tick(d(l, 'repairDone') === 'notdone')}</td><td className="fp-tick">{tick(d(l, 'repairDone') === 'done')}</td><td>{({ acc: 'ACC', rej: 'REJ' } as Record<string, string>)[d(l, 'vtCheck')] ?? d(l, 'vtCheck')}</td><td>{mk(l, 'rtReportNo', d(l, 'rtReportNo'))}</td><td>{mk(l, 'rtReqNo', d(l, 'rtReqNo'))}</td></tr>)}</tbody>
       </table>
       <div className="fp-band">نفرات و ماشین‌آلات</div>
       <div className="fp-res" dir="rtl">
@@ -160,7 +163,7 @@ function StringPaper({ c }: { c: PaperCtx }) {
   const sum = (a: number[]) => a.reduce((x, y) => x + y, 0)
   const nf0 = (x: number) => x.toLocaleString('en-US'), nf2 = f2
   const half = (rows: (ReportLine | undefined)[], from: number) => rows.map((l, i) => (
-    <tr key={i}><td>{fa(from + i + 1)}</td><td>{d(l, 'pipeNo')}</td><td>{l && l.detail.lengthM !== '' && l.detail.lengthM != null ? Number(l.detail.lengthM).toFixed(2) : ''}</td><td>{l && l.detail.thkIn !== '' && l.detail.thkIn != null ? `${Number(l.detail.thkIn).toFixed(3)}"` : ''}</td><td className="fp-tick">{tick(d(l, 'origin') === 'factory')}</td><td className="fp-tick">{tick(d(l, 'origin') === 'depot')}</td></tr>
+    <tr key={i}><td>{fa(from + i + 1)}</td><td>{mk(l, 'pipeNo', d(l, 'pipeNo'))}</td><td>{mk(l, 'lengthM', l && l.detail.lengthM !== '' && l.detail.lengthM != null ? Number(l.detail.lengthM).toFixed(2) : '')}</td><td>{mk(l, 'thkIn', l && l.detail.thkIn !== '' && l.detail.thkIn != null ? `${Number(l.detail.thkIn).toFixed(3)}"` : '')}</td><td className="fp-tick">{tick(d(l, 'origin') === 'factory')}</td><td className="fp-tick">{tick(d(l, 'origin') === 'depot')}</td></tr>
   ))
   return (
     <div className="mt-printable fp-wrap">
@@ -224,7 +227,7 @@ function RtRequest({ c }: { c: PaperCtx }) {
                 <tr><th>R<br />C</th><th>Root</th><th>Hot</th><th>Fill</th><th>CAP</th></tr>
               </thead>
               <tbody>{rows.map((l, i) => [
-                <tr key={`a${i}`} className="fp-top"><td rowSpan={2}>{p * PER + i + 1}</td><td rowSpan={2}>{d(l, 'sec')}</td><td rowSpan={2}>{d(l, 'weldNo')}</td><td rowSpan={2}>{l && l.detail.thkIn !== '' && l.detail.thkIn != null ? `${Number(l.detail.thkIn).toFixed(3)}"` : ''}</td><td rowSpan={2}>{d(l, 'odIn')}</td><td><b>R</b></td>{st(l, '')}<td rowSpan={2}>{d(l, 'remark')}</td></tr>,
+                <tr key={`a${i}`} className="fp-top"><td rowSpan={2}>{p * PER + i + 1}</td><td rowSpan={2}>{mk(l, 'sec', d(l, 'sec'))}</td><td rowSpan={2}>{mk(l, 'weldNo', d(l, 'weldNo'))}</td><td rowSpan={2}>{mk(l, 'thkIn', l && l.detail.thkIn !== '' && l.detail.thkIn != null ? `${Number(l.detail.thkIn).toFixed(3)}"` : '')}</td><td rowSpan={2}>{mk(l, 'odIn', d(l, 'odIn'))}</td><td><b>R</b></td>{st(l, '')}<td rowSpan={2}>{mk(l, 'remark', d(l, 'remark'))}</td></tr>,
                 <tr key={`b${i}`}><td><b>C</b></td>{st(l, 'C')}</tr>,
               ])}</tbody>
             </table>
@@ -251,7 +254,7 @@ function PipeEntry({ c }: { c: PaperCtx }) {
             <div className="fp-line fp-meta3"><span>شماره گزارش <b>{r.reportNo}</b></span><span className="fp-grow">صورتجلسه ورود لوله‌های ۳۰ اینچ به کارگاه</span><span>تاریخ تنظیم : <b>{fmtD(r.reportDate)}</b></span></div>
             <table className="fp-tbl fp-pe" dir="ltr">
               <thead><tr><th>ردیف</th><th>شماره<br />WAY BILL</th><th>شماره لوله</th><th>طول بارنامه<br />(m)</th><th>ضخامت<br />(in)</th><th>سایز<br />(in)</th><th>شماره بارنامه</th><th>شماره کامیون</th><th>تاریخ بارگیری</th><th>تاریخ تخلیه</th><th className="fp-wide">وضعیت</th></tr></thead>
-              <tbody>{rows.map((l, i) => <tr key={i} className={i === c.lines.length - p * PER && c.lines.length > 0 ? 'fp-strike' : undefined}><td>{p * PER + i + 1}</td><td>{d(l, 'wayBill')}</td><td>{d(l, 'pipeNo')}</td><td>{l && l.detail.lengthM !== '' && l.detail.lengthM != null ? Number(l.detail.lengthM).toFixed(2) : ''}</td><td>{l && l.detail.thkIn !== '' && l.detail.thkIn != null ? `${Number(l.detail.thkIn).toFixed(3)}"` : ''}</td><td>{d(l, 'sizeIn')}</td><td>{d(l, 'billNo')}</td><td>{d(l, 'truckNo')}</td><td>{jd2(l?.detail.loadDate)}</td><td>{jd2(l?.detail.unloadDate)}</td><td>{d(l, 'status')}</td></tr>)}</tbody>
+              <tbody>{rows.map((l, i) => <tr key={i} className={i === c.lines.length - p * PER && c.lines.length > 0 ? 'fp-strike' : undefined}><td>{p * PER + i + 1}</td><td>{mk(l, 'wayBill', d(l, 'wayBill'))}</td><td>{mk(l, 'pipeNo', d(l, 'pipeNo'))}</td><td>{mk(l, 'lengthM', l && l.detail.lengthM !== '' && l.detail.lengthM != null ? Number(l.detail.lengthM).toFixed(2) : '')}</td><td>{mk(l, 'thkIn', l && l.detail.thkIn !== '' && l.detail.thkIn != null ? `${Number(l.detail.thkIn).toFixed(3)}"` : '')}</td><td>{mk(l, 'sizeIn', d(l, 'sizeIn'))}</td><td>{mk(l, 'billNo', d(l, 'billNo'))}</td><td>{mk(l, 'truckNo', d(l, 'truckNo'))}</td><td>{jd2(l?.detail.loadDate)}</td><td>{jd2(l?.detail.unloadDate)}</td><td>{mk(l, 'status', d(l, 'status'))}</td></tr>)}</tbody>
             </table>
             <div className="fp-band fp-title">نوع بارگیری : {String(r.data.loadType ?? '')} - مبداء بارگیری : {String(r.data.origin ?? '')}</div>
             <div className="fp-pe-sum">
@@ -295,14 +298,14 @@ function Lowering({ c }: { c: PaperCtx }) {
         <table className="fp-tbl">
           <thead><tr><th rowSpan={2}>No.</th><th rowSpan={2}>Line/Sec<br />No.</th><th colSpan={2}>Weld No.</th><th colSpan={2}>Location (Km)</th><th rowSpan={2}>Lowered<br />(m)</th><th rowSpan={2}>Lowered<br />(No)</th><th rowSpan={2}>Holiday Result</th><th rowSpan={2} className="fp-wide">Remark</th></tr><tr><th>From</th><th>To</th><th>From</th><th>To</th></tr></thead>
           <tbody>
-            {mr.map((l, i) => <tr key={i} className={i === main.length && main.length > 0 ? 'fp-strike' : undefined}><td>{i + 1}</td><td>{d(l, 'lineSec')}</td><td>{d(l, 'weldFrom')}</td><td>{d(l, 'weldTo')}</td><td>{kmTxt(l?.detail.kmFrom)}</td><td>{kmTxt(l?.detail.kmTo)}</td><td>{q(l?.detail.loweredM)}</td><td>{d(l, 'loweredNo')}</td><td>{hol(l)}</td><td>{d(l, 'remark')}</td></tr>)}
+            {mr.map((l, i) => <tr key={i} className={i === main.length && main.length > 0 ? 'fp-strike' : undefined}><td>{i + 1}</td><td>{mk(l, 'lineSec', d(l, 'lineSec'))}</td><td>{mk(l, 'weldFrom', d(l, 'weldFrom'))}</td><td>{mk(l, 'weldTo', d(l, 'weldTo'))}</td><td>{mk(l, 'kmFrom', kmTxt(l?.detail.kmFrom), kmTxt)}</td><td>{mk(l, 'kmTo', kmTxt(l?.detail.kmTo), kmTxt)}</td><td>{q(l?.detail.loweredM)}</td><td>{mk(l, 'loweredNo', d(l, 'loweredNo'))}</td><td>{hol(l)}</td><td>{mk(l, 'remark', d(l, 'remark'))}</td></tr>)}
             <tr className="fp-tot"><td colSpan={6}>Total (m)</td><td>{f2(sumM)}</td><td>{sumN}</td><td colSpan={2} /></tr>
           </tbody>
         </table>
         <div className="fp-low-split">
           <table className="fp-tbl">
             <thead><tr><th colSpan={7}>Passage With Crossing</th></tr><tr><th rowSpan={2}>No.</th><th rowSpan={2}>Line/Sec<br />No</th><th rowSpan={2}>Crossing<br />Name/Type</th><th colSpan={2}>Weld No.</th><th rowSpan={2}>Length(m)</th><th rowSpan={2}>Holiday<br />result</th></tr><tr><th>From</th><th>To</th></tr></thead>
-            <tbody>{cr.map((l, i) => <tr key={i}><td>{i + 1}</td><td>{d(l, 'lineSec')}</td><td>{d(l, 'crossing')}</td><td>{d(l, 'weldFrom')}</td><td>{d(l, 'weldTo')}</td><td>{q(l?.detail.crossingM)}</td><td>{hol(l)}</td></tr>)}
+            <tbody>{cr.map((l, i) => <tr key={i}><td>{i + 1}</td><td>{mk(l, 'lineSec', d(l, 'lineSec'))}</td><td>{mk(l, 'crossing', d(l, 'crossing'))}</td><td>{mk(l, 'weldFrom', d(l, 'weldFrom'))}</td><td>{mk(l, 'weldTo', d(l, 'weldTo'))}</td><td>{q(l?.detail.crossingM)}</td><td>{hol(l)}</td></tr>)}
               <tr className="fp-tot"><td colSpan={5}>Total (m)</td><td>{sumC ? f2(sumC) : ''}</td><td /></tr></tbody>
           </table>
           <table className="fp-tbl"><thead><tr><th>Remark</th></tr></thead><tbody><tr><td className="fp-remark-box">{r.notes}</td></tr></tbody></table>
@@ -355,7 +358,7 @@ function TieIn({ c }: { c: PaperCtx }) {
             <div className="fp-sub">شماره سکشن و سرجوش‌های انجام شده امروز</div>
             <table className="fp-tbl" dir="ltr">
               <thead><tr><th>ROW</th><th>SEC</th><th>WELD NO.</th><th>PIPE NO.</th><th>LENGTH</th><th>THK</th><th>BEND</th></tr></thead>
-              <tbody>{lines.map((l, i) => <tr key={i}><td>{i + 1}</td><td><b>{d(l, 'sec')}</b></td><td><b>{d(l, 'weldNo')}</b></td><td><b>{d(l, 'pipeNo')}</b></td><td><b>{l && l.detail.lengthM !== '' && l.detail.lengthM != null ? Number(l.detail.lengthM).toFixed(2) : ''}</b></td><td><b>{t3(l?.detail.thkIn)}</b></td><td><b>{d(l, 'bendDeg')}</b></td></tr>)}</tbody>
+              <tbody>{lines.map((l, i) => <tr key={i}><td>{i + 1}</td><td><b>{d(l, 'sec')}</b></td><td><b>{d(l, 'weldNo')}</b></td><td><b>{d(l, 'pipeNo')}</b></td><td><b>{mk(l, 'lengthM', l && l.detail.lengthM !== '' && l.detail.lengthM != null ? Number(l.detail.lengthM).toFixed(2) : '')}</b></td><td><b>{t3(l?.detail.thkIn)}</b></td><td><b>{d(l, 'bendDeg')}</b></td></tr>)}</tbody>
             </table>
             <div className="fp-notes fp-tie-n"><b>توضیحات :</b> {r.notes}</div>
           </div>
@@ -387,7 +390,7 @@ function PipePermit({ c }: { c: PaperCtx }) {
         <div className="fp-pp-meta"><div><span>خریدار: {v('buyer') || c.orgName}</span><span>ضخامت: "{h.thkIn ? Number(h.thkIn).toFixed(3) : ''}</span></div><div><span>شماره سند : <b>{v('docNo')}</b></span><span>تاریخ سند : <b>{dt('docDate')}</b></span></div></div>
         <table className="fp-tbl">
           <thead><tr><th>ردیف</th><th>مشخصات کالا</th><th>شماره لوله</th><th>متراژ شاخه</th></tr></thead>
-          <tbody>{rows.map((l, i) => <tr key={i}><td>{i + 1}</td><td dir="ltr">{l ? d(l, 'goods') || 'PIPE COATED 30" 3 LAY PE' : ''}</td><td>{d(l, 'pipeNo')}</td><td>{l && l.detail.lengthM !== '' && l.detail.lengthM != null ? <>{d(l, 'checked') === 'yes' && <span className="fp-tick">✓ </span>}{Number(l.detail.lengthM).toFixed(2)}</> : ''}</td></tr>)}</tbody>
+          <tbody>{rows.map((l, i) => <tr key={i}><td>{i + 1}</td><td dir="ltr">{l ? d(l, 'goods') || 'PIPE COATED 30" 3 LAY PE' : ''}</td><td>{mk(l, 'pipeNo', d(l, 'pipeNo'))}</td><td>{l && l.detail.lengthM !== '' && l.detail.lengthM != null ? <>{d(l, 'checked') === 'yes' && <span className="fp-tick">✓ </span>}{Number(l.detail.lengthM).toFixed(2)}</> : ''}</td></tr>)}</tbody>
         </table>
         <p className="fp-pp-p">بدین‌وسیله تأیید می‌گردد لوله‌های مندرج در این برگ خروجی صحیح و سالم تحویل اینجانب {v('receiver')} گردید.</p>
         <div className="fp-pp-box"><span>وسیله نقلیه شماره <b dir="ltr">{v('truck')}</b> به رانندگی <b>{v('driver')}</b> در تاریخ <b>{dt('exitDate')}</b> از شرکت حمل و نقل <b>{v('carrier')}</b></span><strong>مجاز است لوله‌های فوق را از کارخانه خارج نماید.</strong></div>
@@ -398,6 +401,7 @@ function PipePermit({ c }: { c: PaperCtx }) {
 }
 
 export function FormPaper({ c }: { c: PaperCtx }) {
+  usePaperFixes(useReportFixes(c.report.id))
   switch (c.form?.key) {
     case 'backfill': return <JointKm c={c} title="بکفیل" />
     case 'rock_shield': return <JointKm c={c} title="Rock Shield" />

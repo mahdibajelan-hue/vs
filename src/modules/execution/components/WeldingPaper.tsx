@@ -1,6 +1,8 @@
 import { fmtD } from '../../finance/components/fn'
 import type { PaperCtx } from './ReportPaper'
 import type { ReportLine } from '../types'
+import { mk, usePaperFixes } from './paperFix'
+import { useReportFixes } from '../store/useFixStore'
 
 const ROWS_PER_PAGE = 20
 /** Jalali date written like the paper form: 1402.10.11 */
@@ -19,6 +21,7 @@ export const thicknessSet = (raw: unknown): number[] => {
 /** The daily welding report laid out exactly like the paper form: titles, two-line welder-stamp rows (R / C), THK summary and signature boxes — 20 welds per page. */
 export function WeldingPaper({ c }: { c: PaperCtx }) {
   const r = c.report
+  usePaperFixes(useReportFixes(r.id))
   const fit = c.form?.key === 'fitup' // the fit-up report is the same sheet without the welder stamps
   const wk = fit ? 'jointNo' : 'weldNo'
   const thk = thicknessSet(r.data.thkSet)
@@ -71,7 +74,7 @@ export function WeldingPaper({ c }: { c: PaperCtx }) {
                     const l = slice[i]
                     return [
                       <td key="n" rowSpan={2} className="wd-wcell">{p * ROWS_PER_PAGE + i + 1}</td>,
-                      <td key="s" rowSpan={2} className="wd-wcell">{l ? d(l, 'sec') : ''}</td>,
+                      <td key="s" rowSpan={2} className="wd-wcell">{l ? mk(l, 'sec', d(l, 'sec')) : ''}</td>,
                       <td key="w" rowSpan={2} className="wd-wcell wd-weld">{l ? d(l, wk) : ''}<svg className="wd-chev" viewBox="0 0 14 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,0 14,50 0,100" vectorEffect="non-scaling-stroke" /></svg></td>,
                     ]
                   }
@@ -81,11 +84,11 @@ export function WeldingPaper({ c }: { c: PaperCtx }) {
                   return (
                     <tr key={r} className="wd-top">
                       {r === 0 && [<td key="a" className="wd-edge" />, <td key="b" className="wd-edge" />, <td key="c" className="wd-edge" />]}
-                      <td rowSpan={2} className="wd-pcell">{l ? d(l, 'pipeNo') : ''}</td>
-                      {thk.map((_, j) => <td key={j} rowSpan={2}>{l && ci === j && d(l, 'lengthM') !== '' ? n(l.detail.lengthM).toFixed(2) : ''}</td>)}
-                      <td rowSpan={2}>{l ? d(l, 'sizeIn') : ''}</td><td rowSpan={2}>{l ? d(l, 'bendDeg') : ''}</td>
+                      <td rowSpan={2} className="wd-pcell">{l ? mk(l, 'pipeNo', d(l, 'pipeNo')) : ''}</td>
+                      {thk.map((_, j) => <td key={j} rowSpan={2}>{l && ci === j && d(l, 'lengthM') !== '' ? mk(l, 'lengthM', n(l.detail.lengthM).toFixed(2)) : ''}</td>)}
+                      <td rowSpan={2}>{l ? mk(l, 'sizeIn', d(l, 'sizeIn')) : ''}</td><td rowSpan={2}>{l ? mk(l, 'bendDeg', d(l, 'bendDeg')) : ''}</td>
                       {!fit && <><td className="wd-rc">R</td>{stamp(l, '')}</>}
-                      <td rowSpan={2} className="wd-vt">{l ? ({ acc: 'ACC', rej: 'REJ' } as Record<string, string>)[d(l, fit ? 'result' : 'vt')] ?? d(l, fit ? 'result' : 'vt') : ''}</td><td rowSpan={2} className="wd-remark">{l ? d(l, 'remark') : ''}</td>
+                      <td rowSpan={2} className="wd-vt">{l ? ({ acc: 'ACC', rej: 'REJ' } as Record<string, string>)[d(l, fit ? 'result' : 'vt')] ?? d(l, fit ? 'result' : 'vt') : ''}</td><td rowSpan={2} className="wd-remark">{l ? mk(l, 'remark', d(l, 'remark')) : ''}</td>
                     </tr>
                   )
                 })}

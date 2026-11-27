@@ -27,12 +27,20 @@ export function SignaturesCard({ report, dirty, beforeSend }: { report: Pick<Rep
   const finalKey = [...slots].reverse().find((x) => x.required && x.party !== 'contractor')?.slotKey
   // the contractor's last required slot: its signature also sends the report to the supervision (063)
   const sendKey = [...slots].reverse().find((x) => x.required && x.party === 'contractor')?.slotKey
+  // each person sees the signatures already given and their OWN box to sign — not the empty boxes of the others.
+  // The system admin (who may sign any slot) sees the next box waiting in the signing order.
+  const unsigned = slots.filter((x) => !sigs.some((g) => g.slotKey === x.slotKey))
+  const nextOpen = unsigned.find((x) => x.required) ?? unsigned[0]
+  const visible = slots.filter((x) => sigs.some((g) => g.slotKey === x.slotKey) || x.userId === me || (isAdmin && !unsigned.some((u) => u.userId === me) && x.slotKey === nextOpen?.slotKey))
+  const waiting = unsigned.filter((x) => !visible.includes(x))
+  if (!visible.length && !waiting.length) return null
   return (
     <div className="im-card" style={{ padding: 12, display: 'grid', gap: 8 }}>
       <b>امضاها</b>
+      {waiting.length > 0 && <small className="im-helper" style={{ margin: 0 }}>در انتظار امضای: {waiting.map((x) => x.label).join(' ← ')}</small>}
       {dirty && <span className="ex-warn">تغییرات ذخیره‌نشده دارید؛ پس از ذخیره امضا کنید (تغییر گزارش بعد از امضا، امضاها را پاک می‌کند).</span>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 8 }}>
-        {slots.map((sl, i) => {
+        {visible.map((sl) => { const i = slots.indexOf(sl)
           const sg = sigs.find((x) => x.slotKey === sl.slotKey)
           const prevOk = slots.slice(0, i).every((p) => !p.required || sigs.some((x) => x.slotKey === p.slotKey))
           const mine = sl.userId === me, asAdmin = !mine && isAdmin   // the system admin may sign any slot, under their own name

@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict'
+import { chainLive, chainParse, chainText } from './chainage.ts'
+
+assert.equal(chainText(1.284), '1+284')
+assert.equal(chainText(25.1), '25+100')
+assert.equal(chainText(0.005), '0+005')
+assert.equal(chainText(''), '')
+assert.equal(chainText(null), '')
+assert.equal(chainParse('1284'), 1.284)
+assert.equal(chainParse('۱۲۸۴'), 1.284)
+assert.equal(chainParse('1+284'), 1.284)
+assert.equal(chainParse('1/284'), 1.284)
+assert.equal(chainParse('1.284'), 1.284)
+assert.equal(chainParse('284'), 0.284)
+assert.equal(chainParse(''), null)
+assert.equal(chainLive('25100'), '25+100')
+assert.equal(chainLive('251'), '251')
+assert.equal(chainLive('25+1'), '25+1')
+assert.equal(chainText(chainParse('84500')), '84+500')
+console.log('chainage ok')
