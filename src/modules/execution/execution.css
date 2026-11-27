@@ -550,16 +550,18 @@
 /* the path into the current step: a gradient track with chevrons travelling toward it */
 .ex-steps li:has(+ li.cur)::before { background: linear-gradient(to left, var(--st-done), var(--st-cur)); }
 [dir="ltr"] .ex-steps li:has(+ li.cur)::before { background: linear-gradient(to right, var(--st-done), var(--st-cur)); }
-.ex-steps li:has(+ li.cur)::after { content: ''; position: absolute; top: 8px; inset-inline-start: calc(50% + 18px); width: calc(100% - 36px); height: 15px; z-index: 0; pointer-events: none;
+/* chevrons run from the current step toward the next one */
+.ex-steps li.cur:not(:last-child)::after { content: ''; position: absolute; top: 8px; inset-inline-start: calc(50% + 18px); width: calc(100% - 36px); height: 15px; z-index: 0; pointer-events: none;
   background: var(--st-cur); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='15' viewBox='0 0 18 15'%3E%3Cpath d='M11 2 5.5 7.5 11 13' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 0 0 / 18px 15px repeat-x;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='15' viewBox='0 0 18 15'%3E%3Cpath d='M11 2 5.5 7.5 11 13' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 0 0 / 18px 15px repeat-x;
   animation: ex-step-run 0.9s linear infinite; }
 @keyframes ex-step-run { from { -webkit-mask-position: 18px 0; mask-position: 18px 0; } to { -webkit-mask-position: 0 0; mask-position: 0 0; } }
-.ex-steps li:first-child.cur::before { background: var(--st-track); }
+.ex-steps li.cur::before { background: linear-gradient(to left, color-mix(in srgb, var(--st-cur) 45%, transparent), var(--st-track)); }
+[dir="ltr"] .ex-steps li.cur::before { background: linear-gradient(to right, color-mix(in srgb, var(--st-cur) 45%, transparent), var(--st-track)); }
 .ex-steps li.cur { color: var(--st-cur-ink); font-weight: 800; } .ex-steps li.cur span { border-color: var(--st-cur); color: var(--st-cur); animation: ex-step-blink 1.2s ease-in-out infinite; }
 @keyframes ex-step-blink { 50% { box-shadow: 0 0 0 7px var(--st-cur-glow); background: color-mix(in srgb, var(--st-cur) 16%, var(--st-dot)); } }
 @media (max-width: 700px) { .ex-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 10px 4px; } .ex-steps li { font-size: 10.5px; } }
-@media (prefers-reduced-motion: reduce) { .ex-steps li.cur span { animation: none; box-shadow: 0 0 0 4px var(--st-cur-glow); } .ex-steps li:has(+ li.cur)::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ex-steps li.cur span { animation: none; box-shadow: 0 0 0 4px var(--st-cur-glow); } .ex-steps li.cur::after { animation: none; } }
 
 /* day page: subject picture per minute, category chips, search */
 .dv-find { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
@@ -683,3 +685,8 @@
 .dv-search:focus-within { border-color: #64748b; }
 .dv-todo, .dv-work.dv-todo { --c: #64748b; }
 @media (prefers-reduced-motion: reduce) { .dv-buckets button { transition: none; } }
+.wx-sky-now .wx-big { display: flex; flex-direction: row; gap: 6px; align-items: baseline; }
+.wx-sky-now .wx-big b { font-size: 34px; } .wx-sky-now .wx-big em { font-size: 20px; }
+.dv-buckets button.dv-b-todo { --b: #64748b; } .dv-buckets button.dv-b-mid { --b: #d97706; } .dv-buckets button.dv-b-done { --b: #059669; }
+.dv-bucket .dv-state { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.wx-sky-now { width: 100%; }
