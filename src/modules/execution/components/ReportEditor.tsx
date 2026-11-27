@@ -468,9 +468,9 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
         </div>
       </div>}
 
-      {form && <>{finishBar}{signs}</>}
-
+      {/* every entry of a site minute (rows, manpower, photos) comes before «save»; the signatures come after it */}
       {form?.resources && <ResourcePanel rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} onCopyLast={copyLastResources} />}
+      {form && <><ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />{finishBar}{signs}</>}
 
       {!form && (
         <div className="im-card" style={{ padding: 14, display: 'grid', gap: 10 }}>
@@ -508,7 +508,6 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
       )}
       {!form && <><SecTitle n={6} title="پیش‌بینی عملیات اجرایی روز آتی" /><NextDayPlan value={asNext(data.nextDay)} editable={editable} onChange={(v) => setD('nextDay', v)} /></>}
       {!form && <><ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />{finishBar}{signs}</>}
-      {form && <ReportPhotos projectId={m.projectId} reportId={reportId} date={head.reportDate} front={head.front} can={ex.can(m.projectId, 'record') || ex.can(m.projectId, 'review')} />}
 
 
       {incons.length > 0 && editable && (
