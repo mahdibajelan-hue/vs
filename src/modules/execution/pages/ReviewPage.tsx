@@ -200,7 +200,7 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <div className="mt-filters no-print">
-        <button className="im-btn im-btn-sm" onClick={onClose}><ArrowRight size={14} /> بازگشت به کارتابل</button>
+        <button className="im-btn im-btn-sm" onClick={() => { if (!pendingFix.length || window.confirm(`${fa(pendingFix.length)} اصلاح هنوز ثبت نشده و با خروج از بین می‌رود. خارج شوید؟`)) onClose() }}><ArrowRight size={14} /> بازگشت به کارتابل</button>
         <b style={{ fontSize: 15 }}>{form ? form.title : 'گزارش وضعیت کارگاه'} · <span className="fn-code">{r.reportNo}</span></b>
         <ReportStatusChip status={r.status} />
         <span style={{ marginInlineStart: 'auto', display: 'inline-flex', gap: 6 }}>
