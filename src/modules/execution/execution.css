@@ -714,7 +714,8 @@
 .rs-band th.rs-v { writing-mode: vertical-rl; transform: rotate(180deg); height: 46px; padding: 2px 0; }
 .rs-band .rs-sec { width: 9%; background: #f9fafb; padding: 0; overflow: hidden; }
 .rs-band td.rs-sec span { display: block; writing-mode: vertical-rl; transform: rotate(180deg); margin: auto; font-weight: 700; line-height: 1.1; padding: 2px 0; }
-.rs-band .rs-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs-band .rs-name { white-space: normal; word-break: break-word; line-height: 1.2; padding-block: 2px; }
+.rs-band th, .rs-band td { height: auto; min-height: 17px; }
 .rs-band tr.on .rs-name, .rs-band tr.on .rs-v { font-weight: 700; }
 .rs-total { border-collapse: collapse; width: 100%; }
 .rs-total th, .rs-total td { border: 1.5px solid #111; padding: 3px 6px; text-align: center; }
@@ -722,6 +723,8 @@
 .rs-total td small { display: block; font-size: 8.5px; color: #4b5563; } .rs-total td b { font-size: 12px; }
 @media (max-width: 900px) { .rs-bands { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .rs-bands { grid-template-columns: 1fr; } }
+/* phones: one band per row, the name column takes the room, the figures stay narrow */
+@media (max-width: 900px) { .rs-sheet { font-size: 12px; padding: 6px; } .rs-band { table-layout: auto; } .rs-band .rs-v { width: 34px; } .rs-band .rs-sec { width: 30px; } .rs-band th.rs-v { height: 52px; } .rs-band td { padding: 3px 4px; } .rs-band td.rs-sec span { font-size: 10px !important; } }
 @media print { .rs-bands { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; } .rs-sheet { break-before: page; padding: 0; } }
 .rs-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--im-line); }
 .rs-wrap .rs-sheet { min-width: 920px; }

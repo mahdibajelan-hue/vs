@@ -10,7 +10,8 @@ import type { Report } from '../types'
 const PARTY_FA = { contractor: 'پیمانکار', consultant: 'مشاور', supervision: 'نظارت', employer: 'کارفرما', other: 'سایر' } as const
 
 /** The electronic signatures of one technical form: every slot shows who signs, who has signed (with the signature copied at that moment) and — for the assigned person — a sign button. Editing a draft after signing clears the signatures. */
-export function SignaturesCard({ report, dirty, beforeSend }: { report: Pick<Report, 'id' | 'projectId' | 'formKey' | 'status'>; dirty?: boolean; /** runs before the signature that also sends the report; false = do not sign */ beforeSend?: () => boolean | Promise<boolean> }) {
+export function SignaturesCard({ report, dirty, beforeSend, beforeSign }: { report: Pick<Report, 'id' | 'projectId' | 'formKey' | 'status'>; dirty?: boolean; /** runs before the signature that also sends the report; false = do not sign */ beforeSend?: () => boolean | Promise<boolean>
+  /** runs before a supervision signature (e.g. saves the corrections typed but not yet recorded); false = do not sign */ beforeSign?: () => boolean | Promise<boolean> }) {
   const slots = useEpcStore((s) => s.signSlots).filter((x) => x.projectId === report.projectId && x.formKey === report.formKey && x.active).sort((a, b) => a.sort - b.sort)
   const sigs = useEpcStore((s) => s.signatures).filter((x) => x.reportId === report.id)
   const epc = useEpcStore.getState()
@@ -55,7 +56,7 @@ export function SignaturesCard({ report, dirty, beforeSend }: { report: Pick<Rep
               </> : <>
                 <Chip tone="warn">امضا نشده</Chip>
                 {(mine || asAdmin) && sl.party !== 'contractor' && !sent && <small className="im-helper">پس از ارسال گزارش برای نظارت امضا می‌شود</small>}
-                {(mine || asAdmin) && (sl.party === 'contractor' || sent) && <button className="im-btn im-btn-primary im-btn-sm" disabled={!prevOk || !!dirty || report.status === 'rejected'} title={!prevOk ? 'ابتدا امضاهای قبلی ثبت شود' : sl.slotKey === finalKey ? 'ردیف‌های در انتظار، با همین امضا تأیید نهایی می‌شوند' : undefined} style={{ justifySelf: 'start' }} onClick={async () => { if (sl.slotKey === sendKey && draftish && beforeSend && !(await beforeSend())) return; void epc.signReport(report.id, sl.slotKey) }}><PenLine size={13} /> {sl.slotKey === finalKey && sl.party !== 'contractor' ? 'امضا و تأیید نهایی' : sl.slotKey === sendKey && draftish ? 'امضا و ارسال برای نظارت' : asAdmin ? 'امضا به‌عنوان مدیر سامانه' : 'امضا با حساب من'}</button>}
+                {(mine || asAdmin) && (sl.party === 'contractor' || sent) && <button className="im-btn im-btn-primary im-btn-sm" disabled={!prevOk || !!dirty || report.status === 'rejected'} title={!prevOk ? 'ابتدا امضاهای قبلی ثبت شود' : sl.slotKey === finalKey ? 'ردیف‌های در انتظار، با همین امضا تأیید نهایی می‌شوند' : undefined} style={{ justifySelf: 'start' }} onClick={async () => { if (sl.slotKey === sendKey && draftish && beforeSend && !(await beforeSend())) return; if (sl.party !== 'contractor' && beforeSign && !(await beforeSign())) return; void epc.signReport(report.id, sl.slotKey) }}><PenLine size={13} /> {sl.slotKey === finalKey && sl.party !== 'contractor' ? 'امضا و تأیید نهایی' : sl.slotKey === sendKey && draftish ? 'امضا و ارسال برای نظارت' : asAdmin ? 'امضا به‌عنوان مدیر سامانه' : 'امضا با حساب من'}</button>}
               </>}
             </div>
           )

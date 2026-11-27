@@ -266,7 +266,12 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
       )}
       {fixList.length > 0 && <p className="im-helper no-print" style={{ margin: 0 }}><span className="ex-fixmark"><s>۱۲</s><b>۱۰</b></span> = عدد پیمانکار (خط‌خورده) و عدد اصلاحی دستگاه نظارت (قرمز). {fa(fixList.length)} مقدار اصلاح شده است.</p>}
       <ReviewSheet report={r} form={form} lines={lines} resources={m.resources.filter((x) => x.reportId === reportId)} stoppages={m.stoppages.filter((x) => x.reportId === reportId)} acts={m.actById} fixes={fixes} editing={mode === 'fix' && canReview && !finalSigned} draft={draft} onDraft={(path, value, label) => setDraft((d) => ({ ...d, [path]: { value, label } }))} />
-      <div id="ex-review-signs"><SignaturesCard report={{ id: reportId, projectId: r.projectId, formKey: r.formKey, status: r.status }} /></div>
+      <div id="ex-review-signs">{pendingFix.length > 0 && <p className="ex-dec-msg no-print" style={{ background: 'rgba(217,119,6,.12)' }}>{fa(pendingFix.length)} اصلاح هنوز ثبت نشده است؛ با زدن امضا، ابتدا همین اصلاحات ثبت و سپس امضا می‌شود.</p>}<SignaturesCard report={{ id: reportId, projectId: r.projectId, formKey: r.formKey, status: r.status }} beforeSign={async () => {
+        if (!pendingFix.length) return true
+        setBusy(true); const err = await useFixStore.getState().save(reportId, pendingFix.map((x) => ({ ...x, note: fixNote.trim() }))); setBusy(false)
+        if (err) { setMsg(err); return false }
+        setDraft({}); return true
+      }} /></div>
       {lines.length > 0 && <div className="im-card" style={{ padding: 0 }}>
         <div style={{ padding: '10px 14px' }}><b>ردیف‌ها — تصمیم ردیف‌به‌ردیف (اختیاری)</b> <span className="im-helper">بدون تصمیم ردیف‌به‌ردیف، امضای نهایی همهٔ ردیف‌های در انتظار را تأیید می‌کند.</span></div>
         <div className="fn-tbl-wrap" style={{ maxHeight: 'none' }}>
