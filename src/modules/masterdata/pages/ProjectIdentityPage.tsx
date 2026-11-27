@@ -1,3 +1,4 @@
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useEffect, useState, type ReactNode } from 'react'
 import { ProjectKindSelect } from '../components/ProjectKindSelect'
 import { projectKindLabel } from '../../../lib/projectProfile'
@@ -785,15 +786,15 @@ function EditForm({
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">تاریخ شروع قرارداد</span>
-            <input type="date" value={form.contractStartDate} onChange={(e) => set('contractStartDate', e.target.value)} className="input num" />
+            <JalaliDateInput value={form.contractStartDate ?? ''} onChange={(iso) => set('contractStartDate', iso)} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">تکمیل قراردادی</span>
-            <input type="date" value={form.contractualCompletionDate} onChange={(e) => set('contractualCompletionDate', e.target.value)} className="input num" />
+            <JalaliDateInput value={form.contractualCompletionDate ?? ''} onChange={(iso) => set('contractualCompletionDate', iso)} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">تکمیل بازنگری‌شده</span>
-            <input type="date" value={form.revisedCompletionDate} onChange={(e) => set('revisedCompletionDate', e.target.value)} className="input num" />
+            <JalaliDateInput value={form.revisedCompletionDate ?? ''} onChange={(iso) => set('revisedCompletionDate', iso)} />
           </label>
         </div>
       </SectionCard>
@@ -802,23 +803,23 @@ function EditForm({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">شروع برنامه‌ریزی‌شده</span>
-            <input type="date" value={form.plannedStartDate} onChange={(e) => set('plannedStartDate', e.target.value)} className="input num" />
+            <JalaliDateInput value={form.plannedStartDate ?? ''} onChange={(iso) => set('plannedStartDate', iso)} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">پایان برنامه‌ریزی‌شده</span>
-            <input type="date" value={form.plannedFinishDate} onChange={(e) => set('plannedFinishDate', e.target.value)} className="input num" />
+            <JalaliDateInput value={form.plannedFinishDate ?? ''} onChange={(iso) => set('plannedFinishDate', iso)} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">شروع واقعی</span>
-            <input type="date" value={form.actualStartDate} onChange={(e) => set('actualStartDate', e.target.value)} className="input num" />
+            <JalaliDateInput value={form.actualStartDate ?? ''} onChange={(iso) => set('actualStartDate', iso)} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">پایان واقعی</span>
-            <input type="date" value={form.actualFinishDate} onChange={(e) => set('actualFinishDate', e.target.value)} className="input num" />
+            <JalaliDateInput value={form.actualFinishDate ?? ''} onChange={(iso) => set('actualFinishDate', iso)} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">پیش‌بینی پایان</span>
-            <input type="date" value={form.forecastFinishDate} onChange={(e) => set('forecastFinishDate', e.target.value)} className="input num" />
+            <JalaliDateInput value={form.forecastFinishDate ?? ''} onChange={(iso) => set('forecastFinishDate', iso)} />
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-secondary">وضعیت زمان‌بندی</span>

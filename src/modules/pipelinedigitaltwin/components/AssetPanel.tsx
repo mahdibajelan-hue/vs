@@ -1,3 +1,4 @@
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useMemo, useState, type CSSProperties } from 'react'
 import { Boxes, CheckCircle2, ClipboardCheck, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { usePdtStore } from '../store/usePdtStore'
@@ -93,7 +94,7 @@ export function AssetDrawer({ asset, onEdit, onClose }: { asset: Asset; onEdit: 
             {(Object.keys(EVENT_FA) as AssetEvent['kind'][]).filter((k) => k !== 'operation' || asset.kind === 'valve').map((k) => <button key={k} type="button" aria-pressed={f.kind === k} onClick={() => setF({ ...f, kind: k })}>{EVENT_FA[k]}</button>)}
           </div>
           <div className="tw-grid2">
-            <label className="tw-field"><small>تاریخ</small><input type="date" value={f.at} max={today()} onChange={(e) => setF({ ...f, at: e.target.value })} /></label>
+            <label className="tw-field"><small>تاریخ</small><JalaliDateInput value={f.at ?? ''} onChange={(iso) => setF({ ...f, at: iso })} /></label>
             {f.kind === 'operation'
               ? <label className="tw-field"><small>وضعیت شیر پس از عملیات</small><select value={f.opState} onChange={(e) => setF({ ...f, opState: e.target.value as OpState })}><option value="">—</option>{(['open', 'closed', 'throttled'] as OpState[]).map((s) => <option key={s} value={s}>{OPSTATE_FA[s]}</option>)}</select></label>
               : <label className="tw-field"><small>وضعیت فنی پس از رویداد</small><select value={f.condition} onChange={(e) => setF({ ...f, condition: e.target.value as AssetCondition })}><option value="">بدون تغییر</option>{(Object.keys(CONDITION_FA) as AssetCondition[]).map((c) => <option key={c} value={c}>{CONDITION_FA[c]}</option>)}</select></label>}
@@ -159,12 +160,12 @@ export function AssetForm({ asset, onClose }: { asset: Asset | null; onClose: (s
         <div className="tw-grid2">
           <label className="tw-field"><span>سایز / کلاس</span><input value={f.size} onChange={(e) => setF({ ...f, size: e.target.value })} placeholder='48" #600' dir="ltr" /></label>
           <label className="tw-field"><span>سازنده</span><input value={f.make} onChange={(e) => setF({ ...f, make: e.target.value })} /></label>
-          <label className="tw-field"><span>تاریخ نصب</span><input type="date" value={f.installDate} onChange={(e) => setF({ ...f, installDate: e.target.value })} /></label>
+          <label className="tw-field"><span>تاریخ نصب</span><JalaliDateInput value={f.installDate ?? ''} onChange={(iso) => setF({ ...f, installDate: iso })} /></label>
           <label className="tw-field"><span>اهمیت</span><select value={f.criticality} onChange={(e) => setF({ ...f, criticality: e.target.value as Asset['criticality'] })}>{(['high', 'medium', 'low'] as const).map((c) => <option key={c} value={c}>{CRIT_FA[c]}</option>)}</select></label>
           <label className="tw-field"><span>وضعیت فنی</span><select value={f.condition} onChange={(e) => setF({ ...f, condition: e.target.value as AssetCondition })}>{(Object.keys(CONDITION_FA) as AssetCondition[]).map((c) => <option key={c} value={c}>{CONDITION_FA[c]}</option>)}</select></label>
           {f.kind === 'valve' && <label className="tw-field"><span>وضعیت شیر</span><select value={f.opState} onChange={(e) => setF({ ...f, opState: e.target.value as OpState })}>{(['open', 'closed', 'throttled'] as OpState[]).map((s) => <option key={s} value={s}>{OPSTATE_FA[s]}</option>)}</select></label>}
           <label className="tw-field"><span>دورهٔ بازرسی (روز)</span><input type="number" min={1} value={f.every} onChange={(e) => setF({ ...f, every: e.target.value })} /></label>
-          <label className="tw-field"><span>بازرسی بعدی</span><input type="date" value={f.next} onChange={(e) => setF({ ...f, next: e.target.value })} /></label>
+          <label className="tw-field"><span>بازرسی بعدی</span><JalaliDateInput value={f.next ?? ''} onChange={(iso) => setF({ ...f, next: iso })} /></label>
         </div>
         <label className="tw-field"><span>یادداشت</span><textarea rows={2} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
       </div>

@@ -114,3 +114,41 @@ export function dayHeader(days: Report[]): { label: string; value: string }[] {
 
 /** font size (px) that lets a section name written down the side fit the height of its rows */
 export const sideFont = (name: string, rows: number, rowPx = 15) => Math.max(5.5, Math.min(9.5, (rows * rowPx) / Math.max(1, String(name ?? "").length * 0.62)))
+
+export interface ThkRow { form: string; title: string; thk: number | null; unit: string; prev: number; today: number; cum: number }
+const THK_FORMS: { key: string; title: string; count: string }[] = [
+  { key: 'pipe_entry', title: 'ورود لوله', count: 'شاخه' },
+  { key: 'string', title: 'ریسهٔ لوله', count: 'شاخه' },
+  { key: 'welding', title: 'خمکاری و جوشکاری لوله', count: 'سرجوش' },
+]
+const thkOf = (v: unknown) => { const x = Number(String(v ?? '').replace('٫', '.')); return Number.isFinite(x) && x > 0 ? Math.round(x * 1000) / 1000 : null }
+/**
+ * Pipe entry, stringing and welding by wall thickness, as on the DR's first sheet: per thickness the number (joints / welds)
+ * and the metres, before the day, on the day and to date, then the total of the form. Read from the site-minute rows
+ * (rejected rows and drafts left out).
+ */
+export function thicknessRows(reports: Report[], lines: ReportLine[], day: string): ThkRow[] {
+  const rep = new Map(reports.filter((r) => THK_FORMS.some((f) => f.key === r.formKey) && r.status !== 'draft' && r.status !== 'incomplete' && r.status !== 'rejected' && r.reportDate <= day).map((r) => [r.id, r]))
+  const out: ThkRow[] = []
+  for (const f of THK_FORMS) {
+    const acc = new Map<string, { n: [number, number]; m: [number, number] }>()
+    for (const l of lines) {
+      const r = rep.get(l.reportId)
+      if (!r || r.formKey !== f.key || l.status === 'rejected') continue
+      const k = String(thkOf(l.detail.thkIn) ?? '')
+      const a = acc.get(k) ?? { n: [0, 0], m: [0, 0] }
+      const i = r.reportDate === day ? 1 : 0
+      a.n[i] += 1; a.m[i] += Number(String(l.detail.lengthM ?? '').replace('٫', '.')) || 0
+      acc.set(k, a)
+    }
+    if (!acc.size) continue
+    const keys = [...acc.keys()].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : Number(a) - Number(b)))
+    const push = (thk: number | null, unit: string, prev: number, today: number) => out.push({ form: f.key, title: f.title, thk, unit, prev, today, cum: prev + today })
+    for (const k of keys) { const a = acc.get(k)!; const t = k === '' ? null : Number(k); push(t, f.count, a.n[0], a.n[1]); push(t, 'متر', a.m[0], a.m[1]) }
+    if (keys.length > 1) {
+      const s = [...acc.values()].reduce((x, a) => ({ n: [x.n[0] + a.n[0], x.n[1] + a.n[1]], m: [x.m[0] + a.m[0], x.m[1] + a.m[1]] }), { n: [0, 0], m: [0, 0] })
+      out.push({ form: f.key, title: f.title, thk: -1, unit: f.count, prev: s.n[0], today: s.n[1], cum: s.n[0] + s.n[1] }, { form: f.key, title: f.title, thk: -1, unit: 'متر', prev: s.m[0], today: s.m[1], cum: s.m[0] + s.m[1] })
+    }
+  }
+  return out
+}

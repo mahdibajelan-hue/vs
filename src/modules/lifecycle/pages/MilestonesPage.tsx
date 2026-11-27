@@ -1,3 +1,4 @@
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useState } from 'react'
 import { ArrowLeft, CircleCheckBig, Flag, ListChecks, Plus, ShieldAlert, TrendingUp } from 'lucide-react'
 import { useLifecycleStore } from '../store/useLifecycleStore'
@@ -129,13 +130,11 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
               <div className="mb-2 grid grid-cols-2 gap-2">
                 <label className="text-[11px] text-muted">
                   تاریخ Baseline (میلادی)
-                  <input type="date" value={draft.baselineDate} onChange={(e) => setDraft({ ...draft, baselineDate: e.target.value })}
-                    className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
+                  <JalaliDateInput value={draft.baselineDate ?? ''} onChange={(iso) => setDraft({ ...draft, baselineDate: iso })} />
                 </label>
                 <label className="text-[11px] text-muted">
                   پیش‌بینی (میلادی)
-                  <input type="date" value={draft.forecastDate} onChange={(e) => setDraft({ ...draft, forecastDate: e.target.value })}
-                    className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
+                  <JalaliDateInput value={draft.forecastDate ?? ''} onChange={(iso) => setDraft({ ...draft, forecastDate: iso })} />
                 </label>
               </div>
               <label className="mb-2 flex items-center gap-1.5 text-[11px]">
@@ -249,9 +248,7 @@ export function MilestonesPage({ projectId, onBack }: { projectId: string; onBac
                             <p className="mb-2 plc-stat-sub">
                               هر تغییر پیش‌بینی در تاریخچه ثبت می‌شود تا روند تأخیر قابل تشخیص باشد.
                             </p>
-                            <input type="date" value={forecastEdit.date}
-                              onChange={(e) => setForecastEdit({ ...forecastEdit, date: e.target.value })}
-                              className="mb-2 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
+                            <JalaliDateInput value={forecastEdit.date ?? ''} onChange={(iso) => setForecastEdit({ ...forecastEdit, date: iso })} />
                             <input value={forecastEdit.reason}
                               onChange={(e) => setForecastEdit({ ...forecastEdit, reason: e.target.value })}
                               placeholder="دلیل تغییر (در سابقه ثبت می‌شود)"

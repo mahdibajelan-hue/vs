@@ -60,7 +60,9 @@ export function ReportBuilderPage({ projectId }: { projectId: string }) {
       preparedBy: r.prepared_by, preparedAt: r.prepared_at, checkedBy: r.checked_by, checkedAt: r.checked_at, approvedBy: r.approved_by, approvedAt: r.approved_at, templateId: r.template_id, docKey: r.doc_key })))
   }, [projectId])
   useEffect(() => { void load() }, [load])
-  useEffect(() => { setSections(tpl?.sections.length ? tpl.sections : type.sections) }, [typeKey, tplId]) // eslint-disable-line react-hooks/exhaustive-deps
+  // the daily report of a project with stations carries the station sheets (progress by location, piping / mechanical registers) before the next-day forecast, as on the site DR
+  const withStations = (k: SectionKey[]) => (typeKey === 'daily' && m.kind !== 'pipeline' ? [...k.filter((x) => x !== 'dr_next'), 'locations', 'registers', ...(k.includes('dr_next') ? ['dr_next'] : [])] as SectionKey[] : k)
+  useEffect(() => { setSections(tpl?.sections.length ? tpl.sections : withStations(type.sections)) }, [typeKey, tplId, m.kind]) // eslint-disable-line react-hooks/exhaustive-deps
   // the statement basis comes from the server (the same function the statements use)
   useEffect(() => {
     if (!sections.includes('payable')) { setPay(undefined); return }

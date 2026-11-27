@@ -22,3 +22,14 @@ const p = dayProgress([A], reps, lines, '2026-11-26', () => 1000)
 assert.equal(p.length, 1); assert.equal(p[0].prev, 90); assert.equal(p[0].today, 50); assert.equal(p[0].cum, 140); assert.equal(p[0].remaining, 860); assert.equal(p[0].kmFrom, 1.2)
 assert.deepEqual(dayNarrative([reps[1]]), { ops: ['حفاری'], obstacles: ['باد'] })
 console.log('dailyDr ok')
+import { thicknessRows } from './dailyDr.ts'
+{
+  const reps = [{ id: 'e1', formKey: 'pipe_entry', status: 'approved', reportDate: '2026-11-20' }, { id: 'e2', formKey: 'pipe_entry', status: 'submitted', reportDate: '2026-11-26' }, { id: 'e3', formKey: 'pipe_entry', status: 'draft', reportDate: '2026-11-26' }]
+  const L = (reportId, thk, len, status = 'pending') => ({ reportId, status, detail: { thkIn: thk, lengthM: len } })
+  const t = thicknessRows(reps, [L('e1', 0.688, 11.8, 'approved'), L('e2', 0.688, 12), L('e2', '0٫75', 11.5), L('e2', 0.75, 11, 'rejected'), L('e3', 0.688, 12)], '2026-11-26')
+  const j688 = t.find((x) => x.thk === 0.688 && x.unit === 'شاخه'), m688 = t.find((x) => x.thk === 0.688 && x.unit === 'متر')
+  assert.deepEqual([j688.prev, j688.today, j688.cum], [1, 1, 2]); assert.equal(m688.cum, 23.8)
+  assert.equal(t.find((x) => x.thk === 0.75 && x.unit === 'شاخه').today, 1)
+  assert.equal(t.find((x) => x.thk === -1 && x.unit === 'شاخه').cum, 3)
+  console.log('thickness ok')
+}

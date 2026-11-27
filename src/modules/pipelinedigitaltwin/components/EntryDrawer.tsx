@@ -1,3 +1,4 @@
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useMemo, useState, type CSSProperties } from 'react'
 import { ArrowDownToLine, CheckCircle2, ClipboardPen, Flame, Layers, Loader2, PaintBucket, ScanLine, StepForward, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -97,7 +98,7 @@ export function EntryDrawer({ onClose, presetJoint }: { onClose: () => void; pre
           {from !== '' && to !== '' && !range && <p className="tw-err">این بازه بیرون از مسیر است ({mode === 'km' ? `کیلومتر ${fa(k0, 3)} تا ${fa(k0 + (n * L) / 1000, 3)}` : `سرجوش ۱ تا ${fa(n)}`}).</p>}
         </div>
         <div className="tw-grid2">
-          <label className="tw-field"><span>۴. تاریخ انجام</span><input type="date" value={date} max={today()} onChange={(e) => setDate(e.target.value)} aria-invalid={tooLate} /></label>
+          <label className="tw-field"><span>۴. تاریخ انجام</span><JalaliDateInput value={date ?? ''} onChange={(iso) => setDate(iso)} /></label>
           {stage === 'welding'
             ? <label className="tw-field"><span>جوشکاران (اختیاری)</span><input value={welders} onChange={(e) => setWelders(e.target.value)} placeholder="کد جوشکاران، با ویرگول" /></label>
             : <label className="tw-field"><span>توضیح (اختیاری)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="شمارهٔ گزارش روزانه، …" /></label>}

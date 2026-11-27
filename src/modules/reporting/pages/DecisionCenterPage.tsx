@@ -1,3 +1,4 @@
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, Plus } from 'lucide-react'
 import {
@@ -86,7 +87,7 @@ function DecisionsTab({ masterProjectId }: { masterProjectId: string }) {
           <textarea value={form.recommendedAction} onChange={(e) => setForm({ ...form, recommendedAction: e.target.value })} placeholder="اقدام پیشنهادی" className="input" rows={2} />
           <label className="block">
             <span className="mb-1 block text-[11px] text-muted">مهلت تصمیم‌گیری</span>
-            <input type="date" value={form.requiredBy} onChange={(e) => setForm({ ...form, requiredBy: e.target.value })} className="input" />
+            <JalaliDateInput value={form.requiredBy ?? ''} onChange={(iso) => setForm({ ...form, requiredBy: iso })} />
           </label>
           <button onClick={submit} disabled={creating || !form.title.trim()} className="flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-2 text-xs font-bold text-white hover:bg-teal-800 disabled:opacity-40">
             {creating && <Loader2 size={12} className="animate-spin" />} ثبت تصمیم
@@ -230,7 +231,7 @@ function ActionsTab({ masterProjectId }: { masterProjectId: string }) {
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-[11px] text-muted">مهلت</span>
-              <input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} className="input" />
+              <JalaliDateInput value={form.dueDate ?? ''} onChange={(iso) => setForm({ ...form, dueDate: iso })} />
             </label>
             <label className="block">
               <span className="mb-1 block text-[11px] text-muted">اولویت</span>

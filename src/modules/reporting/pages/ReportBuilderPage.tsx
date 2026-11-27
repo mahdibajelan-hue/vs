@@ -1,3 +1,4 @@
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, FileOutput, Loader2, Save } from 'lucide-react'
 import { REPORT_TYPES, REPORT_TYPE_LABEL_FA, WIDGET_CATEGORY_LABEL_FA, type ReportType, type WidgetCategory } from '../types'
@@ -133,11 +134,11 @@ export function ReportBuilderPage({ masterProjectId }: { masterProjectId: string
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-[11px] text-muted">شروع دوره</span>
-              <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="w-full rounded-lg bg-black/20 border border-white/10 px-2 py-1.5 text-xs" />
+              <JalaliDateInput value={periodStart ?? ''} onChange={(iso) => setPeriodStart(iso)} />
             </label>
             <label className="block">
               <span className="mb-1 block text-[11px] text-muted">پایان دوره</span>
-              <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="w-full rounded-lg bg-black/20 border border-white/10 px-2 py-1.5 text-xs" />
+              <JalaliDateInput value={periodEnd ?? ''} onChange={(iso) => setPeriodEnd(iso)} />
             </label>
           </div>
         </div>

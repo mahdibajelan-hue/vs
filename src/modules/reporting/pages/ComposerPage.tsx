@@ -1,3 +1,4 @@
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useEffect, useMemo, useState } from 'react'
 import { FileSpreadsheet, Loader2, Printer, Save } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
@@ -61,8 +62,8 @@ export function ComposerPage({ projectId }: { projectId: string | null }) {
             <div className="rpx-bar">{(Object.keys(PERIOD_FA) as PeriodKind[]).map((p) => <button key={p} className="rpx-chip" aria-pressed={cfg.period === p} onClick={() => set({ period: p })}>{PERIOD_FA[p]}</button>)}</div>
             {cfg.period === 'custom' && (
               <div className="rpx-bar">
-                <input type="date" className="rpx-input" aria-label="از تاریخ" value={cfg.from ?? ''} onChange={(e) => set({ from: e.target.value })} />
-                <input type="date" className="rpx-input" aria-label="تا تاریخ" value={cfg.to ?? ''} onChange={(e) => set({ to: e.target.value })} />
+                <JalaliDateInput value={cfg.from ?? ''} onChange={(iso) => set({ from: iso })} />
+                <JalaliDateInput value={cfg.to ?? ''} onChange={(iso) => set({ to: iso })} />
                 {cfg.from && cfg.to && <span className="rpx-muted">{jd(cfg.from)} تا {jd(cfg.to)}</span>}
               </div>
             )}

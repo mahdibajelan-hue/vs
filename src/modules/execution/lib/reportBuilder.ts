@@ -9,7 +9,7 @@ import { activityRows, byDimension, dailyMatrix, resourceSummary, statusSummary,
 import { deviationDrivers, physicalProgress, plannedOverall, type EmployerMode } from './progress'
 import { jalaliText, type Period } from './periods'
 import { drDisciplines, drLocations, drNarrative, drRegisters, drResources, type CsData, type DrTable } from './stationDr'
-import { dayHeader, dayNarrative, dayNext, dayProgress, dayReports, resourceBands, sideFont, type Bands } from './dailyDr'
+import { dayHeader, dayNarrative, dayNext, dayProgress, dayReports, resourceBands, sideFont, thicknessRows, type Bands } from './dailyDr'
 import { chainText } from './chainage'
 
 export type SectionKey = 'dr_progress' | 'dr_ops' | 'dr_man' | 'dr_equip' | 'dr_next' | 'summary' | 'volumes' | 'daily' | 'fronts' | 'resources' | 'stoppages' | 'deviation' | 'status' | 'payable' | 'disciplines' | 'locations' | 'registers' | 'narrative' | 'crew' | 'fleet'
@@ -92,7 +92,17 @@ export function buildReport(src: BuildCtx, p: Period, type: ReportType, sections
     if (s.startsWith('dr_')) header ??= dayHeader(days)
     if (s === 'dr_progress') {
       tables.push({ key: s, title: 'گزارش روزانهٔ عملیات اجرایی', page: true, head: ['ردیف', 'شرح عملیات', 'واحد', 'مقدار کل', 'کیلومتراژ از', 'کیلومتراژ تا', 'کارکرد تا روز قبل', 'کارکرد امروز', 'کارکرد تا امروز', 'مقدار باقیمانده', 'درصد پیشرفت تجمعی', 'توضیحات'],
-        rows: dayProgress(c.activities, c.reports, c.lines, p.to, base).map((r, i) => [{ v: i + 1, n: true }, { v: r.activity.title }, { v: r.activity.unit }, { v: r2(r.base), n: true }, { v: chainText(r.kmFrom) }, { v: chainText(r.kmTo) }, { v: r2(r.prev), n: true }, { v: r2(r.today), n: true }, { v: r2(r.cum), n: true }, { v: r2(r.remaining), n: true }, { v: pctS(r.pct), n: true }, { v: r.note }]),
+        rows: (() => {
+          const acts = dayProgress(c.activities, c.reports, c.lines, p.to, base)
+          const rows: Cell[][] = acts.map((r, i) => [{ v: i + 1, n: true }, { v: r.activity.title }, { v: r.activity.unit }, { v: r2(r.base), n: true }, { v: chainText(r.kmFrom) }, { v: chainText(r.kmTo) }, { v: r2(r.prev), n: true }, { v: r2(r.today), n: true }, { v: r2(r.cum), n: true }, { v: r2(r.remaining), n: true }, { v: pctS(r.pct), n: true }, { v: r.note }])
+          // pipe entry, stringing and welding by wall thickness, from the site minutes
+          let k = acts.length
+          for (const t of thicknessRows(c.reports, c.lines, p.to)) {
+            const label = `${t.title} — ${t.thk === -1 ? 'مجموع' : t.thk == null ? 'ضخامت نامشخص' : `ضخامت ${t.thk.toLocaleString('fa-IR')}″`}`
+            rows.push([{ v: t.unit === 'متر' ? '' : ++k, n: true }, { v: t.unit === 'متر' ? '' : label }, { v: t.unit }, { v: '' }, { v: '' }, { v: '' }, { v: r2(t.prev), n: true }, { v: r2(t.today), n: true }, { v: r2(t.cum), n: true }, { v: '' }, { v: '' }, { v: '' }])
+          }
+          return rows
+        })(),
         note: 'کارکرد = مقدار گزارش‌شده (تأییدشده با مقدار تأییدی و در انتظار بررسی)؛ ردیف‌های ردشده شمرده نمی‌شوند.' })
       continue
     }
@@ -142,7 +152,7 @@ export function buildReport(src: BuildCtx, p: Period, type: ReportType, sections
     if (s === 'disciplines' || s === 'locations' || s === 'registers' || s === 'narrative' || s === 'crew' || s === 'fleet') {
       const dc = { ...c, baseOf: c.baseOf }
       const t: DrTable | null = s === 'disciplines' ? drDisciplines(dc, p) : s === 'locations' ? drLocations(dc, p) : s === 'registers' ? (c.cs ? drRegisters(c.cs, p) : null) : s === 'narrative' ? drNarrative(dc, p) : drResources(dc, p, s === 'crew' ? 'man' : 'equip')
-      if (t) tables.push({ key: s, title: t.title, head: t.head, rows: t.rows, note: t.note })
+      if (t) tables.push({ key: s, title: t.title, head: t.head, rows: t.rows, note: t.note, page: s === 'locations' || s === 'registers' || s === 'disciplines' })
       continue
     }
     if (s === 'payable') {

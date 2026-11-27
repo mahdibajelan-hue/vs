@@ -1,3 +1,4 @@
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Ban, Check, Gavel, Plus, Undo2, X } from 'lucide-react'
 import { useCompetencyStore } from '../store/useCompetencyStore'
@@ -103,7 +104,7 @@ function Propose({ people, onSave, onClose }: { people: { id: string; candidateN
         <label>فرد<select value={id} onChange={(e) => setId(e.target.value)}><option value="">انتخاب…</option>{people.map((x) => <option key={x.id} value={x.id}>{x.candidateName}</option>)}</select></label>
         <label>نوع تصمیم<select value={kind} onChange={(e) => setKind(e.target.value as DecisionKind)}>{(Object.keys(KIND_LABEL_FA) as DecisionKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL_FA[k]}</option>)}</select></label>
         {kind === 'score_deduction' && <label>مقدار کسر (از ۱۰۰ امتیاز رفتاری)<input type="number" min={1} max={100} value={points} onChange={(e) => setPoints(+e.target.value)} /></label>}
-        {kind !== 'score_deduction' && <div className="comp-talent-row"><label className="comp-talent-f"><span>از تاریخ (میلادی)</span><input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label><label className="comp-talent-f"><span>{kind === 'suspension' ? 'تا تاریخ (الزامی)' : 'تا تاریخ (خالی = بدون پایان)'}</span><input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label></div>}
+        {kind !== 'score_deduction' && <div className="comp-talent-row"><label className="comp-talent-f"><span>از تاریخ </span><JalaliDateInput value={start ?? ''} onChange={(iso) => setStart(iso)} /></label><label className="comp-talent-f"><span>{kind === 'suspension' ? 'تا تاریخ (الزامی)' : 'تا تاریخ (خالی = بدون پایان)'}</span><JalaliDateInput value={end ?? ''} onChange={(iso) => setEnd(iso)} /></label></div>}
         <label>دلیل و مستند تصمیم<textarea value={reason} onChange={(e) => setReason(e.target.value)} /></label>
         <label>شواهد (شمارهٔ گزارش، نامه، گواهی…)<input value={ev} onChange={(e) => setEv(e.target.value)} /></label>
         <div className="comp-talent-row"><button className="im-btn im-btn-primary" disabled={!ok} onClick={() => onSave({ assessmentId: id, kind, points: kind === 'score_deduction' ? points : null, startDate: start, endDate: kind === 'score_deduction' ? null : end || null, reason: reason.trim(), evidenceNote: ev })}>ثبت پیشنهاد</button><button className="im-btn im-btn-ghost" onClick={onClose}>انصراف</button></div>

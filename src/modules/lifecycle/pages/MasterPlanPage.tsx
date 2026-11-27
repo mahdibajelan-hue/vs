@@ -1,3 +1,4 @@
+import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
 import { Fragment, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { ArrowLeft, GanttChartSquare, Lock, Plus, Trash2 } from 'lucide-react'
 import { useLifecycleStore } from '../store/useLifecycleStore'
@@ -189,13 +190,11 @@ export function MasterPlanPage({ projectId, onBack }: { projectId: string; onBac
                 </select>
                 <label className="text-[11px] text-muted">
                   شروع پیش‌بینی
-                  <input type="date" value={draft.forecastStart} onChange={(e) => setDraft({ ...draft, forecastStart: e.target.value })}
-                    className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
+                  <JalaliDateInput value={draft.forecastStart ?? ''} onChange={(iso) => setDraft({ ...draft, forecastStart: iso })} />
                 </label>
                 <label className="text-[11px] text-muted">
                   پایان پیش‌بینی
-                  <input type="date" value={draft.forecastFinish} onChange={(e) => setDraft({ ...draft, forecastFinish: e.target.value })}
-                    className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
+                  <JalaliDateInput value={draft.forecastFinish ?? ''} onChange={(iso) => setDraft({ ...draft, forecastFinish: iso })} />
                 </label>
               </div>
               <label className="mb-2 flex items-center gap-1.5 text-[11px]">
@@ -359,8 +358,7 @@ function ActivityEditor({ activity, others, onSave, onDelete }: {
         {(['baselineStart', 'baselineFinish', 'forecastStart', 'forecastFinish'] as const).map((k) => (
           <label key={k} className="text-[11px] text-muted">
             {k === 'baselineStart' ? 'شروع Baseline' : k === 'baselineFinish' ? 'پایان Baseline' : k === 'forecastStart' ? 'شروع پیش‌بینی' : 'پایان پیش‌بینی'}
-            <input type="date" value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })}
-              className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
+            <JalaliDateInput value={form[k] ?? ''} onChange={(iso) => setForm({ ...form, [k]: iso })} />
           </label>
         ))}
       </div>
@@ -368,13 +366,11 @@ function ActivityEditor({ activity, others, onSave, onDelete }: {
       <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <label className="text-[11px] text-muted">
           شروع واقعی
-          <input type="date" value={form.actualStart} onChange={(e) => setForm({ ...form, actualStart: e.target.value })}
-            className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
+          <JalaliDateInput value={form.actualStart ?? ''} onChange={(iso) => setForm({ ...form, actualStart: iso })} />
         </label>
         <label className="text-[11px] text-muted">
           پایان واقعی
-          <input type="date" value={form.actualFinish} onChange={(e) => setForm({ ...form, actualFinish: e.target.value })}
-            className="mt-1 w-full rounded-lg border bg-black/20 px-2 py-1.5 text-xs outline-none" style={{ borderColor: 'var(--border-soft)' }} />
+          <JalaliDateInput value={form.actualFinish ?? ''} onChange={(iso) => setForm({ ...form, actualFinish: iso })} />
         </label>
         <label className="text-[11px] text-muted">
           وضعیت
