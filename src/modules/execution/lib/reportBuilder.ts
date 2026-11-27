@@ -9,9 +9,12 @@ import { activityRows, byDimension, dailyMatrix, resourceSummary, statusSummary,
 import { deviationDrivers, physicalProgress, plannedOverall, type EmployerMode } from './progress'
 import { jalaliText, type Period } from './periods'
 import { drDisciplines, drLocations, drNarrative, drRegisters, drResources, type CsData, type DrTable } from './stationDr'
+import { dayHeader, dayNarrative, dayNext, dayProgress, dayReports, resourceBands, sideFont, type Bands } from './dailyDr'
+import { chainText } from './chainage'
 
-export type SectionKey = 'summary' | 'volumes' | 'daily' | 'fronts' | 'resources' | 'stoppages' | 'deviation' | 'status' | 'payable' | 'disciplines' | 'locations' | 'registers' | 'narrative' | 'crew' | 'fleet'
+export type SectionKey = 'dr_progress' | 'dr_ops' | 'dr_man' | 'dr_equip' | 'dr_next' | 'summary' | 'volumes' | 'daily' | 'fronts' | 'resources' | 'stoppages' | 'deviation' | 'status' | 'payable' | 'disciplines' | 'locations' | 'registers' | 'narrative' | 'crew' | 'fleet'
 export const SECTION_LABEL: Record<SectionKey, string> = {
+  dr_progress: 'پیشرفت عملیات اجرایی (برگهٔ DR)', dr_ops: 'شرح عملیات و موانع و مشکلات', dr_man: 'لیست نیروی انسانی', dr_equip: 'لیست ماشین‌آلات و تجهیزات', dr_next: 'پیش‌بینی عملیات اجرایی روز آینده',
   summary: 'خلاصهٔ مدیریتی', volumes: 'احجام اجرایی به تفکیک فعالیت', daily: 'کارکرد روزانه', fronts: 'عملکرد جبهه‌های کاری', resources: 'نیروی انسانی و ماشین‌آلات',
   stoppages: 'توقفات و علل', deviation: 'انحراف از برنامه (عوامل اصلی)', status: 'وضعیت گزارش‌ها و تأییدها', payable: 'مبنای صورت‌وضعیت (تأییدشده × فی)',
   disciplines: 'روکش احجام به تفکیک دیسیپلین', locations: 'احجام به تفکیک محل اجرا', registers: 'ثبت‌های ایستگاه (پایپینگ، مکانیکال)', narrative: 'اهم فعالیت‌ها و موانع', crew: 'نیروی انسانی به تفکیک بخش', fleet: 'ماشین‌آلات به تفکیک گروه',
@@ -19,7 +22,8 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
 export type PeriodMode = 'day' | 'week' | 'month' | 'range'
 export interface ReportType { key: string; label: string; period: PeriodMode; sections: SectionKey[] }
 export const REPORT_TYPES: ReportType[] = [
-  { key: 'daily', label: 'گزارش روزانه', period: 'day', sections: ['summary', 'volumes', 'resources', 'stoppages'] },
+  // the contractor's daily report (DR) as printed on site — the hydrostatic-test sheet is not part of it
+  { key: 'daily', label: 'گزارش روزانه', period: 'day', sections: ['dr_progress', 'dr_ops', 'dr_man', 'dr_equip', 'dr_next'] },
   { key: 'weekly', label: 'گزارش هفتگی', period: 'week', sections: ['summary', 'volumes', 'daily', 'fronts', 'resources', 'stoppages', 'status'] },
   { key: 'monthly', label: 'گزارش ماهانه', period: 'month', sections: ['summary', 'volumes', 'fronts', 'resources', 'stoppages', 'deviation', 'status'] },
   { key: 'activity', label: 'گزارش عملکرد فعالیت', period: 'range', sections: ['volumes', 'daily'] },
@@ -36,9 +40,15 @@ export const REPORT_TYPES: ReportType[] = [
 export const typeOf = (k: string) => REPORT_TYPES.find((t) => t.key === k) ?? REPORT_TYPES[2]
 
 export interface Cell { v: string | number; n?: boolean }
-export interface Table { key: SectionKey; title: string; head: string[]; rows: Cell[][]; note?: string }
+export interface Table { key: SectionKey; title: string; head: string[]; rows: Cell[][]; note?: string
+  /** the manpower / machinery list in four bands, as on the daily sheet */
+  bands?: Bands
+  /** starts a new printed page */
+  page?: boolean }
 export interface Kpi { label: string; value: string }
-export interface BuiltReport { title: string; period: { from: string; to: string; label: string }; filters: { front?: string; activityIds?: string[] }; kpis: Kpi[]; tables: Table[] }
+export interface BuiltReport { title: string; period: { from: string; to: string; label: string }; filters: { front?: string; activityIds?: string[] }; kpis: Kpi[]; tables: Table[]
+  /** the daily sheet's header: site and weather of the day, and the site reports it was built from */
+  header?: { label: string; value: string }[]; sources?: string[] }
 
 export interface BuildCtx {
   activities: Activity[]; reports: Report[]; lines: ReportLine[]; resources: ReportResource[]; stoppages: Stoppage[]
@@ -76,7 +86,37 @@ export function buildReport(src: BuildCtx, p: Period, type: ReportType, sections
   const kpis: Kpi[] = []
   const actRows = activityRows(ctx, p, base, c.employer)
   const stops = stoppageSummary(ctx, p)
+  const days = dayReports(c.reports, p.to, filters.front)
+  let header: BuiltReport['header']
   for (const s of sections) {
+    if (s.startsWith('dr_')) header ??= dayHeader(days)
+    if (s === 'dr_progress') {
+      tables.push({ key: s, title: 'گزارش روزانهٔ عملیات اجرایی', page: true, head: ['ردیف', 'شرح عملیات', 'واحد', 'مقدار کل', 'کیلومتراژ از', 'کیلومتراژ تا', 'کارکرد تا روز قبل', 'کارکرد امروز', 'کارکرد تا امروز', 'مقدار باقیمانده', 'درصد پیشرفت تجمعی', 'توضیحات'],
+        rows: dayProgress(c.activities, c.reports, c.lines, p.to, base).map((r, i) => [{ v: i + 1, n: true }, { v: r.activity.title }, { v: r.activity.unit }, { v: r2(r.base), n: true }, { v: chainText(r.kmFrom) }, { v: chainText(r.kmTo) }, { v: r2(r.prev), n: true }, { v: r2(r.today), n: true }, { v: r2(r.cum), n: true }, { v: r2(r.remaining), n: true }, { v: pctS(r.pct), n: true }, { v: r.note }]),
+        note: 'کارکرد = مقدار گزارش‌شده (تأییدشده با مقدار تأییدی و در انتظار بررسی)؛ ردیف‌های ردشده شمرده نمی‌شوند.' })
+      continue
+    }
+    if (s === 'dr_ops') {
+      const n = dayNarrative(days), pad = (a: string[], k: number) => [...a, ...Array(Math.max(0, k - a.length)).fill('')]
+      tables.push({ key: s, title: 'شرح عملیات', page: true, head: ['ردیف', 'شرح عملیات'], rows: pad(n.ops, 12).map((x, i) => [{ v: i + 1, n: true }, { v: x }]) })
+      tables.push({ key: s, title: 'موانع و مشکلات', head: ['ردیف', 'موانع و مشکلات'], rows: pad(n.obstacles, 3).map((x, i) => [{ v: i + 1, n: true }, { v: x }]) })
+      continue
+    }
+    if (s === 'dr_man' || s === 'dr_equip') {
+      const kind = s === 'dr_man' ? 'man' : 'equip'
+      const ids = new Set(days.map((r) => r.id))
+      const b = resourceBands(c.resources.filter((x) => ids.has(x.reportId)), kind)
+      tables.push({ key: s, title: kind === 'man' ? 'لیست نیروی انسانی' : 'لیست ماشین‌آلات سبک و سنگین و تجهیزات اجرایی', page: true, head: ['قسمت', kind === 'man' ? 'نیروی انسانی' : 'تجهیزات', ...b.head], bands: b,
+        rows: [...b.bands.flat().map((r) => [{ v: r.section }, { v: r.name }, ...r.vals.map((v) => ({ v, n: true }))]), [{ v: 'جمع کل' }, { v: '' }, ...b.total.map((v) => ({ v, n: true }))]] })
+      continue
+    }
+    if (s === 'dr_next') {
+      const n = dayNext(days)
+      const rows = n.rows.map((x) => [{ v: x.op }, { v: x.kmFrom }, { v: x.kmTo }, { v: x.unit }, { v: x.qty, n: true }, { v: x.crew }, { v: x.note }])
+      tables.push({ key: s, title: 'گزارش پیش‌بینی عملیات اجرایی روز آینده', page: true, head: ['نوع عملیات', 'کیلومتراژ از', 'کیلومتراژ تا', 'واحد', 'مقدار', 'نفر اجرا', 'ملاحظات'], rows,
+        note: [n.date ? `تاریخ پیش‌بینی: ${jalaliText(n.date)}` : '', n.hours ? `جمع ساعت کاری: ${faN(n.hours)} ساعت` : '', n.condition].filter(Boolean).join(' · ') || undefined })
+      continue
+    }
     if (s === 'summary') {
       const prog = physicalProgress({ ...c, asOf: p.to, mode: 'approved', groupWeights: c.groupWeights, employer: c.employer })
       const plan = plannedOverall({ ...c, asOf: p.to, groupWeights: c.groupWeights })
@@ -113,40 +153,66 @@ export function buildReport(src: BuildCtx, p: Period, type: ReportType, sections
         note: pay ? 'محاسبه‌شده در سرور (ex_payable_basis) از ردیف‌های تأییدشده تا پایان دوره؛ با گام الزامی کارفرما فقط مقدار تأییدشدهٔ کارفرما.' : 'مبنای سرور دریافت نشد.' })
     }
   }
-  return { title: type.label, period: { from: p.from, to: p.to, label: p.label }, filters, kpis, tables }
+  return { title: type.label, period: { from: p.from, to: p.to, label: p.label }, filters, kpis, tables, header, sources: days.map((r) => r.reportNo) }
 }
 
 export interface DocMeta { projectName: string; projectCode: string; headerLines: string[]; docNo: string; revision: number | null; status: string; issueDate: string
   prepared: string; checked: string; approved: string; preparedAt?: string; checkedAt?: string; approvedAt?: string; distribution: string; attachments: string; footer: string
-  history: { revision: number; date: string; reason: string; status: string }[] }
+  history: { revision: number; date: string; reason: string; status: string }[]
+  /** the three parties' names and logos for the letterhead (employer · consultant · contractor) */
+  parties?: Partial<Record<'employer' | 'consultant' | 'contractor', { name?: string; logo?: string }>> }
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 const num = (v: number) => (Number.isInteger(v) ? v.toLocaleString('fa-IR') : v.toLocaleString('fa-IR', { maximumFractionDigits: 2 }))
 export const DOC_STATUS_FA: Record<string, string> = { preview: 'پیش‌نمایش — صادر نشده', issued: 'صادرشده (IFR)', checked: 'بررسی‌شده', approved: 'تأییدشده (معتبر)', superseded: 'منسوخ — نسخهٔ معتبر نیست' }
 
-/** the printable page (also the PDF via the browser's print): ISO header, sections, signatures, revision history, distribution */
+/**
+ * The printable page (also the PDF via the browser's print), laid out like the contractor's daily sheet: on every printed
+ * page the letterhead (parties' logos, project title), the report number / date row and the four-signature row repeat
+ * (table header / footer groups); the sections follow, each sheet of the daily report on its own page. The document
+ * control (revision history, distribution) closes the report.
+ */
 export function renderReportHtml(r: BuiltReport, m: DocMeta): string {
-  const table = (t: Table) => `<section><h2>${esc(t.title)}</h2>${t.rows.length ? `<table><thead><tr>${t.head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${t.rows.map((row) => `<tr>${row.map((c) => `<td${c.n ? ' class="n"' : ''}>${typeof c.v === 'number' ? num(c.v) : esc(c.v)}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '<p class="empty">در این دوره داده‌ای ثبت نشده است.</p>'}${t.note ? `<p class="note">${esc(t.note)}</p>` : ''}</section>`
+  const cell = (c: Cell) => `<td${c.n ? ' class="n"' : ''}>${typeof c.v === 'number' ? num(c.v) : esc(c.v)}</td>`
+  const bands = (t: Table) => { const b = t.bands!; const head = `<tr><th class="sec">قسمت</th><th>${esc(t.head[1])}</th>${b.head.map((h) => `<th class="v">${esc(h)}</th>`).join('')}</tr>`
+    return `<div class="bands">${b.bands.map((band) => `<table class="band"><thead>${head}</thead><tbody>${band.map((x) => `<tr${x.vals[0] ? ' class="on"' : ''}>${x.span ? `<td class="sec" rowspan="${x.span}"><span style="font-size:${sideFont(x.section, x.span, 14).toFixed(1)}px">${esc(x.section)}</span></td>` : ''}<td class="nm">${esc(x.name)}</td>${x.vals.map((v) => `<td class="v">${v ? num(v) : '·'}</td>`).join('')}</tr>`).join('')}</tbody></table>`).join('')}</div>
+      <table class="tot"><tr><th>جمع کل</th>${b.head.map((h, i) => `<td><small>${esc(h)}</small><b>${num(b.total[i])}</b></td>`).join('')}</tr></table>` }
+  let first = true
+  const table = (t: Table) => { const brk = t.page && !first; first = false
+    return `<section${brk ? ' class="pg"' : ''}><h2>${esc(t.title)}</h2>${t.bands ? bands(t) : t.rows.length ? `<table class="grid"><thead><tr>${t.head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${t.rows.map((row) => `<tr>${row.map(cell).join('')}</tr>`).join('')}</tbody></table>` : '<p class="empty">در این دوره داده‌ای ثبت نشده است.</p>'}${t.note ? `<p class="note">${esc(t.note)}</p>` : ''}</section>` }
   const superseded = m.status === 'superseded'
+  const P = m.parties ?? {}
+  const logo = (k: 'employer' | 'consultant' | 'contractor') => (P[k]?.logo ? `<img src="${esc(P[k]!.logo)}" alt="${esc(P[k]!.name ?? '')}">` : P[k]?.name ? `<span class="pn">${esc(P[k]!.name)}</span>` : '')
+  const info = [...(r.header ?? []), { label: 'شمارهٔ گزارش', value: m.docNo || r.sources?.join('، ') || '—' }, { label: 'تاریخ', value: r.period.from === r.period.to ? jalaliText(r.period.from) : r.period.label }]
+  const head = `<div class="lh"><div class="lh-r">${logo('employer')}${logo('consultant')}</div><div class="lh-c">${m.headerLines.map((l) => `<div>${esc(l)}</div>`).join('')}<div class="pj">${esc(m.projectName)}</div><div class="rt">${esc(r.title)}${r.filters.front ? ` — ${esc(r.filters.front)}` : ''}</div></div><div class="lh-l">${logo('contractor')}</div></div>
+<div class="info">${info.map((x) => `<div><span>${esc(x.label)}:</span> <b>${esc(x.value)}</b></div>`).join('')}${m.docNo ? `<div><span>بازنگری:</span> <b>${m.revision ?? '—'}</b></div><div><span>وضعیت:</span> <b>${esc(DOC_STATUS_FA[m.status] ?? m.status)}</b></div>` : ''}</div>`
+  const signs = `<table class="sg"><tr><th>کنترل پروژهٔ پیمانکار</th><th>سرپرست کارگاه پیمانکار</th><th>دستگاه نظارت</th><th>نمایندهٔ کارفرما</th></tr><tr><td></td><td></td><td></td><td></td></tr></table>`
   return `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>${esc(m.docNo || r.title)}</title><style>
-@page { size: A4; margin: 16mm 12mm 18mm; @bottom-center { content: "صفحه " counter(page) " از " counter(pages); font: 9pt Vazirmatn, Tahoma, sans-serif; color: #555 } @bottom-left { content: "${esc(m.docNo)} · Rev ${m.revision ?? '-'}"; font: 8pt Tahoma, sans-serif; color: #777 } }
-*{box-sizing:border-box} body{font-family:Vazirmatn,Tahoma,sans-serif;font-size:10pt;color:#111;margin:0;line-height:1.6}
-.iso{width:100%;border-collapse:collapse;margin-bottom:10px} .iso td{border:1px solid #444;padding:4px 6px;vertical-align:middle} .iso .t{font-size:14pt;font-weight:700;text-align:center} .iso .k{color:#555;font-size:8.5pt;white-space:nowrap}
-h2{font-size:11.5pt;margin:14px 0 6px;border-bottom:2px solid #1f4e79;padding-bottom:2px;color:#1f4e79} table{width:100%;border-collapse:collapse;page-break-inside:auto} tr{page-break-inside:avoid}
-th,td{border:1px solid #999;padding:3px 5px} th{background:#e8eef5;font-weight:600;font-size:9pt} td.n{text-align:left;direction:ltr;font-variant-numeric:tabular-nums}
-.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:6px} .kpi div{border:1px solid #bbb;padding:5px;border-radius:4px} .kpi b{display:block;font-size:12pt}
-.note{color:#555;font-size:8.5pt;margin:3px 0} .empty{color:#777} .sign td{height:62px;vertical-align:top;width:33%}
+@page { size: A4; margin: 8mm 7mm 8mm; }
+*{box-sizing:border-box} body{font-family:Vazirmatn,Tahoma,sans-serif;font-size:9pt;color:#111;margin:0;line-height:1.45}
+.frame{width:100%;border-collapse:collapse;table-layout:fixed} .frame>thead>tr>td,.frame>tfoot>tr>td,.frame>tbody>tr>td{padding:0;border:0}
+.lh{display:grid;grid-template-columns:22% 56% 22%;align-items:center;border:1.5px solid #222;border-bottom:0;padding:4px 6px;min-height:64px}
+.lh img{max-height:42px;max-width:46%;object-fit:contain;margin:1px 3px} .lh-r{text-align:right} .lh-l{text-align:left} .pn{font-size:8pt;font-weight:700;display:inline-block;margin:2px}
+.lh-c{text-align:center;font-weight:700;font-size:10pt;line-height:1.5} .lh-c .pj{font-size:10.5pt} .lh-c .rt{margin-top:2px;font-size:11.5pt;border-top:1px solid #999;padding-top:2px}
+.info{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1.5px solid #222;border-bottom:0;margin-bottom:6px} .info>div{border-bottom:1.5px solid #222;border-inline-start:1px solid #999;padding:2px 6px;font-size:8.3pt} .info span{color:#444}
+.sg{width:100%;border-collapse:collapse;margin-top:6px} .sg th{border:1.5px solid #222;background:#f3f4f6;font-size:8.5pt;padding:3px;width:25%} .sg td{border:1.5px solid #222;height:58px}
+section.pg{break-before:page} h2{font-size:10.5pt;margin:6px 0 4px;text-align:center;background:#e5e7eb;border:1px solid #555;padding:3px}
+table.grid{width:100%;border-collapse:collapse;font-size:8pt} table.grid td{word-break:break-word} table.grid th:first-child{width:32px} table.grid tr{break-inside:avoid} table.grid th,table.grid td{border:1px solid #666;padding:2px 4px} table.grid th{background:#eef0f3;font-weight:700;font-size:8.5pt} td.n{text-align:center;font-variant-numeric:tabular-nums}
+.bands{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:start} .band{width:100%;border-collapse:collapse;table-layout:fixed;font-size:7.6pt}
+.band th,.band td{border:1px solid #555;padding:0 2px;height:14px;line-height:1.2} .band th{background:#e5e7eb} .band .v{width:8.5%;text-align:center} .band th.v{writing-mode:vertical-rl;transform:rotate(180deg);height:40px;padding:2px 0}
+.band .sec{width:9%;padding:0;background:#f9fafb;overflow:hidden} .band td.sec span{display:block;writing-mode:vertical-rl;transform:rotate(180deg);margin:auto;font-weight:700;padding:1px 0;line-height:1.1;max-height:100%} .band .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .band tr.on td{font-weight:700}
+.tot{width:100%;border-collapse:collapse;margin-top:3px} .tot th,.tot td{border:1.5px solid #111;padding:2px 6px;text-align:center} .tot th{background:#e5e7eb;width:16%} .tot small{display:block;font-size:7pt;color:#444}
+.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:4px} .kpi div{border:1px solid #999;padding:4px} .kpi b{display:block;font-size:11pt}
+.note{color:#444;font-size:7.8pt;margin:2px 0} .empty{color:#777;text-align:center}
 .wm{position:fixed;top:40%;left:0;right:0;text-align:center;font-size:54pt;color:rgba(200,0,0,.12);transform:rotate(-25deg);pointer-events:none}
+.dc{break-inside:avoid;margin-top:8px} .dc table{width:100%;border-collapse:collapse;font-size:8pt} .dc th,.dc td{border:1px solid #888;padding:2px 4px}
 </style></head><body>${superseded ? '<div class="wm">منسوخ — SUPERSEDED</div>' : m.status === 'preview' ? '<div class="wm">پیش‌نمایش</div>' : ''}
-<table class="iso"><tr><td rowspan="3" style="width:28%">${m.headerLines.map((l) => `<div>${esc(l)}</div>`).join('')}<div><b>${esc(m.projectName)}</b></div></td><td class="t" rowspan="2" colspan="2">${esc(r.title)}<div style="font-size:10pt;font-weight:400">${esc(r.period.label)}${r.filters.front ? ` · ${esc(r.filters.front)}` : ''}</div></td>
-<td><span class="k">Document No. / شمارهٔ مدرک</span><br><b dir="ltr">${esc(m.docNo || '—')}</b></td></tr>
-<tr><td><span class="k">Revision / بازنگری</span><br><b>${m.revision == null ? '—' : m.revision}</b></td></tr>
-<tr><td><span class="k">Issue Date / تاریخ صدور</span><br>${esc(m.issueDate)}</td><td><span class="k">Period / دوره</span><br>${esc(jalaliText(r.period.from))} تا ${esc(jalaliText(r.period.to))}</td><td><span class="k">Status / وضعیت</span><br><b>${esc(DOC_STATUS_FA[m.status] ?? m.status)}</b></td></tr></table>
-${r.kpis.length ? `<section><h2>${SECTION_LABEL.summary}</h2><div class="kpi">${r.kpis.map((k) => `<div><span class="k">${esc(k.label)}</span><b>${esc(k.value)}</b></div>`).join('')}</div></section>` : ''}
+<table class="frame"><thead><tr><td>${head}</td></tr></thead><tfoot><tr><td>${signs}</td></tr></tfoot><tbody><tr><td>
+${r.kpis.length ? `<section><h2>${SECTION_LABEL.summary}</h2><div class="kpi">${r.kpis.map((k) => `<div><span class="note">${esc(k.label)}</span><b>${esc(k.value)}</b></div>`).join('')}</div></section>` : ''}
 ${r.tables.map(table).join('')}
-<section><h2>امضاها</h2><table class="sign"><tr><th>Prepared By / تهیه‌کننده</th><th>Checked By / بررسی‌کننده</th><th>Approved By / تأییدکننده</th></tr>
-<tr><td>${esc(m.prepared)}<br><span class="note">${esc(m.preparedAt ?? '')}</span></td><td>${esc(m.checked)}<br><span class="note">${esc(m.checkedAt ?? '')}</span></td><td>${esc(m.approved)}<br><span class="note">${esc(m.approvedAt ?? '')}</span></td></tr></table></section>
-<section><h2>Revision History / سوابق بازنگری</h2><table><thead><tr><th>Rev</th><th>تاریخ</th><th>شرح / علت بازنگری</th><th>وضعیت</th></tr></thead><tbody>${(m.history.length ? m.history : [{ revision: m.revision ?? 0, date: m.issueDate, reason: 'صدور اولیه', status: m.status }]).map((h) => `<tr><td class="n">${h.revision}</td><td>${esc(h.date)}</td><td>${esc(h.reason || 'صدور اولیه')}</td><td>${esc(DOC_STATUS_FA[h.status] ?? h.status)}</td></tr>`).join('')}</tbody></table></section>
-<section><h2>Distribution & Attachments / توزیع و پیوست‌ها</h2><table><tr><th style="width:25%">توزیع</th><td>${esc(m.distribution || '—')}</td></tr><tr><th>پیوست‌ها</th><td>${esc(m.attachments || '—')}</td></tr></table></section>
+${m.docNo ? `<section class="dc"><h2>کنترل مدرک</h2><table><tr><th>تهیه‌کننده</th><th>بررسی‌کننده</th><th>تأییدکننده</th></tr><tr><td>${esc(m.prepared)} ${esc(m.preparedAt ?? '')}</td><td>${esc(m.checked)} ${esc(m.checkedAt ?? '')}</td><td>${esc(m.approved)} ${esc(m.approvedAt ?? '')}</td></tr></table>
+<table style="margin-top:4px"><tr><th>بازنگری</th><th>تاریخ</th><th>شرح / علت</th><th>وضعیت</th></tr>${(m.history.length ? m.history : [{ revision: m.revision ?? 0, date: m.issueDate, reason: 'صدور اولیه', status: m.status }]).map((h) => `<tr><td class="n">${h.revision}</td><td>${esc(h.date)}</td><td>${esc(h.reason || 'صدور اولیه')}</td><td>${esc(DOC_STATUS_FA[h.status] ?? h.status)}</td></tr>`).join('')}</table>
+${m.distribution ? `<p class="note">توزیع: ${esc(m.distribution)}</p>` : ''}</section>` : ''}
 ${m.footer ? `<p class="note">${esc(m.footer)}</p>` : ''}
-<p class="note">تولیدشده در سامانهٔ فرین از گزارش‌های روزانهٔ ثبت‌شده؛ هر عدد تا گزارش روزانهٔ منبع قابل ردیابی است.</p></body></html>`
+<p class="note">تولیدشده در سامانهٔ فرین از گزارش‌های روزانهٔ ثبت‌شده${r.sources?.length && r.header ? ` (${esc(r.sources.join('، '))})` : ''}؛ هر عدد تا گزارش منبع قابل ردیابی است.</p>
+</td></tr></tbody></table></body></html>`
 }

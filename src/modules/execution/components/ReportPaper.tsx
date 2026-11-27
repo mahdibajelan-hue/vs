@@ -22,6 +22,7 @@ import { sheetSignCells } from '../forms/signBoxes'
 import { useAmendments, useReportFixes } from '../store/useFixStore'
 import { RES_COL, byPath, fixPath, type ReportFix } from '../lib/reviewFixes'
 import { FixMark } from './ReviewSheet'
+import { ResourceSheet } from './ResourceSheet'
 import { chainText } from '../lib/chainage'
 
 export interface PaperCtx {
@@ -194,7 +195,9 @@ function ReportPaperBody({ c }: { c: PaperCtx }) {
           {asList(r.data.obstacles).some((x) => x.trim()) && <><thead><tr><th>ردیف</th><th>موانع و مشکلات</th></tr></thead><tbody>{asList(r.data.obstacles).filter((x) => x.trim()).map((x, i) => <tr key={i}><td className="num">{fa(i + 1)}</td><td>{x}</td></tr>)}</tbody></>}
         </table>
       )}
-      {(['man', 'equip'] as const).map((kind) => {
+      {/* the site-status report: manpower and machinery as on the contractor's daily sheet (four bands, full list) */}
+      {!form && c.resources.length > 0 && <><ResourceSheet rows={c.resources} kind="man" /><ResourceSheet rows={c.resources} kind="equip" /></>}
+      {form && (['man', 'equip'] as const).map((kind) => {
         const list = c.resources.filter((x) => x.kind === kind && resUsed(x))
         if (!list.length) return null
         const cols: readonly (readonly [ResField, string])[] = kind === 'man' ? MAN_COLS : EQUIP_COLS

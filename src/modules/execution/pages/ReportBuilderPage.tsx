@@ -10,6 +10,7 @@ import { jalaliText, periodOf, type Period } from '../lib/periods'
 import { DOC_STATUS_FA, REPORT_TYPES, SECTION_LABEL, buildReport, renderReportHtml, typeOf, type BuiltReport, type DocMeta, type PayRow, type SectionKey } from '../lib/reportBuilder'
 import { Empty } from '../components/common'
 import { JalaliDateInput } from '../../../components/common/JalaliDateInput'
+import { usePartyBrand } from '../components/epc/PaperFrame'
 
 interface Tpl { id: string; reportType: string; title: string; docPrefix: string; sections: SectionKey[]; headerLines: string[]; footer: string; distribution: string }
 interface Doc { id: string; reportType: string; docNo: string; revision: number; title: string; from: string | null; to: string | null; filters: { front?: string; activityIds?: string[] }; report: BuiltReport; status: string; reason: string; distribution: string
@@ -27,7 +28,7 @@ export function ReportBuilderPage({ projectId }: { projectId: string }) {
   const m = useExecutionModel(projectId)
   const ex = useExecutionStore()
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId))
-  const [typeKey, setTypeKey] = useState('monthly')
+  const [typeKey, setTypeKey] = useState('daily')
   const type = typeOf(typeKey)
   const [anchor, setAnchor] = useState(m.today)
   const [from, setFrom] = useState(m.today.slice(0, 8) + '01'), [to, setTo] = useState(m.today)
@@ -77,13 +78,14 @@ export function ReportBuilderPage({ projectId }: { projectId: string }) {
   const report = useMemo(() => buildReport({ activities: m.activities, reports: m.reports, lines: m.lines, resources: m.resources, stoppages: m.stoppages, baselines: m.baselines, blines: m.blines, baseOf: m.baseOf, employer: m.employer, groupWeights: m.settings.groupWeights, cs: hasCs ? cs : undefined },
     period, type, sections, filters, pay), [m.activities, m.reports, m.lines, m.resources, m.stoppages, m.baselines, m.blines, m.employer, period, type, sections, filters, pay, cs, hasCs]) // eslint-disable-line react-hooks/exhaustive-deps
   const name = (id: string | null) => (id ? ex.people.get(id) ?? '—' : '')
+  const parties = usePartyBrand(projectId)
   const metaFor = (d: Doc | null, t: Tpl | null): DocMeta => {
     const hist = d ? docs.filter((x) => x.docKey === d.docKey).sort((a, b) => a.revision - b.revision).map((x) => ({ revision: x.revision, date: dt(x.preparedAt), reason: x.reason, status: x.status })) : []
     return { projectName: project?.officialName || project?.shortName || '', projectCode: project?.projectCode ?? '', headerLines: t?.headerLines ?? [], docNo: d?.docNo ?? '', revision: d?.revision ?? null, status: d?.status ?? 'preview',
       issueDate: d ? dt(d.preparedAt) : jalaliText(m.today), prepared: d ? name(d.preparedBy) : '', checked: d ? name(d.checkedBy) : '', approved: d ? name(d.approvedBy) : '',
-      preparedAt: dt(d?.preparedAt), checkedAt: dt(d?.checkedAt), approvedAt: dt(d?.approvedAt), distribution: d?.distribution ?? t?.distribution ?? '', attachments: '', footer: t?.footer ?? '', history: hist }
+      preparedAt: dt(d?.preparedAt), checkedAt: dt(d?.checkedAt), approvedAt: dt(d?.approvedAt), distribution: d?.distribution ?? t?.distribution ?? '', attachments: '', footer: t?.footer ?? '', history: hist, parties }
   }
-  const previewHtml = useMemo(() => renderReportHtml(report, metaFor(null, tpl)), [report, tpl, project]) // eslint-disable-line react-hooks/exhaustive-deps
+  const previewHtml = useMemo(() => renderReportHtml(report, metaFor(null, tpl)), [report, tpl, project, parties]) // eslint-disable-line react-hooks/exhaustive-deps
   const title = `${type.label} — ${period.label}${front ? ` — ${front}` : ''}${actId ? ` — ${m.activities.find((a) => a.id === actId)?.title ?? ''}` : ''}`
 
   const printDoc = (r: BuiltReport, meta: DocMeta) => { if (!openPrintDocument(renderReportHtml(r, meta), { print: true })) setFlash('مرورگر پنجرهٔ چاپ را مسدود کرد؛ اجازهٔ پنجرهٔ بازشو بدهید.') }

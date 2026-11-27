@@ -32,6 +32,7 @@ import { buildProfile, fillPatch, type Profile } from '../lib/weldProfile'
 import { WeatherCard } from './WeatherCard'
 import { KmInput } from './KmInput'
 import { PipePick } from './PipePick'
+import { ResourceSheet } from './ResourceSheet'
 import { chainText } from '../lib/chainage'
 import { SheetEntry } from './SheetEntry'
 import { WELDER_FIELDS, fromScan, checkPipeCell, checkWelderCell, isPipeField, isWelderField, pipeFillPatch, registerKey, splitStamps, welderQualified } from '../lib/registers'
@@ -80,6 +81,7 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
   const [paper, setPaper] = useState(false)
   const [showHist, setShowHist] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [resSheet, setResSheet] = useState(false) // manpower / machinery shown as the printed sheet instead of the entry panel
 
   const canRecord = ex.can(m.projectId, 'record')
   const slotsAll = useEpcStore((x) => x.signSlots), sigsAll = useEpcStore((x) => x.signatures)
@@ -421,9 +423,10 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
 
       {!form && <>
         <SecTitle n={2} title="نیروی انسانی کارگاه" />
-        <ResourcePanel only="man" rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} onCopyLast={copyLastResources} />
+        {editable && <SheetToggle on={resSheet} set={setResSheet} />}
+        {editable && !resSheet ? <ResourcePanel only="man" rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} onCopyLast={copyLastResources} /> : <div className="rs-wrap"><ResourceSheet rows={res} kind="man" /></div>}
         <SecTitle n={3} title="ماشین‌آلات کارگاه" />
-        <ResourcePanel only="equip" rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} />
+        {editable && !resSheet ? <ResourcePanel only="equip" rows={res} editable={editable} onChange={(n) => { setRes(n); setDirty(true) }} baseline={lastRows} baselineLabel={lastRes ? `گزارش ${fmtD(lastRes.reportDate)}` : undefined} /> : <div className="rs-wrap"><ResourceSheet rows={res} kind="equip" /></div>}
         {epcAvailable && <CrewLogsPanel rows={crews} editable={editable} activities={acts} onChange={(n) => { setCrews(n); setCrewDirty(true); setDirty(true) }} />}
       </>}
 
@@ -573,6 +576,16 @@ function IssuePanel({ title, items, onClose }: { title: string; items: string[];
       <div className="ex-issues-head"><b id="ex-issues-t">{title}</b><button className="im-btn im-btn-sm" onClick={onClose} aria-label="بستن">بستن</button></div>
       <ul>{items.slice(0, 20).map((x) => <li key={x}>{x}</li>)}{items.length > 20 && <li>و {(items.length - 20).toLocaleString('fa-IR')} مورد دیگر…</li>}</ul>
       <small>پس از اصلاح، دوباره «ارسال برای نظارت» را بزنید.</small>
+    </div>
+  )
+}
+
+/** entry panel ↔ the list as printed on the daily sheet */
+function SheetToggle({ on, set }: { on: boolean; set: (v: boolean) => void }) {
+  return (
+    <div className="rs-toggle no-print" role="group" aria-label="نحوهٔ نمایش نیروی انسانی و ماشین‌آلات">
+      <button type="button" className={!on ? 'on' : undefined} onClick={() => set(false)} aria-pressed={!on}>ثبت و ویرایش</button>
+      <button type="button" className={on ? 'on' : undefined} onClick={() => set(true)} aria-pressed={on}>نمایش مثل فرم چاپی</button>
     </div>
   )
 }

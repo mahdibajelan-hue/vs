@@ -702,3 +702,30 @@
 .ex-am-band { margin-top: 10px; padding: 6px 9px; border: 1.5px solid #b45309; background: #fffbeb; color: #111; font-size: 11.5px; display: grid; gap: 3px; break-inside: avoid; }
 .ex-am-band b { color: #b45309; }
 @media (prefers-reduced-motion: reduce) { .ex-amends li.open .ex-am-no { animation: none; } }
+
+/* manpower / machinery list as on the contractor's daily sheet: four bands, section written down the side */
+.rs-sheet { display: grid; gap: 4px; background: #fff; color: #111; padding: 8px; border-radius: 10px; font-size: 10px; }
+.rs-title { text-align: center; font-weight: 800; font-size: 13px; padding: 4px; border: 1px solid #555; background: #f3f4f6; }
+.rs-bands { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; gap: 0; }
+.rs-band { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.rs-band th, .rs-band td { border: 1px solid #555; padding: 1px 3px; height: 17px; line-height: 1.25; }
+.rs-band th { background: #e5e7eb; font-weight: 700; font-size: 9px; }
+.rs-band .rs-v { width: 8.5%; text-align: center; font-variant-numeric: tabular-nums; }
+.rs-band th.rs-v { writing-mode: vertical-rl; transform: rotate(180deg); height: 46px; padding: 2px 0; }
+.rs-band .rs-sec { width: 9%; background: #f9fafb; padding: 0; overflow: hidden; }
+.rs-band td.rs-sec span { display: block; writing-mode: vertical-rl; transform: rotate(180deg); margin: auto; font-weight: 700; line-height: 1.1; padding: 2px 0; }
+.rs-band .rs-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs-band tr.on .rs-name, .rs-band tr.on .rs-v { font-weight: 700; }
+.rs-total { border-collapse: collapse; width: 100%; }
+.rs-total th, .rs-total td { border: 1.5px solid #111; padding: 3px 6px; text-align: center; }
+.rs-total th { width: 16%; background: #e5e7eb; font-size: 12px; }
+.rs-total td small { display: block; font-size: 8.5px; color: #4b5563; } .rs-total td b { font-size: 12px; }
+@media (max-width: 900px) { .rs-bands { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .rs-bands { grid-template-columns: 1fr; } }
+@media print { .rs-bands { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; } .rs-sheet { break-before: page; padding: 0; } }
+.rs-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--im-line); }
+.rs-wrap .rs-sheet { min-width: 920px; }
+@media (max-width: 900px) { .rs-wrap .rs-sheet { min-width: 0; } }
+.rs-toggle { display: inline-flex; justify-self: start; padding: 3px; gap: 3px; border-radius: 12px; border: 1px solid var(--im-line); background: var(--im-panel-2); }
+.rs-toggle button { padding: 6px 12px; border-radius: 9px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 12.5px; cursor: pointer; min-height: 32px; }
+.rs-toggle button.on { background: var(--im-panel); font-weight: 700; box-shadow: 0 1px 3px rgba(15, 23, 42, .12); }
