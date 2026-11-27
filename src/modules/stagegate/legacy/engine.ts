@@ -4,7 +4,7 @@
 // (lcState … lcBindEvents). The rendering/logic is kept as in the source on purpose so the Gantt and
 // orbit behave identically; only the data layer is adapted (sg_* tables) and the globals the source
 // took from its host page are injected through `env`.
-import { SG_PHASE_GUIDE, SG_SOURCE_LABEL, SG_HOW_TO } from '../sgGuide'
+import { SG_PHASE_GUIDE, SG_SOURCE_LABEL } from '../sgGuide'
 import { todayTehran } from '../../../lib/today'
 
 export function createStageGateEngine(env) {
@@ -654,7 +654,6 @@ export function createStageGateEngine(env) {
         // matters more here than making any single node bigger.
         function lcOrbitPageHtml() {
             return `
-            ${lcHowToHtml()}
             <div class="lc-dark-panel sgx-orbit-panel rounded-2xl p-4 md:p-6 flex flex-col" style="background: radial-gradient(ellipse 90% 70% at 50% 10%, #123159 0%, #04070f 78%); border: 1px solid rgba(255,255,255,.07); min-height: 48vh;">
                 ${lcIdentityStripHtml()}
                 <div class="relative flex-1 flex items-center justify-center" id="lcOrbitStage" style="min-height: 37vh;">
@@ -665,20 +664,6 @@ export function createStageGateEngine(env) {
                 ${lcLegendHtml()}
             </div>
             ${lcPhaseListHtml()}`;
-        }
-
-        // «کاربر با نگاه بفهمد چه کند» — three steps above the orbit, and a link to the full guide
-        function lcHowToHtml() {
-            return `
-            <section class="sgx-howto no-print" aria-label="راهنمای سریع">
-                <div class="sgx-howto-head">
-                    <b>چطور از این صفحه استفاده کنم؟</b>
-                    ${env.onOpenGuide ? `<button type="button" data-lc-action="open-guide" class="sgx-guide-btn">${iconSvg('info', 'w-4 h-4')}<span>راهنمای کامل مراحل</span></button>` : ''}
-                </div>
-                <ol class="sgx-howto-steps">
-                    ${SG_HOW_TO.map((h, i) => `<li><span class="sgx-num">${toPersianDigits(i + 1)}</span><div><b>${esc(h.title)}</b><p>${esc(h.text)}</p></div></li>`).join('')}
-                </ol>
-            </section>`;
         }
 
         // the phases as a plain list — the whole view on phones (the orbit needs room), and a quick index under it on desktop
@@ -1110,6 +1095,8 @@ export function createStageGateEngine(env) {
                     ${gateMeta ? `<span class="text-[11px] px-2.5 py-1 rounded-full font-bold bg-${gateMeta.color}-100 text-${gateMeta.color}-700">گیت فاز جاری: ${esc(gateMeta.label)}</span>` : ''}
                     ${pendingMandatory ? `<span class="text-[11px] px-2.5 py-1 rounded-full font-bold bg-amber-100 text-amber-700">${toPersianDigits(pendingMandatory)} معیار الزامی معلق</span>` : ''}
                     ${blockedItems ? `<span class="text-[11px] px-2.5 py-1 rounded-full font-bold bg-red-100 text-red-700">${toPersianDigits(blockedItems)} مورد مسدود</span>` : ''}
+                    ${/* the full guide of the stages (with the three steps of how to use the page) — lives here so the orbit sits higher */ ''}
+                    ${env.onOpenGuide ? `<button type="button" data-lc-action="open-guide" class="sgx-guide-btn no-print" style="margin-inline-start:auto">${iconSvg('info', 'w-4 h-4')}<span>راهنمای کامل مراحل</span></button>` : ''}
                 </div>
             </div>`;
         }
