@@ -43,8 +43,8 @@ export function EngineeringApp({ onExitToHub, onBackToRadar }: { onExitToHub: ()
   const exLoaded = useExecutionStore((s) => s.loaded)
   const fetchEx = useExecutionStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
-  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
-  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string')
+  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string' && NAV.some((x) => x.id === v), 'tab')
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string', 'p')
   const [locked, setLocked] = useState(false)
 
   useEffect(() => {

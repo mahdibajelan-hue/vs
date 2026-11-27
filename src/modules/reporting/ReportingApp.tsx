@@ -54,8 +54,8 @@ export function ReportingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
 
   // Arrived from a mission finding («مشاهده در مدیریت اقدامات»): open that project's decision center.
   const linked = useDeepLinkStore.getState().pending?.module === 'reporting' ? useDeepLinkStore.getState().pending?.masterProjectId ?? null : null
-  const [projectId, setProjectId] = useRemembered<string | null>('projectId', linked, (v) => v === null || typeof v === 'string')
-  const [section, setSection] = useRemembered<Section>('section', linked ? 'analysis' : 'home', (v) => typeof v === 'string')
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', linked, (v) => v === null || typeof v === 'string', 'p')
+  const [section, setSection] = useRemembered<Section>('section', linked ? 'analysis' : 'home', (v) => typeof v === 'string', 'tab')
   const [builderSub, setBuilderSub] = useState<BuilderSub>('composer')
   const navInd = useTabIndicator<HTMLElement>(section)
   const subInd = useTabIndicator<HTMLElement>(`${section}:${builderSub}`)

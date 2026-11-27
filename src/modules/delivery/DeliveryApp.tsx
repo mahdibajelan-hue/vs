@@ -36,7 +36,7 @@ export function DeliveryApp({ onExitToHub }: { onExitToHub: () => void; onBackTo
   const projectId = useProjectContextStore((s) => s.projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const { st, study, versions, current, live, shown, locked, canEdit } = useLive()
-  const [tab, setTab] = useRemembered<Tab>('dstab', () => { const e = useModuleStore.getState().takeEntryTab() as Tab | null; return e && ALL.includes(e) ? e : 'dash' }, (v) => typeof v === 'string' && ALL.includes(v as Tab))
+  const [tab, setTab] = useRemembered<Tab>('dstab', () => { const e = useModuleStore.getState().takeEntryTab() as Tab | null; return e && ALL.includes(e) ? e : 'dash' }, (v) => typeof v === 'string' && ALL.includes(v as Tab), 'tab')
   const [focus, setFocus] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   useEffect(() => { if (!useMasterDataStore.getState().loaded) void useMasterDataStore.getState().fetchAll() }, [])

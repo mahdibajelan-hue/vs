@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRemembered } from '../../../lib/navMemory'
 import { Plus } from 'lucide-react'
 import { projectParties } from '../lib/projectParties'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
@@ -22,7 +23,7 @@ export function DailyPage({ projectId, sub, scope = 'execution' }: { projectId: 
   const ex0 = useExecutionStore.getState()
   const orgs = useMasterDataStore((s) => s.organizations)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId))
-  const [open, setOpen] = useState<string | null>(null)
+  const [open, setOpen] = useRemembered<string | null>('r@daily', null, (v) => v === null || typeof v === 'string', 'r') // the open report is part of the address
   const focus = useExecutionStore((x) => x.focusReportId)
   useEffect(() => { if (focus) { setOpen(focus); ex0.setFocus(null) } }, [focus]) // eslint-disable-line react-hooks/exhaustive-deps
   const [status, setStatus] = useState<ReportStatus | ''>('')

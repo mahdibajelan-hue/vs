@@ -12,7 +12,8 @@ import { useFinanceControlStore } from './store/useFinanceControlStore'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
 import { useModuleStore } from '../../store/useModuleStore'
 import { PortfolioViewButton } from '../../components/common/PortfolioViewButton'
-import { useRemembered } from '../../lib/navMemory'
+import { urlSubs, useRemembered } from '../../lib/navMemory'
+import { useUrlBind } from '../../lib/urlState'
 import { NavScroller } from '../../components/common/NavScroller'
 
 /** Accent used for fills inside the module (white text on it keeps ≥ 4:1 contrast). */
@@ -63,9 +64,9 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
   const [entry] = useState(() => { const [t, sb] = (useModuleStore.getState().takeEntryTab() ?? '').split(':'); return NAV.some((n) => n.id === t) ? { tab: t as FinTab, sub: sb } : null })
   // opened inside one project (from the radar): portfolio-wide views are offered through «دیدن در سطح پرتفولیو» instead
   const [inProject] = useState(() => !!useProjectContextStore.getState().projectId)
-  const [tab, setTab] = useRemembered<FinTab>('tab', entry?.tab ?? 'dashboard', (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
-  const [subs, setSubs] = useRemembered<Partial<Record<FinTab, string>>>('subs', entry?.sub ? { [entry.tab]: entry.sub } : {}, (v) => !!v && typeof v === 'object')
-  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string')
+  const [tab, setTab] = useRemembered<FinTab>('tab', entry?.tab ?? 'dashboard', (v) => typeof v === 'string' && NAV.some((x) => x.id === v), 'tab')
+  const [subs, setSubs] = useRemembered<Partial<Record<FinTab, string>>>('subs', entry?.sub ? { [entry.tab]: entry.sub } : {}, (v) => !!v && typeof v === 'object', undefined, urlSubs)
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string', 'p')
 
   useEffect(() => {
     if (!mdLoaded) fetchMasterData()
@@ -84,6 +85,7 @@ export function FinanceApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => 
     return inProject && n.subs ? { ...n, subs: n.subs.filter((x) => x.id !== 'portfolio') } : n
   }, [tab, inProject])
   const sub = cur.subs ? (cur.subs.some((x) => x.id === subs[tab]) ? subs[tab]! : cur.subs[0].id) : ''
+  useUrlBind('sub', sub, (v, loc) => setSubs((x) => { const t = (loc.tab || tab) as typeof tab, n = { ...x }; if (v) n[t] = v; else delete n[t]; return n }))
   const go = (t: FinTab, s?: string) => { setTab(t); if (s) setSubs((x) => ({ ...x, [t]: s })) }
   const loading = !financeLoaded || !mdLoaded
 

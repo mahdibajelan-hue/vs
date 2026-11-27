@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useModuleStore } from './useModuleStore'
 import { useModuleAccessStore } from './useModuleAccessStore'
 import { navStorage } from '../lib/navMemory'
+import { takeLinkedPlace } from '../lib/urlNav'
 
 export interface Profile {
   id: string
@@ -143,7 +144,9 @@ supabase.auth.onAuthStateChange((_event, session) => {
     // A new sign-in (or a different user than before) must never inherit whichever module the
     // previous session happened to be sitting in — always land back on the hub. A page refresh
     // restores the same user's session: that user stays on the page they were on (navMemory).
-    if (navStorage.get('user') !== session.user.id) useModuleStore.getState().exitToHub()
+    // A link opened before signing in (a report sent by a colleague) opens once the user is in.
+    const newUser = navStorage.get('user') !== session.user.id
+    if (!takeLinkedPlace(newUser) && newUser) useModuleStore.getState().exitToHub()
     navStorage.set('user', session.user.id)
     useAuthStore.setState({ profileLoading: true })
     loadProfile(session.user.id)

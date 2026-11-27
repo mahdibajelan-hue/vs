@@ -77,7 +77,7 @@ export function WeldQcApp({ onExitToHub }: { onExitToHub: () => void; onBackToRa
   const projectId = useProjectContextStore((s) => s.projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const st = useWqStore()
-  const [tab, setTab] = useRemembered<QcTab>('qtab', () => { const e = useModuleStore.getState().takeEntryTab() as QcTab | null; return e && ALL_TABS.includes(e) ? e : 'home' }, (v) => typeof v === 'string' && ALL_TABS.includes(v as QcTab))
+  const [tab, setTab] = useRemembered<QcTab>('qtab', () => { const e = useModuleStore.getState().takeEntryTab() as QcTab | null; return e && ALL_TABS.includes(e) ? e : 'home' }, (v) => typeof v === 'string' && ALL_TABS.includes(v as QcTab), 'tab')
   const [open, setOpen] = useRemembered<string | null>('weld', null, (v) => v === null || typeof v === 'string')
   const [filter, setFilter] = useState<string>('all')
   const exLoaded = useExecutionStore((s) => s.loaded)

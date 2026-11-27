@@ -15,7 +15,8 @@ import { Term } from './components/control/Term'
 import { useMyTasks } from './lib/control/useMyTasks'
 import { GuideWizard, HelpBox, shouldAutoGuide } from './components/control/GuideKit'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
-import { useRemembered } from '../../lib/navMemory'
+import { urlSubs, useRemembered } from '../../lib/navMemory'
+import { useUrlBind } from '../../lib/urlState'
 import { NavScroller } from '../../components/common/NavScroller'
 
 export const MATERIAL_ACCENT = '#f59e0b'
@@ -69,9 +70,9 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
   const csLoaded = useMaterialControlStore((s) => s.loaded)
   const fetchControl = useMaterialControlStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
-  const [tab, setTab] = useRemembered<MatTab>('tab', 'dashboard', (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
-  const [subs, setSubs] = useRemembered<Partial<Record<MatTab, string>>>('subs', {}, (v) => !!v && typeof v === 'object')
-  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string')
+  const [tab, setTab] = useRemembered<MatTab>('tab', 'dashboard', (v) => typeof v === 'string' && NAV.some((x) => x.id === v), 'tab')
+  const [subs, setSubs] = useRemembered<Partial<Record<MatTab, string>>>('subs', {}, (v) => !!v && typeof v === 'object', undefined, urlSubs)
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string', 'p')
   const [locked, setLocked] = useState(false)
   const [guide, setGuide] = useState(false)
 
@@ -92,6 +93,7 @@ export function MaterialApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =>
 
   const cur = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
   const sub = cur.subs ? (subs[tab] ?? cur.subs[0].id) : ''
+  useUrlBind('sub', sub, (v, loc) => setSubs((x) => { const t = (loc.tab || tab) as typeof tab, n = { ...x }; if (v) n[t] = v; else delete n[t]; return n }))
   const go = (t: MatTab, s?: string) => { setTab(t); if (s) setSubs((x) => ({ ...x, [t]: s })) }
   const loading = !matLoaded || !mdLoaded || !csLoaded
   const model = useMaterialModel(projectId)

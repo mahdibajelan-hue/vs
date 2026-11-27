@@ -47,8 +47,8 @@ export function SchedulingApp({ onExitToHub, onBackToRadar }: { onExitToHub: () 
   const contextProjectId = useProjectContextStore((s) => s.projectId)
   // the shared inbox opens a waiting item here: it leaves the target tab / project in sessionStorage (read once)
   const [opened] = useState(() => { try { const t = sessionStorage.getItem('sch.openTab'), p = sessionStorage.getItem('sch.openProject'); sessionStorage.removeItem('sch.openTab'); sessionStorage.removeItem('sch.openProject'); return { tab: t as SchTab | null, project: p } } catch { return { tab: null, project: null } } })
-  const [tab, setTab] = useRemembered<SchTab>('tab', opened.tab && NAV.some((n) => n.id === opened.tab) ? opened.tab : 'dash', (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
-  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string')
+  const [tab, setTab] = useRemembered<SchTab>('tab', opened.tab && NAV.some((n) => n.id === opened.tab) ? opened.tab : 'dash', (v) => typeof v === 'string' && NAV.some((x) => x.id === v), 'tab')
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string', 'p')
   const [locked, setLocked] = useState(false)
 
   useEffect(() => {

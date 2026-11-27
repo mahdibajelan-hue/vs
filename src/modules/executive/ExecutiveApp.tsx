@@ -54,7 +54,7 @@ export function ExecutiveApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const portfolios = useMasterDataStore((s) => s.portfolios)
   const programs = useMasterDataStore((s) => s.programs)
   const allProjects = useMasterDataStore((s) => s.projects)
-  const [tab, setTab] = useRemembered<Tab>('tab', () => { const e = useModuleStore.getState().takeEntryTab(); return e === 'pipeline' || e === 'issues' || e === 'guide' || e === 'overview' ? e : 'dashboard' }, (v) => typeof v === 'string')
+  const [tab, setTab] = useRemembered<Tab>('tab', () => { const e = useModuleStore.getState().takeEntryTab(); return e === 'pipeline' || e === 'issues' || e === 'guide' || e === 'overview' ? e : 'dashboard' }, (v) => typeof v === 'string', 'tab')
   const tabInd = useTabIndicator<HTMLElement>(tab)
   const [scope, setScope] = useState<PortfolioScope>({ portfolioId: null, programId: null })
   const [deciding, setDeciding] = useState<{ id: string | null } | null>(null)

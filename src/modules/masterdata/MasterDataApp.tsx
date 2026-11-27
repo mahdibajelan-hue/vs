@@ -37,7 +37,7 @@ const TOOLS: { id: Tab; label: string }[] = [
  * and each project's identity and human-resources structure. Roles and access are managed per user in the «کاربران» tab.
  */
 export function MasterDataApp() {
-  const [tab, setTab] = useRemembered<Tab>('tab', 'overview', (v) => typeof v === 'string')
+  const [tab, setTab] = useRemembered<Tab>('tab', 'overview', (v) => typeof v === 'string', 'sub')
   // a deep link (e.g. «تغییر ناظران» from the supervision module) opens that project's team at once
   const [openProject, setOpenProject] = useState<{ id: string; team?: boolean } | null>(() => {
     const p = useDeepLinkStore.getState().pending

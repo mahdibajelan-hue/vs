@@ -45,7 +45,7 @@ export function ChangeApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   const setScope = useChangeStore((s) => s.setScope)
   const fetchAll = useChangeStore((s) => s.fetchAll)
   const ctx = useChangeCtx()
-  const [tab, setTab] = useRemembered<ChangeTab>('tab', () => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as ChangeTab) : 'dashboard' }, (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
+  const [tab, setTab] = useRemembered<ChangeTab>('tab', () => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as ChangeTab) : 'dashboard' }, (v) => typeof v === 'string' && NAV.some((x) => x.id === v), 'tab')
   const [open, setOpen] = useState<{ id: string; tab: DrawerTab } | null>(null)
   const [newOpen, setNewOpen] = useState(false)
   useEffect(() => { fetchAll() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [])

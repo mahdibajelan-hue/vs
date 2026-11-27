@@ -73,7 +73,7 @@ export function IssuesApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => v
   const cfgLoaded = useIssueConfigStore((s) => s.loaded)
   const fetchCfg = useIssueConfigStore((s) => s.fetch)
   const fetchDecisions = useDecisionStore((s) => s.fetchAll)
-  const [tab, setTab] = useRemembered<Tab>('tab', () => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as Tab) : 'home' }, (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
+  const [tab, setTab] = useRemembered<Tab>('tab', () => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as Tab) : 'home' }, (v) => typeof v === 'string' && NAV.some((x) => x.id === v), 'tab')
   const [newIssueProjectId, setNewIssueProjectId] = useState<string | null | 'pick'>(null)
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [drawerTab, setDrawerTab] = useState<DrawerTab>('overview')

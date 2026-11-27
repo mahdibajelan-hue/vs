@@ -41,7 +41,7 @@ export function StakeholdersApp({ onExitToHub }: { onExitToHub: () => void; onBa
   const projectId = useProjectContextStore((s) => s.projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const st = useStakeholderStore()
-  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string')
+  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string', 'tab')
   const [open, setOpen] = useState<string | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
   useEffect(() => { if (!useMasterDataStore.getState().loaded) void useMasterDataStore.getState().fetchAll() }, [])

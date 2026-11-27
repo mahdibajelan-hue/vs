@@ -18,7 +18,7 @@ type Tab = 'users' | 'masterdata'
 export function AdminApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
   // «تغییر ناظران» in the supervision module lands straight on master data → that project's team
-  const [tab, setTab] = useRemembered<Tab>('tab', () => (useDeepLinkStore.getState().pending?.module === 'admin' ? 'masterdata' : 'users'), (v) => typeof v === 'string')
+  const [tab, setTab] = useRemembered<Tab>('tab', () => (useDeepLinkStore.getState().pending?.module === 'admin' ? 'masterdata' : 'users'), (v) => v === 'users' || v === 'masterdata', 'tab')
 
   if (!isAdmin) {
     return (

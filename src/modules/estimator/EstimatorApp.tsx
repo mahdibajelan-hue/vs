@@ -44,7 +44,7 @@ export function EstimatorApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const saveEstimate = useEstimatorStore((s) => s.saveEstimate)
   const deleteEstimate = useEstimatorStore((s) => s.deleteEstimate)
 
-  const [view, setView] = useRemembered<View>('view', 'home', (v) => typeof v === 'string')
+  const [view, setView] = useRemembered<View>('view', 'home', (v) => typeof v === 'string', 'tab')
   const [inputs, setInputs] = useState<EstFullInputs>(buildDefaultInputs())
   /** name of the saved version currently on screen; cleared as soon as an input changes */
   const [openVersion, setOpenVersion] = useState<string | undefined>()

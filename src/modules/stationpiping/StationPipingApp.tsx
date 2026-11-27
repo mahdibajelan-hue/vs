@@ -37,7 +37,7 @@ export function StationPipingApp({ onExitToHub }: { onExitToHub: () => void; onB
   const projectId = useProjectContextStore((s) => s.projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const st = useSpStore()
-  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string')
+  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string', 'tab')
   const [open, setOpen] = useRemembered<string | null>('station', null, (v) => v === null || typeof v === 'string')
   const [guide, setGuide] = useState(false)
   useEffect(() => { if (!useMasterDataStore.getState().loaded) void useMasterDataStore.getState().fetchAll() }, [])

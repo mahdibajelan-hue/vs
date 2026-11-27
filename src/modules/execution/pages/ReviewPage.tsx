@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useRemembered } from '../../../lib/navMemory'
+import { useLeaveGuard } from '../../../lib/urlState'
 import { ArrowRight, Check, CheckCircle2, CornerUpLeft, History, PenLine, Printer, RotateCcw, X } from 'lucide-react'
 import { useMasterDataStore } from '../../masterdata/store/useMasterDataStore'
 import { DecInput } from '../../material/components/control/DecInput'
@@ -28,7 +30,7 @@ type Dec = { decision: 'approved' | 'rejected' | 'returned'; qty: number; note: 
 export function ReviewPage({ projectId }: { projectId: string }) {
   const m = useExecutionModel(projectId)
   const orgs = useMasterDataStore((s) => s.organizations)
-  const [open, setOpen] = useState<string | null>(null)
+  const [open, setOpen] = useRemembered<string | null>('r@review', null, (v) => v === null || typeof v === 'string', 'r') // the open report is part of the address
   const focus = useExecutionStore((x) => x.focusReportId)
   useEffect(() => { if (focus) { setOpen(focus); useExecutionStore.getState().setFocus(null) } }, [focus])
   const [scope, setScope] = useState<'wait' | 'done'>('wait')
@@ -129,6 +131,8 @@ function ReviewPanel({ reportId, model: m, onClose }: { reportId: string; model:
   const amends = useAmendments(reportId)
   const me = useAuthStore((x) => x.session?.user.id), isAdmin = useAuthStore((x) => Boolean(x.profile?.isAdmin))
   const [amReason, setAmReason] = useState(''), [amOpenForm, setAmOpenForm] = useState(false)
+  // typed corrections not yet recorded: the browser's back button and a refresh ask first (they would be lost)
+  useLeaveGuard(Object.keys(draft).length > 0, 'اصلاحاتی که وارد کرده‌اید هنوز ثبت نشده و با خروج از این صفحه از بین می‌رود. خارج شوید؟')
   if (!r) return null
   const epc = epcSettings(m.settings as unknown as Record<string, unknown>)
   const empOn = epc.employerStep !== 'off'

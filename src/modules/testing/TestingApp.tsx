@@ -42,7 +42,7 @@ export function TestingApp({ onExitToHub }: { onExitToHub: () => void; onBackToR
   const projectId = useProjectContextStore((s) => s.projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const st = useTestingStore()
-  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string' && v !== 'coating') // the coating tests moved to the quality-control module
+  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string' && v !== 'coating', 'tab') // the coating tests moved to the quality-control module
   const [open, setOpen] = useState<{ kind: TargetKind; id: string } | null>(null)
   const [guide, setGuide] = useState(false)
   useEffect(() => { if (!useMasterDataStore.getState().loaded) void useMasterDataStore.getState().fetchAll() }, [])

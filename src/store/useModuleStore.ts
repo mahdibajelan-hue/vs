@@ -1,9 +1,12 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { navStorage, setNavModule } from '../lib/navMemory'
+import { invalidateUrl } from '../lib/urlState'
 import { useProjectContextStore } from './useProjectContextStore'
 
-export type ModuleKey = 'pipepulse' | 'risk' | 'change' | 'issues' | 'admin' | 'reporting' | 'executive' | 'finance' | 'material' | 'execution' | 'engineering' | 'scheduling' | 'pipelinedigitaltwin' | 'competency' | 'estimator' | 'lifecycle' | 'missions' | 'landacq' | 'stagegate' | 'taskissue' | 'supervision' | 'projectdashboard' | 'healthcenter' | 'stakeholders' | 'pssr' | 'testing' | 'statements' | 'stationpiping' | 'weldqc' | 'delivery'
+/** every module, as a runtime list too: an address names one, and anything else in the address is ignored */
+export const MODULE_KEYS = ['pipepulse', 'risk', 'change', 'issues', 'admin', 'reporting', 'executive', 'finance', 'material', 'execution', 'engineering', 'scheduling', 'pipelinedigitaltwin', 'competency', 'estimator', 'lifecycle', 'missions', 'landacq', 'stagegate', 'taskissue', 'supervision', 'projectdashboard', 'healthcenter', 'stakeholders', 'pssr', 'testing', 'statements', 'stationpiping', 'weldqc', 'delivery'] as const
+export type ModuleKey = typeof MODULE_KEYS[number]
 
 /** Modules that belong to one project — reached through the radar (see radar/projectNav.ts for their menu). */
 export const PROJECT_SCOPED_MODULES = new Set<ModuleKey>(['projectdashboard', 'delivery', 'healthcenter', 'stakeholders', 'pssr', 'testing', 'weldqc', 'stationpiping', 'statements', 'lifecycle', 'stagegate', 'scheduling', 'engineering', 'material', 'execution', 'finance', 'change', 'risk', 'taskissue', 'issues', 'landacq', 'pipepulse', 'pipelinedigitaltwin'])
@@ -48,8 +51,8 @@ export const useModuleStore = create<ModuleState>()(persist((set, get) => ({
   moduleResetKey: 0,
   workspace: null,
   entryTab: null,
-  goModuleHome: () => { const m = get().activeModule; if (m) navStorage.clearModule(m); set((s) => ({ moduleResetKey: s.moduleResetKey + 1, entryTab: null })) },
-  enterModule: (key, workspace, tab) => { navStorage.clearModule(key); setNavModule(key); set((s) => ({
+  goModuleHome: () => { invalidateUrl(); const m = get().activeModule; if (m) navStorage.clearModule(m); set((s) => ({ moduleResetKey: s.moduleResetKey + 1, entryTab: null })) },
+  enterModule: (key, workspace, tab) => { invalidateUrl(); navStorage.clearModule(key); setNavModule(key); set((s) => ({
     activeModule: key,
     // re-entering the same module (e.g. project → portfolio view) must remount it so it re-reads the context
     moduleResetKey: s.activeModule === key ? s.moduleResetKey + 1 : s.moduleResetKey,

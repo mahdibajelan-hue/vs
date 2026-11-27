@@ -56,7 +56,7 @@ function App() {
   const isAuthed = useAuthStore((s) => s.isAuthed)
   const isAdmin = useAuthStore((s) => s.profile?.isAdmin ?? false)
 
-  const [page, setPage] = useRemembered<Page>('page', 'viewer', (v) => typeof v === 'string')
+  const [page, setPage] = useRemembered<Page>('page', 'viewer', (v) => typeof v === 'string', 'tab')
   const [showNewProject, setShowNewProject] = useState(false)
   const [demoLoading, setDemoLoading] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)

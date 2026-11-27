@@ -34,7 +34,7 @@ export function PssrApp({ onExitToHub }: { onExitToHub: () => void; onBackToRada
   const projectId = useProjectContextStore((s) => s.projectId)
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const st = usePssrStore()
-  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string')
+  const [tab, setTab] = useRemembered<Tab>('tab', 'dash', (v) => typeof v === 'string', 'tab')
   const [openSys, setOpenSys] = useState<string | null>(null)
   const [guide, setGuide] = useState(false)
   const [tablet, setTablet] = useState(() => { try { return localStorage.getItem(TABLET_KEY) === '1' } catch { return false } })

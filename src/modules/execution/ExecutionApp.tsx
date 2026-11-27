@@ -16,7 +16,8 @@ import { useExecutionModel } from './lib/useExecutionModel'
 import { PortfolioStrip } from './components/epc/PortfolioStrip'
 import { ExecutionGuide } from './components/ExecutionGuide'
 import { resetModuleScroll, revealTab } from '../../lib/revealTab'
-import { useRemembered } from '../../lib/navMemory'
+import { urlSubs, useRemembered } from '../../lib/navMemory'
+import { useUrlBind } from '../../lib/urlState'
 import { scopeViews, SCOPE_VIEW_FA, PROJECT_KIND_FA, type ScopeView } from '../../lib/projectProfile'
 import { useProjectScope, useScopeStore } from './store/useScopeStore'
 
@@ -66,9 +67,9 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const exLoaded = useExecutionStore((s) => s.loaded)
   const fetchEx = useExecutionStore((s) => s.fetchAll)
   const contextProjectId = useProjectContextStore((s) => s.projectId)
-  const [tab, setTab] = useRemembered<ExTab>('tab', () => { const e = (useModuleStore.getState().takeEntryTab() ?? '').split(':')[0] as ExTab; return e && NAV.some((x) => x.id === e) ? e : 'dashboard' }, (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
-  const [subs, setSubs] = useRemembered<Partial<Record<ExTab, string>>>('subs', () => { const [t, sb] = (useModuleStore.getState().entryTab ?? '').split(':'); return t && sb ? { [t]: sb } : {} }, (v) => !!v && typeof v === 'object')
-  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string')
+  const [tab, setTab] = useRemembered<ExTab>('tab', () => { const e = (useModuleStore.getState().takeEntryTab() ?? '').split(':')[0] as ExTab; return e && NAV.some((x) => x.id === e) ? e : 'dashboard' }, (v) => typeof v === 'string' && NAV.some((x) => x.id === v), 'tab')
+  const [subs, setSubs] = useRemembered<Partial<Record<ExTab, string>>>('subs', () => { const [t, sb] = (useModuleStore.getState().entryTab ?? '').split(':'); return t && sb ? { [t]: sb } : {} }, (v) => !!v && typeof v === 'object', undefined, urlSubs)
+  const [projectId, setProjectId] = useRemembered<string | null>('projectId', null, (v) => v === null || typeof v === 'string', 'p')
   const [locked, setLocked] = useState(false)
   const [guide, setGuide] = useState(false)
 
@@ -95,6 +96,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
   const cur0 = useMemo(() => NAV.find((n) => n.id === tab)!, [tab])
   const cur = useMemo(() => (cur0.subs ? { ...cur0, subs: cur0.subs.filter((x) => x.id !== 'today' || todayOn) } : cur0), [cur0, todayOn]) // experimental views stay hidden until their flag is on
   const sub = cur.subs ? (subs[tab] ?? cur.subs[0].id) : ''
+  useUrlBind('sub', sub, (v, loc) => setSubs((x) => { const t = (loc.tab || tab) as typeof tab, n = { ...x }; if (v) n[t] = v; else delete n[t]; return n }))
   const go = (t: ExTab, s?: string) => {
     // quality control (NCRs, findings, QC forms) is its own module now
     if (t === 'qc') { if (projectId) useProjectContextStore.getState().setProject(projectId); useModuleStore.getState().enterModule('weldqc', undefined, 'ncr'); return }

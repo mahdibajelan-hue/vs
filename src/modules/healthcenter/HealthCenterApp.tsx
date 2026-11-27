@@ -51,7 +51,7 @@ export function HealthCenterApp({ onExitToHub }: { onExitToHub: () => void; onBa
   const [r, setR] = useState<HealthResult | null | undefined>(undefined)
   const [err, setErr] = useState<string | null>(null)
   const [sheet, setSheet] = useState<Sheet | null>(null)
-  const [tab, setTab] = useRemembered<ImagingTab>('tab', 'xray', (v) => typeof v === 'string')
+  const [tab, setTab] = useRemembered<ImagingTab>('tab', 'xray', (v) => typeof v === 'string', 'tab')
   const [range, setRange] = useState<Range>('90')
   const [tick, setTick] = useState(0)
 

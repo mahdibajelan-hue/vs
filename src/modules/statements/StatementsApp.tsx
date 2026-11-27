@@ -30,7 +30,7 @@ export function StatementsApp({ onExitToHub }: { onExitToHub: () => void; onBack
   const project = useMasterDataStore((s) => s.projects.find((p) => p.id === projectId) ?? null)
   const st = usePstStore()
   // entry from another module, e.g. «قراردادها و مالی» → «تأیید نهایی و پرداخت»
-  const [tab, setTab] = useRemembered<Tab>('tab', () => { const t = useModuleStore.getState().takeEntryTab() as Tab | null; return t && TABS.includes(t) ? t : 'dash' }, (v) => typeof v === 'string')
+  const [tab, setTab] = useRemembered<Tab>('tab', () => { const t = useModuleStore.getState().takeEntryTab() as Tab | null; return t && TABS.includes(t) ? t : 'dash' }, (v) => typeof v === 'string', 'tab')
   const [open, setOpen] = useState<string | null>(null)
   const [preset, setPreset] = useState<{ contractId?: string; part?: Part } | undefined>()
   const [cfgContract, setCfgContract] = useState('')

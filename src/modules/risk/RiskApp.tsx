@@ -71,7 +71,7 @@ export function RiskApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => voi
   const fetchAll = useRiskStore((s) => s.fetchAll)
   const syncProjects = useRiskStore((s) => s.syncProjects)
   const fetchPeople = useRiskPeopleStore((s) => s.fetchAll)
-  const [tab, setTab] = useRemembered<RiskTab>('tab', () => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as RiskTab) : 'home' }, (v) => typeof v === 'string' && NAV.some((x) => x.id === v))
+  const [tab, setTab] = useRemembered<RiskTab>('tab', () => { const t = useModuleStore.getState().takeEntryTab(); return NAV.some((n) => n.id === t) ? (t as RiskTab) : 'home' }, (v) => typeof v === 'string' && NAV.some((x) => x.id === v), 'tab')
   const [openRisk, setOpenRisk] = useState<{ id: string; tab: RiskTabId } | null>(null)
   const [newOpen, setNewOpen] = useState(false)
   const role = useRiskRole(scope === 'all' ? null : scope)
