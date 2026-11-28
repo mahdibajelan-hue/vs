@@ -43,3 +43,4 @@ backups/
 
 # Upload packages from scripts/package-host.mjs — built artifacts, never committed.
 release/
+__pycache__/
