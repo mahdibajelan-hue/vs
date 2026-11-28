@@ -1,0 +1,30 @@
+# SQL files the own server (ArvanCloud) still needs, in the order they run. deploy/server/auto-update.sh applies each
+# file listed here once (it remembers them in the table farin_ops.applied_sql) and stops at the first error.
+# A NEW SQL file goes at the END of this list, in the same commit that adds it (npm test checks every file is listed
+# here or in sql-baseline.txt). Every file must be safe to run again: create or replace, if not exists, drop … if exists.
+supabase/execution/046_statement_server_quantities.sql
+supabase/execution/047_payment_chain_and_line_amend.sql
+supabase/execution/048_report_builder_iso.sql
+supabase/scheduling/005_link_share.sql
+supabase/execution/049_scope.sql
+supabase/execution/050_cs_registers.sql
+supabase/execution/051_cs_qc.sql
+supabase/execution/052_cs_plot.sql
+supabase/execution/053_cs_pssr_link.sql
+supabase/execution/054_activity_unit_count.sql
+supabase/execution/055_cs_plot_image.sql
+supabase/execution/056_entry_timing.sql
+supabase/execution/057_pipe_entry_register.sql
+supabase/execution/058_admin_sign.sql
+supabase/execution/059_one_report_per_day.sql
+supabase/execution/060_supervision_signatures.sql
+supabase/execution/061_signed_lock.sql
+supabase/execution/062_final_approval_lock.sql
+supabase/execution/063_sign_sends.sql
+supabase/execution/064_weld_dossier.sql
+supabase/execution/065_review_fixes.sql
+supabase/execution/066_pipe_register_follows_fixes.sql
+supabase/execution/067_report_amendments.sql
+supabase/execution/068_fix_restarts_signatures.sql
+supabase/execution/069_inbox_sign_turn.sql
+supabase/execution/070_fix_keeps_review_signatures.sql

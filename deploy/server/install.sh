@@ -185,6 +185,10 @@ caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1
 systemctl enable -q caddy && systemctl restart caddy
 ok "Caddy restarted"
 
+say "Automatic updates from GitHub (every 5 minutes; deploy/server/auto-update.sh)"
+bash "$SRC_DIR/deploy/server/auto-update.sh" --install >/dev/null 2>&1 && ok "on — status: bash $SRC_DIR/deploy/server/auto-update.sh --status" \
+  || printf '\033[1;33m    ! could not be switched on: bash %s --install\033[0m\n' "$SRC_DIR/deploy/server/auto-update.sh"
+
 say "8/8 Firewall: only ports 22, 80 and 443"
 ufw allow 22/tcp >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
