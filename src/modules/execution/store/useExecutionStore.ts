@@ -1,3 +1,4 @@
+import { OPEN_FOR_ENTRY, carriedHeader, dayReport } from '../lib/lineWork'
 import { keepReads } from '../../../lib/keepReads'
 import { currentWriteScope } from './useScopeStore'
 import { create } from 'zustand'
@@ -73,6 +74,9 @@ interface State {
   updateReport: (id: string, patch: Partial<Pick<Report, 'reportDate' | 'front' | 'station' | 'shift' | 'contractorOrgId' | 'data' | 'notes'>>) => Promise<boolean>
   deleteReport: (id: string) => Promise<boolean>
   saveBody: (reportId: string, body: { lines?: LineInput[]; resources?: ResourceInput[]; stoppages?: StoppageInput[] }) => Promise<boolean>
+  /** the line workbench: add rows to that day's site minute of a form (front), creating it when the day has none yet;
+   *  refused when the day's minute is already sent or decided */
+  appendToDay: (a: { projectId: string; formKey: string; date: string; front: string; contractorOrgId: string | null; rows: Record<string, unknown>[] }) => Promise<{ reportId: string; reportNo: string; created: boolean } | { error: string }>
   submitReport: (id: string) => Promise<boolean>
   /** sends the report; returns the explained error (null when sent) so the editor can show it next to the button */
   submitReportMsg: (id: string) => Promise<string | null>
@@ -391,6 +395,22 @@ export const useExecutionStore = create<State>((set, get) => ({
       if (rows.length) { const { error } = await supabase.from('ex_report_stoppages').insert(rows); if (report('ذخیرهٔ توقف‌ها', error)) return false }
     }
     await get().reloadReports([reportId]); return true
+  },
+  appendToDay: async (a) => {
+    const all = get().reports.filter((r) => r.projectId === a.projectId)
+    let rep = dayReport(all, a.formKey, a.date, a.front)
+    if (rep && !OPEN_FOR_ENTRY.includes(rep.status)) return { error: `صورتجلسهٔ ${rep.reportNo} این روز ارسال یا بررسی شده و ردیف تازه نمی‌گیرد؛ تاریخ را عوض کنید یا آن را از نظارت برگشت بگیرید.` }
+    let created = false
+    if (!rep) {
+      const id = await get().createReport({ projectId: a.projectId, formKey: a.formKey, reportDate: a.date, front: a.front, contractorOrgId: a.contractorOrgId, data: carriedHeader(all, a.formKey, a.front) })
+      if (!id) return { error: 'ساخت صورتجلسهٔ این روز ممکن نشد.' }
+      rep = get().reports.find((r) => r.id === id); created = true
+      if (!rep) return { error: 'صورتجلسهٔ ساخته‌شده پیدا نشد؛ صفحه را تازه کنید.' }
+    }
+    const keep: LineInput[] = get().lines.filter((l) => l.reportId === rep!.id).sort((x, y) => x.lineNo - y.lineNo)
+      .map((l) => ({ id: l.id, activityId: l.activityId, qty: l.qty, kmFrom: l.kmFrom, kmTo: l.kmTo, location: l.location, note: l.note, detail: l.detail, sourceReportId: l.sourceReportId }))
+    const ok = await get().saveBody(rep.id, { lines: [...keep, ...a.rows.map((detail) => ({ detail }))] })
+    return ok ? { reportId: rep.id, reportNo: rep.reportNo, created } : { error: 'ثبت ردیف‌ها در صورتجلسه ممکن نشد.' }
   },
   submitReportMsg: async (id) => {
     const { error } = await supabase.rpc('ex_report_submit', { p_id: id })

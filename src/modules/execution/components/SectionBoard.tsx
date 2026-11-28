@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Check, GitCommitHorizontal, Settings2, Sparkles, X } from 'lucide-react'
 import { fa } from './common'
 import { KmInput } from './KmInput'
+import { LineStrip, thicknessColors } from './LineStrip'
 import { chainText } from '../lib/chainage'
 import { fitupRows, type SectionPlan, type SectionView, type Slot } from '../lib/sections'
 
-const THK_COLORS = ['#38bdf8', '#a78bfa', '#f59e0b', '#f43f5e', '#10b981', '#eab308']
 const slotId = (s: Slot) => `${s.before.key}|${s.after.key}`
 
 /**
@@ -15,11 +15,12 @@ const slotId = (s: Slot) => `${s.before.key}|${s.after.key}`
  * open for the radiography crawler. Picking gives each joint its section and the section's next joint number, and
  * the fit-up rows get the two pipes and the facts of the pipe after the joint from the register.
  */
-export function SectionBoard({ sections, plan, joints, canPlan, onPlan, onAdd, onClose }: {
+export function SectionBoard({ sections, plan, joints, canPlan, onPlan, onAdd, onClose, inline }: {
   sections: SectionView[]; plan: SectionPlan; joints: { sec: string; no: string }[]
-  canPlan: boolean; onPlan: (p: SectionPlan) => Promise<boolean>; onAdd: (rows: Record<string, unknown>[]) => void; onClose: () => void
+  canPlan: boolean; onPlan: (p: SectionPlan) => Promise<boolean>; onAdd: (rows: Record<string, unknown>[]) => void; onClose?: () => void
+  /** drawn inside a page (the line workbench) instead of over it */ inline?: boolean
 }) {
-  const thkColor = useMemo(() => { const t = [...new Set(sections.flatMap((s) => s.pipes.map((p) => p.thkIn)).filter((x): x is number => x != null))].sort((a, b) => a - b); return new Map(t.map((v, i) => [v, THK_COLORS[i % THK_COLORS.length]])) }, [sections])
+  const thkColor = useMemo(() => thicknessColors(sections.flatMap((s) => s.pipes.map((p) => p.thkIn))), [sections])
   // open on the section where the fit-up front stands: the first with a suggested free place after joints already made
   const start = useMemo(() => (sections.find((s) => s.stats.fitted > 0 && s.slots.some((x) => x.kind === 'free')) ?? sections.find((s) => s.slots.some((x) => x.kind === 'free')) ?? sections[0])?.sec ?? 0, [sections])
   const [cur, setCur] = useState(start)
@@ -50,8 +51,7 @@ export function SectionBoard({ sections, plan, joints, canPlan, onPlan, onAdd, o
   const pending = v ? v.slots.filter((s) => s.kind === 'free').length : 0
 
   return (
-    <div className="im-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="im-modal py-modal sb-modal" role="dialog" aria-modal="true" aria-label="سرجوش‌گذاری روی خط">
+    <Shell inline={inline} onClose={onClose}>
         <header className="py-head">
           <span className="py-ico sb-ico" aria-hidden><GitCommitHorizontal size={20} /></span>
           <div style={{ minWidth: 0 }}>
@@ -59,7 +59,7 @@ export function SectionBoard({ sections, plan, joints, canPlan, onPlan, onAdd, o
             <p className="im-helper" style={{ margin: 0 }}>سکشن‌های {fa(plan.lengthM)} متری از کیلومتر {chainText(plan.startKm)} · دو سر هر سکشن برای کرالر رادیوگرافی باز می‌ماند</p>
           </div>
           {canPlan && <button type="button" className="im-btn im-btn-sm" onClick={() => { setDraft(plan); setPlanOpen((o) => !o) }} aria-expanded={planOpen}><Settings2 size={14} /> سکشن‌بندی</button>}
-          <button type="button" className="im-modal-close" onClick={onClose} aria-label="بستن"><X size={16} /></button>
+          {onClose && !inline && <button type="button" className="im-modal-close" onClick={onClose} aria-label="بستن"><X size={16} /></button>}
         </header>
 
         {planOpen && (
@@ -102,29 +102,17 @@ export function SectionBoard({ sections, plan, joints, canPlan, onPlan, onAdd, o
               <span className="sb-legend" aria-hidden><i className="k-done" />ثبت‌شده <i className="k-mine" />در این گزارش <i className="k-sel" />انتخاب شما <i className="k-free" />آزاد</span>
             </div>
 
-            <div className="sb-strip" ref={strip} dir="ltr" role="list" aria-label={`لوله‌ها و سرجوش‌های سکشن ${v.sec} به ترتیب کیلومتر`}>
-              {v.pipes.map((p, i) => { const s = v.slots.find((x) => x.before.key === p.key); return (
-                <span key={p.key} className="sb-cell" role="listitem">
-                  <span className="sb-pipe" style={{ ['--c' as string]: p.thkIn != null ? thkColor.get(p.thkIn) : '#64748b', width: `${Math.max(56, Math.min(96, p.lengthM * 6))}px` }} title={`${p.raw} · ${p.lengthM} m · ${p.thkIn ?? '—'}″ · km ${chainText(p.km)}`}>
-                    <b>{p.raw}</b><small>{fa(p.lengthM, 2)} م</small>
-                    {i % 5 === 0 && <em className="sb-km">{chainText(p.km)}</em>}
-                  </span>
-                  {s && (s.kind === 'boundary' ? <span className="sb-end" title={s.why}><span>انتهای سکشن</span></span>
-                    : s.kind === 'gap' ? <span className="sb-gap" title={s.why}><span>≈</span></span>
-                    : s.kind === 'done' || s.kind === 'mine' ? (
-                      <span className={`sb-slot ${s.kind}`} title={`سرجوش ${s.joint!.no} (سکشن ${s.joint!.sec}) · ${s.before.raw} ← ${s.after.raw}${s.joint!.welded ? ' · جوش‌شده' : ''}${s.joint!.rtOk ? ' · رادیوگرافی قبول' : s.joint!.rtRep ? ' · نیاز به تعمیر' : ''}${s.joint!.coated ? ' · عایق‌شده' : ''}`}>
-                        <span className="sb-dot"><Check size={12} strokeWidth={3} /></span><small>{s.joint!.no}</small>
-                        <span className="sb-steps" aria-hidden><i className={s.joint!.welded ? 'on' : ''} /><i className={s.joint!.rtOk ? 'on' : s.joint!.rtRep ? 'bad' : ''} /><i className={s.joint!.coated ? 'on' : ''} /></span>
-                      </span>)
-                    : s.kind === 'blocked' ? <span className="sb-slot blocked" title={s.why}><span className="sb-dot">!</span></span>
-                    : <button type="button" className={`sb-slot free${s.suggested ? ' sug' : ''}${isSel(s) ? ' sel' : ''}`} aria-pressed={isSel(s)} onClick={() => toggle(s)}
-                        title={`سرجوش بین ${s.before.raw} و ${s.after.raw} · km ${chainText(s.km)}${s.suggested ? ' · پیشنهاد سامانه: ادامهٔ جبههٔ فیت‌آپ' : ''}`}>
-                        <span className="sb-dot">{isSel(s) ? <Check size={12} strokeWidth={3} /> : '+'}</span>
-                        <small>{isSel(s) ? noOf.get(`${s.before.raw}|${s.after.raw}`.toUpperCase()) : s.suggested ? 'پیشنهاد' : ''}</small>
-                      </button>)}
-                </span>
-              ) })}
-            </div>
+            <LineStrip ref={strip} view={v} colors={thkColor} label={`لوله‌ها و سرجوش‌های سکشن ${v.sec} به ترتیب کیلومتر`} slot={(s) => s.kind === 'done' || s.kind === 'mine' ? (
+                <span className={`sb-slot ${s.kind}`} title={`سرجوش ${s.joint!.no} (سکشن ${s.joint!.sec}) · ${s.before.raw} ← ${s.after.raw}${s.joint!.welded ? ' · جوش‌شده' : ''}${s.joint!.rtOk ? ' · رادیوگرافی قبول' : s.joint!.rtRep ? ' · نیاز به تعمیر' : ''}${s.joint!.coated ? ' · عایق‌شده' : ''}`}>
+                  <span className="sb-dot"><Check size={12} strokeWidth={3} /></span><small>{s.joint!.no}</small>
+                  <span className="sb-steps" aria-hidden><i className={s.joint!.welded ? 'on' : ''} /><i className={s.joint!.rtOk ? 'on' : s.joint!.rtRep ? 'bad' : ''} /><i className={s.joint!.coated ? 'on' : ''} /></span>
+                </span>)
+              : s.kind === 'blocked' ? <span className="sb-slot blocked" title={s.why}><span className="sb-dot">!</span></span>
+              : <button type="button" className={`sb-slot free${s.suggested ? ' sug' : ''}${isSel(s) ? ' sel' : ''}`} aria-pressed={isSel(s)} onClick={() => toggle(s)}
+                  title={`سرجوش بین ${s.before.raw} و ${s.after.raw} · km ${chainText(s.km)}${s.suggested ? ' · پیشنهاد سامانه: ادامهٔ جبههٔ فیت‌آپ' : ''}`}>
+                  <span className="sb-dot">{isSel(s) ? <Check size={12} strokeWidth={3} /> : '+'}</span>
+                  <small>{isSel(s) ? noOf.get(`${s.before.raw}|${s.after.raw}`.toUpperCase()) : s.suggested ? 'پیشنهاد' : ''}</small>
+                </button>} />
           </>}
         </>}
 
@@ -134,9 +122,18 @@ export function SectionBoard({ sections, plan, joints, canPlan, onPlan, onAdd, o
               : preview.slice(0, 6).map((r) => <span key={String(r.jointNo) + r.sec} className="sb-chip"><b>{String(r.jointNo)}</b><small>سکشن {fa(Number(r.sec))} · {String(r.pipeNo2)} ← {String(r.pipeNo)}</small></span>)}
             {preview.length > 6 && <span className="im-helper" style={{ margin: 0 }}>و {fa(preview.length - 6)} سرجوش دیگر</span>}
           </div>
-          <button type="button" className="im-btn im-btn-primary" disabled={!preview.length} onClick={() => onAdd(preview)}><Check size={15} /> افزودن {fa(preview.length)} سرجوش به گزارش</button>
+          <button type="button" className="im-btn im-btn-primary" disabled={!preview.length} onClick={() => { onAdd(preview); setSel([]) }}><Check size={15} /> {inline ? `ثبت ${fa(preview.length)} سرجوش در صورتجلسهٔ فیت‌آپ` : `افزودن ${fa(preview.length)} سرجوش به گزارش`}</button>
         </footer>
-      </div>
+    </Shell>
+  )
+}
+
+/** the board over the page (a record being written) or in it (the line workbench) */
+function Shell({ inline, onClose, children }: { inline?: boolean; onClose?: () => void; children: ReactNode }) {
+  if (inline) return <section className="im-card py-modal sb-modal sb-inline" aria-label="سرجوش‌گذاری روی خط">{children}</section>
+  return (
+    <div className="im-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose?.() }}>
+      <div className="im-modal py-modal sb-modal" role="dialog" aria-modal="true" aria-label="سرجوش‌گذاری روی خط">{children}</div>
     </div>
   )
 }

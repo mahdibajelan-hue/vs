@@ -36,7 +36,8 @@ import { PipePick } from './PipePick'
 import { PipeYard } from './PipeYard'
 import { BendDir } from './BendDir'
 import { SectionBoard } from './SectionBoard'
-import { DEFAULT_SECTION_PLAN, lineSections, nextJointNos, sectionOf, sectionOfJoint, type JointRec, type SectionPlan, type StrungPipe } from '../lib/sections'
+import { DEFAULT_SECTION_PLAN, lineSections, nextJointNos, sectionOf, sectionOfJoint, type SectionPlan } from '../lib/sections'
+import { jointRecords, strungPipes } from '../lib/lineWork'
 import { yardPipes } from '../lib/pipeYard'
 import { ResourceSheet } from './ResourceSheet'
 import { chainText } from '../lib/chainage'
@@ -294,34 +295,11 @@ function ReportEditorBody({ reportId, model: m, onClose, paperOnly }: { reportId
   }, [m.lines, m.reports])
   // ── sections (سکشن) and joints: the strung line, the fit-ups made, and the state of each joint ──────────────
   const plan: SectionPlan = useMemo(() => ({ ...DEFAULT_SECTION_PLAN, ...(m.settings.sectionPlan ?? {}) }), [m.settings.sectionPlan])
-  const jointRecs = useMemo(() => {
-    const formOf = new Map(m.reports.map((r) => [r.id, r.formKey]))
-    const live = m.lines.filter((l) => l.status !== 'rejected')
-    const keyOf = (sec: unknown, no: unknown) => `${registerKey(sec)}|${registerKey(no)}`
-    const welded = new Set<string>(), rtOk = new Set<string>(), rtRep = new Set<string>(), coated = new Set<string>()
-    for (const l of live) {
-      const f = formOf.get(l.reportId), d = l.detail, k = keyOf(d.sec, d.weldNo ?? d.jointNo)
-      if (f === 'welding') welded.add(k)
-      else if (f === 'rt_report') (d.result === 'acc' ? rtOk : rtRep).add(k)
-      else if (f === 'fj_coating' && d.result !== 'rej') coated.add(k)
-    }
-    const rec = (d: Record<string, unknown>, mine: boolean): JointRec => { const k = keyOf(d.sec, d.jointNo); return { before: registerKey(d.pipeNo2), after: registerKey(d.pipeNo), sec: String(d.sec ?? ''), no: String(d.jointNo ?? ''), mine, welded: welded.has(k), rtOk: rtOk.has(k), rtRep: rtRep.has(k) && !rtOk.has(k), coated: coated.has(k) } }
-    const out: JointRec[] = live.filter((l) => l.reportId !== reportId && formOf.get(l.reportId) === 'fitup').map((l) => rec(l.detail, false))
-    if (form?.key === 'fitup') for (const r of rows) if (r.detail.jointNo || r.detail.pipeNo) out.push(rec(r.detail, true))
-    return out
-  }, [m.lines, m.reports, reportId, rows, form?.key])
+  const jointRecs = useMemo(() => jointRecords(m.lines, m.reports, reportId, form?.key === 'fitup' ? rows.map((r) => r.detail) : []), [m.lines, m.reports, reportId, rows, form?.key])
   const [boardOpen, setBoardOpen] = useState(false)
   const boardSections = useMemo(() => {
     if (!boardOpen) return []
-    const formOf = new Map(m.reports.map((r) => [r.id, r.formKey])), byKey = new Map<string, StrungPipe>()
-    for (const l of m.lines) {
-      if (formOf.get(l.reportId) !== 'string' || l.status === 'rejected') continue
-      const key = registerKey(l.detail.pipeNo), km = Number(l.detail.km)
-      if (!key || !Number.isFinite(km) || km <= 0) continue
-      const reg = pipeList.find((p) => p.key === key)
-      byKey.set(key, { key, raw: reg?.raw ?? String(l.detail.pipeNo), km, lengthM: Number(l.detail.lengthM) || reg?.lengthM || 12, thkIn: reg?.wtIn ?? (Number(l.detail.thkIn) || null), odIn: reg?.odIn ?? null })
-    }
-    return lineSections([...byKey.values()], jointRecs.filter((j) => j.before && j.after), plan)
+    return lineSections(strungPipes(m.lines, m.reports, pipeList), jointRecs.filter((j) => j.before && j.after), plan)
   }, [boardOpen, m.lines, m.reports, pipeList, jointRecs, plan])
   const addJoints = (picked: Record<string, unknown>[]) => {
     setRows((a) => {

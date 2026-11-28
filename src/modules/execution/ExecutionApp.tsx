@@ -28,7 +28,7 @@ type Sub = { id: string; label: string }
 const NAV: { id: ExTab; label: string; icon: LucideIcon; color: string; subs?: Sub[]; only?: 'pipeline' | 'station' }[] = [
   { id: 'dashboard', label: 'داشبورد', icon: Gauge, color: '#f97316' },
   { id: 'station', label: 'ایستگاه: پایپینگ، تجهیزات، تست‌پک', icon: Factory, color: '#6366f1', only: 'station', subs: [{ id: 'dash', label: 'خلاصهٔ ایستگاه' }, { id: 'lines', label: 'لاین‌ها و اسپول‌ها' }, { id: 'welds', label: 'سرجوش‌ها (اینچ‌قطر)' }, { id: 'equipment', label: 'نصب تجهیزات' }, { id: 'packs', label: 'تست‌پک‌ها' }, { id: 'qc', label: 'کنترل کیفیت (B31.8 / IGS)' }, { id: 'twin', label: 'دوقلوی دیجیتال (پلات‌پلن)' }] },
-  { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'گزارش روز (وضعیت کارگاه و صورتجلسات)' }, { id: 'forms', label: 'بایگانی گزارشات روزانه' }] },
+  { id: 'daily', label: 'گزارش روزانه', icon: ClipboardList, color: '#0ea5e9', subs: [{ id: 'work', label: 'گزارش روز (وضعیت کارگاه و صورتجلسات)' }, { id: 'line', label: 'میز کار خط (ثبت گرافیکی)' }, { id: 'forms', label: 'بایگانی گزارشات روزانه' }] },
   { id: 'review', label: 'کارتابل بررسی', icon: Inbox, color: '#10b981' },
   { id: 'welds', label: 'سرجوش‌ها (پروندهٔ جوش)', icon: Flame, color: '#f43f5e', only: 'pipeline' },
   { id: 'progress', label: 'پیشرفت فیزیکی', icon: TrendingUp, color: '#14b8a6' },
@@ -58,6 +58,7 @@ const Welds = L(() => import('./pages/WeldsPage'), 'WeldsPage')
 const Gaps = L(() => import('./pages/GapsPage'), 'GapsPage')
 const Settings = L(() => import('./pages/SettingsPage'), 'SettingsPage')
 const Station = L(() => import('./pages/StationPage'), 'StationPage')
+const LineWork = L(() => import('./pages/LineWorkspace'), 'LineWorkspace')
 
 /** «مدیریت اجرا» — daily work reports on the price-list rows, row-by-row approval by the supervision, technical QC forms, weighted physical progress and automatic period reports. */
 export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () => void; onBackToRadar: () => void }) {
@@ -103,7 +104,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
     setTab(t); if (s) setSubs((x) => ({ ...x, [t]: s })) }
   // something outside the module (the inbox) asked to show a report: switch to the page that shows it
   const focusTab = useExecutionStore((x) => (x.focusReportId ? x.focusTab : null))
-  useEffect(() => { if (!focusTab) return; if (focusTab === 'delays') { setTab('reports'); setSubs((x) => ({ ...x, reports: 'delays' })); useExecutionStore.getState().setFocus(null) } else setTab(focusTab) }, [focusTab])
+  useEffect(() => { if (!focusTab) return; if (focusTab === 'delays') { setTab('reports'); setSubs((x) => ({ ...x, reports: 'delays' })); useExecutionStore.getState().setFocus(null) } else { setTab(focusTab); if (focusTab === 'daily') setSubs((x) => (x.daily === 'line' ? { ...x, daily: 'forms' } : x)) } }, [focusTab])
   const loading = !mdLoaded || !exLoaded
   const model = useExecutionModel(projectId)
   const badge = (id: ExTab): number => id === 'review' ? model.reports.filter((r) => r.status === 'submitted' || r.status === 'partially_approved').length : id === 'gaps' ? model.detected.filter((g) => g.kind !== 'form_missing').length : id === 'daily' ? model.reports.filter((r) => r.status === 'returned' || r.status === 'incomplete').length : 0
@@ -113,7 +114,7 @@ export function ExecutionApp({ onExitToHub, onBackToRadar }: { onExitToHub: () =
     switch (tab) {
       case 'station': return <Station {...p} />
       case 'dashboard': return <Dashboard {...p} />
-      case 'daily': return sub === 'designed' ? <Designed {...p} /> : sub === 'today' ? <Today {...p} /> : <Daily {...p} />
+      case 'daily': return sub === 'designed' ? <Designed {...p} /> : sub === 'today' ? <Today {...p} /> : sub === 'line' ? <LineWork {...p} /> : <Daily {...p} />
       case 'review': return <Review {...p} />
       case 'progress': return <Progress {...p} />
       case 'outlook': return <Outlook {...p} />
