@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;var e=1e3;async function t(t){let n=[];for(let r=0;;r+=e){let{data:i,error:a}=await t(r,r+e-1);if(a)return{data:n,error:a};if(n.push(...i??[]),!i||i.length<1e3)return{data:n,error:null}}}export{t};

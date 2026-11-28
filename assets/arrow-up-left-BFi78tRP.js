@@ -1,0 +1,1 @@
+window.CESIUM_BASE_URL=`/vs/cesium/`;import{t as e}from"./createLucideIcon-C77ULwyk.js";var t=e(`arrow-up-left`,[[`path`,{d:`M7 17V7h10`,key:`11bw93`}],[`path`,{d:`M17 17 7 7`,key:`2786uv`}]]);export{t};
