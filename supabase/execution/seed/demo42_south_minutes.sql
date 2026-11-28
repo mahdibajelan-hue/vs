@@ -1,3 +1,4 @@
+-- Pipe numbers P1, P2 … and joint (weld) numbers W1, W2 … — no dash, no zero padding.
 -- Demo data for DEMO-42 (پروژهٔ فرضی ۴۲ اینچ سرخس–مشهد), front «جبههٔ جنوب»: the pipe → joint → weld chain over ~25 days.
 --   · pipe delivery (pipe_entry): 20 days, 5–10 trucks a day, 10–13 joints a truck (≈ 20 km of 42" pipe) → pipe register
 --   · stringing from the stock (≈ 60 joints a day, km from 40+000), bending of a few strung pipes
@@ -49,8 +50,8 @@ begin
         pno := pno + 1;
         thkv := case when random() < 0.6 then 0.562 when random() < 0.75 then 0.688 else 0.750 end;
         lnv := round((11.6 + random() * 0.8)::numeric, 2);
-        insert into sp (no, pipe, len, thk, entry) values (pno, 'SP-' || lpad(pno::text, 4, '0'), lnv, thkv, d);
-        lines := lines || jsonb_build_object('wayBill', wb, 'pipeNo', 'SP-' || lpad(pno::text, 4, '0'), 'lengthM', lnv, 'thkIn', thkv, 'sizeIn', 42, 'billNo', bill, 'truckNo', truck,
+        insert into sp (no, pipe, len, thk, entry) values (pno, 'P' || pno, lnv, thkv, d);
+        lines := lines || jsonb_build_object('wayBill', wb, 'pipeNo', 'P' || pno, 'lengthM', lnv, 'thkIn', thkv, 'sizeIn', 42, 'billNo', bill, 'truckNo', truck,
           'loadDate', to_char(d - 2, 'YYYY-MM-DD'), 'unloadDate', to_char(d, 'YYYY-MM-DD'), 'status', case when random() < 0.04 then 'آسیب جزئی پوشش — تعمیر در دپو' else 'سالم' end);
       end loop;
     end loop;
@@ -87,7 +88,7 @@ begin
       select * into r from sp where no = joint + 1;
       -- the joint's section: the 1000 m chainage grid from km 38 (project setting sectionPlan), by where the pipe after it lies
       insert into sj (no, before_no, after_no, sec, fit) values (joint, joint, joint + 1, (floor((r.km - 38) * 1000 / 1000) + 1)::int::text, d);
-      lines := lines || jsonb_build_object('sec', (select sec from sj where no = joint), 'jointNo', 'J-' || lpad(joint::text, 4, '0'), 'pipeNo2', (select pipe from sp where no = joint), 'pipeNo', r.pipe,
+      lines := lines || jsonb_build_object('sec', (select sec from sj where no = joint), 'jointNo', 'W' || joint, 'pipeNo2', (select pipe from sp where no = joint), 'pipeNo', r.pipe,
         'lengthM', r.len, 'thkIn', r.thk, 'sizeIn', 42, 'bendDeg', '0', 'result', 'acc');
     end loop;
     if jsonb_array_length(lines) > 0 then perform pg_temp.seed_rep('fitup', d, '{"wpsNo":"WPS-42-01","pipeSpec":"API 5L X70 — 42\""}', lines, case when d = last_fit then 'submitted' else 'approved' end); end if;
@@ -98,7 +99,7 @@ begin
     d := day0 + k; lines := '[]'::jsonb;
     for r in select j.*, p.pipe, p.len, p.thk from sj j join sp p on p.no = j.after_no where j.fit = d - 1 order by j.no loop
       update sj set weld = d where no = r.no;
-      lines := lines || jsonb_build_object('sec', r.sec, 'weldNo', 'J-' || lpad(r.no::text, 4, '0'), 'pipeNo', r.pipe, 'lengthM', r.len, 'thkIn', r.thk, 'sizeIn', 42, 'bendDeg', 0,
+      lines := lines || jsonb_build_object('sec', r.sec, 'weldNo', 'W' || r.no, 'pipeNo', r.pipe, 'lengthM', r.len, 'thkIn', r.thk, 'sizeIn', 42, 'bendDeg', 0,
         'stampRoot', w[1 + floor(random() * 12)::int], 'stampHot', w[1 + floor(random() * 12)::int], 'stampFill', w[1 + floor(random() * 12)::int], 'stampCap', w[1 + floor(random() * 12)::int], 'vt', 'acc');
     end loop;
     if jsonb_array_length(lines) > 0 then perform pg_temp.seed_rep('welding', d, '{"wpsNo":"WPS-42-01","pipeSpec":"API 5L X70 — 42\""}', lines, case when d = last_weld then 'submitted' else 'approved' end); end if;
@@ -107,7 +108,7 @@ begin
     d := day0 + k; lines := '[]'::jsonb; reqn := reqn + 1;
     for r in select j.*, p.thk from sj j join sp p on p.no = j.after_no where j.weld = d - 1 order by j.no loop
       update sj set req = d where no = r.no;
-      lines := lines || jsonb_build_object('sec', r.sec, 'weldNo', 'J-' || lpad(r.no::text, 4, '0'), 'thkIn', r.thk, 'odIn', 42);
+      lines := lines || jsonb_build_object('sec', r.sec, 'weldNo', 'W' || r.no, 'thkIn', r.thk, 'odIn', 42);
     end loop;
     if jsonb_array_length(lines) > 0 then perform pg_temp.seed_rep('rt_request', d, jsonb_build_object('pipeSpec', 'API 5L X70 — 42"', 'reqNo', 'RT-S-' || lpad(reqn::text, 3, '0')), lines, case when d = last_req then 'submitted' else 'approved' end); end if;
   end loop;
@@ -116,7 +117,7 @@ begin
     for r in select j.*, p.thk from sj j join sp p on p.no = j.after_no where j.req = d - 2 order by j.no loop
       update sj set rt = d, rt_ok = random() > 0.05 where no = r.no;
       select rt_ok into st from sj where no = r.no;
-      lines := lines || (jsonb_build_object('rtReqNo', 'RT-S-' || lpad((k - 10)::text, 3, '0'), 'sec', r.sec, 'weldNo', 'J-' || lpad(r.no::text, 4, '0'), 'odIn', 42, 'thkIn', r.thk,
+      lines := lines || (jsonb_build_object('rtReqNo', 'RT-S-' || lpad((k - 10)::text, 3, '0'), 'sec', r.sec, 'weldNo', 'W' || r.no, 'odIn', 42, 'thkIn', r.thk,
         'result', case when st::boolean then 'acc' else 'rep' end) || case when st::boolean then '{}'::jsonb else jsonb_build_object('repairKind', 'RS', 'defect', (array['P','SI','IP','LF'])[1 + floor(random() * 4)::int]) end);
     end loop;
     if jsonb_array_length(lines) > 0 then perform pg_temp.seed_rep('rt_report', d, '{"rtContractor":"آزمون صنعت پارس","code":"API 1104","source":"Ir-192","technique":"DWSI","film":"AGFA D7"}', lines, case when d = last_rt then 'submitted' else 'approved' end); end if;
@@ -125,7 +126,7 @@ begin
     d := day0 + k; lines := '[]'::jsonb;
     for r in select * from sj where rt = d - 1 and rt_ok order by no loop
       update sj set fj = d where no = r.no;
-      lines := lines || jsonb_build_object('sec', r.sec, 'weldNo', 'J-' || lpad(r.no::text, 4, '0'), 'thk12', round((1.6 + random() * 0.6)::numeric, 2), 'thk3', round((1.6 + random() * 0.6)::numeric, 2),
+      lines := lines || jsonb_build_object('sec', r.sec, 'weldNo', 'W' || r.no, 'thk12', round((1.6 + random() * 0.6)::numeric, 2), 'thk3', round((1.6 + random() * 0.6)::numeric, 2),
         'thk6', round((1.6 + random() * 0.6)::numeric, 2), 'thk9', round((1.6 + random() * 0.6)::numeric, 2), 'result', 'acc');
     end loop;
     if jsonb_array_length(lines) > 0 then perform pg_temp.seed_rep('fj_coating', d, '{"sleeveType":"Heat shrink sleeve","maker":"Canusa","ambientC":"12","humidity":"45"}', lines, case when d = last_fj then 'submitted' else 'approved' end); end if;
@@ -137,11 +138,11 @@ begin
     select min(j.no), max(j.no) into from_j, to_j from sj j where j.fj is not null and j.fj < d and j.no > coalesce((select max(no) from sj where fj is not null and fj < d - 3), 0);
     continue when from_j is null;
     perform pg_temp.seed_rep('lowering', d, '{"standard":"IPS-C-PI-270","weather":"صاف"}', jsonb_build_array(jsonb_build_object('kind', 'main', 'lineSec', (select sec from sj where no = from_j),
-      'weldFrom', 'J-' || lpad(from_j::text, 4, '0'), 'weldTo', 'J-' || lpad(to_j::text, 4, '0'), 'kmFrom', (select km from sp where no = from_j), 'kmTo', (select km from sp where no = to_j + 1),
+      'weldFrom', 'W' || from_j, 'weldTo', 'W' || to_j, 'kmFrom', (select km from sp where no = from_j), 'kmTo', (select km from sp where no = to_j + 1),
       'loweredM', round((select sum(len) from sp where no between from_j + 1 and to_j + 1), 2), 'loweredNo', to_j - from_j + 1, 'holiday', 'acc')), case when k = 24 then 'submitted' else 'approved' end);
-    perform pg_temp.seed_rep('sand', d + 1, '{}', jsonb_build_array(jsonb_build_object('sec', (select sec from sj where no = from_j), 'jointFrom', 'J-' || lpad(from_j::text, 4, '0'), 'jointTo', 'J-' || lpad(to_j::text, 4, '0'),
+    perform pg_temp.seed_rep('sand', d + 1, '{}', jsonb_build_array(jsonb_build_object('sec', (select sec from sj where no = from_j), 'jointFrom', 'W' || from_j, 'jointTo', 'W' || to_j,
       'kmFrom', (select km from sp where no = from_j), 'kmTo', (select km from sp where no = to_j + 1), 'lengthM', round((select sum(len) from sp where no between from_j + 1 and to_j + 1), 2), 'result', 'acc')), 'approved');
-    perform pg_temp.seed_rep('backfill', d + 2, '{}', jsonb_build_array(jsonb_build_object('kind', 'backfill', 'sec', (select sec from sj where no = from_j), 'jointFrom', 'J-' || lpad(from_j::text, 4, '0'), 'jointTo', 'J-' || lpad(to_j::text, 4, '0'),
+    perform pg_temp.seed_rep('backfill', d + 2, '{}', jsonb_build_array(jsonb_build_object('kind', 'backfill', 'sec', (select sec from sj where no = from_j), 'jointFrom', 'W' || from_j, 'jointTo', 'W' || to_j,
       'kmFrom', (select km from sp where no = from_j), 'kmTo', (select km from sp where no = to_j + 1), 'lengthM', round((select sum(len) from sp where no between from_j + 1 and to_j + 1), 2), 'result', 'acc')), 'approved');
   end loop;
 

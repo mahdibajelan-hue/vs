@@ -69,14 +69,14 @@ export function lineSections(pipes: StrungPipe[], joints: JointRec[], plan: Sect
 }
 
 /**
- * The next joint numbers of a section, in the project's own style: «J-0045» after «J-0044», «12» after «11». A section
- * without joints yet starts at 1, written like the project's other joints (prefix and zero padding).
+ * The next joint numbers of a section, in the project's own style: «W45» after «W44», «12» after «11». A section without
+ * joints yet starts at 1, written like the project's other joints; a project without joints numbers them W1, W2 … (W = weld).
  */
 export function nextJointNos(sec: string, count: number, joints: { sec: string; no: string }[]): string[] {
   const pat = /^(.*?)(\d+)$/
   const inSec = joints.filter((j) => registerKey(j.sec) === registerKey(sec)).map((j) => pat.exec(j.no.trim())).filter((m): m is RegExpExecArray => !!m)
   const sample = inSec[inSec.length - 1] ?? joints.map((j) => pat.exec(j.no.trim())).find((m): m is RegExpExecArray => !!m)
-  const prefix = sample ? sample[1] : '', width = sample ? sample[2].length : 0
+  const prefix = sample ? sample[1] : 'W', width = sample ? sample[2].length : 0
   let n = inSec.reduce((mx, m) => Math.max(mx, Number(m[2])), 0)
   const taken = new Set(joints.filter((j) => registerKey(j.sec) === registerKey(sec)).map((j) => registerKey(j.no)))
   const out: string[] = []

@@ -254,7 +254,7 @@ function LineStage({ mode, sections, colors, bends, welders, quals, lastStamps: 
         ) })}
       </nav>
       <div className="lw-find">
-        <label className="lw-search"><Search size={14} aria-hidden /><input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') find() }} placeholder={mode === 'bend' ? 'شمارهٔ لوله (مثلاً SP-0123)' : 'شمارهٔ لوله یا سرجوش'} dir="ltr" aria-label="جستجو روی خط" /></label>
+        <label className="lw-search"><Search size={14} aria-hidden /><input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') find() }} placeholder={mode === 'bend' ? 'شمارهٔ لوله (مثلاً P123)' : 'شمارهٔ لوله یا سرجوش (P123 / W45)'} dir="ltr" aria-label="جستجو روی خط" /></label>
         <button type="button" className="im-btn im-btn-sm" onClick={find}>پیدا کن</button>
         {flash === '?' && <span className="lw-miss">روی خط پیدا نشد (ریسه نشده یا شماره اشتباه است)</span>}
         {mode === 'weld' && <span className="lw-help">{waiting.length ? <>سرجوش‌های نارنجی منتظر جوش‌اند؛ یکی یا چند تا را بزنید. {waiting.length > 1 && <button type="button" className="im-link" onClick={() => setSel(waiting)}>انتخاب همهٔ {fa(waiting.length)} سرجوش این سکشن</button>}</> : 'در این سکشن سرجوش فیت‌آپ‌شدهٔ بی‌جوش نیست.'}</span>}

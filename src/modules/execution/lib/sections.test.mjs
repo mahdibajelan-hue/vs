@@ -27,7 +27,8 @@ assert.equal(lineSections(pipes.slice(0, 3), [...joints, { before: 'B', after: '
 // joint numbers in the project's style, per section
 assert.deepEqual(nextJointNos('3', 2, [{ sec: '3', no: 'J-0007' }, { sec: '3', no: 'J-0002' }]), ['J-0008', 'J-0009'])
 assert.deepEqual(nextJointNos('4', 1, [{ sec: '3', no: 'J-0007' }]), ['J-0001'])
-assert.deepEqual(nextJointNos('1', 2, []), ['1', '2'])
+assert.deepEqual(nextJointNos('1', 2, []), ['W1', 'W2']) // a project without joints: W = weld
+assert.deepEqual(nextJointNos('9', 1, [{ sec: '9', no: 'W566' }]), ['W567'])
 assert.deepEqual(nextJointNos('2', 1, [{ sec: '2', no: '11' }]), ['12'])
 
 // rows: section, number, pipes before/after, facts of the pipe after
