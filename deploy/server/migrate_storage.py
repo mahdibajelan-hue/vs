@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Copy Supabase Storage files from the cloud project to this server's Supabase.
+"""Copy Supabase Storage files from the cloud project to this server's Supabase (or, with the two sides swapped by
+copy-competency-to-cloud.sh, from this server to the cloud).
 
 Called by migrate-data.sh, which writes the bucket and file lists from the cloud database and passes the keys in the
 environment (never on the command line). Files already on the server with the same size are skipped, so a run that
 stopped half way (the cloud is sometimes unreachable from Iran) can simply be run again.
 
-Environment: CLOUD_URL, CLOUD_KEY, LOCAL_URL, LOCAL_KEY, BUCKETS_JSON, OBJECTS_JSON, LOCAL_JSON, FAILED_TXT
+Environment: CLOUD_URL, CLOUD_KEY (from), LOCAL_URL, LOCAL_KEY (to), BUCKETS_JSON, OBJECTS_JSON, LOCAL_JSON, FAILED_TXT,
+FROM_NAME / TO_NAME (only for the messages)
 """
 import json
 import os
@@ -82,7 +84,8 @@ def main():
 
     todo = [o for o in objects if local.get(f"{o['bucket']}/{o['name']}") is None
             or (o.get("size") is not None and local.get(f"{o['bucket']}/{o['name']}") != o["size"])]
-    print(f"    {len(objects)} files in the cloud, {len(objects) - len(todo)} already here, {len(todo)} to copy")
+    src, dst = os.environ.get("FROM_NAME", "the cloud"), os.environ.get("TO_NAME", "here")
+    print(f"    {len(objects)} files on {src}, {len(objects) - len(todo)} already on {dst}, {len(todo)} to copy")
 
     failed, done, size = [], 0, 0
     for i, o in enumerate(todo, 1):
